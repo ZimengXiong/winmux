@@ -246,6 +246,16 @@ private func currentTabDetachDestination(sourceWindow: Window, mouseLocation: CG
     )
 }
 
+@MainActor
+func shouldSuppressSameAccordionTabDestination(sourceWindow: Window, targetWindow: Window, detachOrigin: TabDetachOrigin) -> Bool {
+    guard detachOrigin == .window,
+          let sourceParent = sourceWindow.parent as? TilingContainer,
+          sourceParent.layout == .accordion,
+          targetWindow.parent === sourceParent
+    else { return false }
+    return true
+}
+
 extension Window {
     @MainActor
     var tabDropZoneRect: Rect? {
@@ -589,7 +599,19 @@ private func currentWindowDragIntentDestination(
        config.windowTabs.enabled,
        let tabDestination = currentWindowTabDropDestination(sourceWindow: sourceWindow, mouseLocation: mouseLocation)
     {
-        return tabDestination
+        if case .tabStack(let targetWindowId) = tabDestination.kind,
+           let targetWindow = Window.get(byId: targetWindowId),
+           shouldSuppressSameAccordionTabDestination(
+               sourceWindow: sourceWindow,
+               targetWindow: targetWindow,
+               detachOrigin: detachOrigin,
+           )
+        {
+            // Body drags from an existing tab group should be able to detach instead of
+            // being trapped by that same group's own tab insert target.
+        } else {
+            return tabDestination
+        }
     }
 
     if subject == .window,

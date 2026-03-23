@@ -133,6 +133,26 @@ final class WindowTabsTest: XCTestCase {
     }
 
     @MainActor
+    func testBodyDragSuppressesSameAccordionTabInsertTarget() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let accordion = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let source = TestWindow.new(id: 1, parent: accordion)
+        let target = TestWindow.new(id: 2, parent: accordion)
+
+        XCTAssertTrue(shouldSuppressSameAccordionTabDestination(
+            sourceWindow: source,
+            targetWindow: target,
+            detachOrigin: .window,
+        ))
+        XCTAssertFalse(shouldSuppressSameAccordionTabDestination(
+            sourceWindow: source,
+            targetWindow: target,
+            detachOrigin: .tabStrip,
+        ))
+    }
+
+    @MainActor
     func testResolvedDraggedWindowAnchorRectUsesWholeGroupForGroupDrag() {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
