@@ -96,6 +96,51 @@ final class TreeNodeTest: XCTestCase {
         XCTAssertFalse(Workspace.all.contains(workspace))
     }
 
+    func testGarbageCollectUnusedWorkspacesKeepsPersistentWorkspace() {
+        config.persistentWorkspaces = ["keep"]
+        let workspace = Workspace.get(byName: "keep")
+
+        Workspace.garbageCollectUnusedWorkspaces()
+
+        XCTAssertTrue(Workspace.all.contains(workspace))
+    }
+
+    func testRememberMacOsLayoutOriginCapturesCurrentWorkspace() {
+        let workspace = Workspace.get(byName: "a")
+        let window = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+
+        window.rememberMacOsLayoutOrigin()
+
+        XCTAssertEqual(
+            window.layoutReason,
+            .macos(prevParentKind: .tilingContainer, prevWorkspaceName: workspace.name),
+        )
+    }
+
+    func testExitMacOsNativeUnconventionalStateRestoresWindowToPreviousWorkspaceAfterAutoDestroy() async throws {
+        let workspaceA = Workspace.get(byName: "a")
+        let window = TestWindow.new(id: 1, parent: workspaceA.rootTilingContainer)
+        let workspaceB = Workspace.get(byName: "b")
+
+        window.layoutReason = .macos(prevParentKind: .tilingContainer, prevWorkspaceName: workspaceA.name)
+        window.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+        _ = workspaceB.focusWorkspace()
+
+        Workspace.garbageCollectUnusedWorkspaces()
+        XCTAssertNil(Workspace.existing(byName: workspaceA.name))
+
+        try await exitMacOsNativeUnconventionalState(
+            window: window,
+            prevParentKind: .tilingContainer,
+            prevWorkspaceName: workspaceA.name,
+            workspace: workspaceB,
+        )
+
+        let restoredWorkspace = Workspace.get(byName: workspaceA.name)
+        XCTAssertEqual(window.nodeWorkspace, restoredWorkspace)
+        XCTAssertTrue(restoredWorkspace.rootTilingContainer.children.contains(window))
+    }
+
     func testPersistedFrozenWorldCodableRoundTrip() throws {
         let workspace = Workspace.get(byName: "1")
         let accordion = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: 1, .h, .accordion, index: 0)

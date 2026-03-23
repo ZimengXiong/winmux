@@ -16,6 +16,7 @@ struct MacosNativeMinimizeCommand: Command {
         let newState: Bool = try await !window.isMacosMinimized
         window.asMacWindow().setNativeMinimized(newState)
         if newState { // minimize
+            window.rememberMacOsLayoutOrigin()
             window.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
             return true
         } else { // unminimize

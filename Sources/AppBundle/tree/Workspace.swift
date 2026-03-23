@@ -113,7 +113,8 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
         workspaceNameToWorkspace = workspaceNameToWorkspace.filter { (_, workspace: Workspace) in
             !workspace.isEffectivelyEmpty ||
                 workspace.isVisible ||
-                workspace.name == focus.workspace.name
+                workspace.name == focus.workspace.name ||
+                workspace.shouldRetainEmptyWorkspace(now: now)
         }
         screenPointToPrevVisibleWorkspace = screenPointToPrevVisibleWorkspace.filter { _, workspaceName in
             workspaceNameToWorkspace[workspaceName] != nil
@@ -148,7 +149,7 @@ extension Workspace {
 
     @MainActor
     func shouldRetainEmptyWorkspace(now: Date = .now) -> Bool {
-        false
+        config.persistentWorkspaces.contains(name)
     }
 
     @MainActor

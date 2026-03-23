@@ -33,11 +33,17 @@ struct MacosNativeFullscreenCommand: Command {
             return io.err(windowIsntPartOfTree(window))
         }
         if newState { // Enter fullscreen
+            window.rememberMacOsLayoutOrigin()
             window.bind(to: workspace.macOsNativeFullscreenWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
         } else { // Exit fullscreen
             switch window.layoutReason {
-                case .macos(let prevParentKind):
-                    try await exitMacOsNativeUnconventionalState(window: window, prevParentKind: prevParentKind, workspace: workspace)
+                case .macos(let prevParentKind, let prevWorkspaceName):
+                    try await exitMacOsNativeUnconventionalState(
+                        window: window,
+                        prevParentKind: prevParentKind,
+                        prevWorkspaceName: prevWorkspaceName,
+                        workspace: workspace,
+                    )
                 default:
                     try await window.relayoutWindow(on: workspace)
             }

@@ -46,7 +46,7 @@ open class Window: TreeNode, Hashable {
 enum LayoutReason: Equatable {
     case standard
     /// Reason for the cur temp layout is macOS native fullscreen, minimize, or hide
-    case macos(prevParentKind: NonLeafTreeNodeKind)
+    case macos(prevParentKind: NonLeafTreeNodeKind, prevWorkspaceName: String?)
 }
 
 extension Window {
@@ -56,6 +56,12 @@ extension Window {
     @MainActor
     func bindAsFloatingWindow(to workspace: Workspace) -> BindingData? {
         bind(to: workspace, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+    }
+
+    @MainActor
+    func rememberMacOsLayoutOrigin() {
+        guard let parent else { return }
+        layoutReason = .macos(prevParentKind: parent.kind, prevWorkspaceName: nodeWorkspace?.name)
     }
 
     func asMacWindow() -> MacWindow { self as! MacWindow }

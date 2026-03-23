@@ -29,30 +29,41 @@ private func _normalizeLayoutReason(workspace: Workspace, windows: [Window]) asy
             !config.automaticallyUnhideMacosHiddenApps && window.macAppUnsafe.nsApp.isHidden
         switch window.layoutReason {
             case .standard:
-                guard let parent = window.parent else { continue }
+                guard window.parent != nil else { continue }
                 switch true {
                     case isMacosFullscreen:
-                        window.layoutReason = .macos(prevParentKind: parent.kind)
+                        window.rememberMacOsLayoutOrigin()
                         window.bind(to: workspace.macOsNativeFullscreenWindowsContainer, adaptiveWeight: WEIGHT_DOESNT_MATTER, index: INDEX_BIND_LAST)
                     case isMacosMinimized:
-                        window.layoutReason = .macos(prevParentKind: parent.kind)
+                        window.rememberMacOsLayoutOrigin()
                         window.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
                     case isMacosWindowOfHiddenApp:
-                        window.layoutReason = .macos(prevParentKind: parent.kind)
+                        window.rememberMacOsLayoutOrigin()
                         window.bind(to: workspace.macOsNativeHiddenAppsWindowsContainer, adaptiveWeight: WEIGHT_DOESNT_MATTER, index: INDEX_BIND_LAST)
                     default: break
                 }
-            case .macos(let prevParentKind):
+            case .macos(let prevParentKind, let prevWorkspaceName):
                 if !isMacosFullscreen && !isMacosMinimized && !isMacosWindowOfHiddenApp {
-                    try await exitMacOsNativeUnconventionalState(window: window, prevParentKind: prevParentKind, workspace: workspace)
+                    try await exitMacOsNativeUnconventionalState(
+                        window: window,
+                        prevParentKind: prevParentKind,
+                        prevWorkspaceName: prevWorkspaceName,
+                        workspace: workspace,
+                    )
                 }
         }
     }
 }
 
 @MainActor
-func exitMacOsNativeUnconventionalState(window: Window, prevParentKind: NonLeafTreeNodeKind, workspace: Workspace) async throws {
+func exitMacOsNativeUnconventionalState(
+    window: Window,
+    prevParentKind: NonLeafTreeNodeKind,
+    prevWorkspaceName: String?,
+    workspace fallbackWorkspace: Workspace,
+) async throws {
     window.layoutReason = .standard
+    let workspace = prevWorkspaceName.map(Workspace.get(byName:)) ?? fallbackWorkspace
     switch prevParentKind {
         case .workspace:
             window.bindAsFloatingWindow(to: workspace)
