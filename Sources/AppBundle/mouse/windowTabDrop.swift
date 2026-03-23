@@ -562,6 +562,10 @@ private func currentWindowDragIntentDestination(
     subject: WindowDragSubject,
     detachOrigin: TabDetachOrigin,
 ) -> WindowDragIntentDestination? {
+    if let sidebarDestination = currentSidebarWorkspaceDropDestination(sourceWindow: sourceWindow, mouseLocation: mouseLocation, subject: subject) {
+        return sidebarDestination
+    }
+
     if let sticky = pendingWindowDragIntent,
        sticky.sourceWindowId == sourceWindow.windowId,
        sticky.sourceSubject == subject,
@@ -577,10 +581,6 @@ private func currentWindowDragIntentDestination(
             previewStyle: sticky.previewStyle,
             isGroup: sticky.isGroup,
         )
-    }
-
-    if let sidebarDestination = currentSidebarWorkspaceDropDestination(sourceWindow: sourceWindow, mouseLocation: mouseLocation, subject: subject) {
-        return sidebarDestination
     }
 
     if subject == .window,
