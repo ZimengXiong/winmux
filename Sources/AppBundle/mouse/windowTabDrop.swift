@@ -570,6 +570,7 @@ private func currentWindowDragIntentDestination(
        sticky.sourceWindowId == sourceWindow.windowId,
        sticky.sourceSubject == subject,
        sticky.previewStyle != .sidebarWorkspaceMove,
+       sticky.previewStyle != .workspaceMove,
        sticky.interactionRect.contains(mouseLocation)
     {
         return WindowDragIntentDestination(
