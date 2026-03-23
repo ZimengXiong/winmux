@@ -53,6 +53,7 @@ private func moveTilingWindow(_ window: Window) {
     setCurrentMouseManipulationKind(.move)
     setCurrentMouseDragSubject(.window)
     setCurrentMouseTabDetachOrigin(.window)
+    setCurrentMouseDragStartedInSidebar(false)
     WindowTabStripPanelController.shared.setIgnoresMouseEvents(true)
     setDraggedWindowAnchorRect(window.lastAppliedLayoutPhysicalRect, for: window.windowId)
     window.lastAppliedLayoutPhysicalRect = nil

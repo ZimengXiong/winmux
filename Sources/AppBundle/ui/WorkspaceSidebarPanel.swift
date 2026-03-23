@@ -222,7 +222,9 @@ final class WorkspaceSidebarPanel: NSPanelHud {
     }
 
     private func shouldLockExpansionForSidebarDrag() -> Bool {
-        TrayMenuModel.shared.workspaceSidebarDropPreview != nil || hasPinnedDraggedWindow()
+        TrayMenuModel.shared.workspaceSidebarDropPreview != nil ||
+            hasPinnedDraggedWindow() ||
+            (getCurrentMouseManipulationKind() == .move && getCurrentMouseDragStartedInSidebar())
     }
 
     private func setHovering(_ isHovering: Bool) {
@@ -467,6 +469,7 @@ private func updateSidebarWindowDrag(_ windowId: UInt32, subject: WindowDragSubj
     setCurrentMouseManipulationKind(.move)
     setCurrentMouseDragSubject(subject)
     setCurrentMouseTabDetachOrigin(.window)
+    setCurrentMouseDragStartedInSidebar(true)
     setDraggedWindowAnchorRect(resolvedDraggedWindowAnchorRect(for: window, subject: subject), for: window.windowId)
     WindowTabStripPanelController.shared.setIgnoresMouseEvents(true)
     _ = updatePendingWindowDragIntent(sourceWindow: window, mouseLocation: mouseLocation, subject: subject, detachOrigin: .window)

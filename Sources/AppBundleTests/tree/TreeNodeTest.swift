@@ -125,6 +125,7 @@ final class TreeNodeTest: XCTestCase {
         setCurrentMouseManipulationKind(.move)
         setCurrentMouseDragSubject(.group)
         setCurrentMouseTabDetachOrigin(.tabStrip)
+        setCurrentMouseDragStartedInSidebar(true)
 
         cancelManipulatedWithMouseState()
 
@@ -132,6 +133,7 @@ final class TreeNodeTest: XCTestCase {
         XCTAssertEqual(getCurrentMouseManipulationKind(), .none)
         XCTAssertEqual(getCurrentMouseDragSubject(), .window)
         XCTAssertEqual(getCurrentMouseTabDetachOrigin(), .window)
+        XCTAssertFalse(getCurrentMouseDragStartedInSidebar())
         XCTAssertNil(draggedWindowAnchorRect(for: window.windowId))
     }
 
