@@ -379,15 +379,32 @@ private func hoveredWorkspaceReadyForTypingRename() -> String? {
 }
 
 @MainActor
+private func workspaceSidebarEditorHasKeyboardFocus() -> Bool {
+    guard WorkspaceSidebarPanel.shared.isKeyWindow else { return false }
+    let firstResponder = WorkspaceSidebarPanel.shared.firstResponder
+    return firstResponder is NSText || firstResponder is NSTextField
+}
+
+@MainActor
 private func handleWorkspaceRenameTypingEvent(_ event: WorkspaceSidebarRenameKeyEvent) -> Bool {
-    guard let hoveredWorkspaceName = hoveredWorkspaceReadyForTypingRename(),
-          let seed = normalizedWorkspaceRenameSeed(
-              modifierFlags: event.modifierFlags,
-              characters: event.characters,
-          )
-    else {
+    guard let seed = normalizedWorkspaceRenameSeed(
+        modifierFlags: event.modifierFlags,
+        characters: event.characters,
+    ) else {
         return false
     }
+    if TrayMenuModel.shared.workspaceSidebarEditingWorkspaceName != nil {
+        guard !workspaceSidebarEditorHasKeyboardFocus() else { return false }
+        guard WorkspaceSidebarPanel.shared.isVisible,
+              TrayMenuModel.shared.isWorkspaceSidebarExpanded
+        else {
+            return false
+        }
+        TrayMenuModel.shared.workspaceSidebarEditingText += seed
+        WorkspaceSidebarPanel.shared.prepareForTextInput()
+        return true
+    }
+    guard let hoveredWorkspaceName = hoveredWorkspaceReadyForTypingRename() else { return false }
     beginWorkspaceSidebarEditing(workspaceName: hoveredWorkspaceName, initialText: seed)
     return true
 }
@@ -419,6 +436,9 @@ private func focusWorkspaceFromSidebar(_ workspaceName: String) {
 private func beginWorkspaceSidebarEditing(workspaceName: String, initialText: String? = nil) {
     TrayMenuModel.shared.workspaceSidebarEditingWorkspaceName = workspaceName
     TrayMenuModel.shared.workspaceSidebarEditingText = initialText ?? config.workspaceSidebar.workspaceLabels[workspaceName] ?? ""
+    if initialText != nil {
+        WorkspaceSidebarPanel.shared.prepareForTextInput()
+    }
     DispatchQueue.main.async {
         WorkspaceSidebarPanel.shared.prepareForTextInput()
     }
