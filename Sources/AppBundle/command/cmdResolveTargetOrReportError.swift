@@ -2,11 +2,6 @@ import Common
 
 extension CmdArgs {
     @MainActor
-    var workspace: Workspace? {
-        if let workspaceName { Workspace.get(byName: workspaceName.raw) } else { nil }
-    }
-
-    @MainActor
     func resolveTargetOrReportError(_ env: CmdEnv, _ io: CmdIo) -> LiveFocus? {
         // Flags
         if let windowId {
@@ -17,7 +12,11 @@ extension CmdArgs {
                 return nil
             }
         }
-        if let workspace {
+        if let workspaceName {
+            guard let workspace = Workspace.existing(byName: workspaceName.raw) else {
+                io.err("Workspace '\(workspaceName.raw)' doesn't exist")
+                return nil
+            }
             return workspace.toLiveFocus()
         }
         // Env
@@ -30,7 +29,11 @@ extension CmdArgs {
             }
         }
         if let wsName = env.workspaceName {
-            return Workspace.get(byName: wsName).toLiveFocus()
+            guard let workspace = Workspace.existing(byName: wsName) else {
+                io.err("Workspace '\(wsName)' doesn't exist")
+                return nil
+            }
+            return workspace.toLiveFocus()
         }
         // Real Focus
         return focus

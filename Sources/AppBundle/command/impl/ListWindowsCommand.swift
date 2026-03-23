@@ -23,7 +23,7 @@ struct ListWindowsCommand: Command {
                         switch filter {
                             case .focused: [focus.workspace]
                             case .visible: Workspace.all.filter(\.isVisible)
-                            case .name(let name): [Workspace.get(byName: name.raw)]
+                            case .name(let name): Workspace.existing(byName: name.raw).map { [$0] } ?? []
                         }
                     }
                     .toSet()

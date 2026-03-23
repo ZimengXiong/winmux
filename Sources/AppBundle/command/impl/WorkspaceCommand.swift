@@ -33,7 +33,10 @@ struct WorkspaceCommand: Command {
             }
             return !args.failIfNoop
         } else {
-            return Workspace.get(byName: workspaceName).focusWorkspace()
+            guard let workspace = Workspace.existing(byName: workspaceName) else {
+                return io.err("Workspace '\(workspaceName)' doesn't exist")
+            }
+            return workspace.focusWorkspace()
         }
     }
 }

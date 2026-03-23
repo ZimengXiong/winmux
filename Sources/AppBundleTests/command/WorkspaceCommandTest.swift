@@ -19,4 +19,13 @@ final class WorkspaceCommandTest: XCTestCase {
         testParseCommandSucc("workspace --stdin next", WorkspaceCmdArgs(target: .relative(.next)).copy(\.explicitStdinFlag, true))
         testParseCommandSucc("workspace --no-stdin next", WorkspaceCmdArgs(target: .relative(.next)).copy(\.explicitStdinFlag, false))
     }
+
+    func testDirectWorkspaceFocusDoesNotCreateMissingWorkspace() async throws {
+        let result = try await WorkspaceCommand(
+            args: WorkspaceCmdArgs(target: .direct(.parse("2").getOrDie())),
+        ).run(.defaultEnv, .emptyStdin)
+
+        assertEquals(result.exitCode, 1)
+        XCTAssertNil(Workspace.existing(byName: "2"))
+    }
 }
