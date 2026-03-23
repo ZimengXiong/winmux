@@ -459,7 +459,7 @@ func applyPendingWindowDragIntentIfPossible() -> Bool {
             swapNodes(sourceNode, targetWindow.moveNode)
             return true
         case .moveToWorkspace(let workspaceName):
-            let targetWorkspace = Workspace.get(byName: workspaceName)
+            guard let targetWorkspace = Workspace.existing(byName: workspaceName) else { return false }
             resetClosedWindowsCache()
             if pendingWindowDragIntent.previewStyle == .sidebarWorkspaceMove {
                 applySidebarWorkspaceMove(sourceNode: sourceNode, sourceWindow: sourceWindow, targetWorkspace: targetWorkspace)

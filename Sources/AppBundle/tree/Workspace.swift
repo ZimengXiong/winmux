@@ -53,6 +53,16 @@ func sidebarDraftWorkspaceIndex(_ name: String) -> Int? {
 }
 
 @MainActor
+private func clearSidebarDraftWorkspaceLabelIfNeeded(_ workspaceName: String) {
+    guard isSidebarDraftWorkspaceName(workspaceName),
+          config.workspaceSidebar.workspaceLabels.removeValue(forKey: workspaceName) != nil
+    else { return }
+    if !isUnitTest {
+        try? persistWorkspaceSidebarLabel(workspaceName: workspaceName, label: nil)
+    }
+}
+
+@MainActor
 func workspaceHasSidebarVisibleWindows(_ workspace: Workspace) -> Bool {
     workspace.children.filterIsInstance(of: TilingContainer.self).contains { !$0.isEffectivelyEmpty } ||
         !workspace.floatingWindows.isEmpty
@@ -146,10 +156,15 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
             workspace.refreshEmptyLifecycle(now: now)
         }
         workspaceNameToWorkspace = workspaceNameToWorkspace.filter { (_, workspace: Workspace) in
-            !workspace.isEffectivelyEmpty ||
+            let shouldKeep =
+                !workspace.isEffectivelyEmpty ||
                 workspace.isVisible ||
                 workspace.name == focus.workspace.name ||
                 workspace.shouldRetainEmptyWorkspace(now: now)
+            if !shouldKeep {
+                clearSidebarDraftWorkspaceLabelIfNeeded(workspace.name)
+            }
+            return shouldKeep
         }
         screenPointToPrevVisibleWorkspace = screenPointToPrevVisibleWorkspace.filter { _, workspaceName in
             workspaceNameToWorkspace[workspaceName] != nil
