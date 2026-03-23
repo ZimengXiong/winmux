@@ -5,10 +5,22 @@ extension Workspace {
     func layoutWorkspace() async throws {
         if isEffectivelyEmpty { return }
         let rect = workspaceMonitor.visibleRectPaddedByOuterGaps
+        let context = LayoutContext(self)
+        if let fullscreenWindow = rootTilingContainer.mostRecentWindowRecursive, fullscreenWindow.isFullscreen {
+            lastAppliedLayoutPhysicalRect = rect
+            lastAppliedLayoutVirtualRect = rect
+            rootTilingContainer.lastAppliedLayoutPhysicalRect = rect
+            rootTilingContainer.lastAppliedLayoutVirtualRect = rect
+            try await hideAllWindowsExcept(fullscreenWindow)
+            fullscreenWindow.lastAppliedLayoutVirtualRect = rect
+            fullscreenWindow.lastAppliedLayoutPhysicalRect = nil
+            fullscreenWindow.layoutFullscreen(context)
+            return
+        }
         // If monitors are aligned vertically and the monitor below has smaller width, then macOS may not allow the
         // window on the upper monitor to take full width. rect.height - 1 resolves this problem
         // But I also faced this problem in monitors horizontal configuration. ¯\_(ツ)_/¯
-        try await layoutRecursive(rect.topLeftCorner, width: rect.width, height: rect.height - 1, virtual: rect, LayoutContext(self))
+        try await layoutRecursive(rect.topLeftCorner, width: rect.width, height: rect.height - 1, virtual: rect, context)
     }
 }
 
@@ -27,7 +39,7 @@ extension TreeNode {
                     try await window.layoutFloatingWindow(context)
                 }
             case .window(let window):
-                if window.windowId != currentlyManipulatedWithMouseWindowId {
+                if window.windowId != currentlyManipulatedWithMouseWindowId || isPinnedDraggedWindow(window.windowId) {
                     lastAppliedLayoutVirtualRect = virtual
                     if window.isFullscreen && window == context.workspace.rootTilingContainer.mostRecentWindowRecursive {
                         lastAppliedLayoutPhysicalRect = nil
@@ -140,6 +152,31 @@ extension TilingContainer {
 
     @MainActor
     fileprivate func layoutAccordion(_ point: CGPoint, width: CGFloat, height: CGFloat, virtual: Rect, _ context: LayoutContext) async throws {
+        if usesWindowTabBehavior {
+            let tabBarHeight = showsWindowTabs ? windowTabBarHeight : 0
+            let contentPoint = point + CGPoint(x: 0, y: tabBarHeight)
+            let contentHeight = max(height - tabBarHeight, 0)
+            let contentVirtual = Rect(
+                topLeftX: virtual.topLeftX,
+                topLeftY: virtual.topLeftY + tabBarHeight,
+                width: virtual.width,
+                height: max(virtual.height - tabBarHeight, 0),
+            )
+            guard let activeChild = mostRecentChild else { return }
+
+            for child in children where child != activeChild {
+                try await child.hideTabbedWindows(context.workspace)
+            }
+            try await activeChild.layoutRecursive(
+                contentPoint,
+                width: width,
+                height: contentHeight,
+                virtual: contentVirtual,
+                context,
+            )
+            return
+        }
+
         guard let mruIndex: Int = mostRecentChild?.ownIndex else { return }
         for (index, child) in children.enumerated() {
             let padding = CGFloat(config.accordionPadding)
@@ -169,6 +206,51 @@ extension TilingContainer {
                         context,
                     )
             }
+        }
+    }
+}
+
+extension TreeNode {
+    @MainActor
+    fileprivate func hideTabbedWindows(_ workspace: Workspace) async throws {
+        switch nodeCases {
+            case .window(let window):
+                window.lastAppliedLayoutPhysicalRect = nil
+                window.lastAppliedLayoutVirtualRect = nil
+                if let macWindow = window as? MacWindow {
+                    try await macWindow.hideInCorner(.bottomRightCorner)
+                }
+            case .tilingContainer(let container):
+                for child in container.children {
+                    try await child.hideTabbedWindows(workspace)
+                }
+            case .workspace, .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer,
+                 .macosPopupWindowsContainer, .macosHiddenAppsWindowsContainer:
+                return
+        }
+    }
+
+    @MainActor
+    fileprivate func hideAllWindowsExcept(_ targetWindow: Window) async throws {
+        switch nodeCases {
+            case .window(let window):
+                guard window != targetWindow else { return }
+                window.lastAppliedLayoutPhysicalRect = nil
+                window.lastAppliedLayoutVirtualRect = nil
+                if let macWindow = window as? MacWindow {
+                    try await macWindow.hideInCorner(.bottomRightCorner)
+                }
+            case .tilingContainer(let container):
+                for child in container.children {
+                    try await child.hideAllWindowsExcept(targetWindow)
+                }
+            case .workspace(let workspace):
+                for child in workspace.children {
+                    try await child.hideAllWindowsExcept(targetWindow)
+                }
+            case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer,
+                 .macosPopupWindowsContainer, .macosHiddenAppsWindowsContainer:
+                return
         }
     }
 }

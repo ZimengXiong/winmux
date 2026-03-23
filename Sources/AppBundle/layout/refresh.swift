@@ -38,9 +38,14 @@ func runRefreshSessionBlocking(
             gcMonitors()
 
             updateTrayText()
+            await updateWorkspaceSidebarModel()
             SecureInputPanel.shared.refresh()
             try await normalizeLayoutReason()
-            if shouldLayoutWorkspaces { try await layoutWorkspaces() }
+            if shouldLayoutWorkspaces {
+                try await layoutWorkspaces()
+                focus.windowOrNil?.nativeFocus()
+            }
+            await updateWindowTabModel()
         }
     }
 }
@@ -69,8 +74,10 @@ func runLightSession<T>(
             let focusAfter = focus.windowOrNil
 
             updateTrayText()
+            await updateWorkspaceSidebarModel()
             SecureInputPanel.shared.refresh()
             try await layoutWorkspaces()
+            await updateWindowTabModel()
             if focusBefore != focusAfter {
                 focusAfter?.nativeFocus() // syncFocusToMacOs
             }
@@ -123,6 +130,7 @@ private func refresh() async throws {
             try await MacWindow.getOrRegister(windowId: windowId, macApp: app)
         }
     }
+    finalizePersistedFrozenWorldAfterRefresh(aliveWindowIds: aliveWindowIds)
 
     // Garbage collect workspaces after apps, because workspaces contain apps.
     Workspace.garbageCollectUnusedWorkspaces()

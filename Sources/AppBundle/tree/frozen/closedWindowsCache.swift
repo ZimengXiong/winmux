@@ -8,7 +8,7 @@ import AppKit
 /// so that once the screen is unlocked, AeroSpace could restore windows to where they were
 @MainActor private var closedWindowsCache = FrozenWorld(workspaces: [], monitors: [], windowIds: [])
 
-struct FrozenMonitor: Sendable {
+struct FrozenMonitor: Codable, Sendable {
     let topLeftCorner: CGPoint
     let visibleWorkspace: String
 
@@ -18,7 +18,7 @@ struct FrozenMonitor: Sendable {
     }
 }
 
-struct FrozenWorkspace: Sendable {
+struct FrozenWorkspace: Codable, Sendable {
     let name: String
     let monitor: FrozenMonitor // todo drop this property, once monitor to workspace assignment migrates to TreeNode
     let rootTilingNode: FrozenContainer
@@ -49,14 +49,24 @@ struct FrozenWorkspace: Sendable {
     )
 }
 
+@MainActor
+func replaceClosedWindowsCache(_ frozenWorld: FrozenWorld) {
+    closedWindowsCache = frozenWorld
+}
+
 @MainActor func restoreClosedWindowsCacheIfNeeded(newlyDetectedWindow: Window) async throws -> Bool {
-    if !closedWindowsCache.windowIds.contains(newlyDetectedWindow.windowId) {
+    try await restoreFrozenWorldIfNeeded(closedWindowsCache, newlyDetectedWindow: newlyDetectedWindow)
+}
+
+@MainActor
+func restoreFrozenWorldIfNeeded(_ frozenWorld: FrozenWorld, newlyDetectedWindow: Window) async throws -> Bool {
+    if !frozenWorld.windowIds.contains(newlyDetectedWindow.windowId) {
         return false
     }
     let monitors = monitors
     let topLeftCornerToMonitor = monitors.grouped { $0.rect.topLeftCorner }
 
-    for frozenWorkspace in closedWindowsCache.workspaces {
+    for frozenWorkspace in frozenWorld.workspaces {
         let workspace = Workspace.get(byName: frozenWorkspace.name)
         _ = topLeftCornerToMonitor[frozenWorkspace.monitor.topLeftCorner]?
             .singleOrNil()?
@@ -76,7 +86,7 @@ struct FrozenWorkspace: Sendable {
         }
     }
 
-    for monitor in closedWindowsCache.monitors {
+    for monitor in frozenWorld.monitors {
         _ = topLeftCornerToMonitor[monitor.topLeftCorner]?
             .singleOrNil()?
             .setActiveWorkspace(Workspace.get(byName: monitor.visibleWorkspace))

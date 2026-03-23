@@ -1,0 +1,20 @@
+public struct StackWithCmdArgs: CmdArgs {
+    /*conforms*/ public var commonState: CmdArgsCommonState
+    init(rawArgs: StrArrSlice) { self.commonState = .init(rawArgs) }
+    public static let parser: CmdParser<Self> = .init(
+        kind: .stackWith,
+        allowInConfig: true,
+        help: stack_with_help_generated,
+        flags: [
+            "--window-id": optionalWindowIdFlag(),
+        ],
+        posArgs: [newMandatoryPosArgParser(\.direction, parseCardinalDirectionArg, placeholder: CardinalDirection.unionLiteral)],
+    )
+
+    public var direction: Lateinit<CardinalDirection> = .uninitialized
+
+    public init(rawArgs: [String], direction: CardinalDirection) {
+        self.commonState = .init(rawArgs.slice)
+        self.direction = .initialized(direction)
+    }
+}

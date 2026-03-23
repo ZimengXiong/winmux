@@ -267,6 +267,66 @@ final class ConfigTest: XCTestCase {
         assertEquals([:], defaultConfig.workspaceToMonitorForceAssignment)
     }
 
+    func testParseWorkspaceSidebar() {
+        let (parsed, errors) = parseConfig(
+            """
+            [workspace-sidebar]
+                enabled = true
+                width = 280
+                monitor = ['secondary', 2]
+
+            [workspace-sidebar.workspace-labels]
+                1 = 'Code'
+                2 = 'Web'
+            """,
+        )
+        assertEquals(errors, [])
+        assertEquals(
+            parsed.workspaceSidebar,
+            WorkspaceSidebarConfig(
+                enabled: true,
+                collapsedWidth: 44,
+                width: 280,
+                monitor: [.secondary, .sequenceNumber(2)],
+                workspaceLabels: ["1": "Code", "2": "Web"],
+            ),
+        )
+
+        let (_, widthErrors) = parseConfig(
+            """
+            [workspace-sidebar]
+                collapsed-width = 0
+                width = 0
+            """,
+        )
+        assertEquals(widthErrors.descriptions, [
+            "workspace-sidebar.collapsed-width: Must be greater than 0",
+            "workspace-sidebar.width: Must be greater than 0",
+        ])
+    }
+
+    func testParseWindowTabs() {
+        let (parsed, errors) = parseConfig(
+            """
+            [window-tabs]
+                enabled = true
+                height = 38
+            """,
+        )
+        assertEquals(errors, [])
+        assertEquals(parsed.windowTabs, WindowTabsConfig(enabled: true, height: 38))
+
+        let (_, heightErrors) = parseConfig(
+            """
+            [window-tabs]
+                height = 20
+            """,
+        )
+        assertEquals(heightErrors.descriptions, [
+            "window-tabs.height: Must be greater than 20",
+        ])
+    }
+
     func testParseOnWindowDetected() {
         let (parsed, errors) = parseConfig(
             """
@@ -448,5 +508,52 @@ final class ConfigTest: XCTestCase {
         assertEquals(colemakErrors, [])
         assertEquals(colemakConfig.keyMapping, KeyMapping(preset: .colemak, rawKeyNotationToKeyCode: [:]))
         assertEquals(colemakConfig.keyMapping.resolve()["f"], .e)
+    }
+
+    func testUpdateWorkspaceSidebarLabelConfigAddsSectionWhenMissing() {
+        let updated = updateWorkspaceSidebarLabelConfig(
+            in: """
+            [mode.main.binding]
+                alt-h = 'focus left'
+            """,
+            workspaceName: "1",
+            label: "Code",
+        )
+
+        XCTAssertTrue(updated.contains("[workspace-sidebar.workspace-labels]"))
+        XCTAssertTrue(updated.contains("\"1\" = \"Code\""))
+    }
+
+    func testUpdateWorkspaceSidebarLabelConfigReplacesExistingLabel() {
+        let updated = updateWorkspaceSidebarLabelConfig(
+            in: """
+            [workspace-sidebar.workspace-labels]
+            "1" = "Old"
+            "2" = "Web"
+            """,
+            workspaceName: "1",
+            label: "Code",
+        )
+
+        XCTAssertTrue(updated.contains("\"1\" = \"Code\""))
+        XCTAssertFalse(updated.contains("\"1\" = \"Old\""))
+        XCTAssertTrue(updated.contains("\"2\" = \"Web\""))
+    }
+
+    func testUpdateWorkspaceSidebarLabelConfigRemovesLastLabelSection() {
+        let updated = updateWorkspaceSidebarLabelConfig(
+            in: """
+            [workspace-sidebar.workspace-labels]
+            "1" = "Code"
+
+            [mode.main.binding]
+                alt-h = 'focus left'
+            """,
+            workspaceName: "1",
+            label: nil,
+        )
+
+        XCTAssertFalse(updated.contains("[workspace-sidebar.workspace-labels]"))
+        XCTAssertTrue(updated.contains("[mode.main.binding]"))
     }
 }

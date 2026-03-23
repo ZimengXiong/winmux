@@ -2,6 +2,9 @@ import AppKit
 import Common
 
 @MainActor private var workspaceNameToWorkspace: [String: Workspace] = [:]
+private let sidebarDraftWorkspacePrefix = "__sidebar_draft_workspace_"
+private let sidebarManagedEmptyWorkspaceRetentionInterval: TimeInterval = 5 * 60
+@MainActor private var sidebarDraftWorkspaceCounter: UInt64 = 0
 
 @MainActor private var screenPointToPrevVisibleWorkspace: [CGPoint: String] = [:]
 @MainActor private var screenPointToVisibleWorkspace: [CGPoint: Workspace] = [:]
@@ -30,11 +33,28 @@ private func getStubWorkspace(forPoint point: CGPoint) -> Workspace {
         .orDie("Can't create empty workspace")
 }
 
+@MainActor
+func nextSidebarDraftWorkspaceName() -> String {
+    while true {
+        sidebarDraftWorkspaceCounter += 1
+        let candidate = "\(sidebarDraftWorkspacePrefix)\(sidebarDraftWorkspaceCounter)"
+        if workspaceNameToWorkspace[candidate] == nil {
+            return candidate
+        }
+    }
+}
+
+func isSidebarDraftWorkspaceName(_ name: String) -> Bool {
+    name.hasPrefix(sidebarDraftWorkspacePrefix)
+}
+
 final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
     let name: String
     nonisolated private let nameLogicalSegments: StringLogicalSegments
     /// `assignedMonitorPoint` must be interpreted only when the workspace is invisible
     fileprivate var assignedMonitorPoint: CGPoint? = nil
+    fileprivate var isSidebarManaged: Bool = false
+    fileprivate var emptySince: Date? = .now
 
     @MainActor
     private init(_ name: String) {
@@ -85,9 +105,14 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
         for name in config.persistentWorkspaces {
             _ = get(byName: name) // Make sure that all persistent workspaces are "cached"
         }
+        let now = Date()
+        for workspace in workspaceNameToWorkspace.values {
+            workspace.refreshEmptyLifecycle(now: now)
+        }
         workspaceNameToWorkspace = workspaceNameToWorkspace.filter { (_, workspace: Workspace) in
             config.persistentWorkspaces.contains(workspace.name) ||
                 !workspace.isEffectivelyEmpty ||
+                workspace.shouldRetainEmptyWorkspace(now: now) ||
                 workspace.isVisible ||
                 workspace.name == focus.workspace.name
         }
@@ -103,6 +128,29 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
 
 extension Workspace {
     @MainActor
+    func markAsSidebarManaged() {
+        isSidebarManaged = true
+        if isEffectivelyEmpty {
+            emptySince = emptySince ?? .now
+        }
+    }
+
+    @MainActor
+    func refreshEmptyLifecycle(now: Date = .now) {
+        if isEffectivelyEmpty {
+            emptySince = emptySince ?? now
+        } else {
+            emptySince = nil
+        }
+    }
+
+    @MainActor
+    func shouldRetainEmptyWorkspace(now: Date = .now) -> Bool {
+        guard isSidebarManaged, let emptySince else { return false }
+        return now.timeIntervalSince(emptySince) < sidebarManagedEmptyWorkspaceRetentionInterval
+    }
+
+    @MainActor
     var isVisible: Bool { visibleWorkspaceToScreenPoint.keys.contains(self) }
     @MainActor
     var workspaceMonitor: Monitor {
@@ -110,6 +158,11 @@ extension Workspace {
             ?? visibleWorkspaceToScreenPoint[self]?.monitorApproximation
             ?? assignedMonitorPoint?.monitorApproximation
             ?? mainMonitor
+    }
+
+    @MainActor
+    func setEmptySinceForTesting(_ date: Date?) {
+        emptySince = date
     }
 }
 

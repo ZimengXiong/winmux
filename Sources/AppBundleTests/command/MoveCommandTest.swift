@@ -16,6 +16,51 @@ final class MoveCommandTest: XCTestCase {
         assertEquals(root.layoutDescription, .h_tiles([.window(2), .window(1)]))
     }
 
+    func testMove_swapWithAccordionTreatsAccordionAsSingleNode() async throws {
+        let root = Workspace.get(byName: name).rootTilingContainer.apply {
+            TilingContainer(parent: $0, adaptiveWeight: 1, .v, .accordion, index: INDEX_BIND_LAST).apply {
+                TestWindow.new(id: 1, parent: $0)
+                TestWindow.new(id: 2, parent: $0)
+            }
+            assertEquals(TestWindow.new(id: 3, parent: $0).focusWindow(), true)
+        }
+
+        try await MoveCommand(args: MoveCmdArgs(rawArgs: [], .left)).run(.defaultEnv, .emptyStdin)
+        assertEquals(root.layoutDescription, .h_tiles([
+            .window(3),
+            .v_accordion([
+                .window(1),
+                .window(2),
+            ]),
+        ]))
+    }
+
+    func testMoveOut_accordionTreatsAccordionAsSingleNode() async throws {
+        let workspace = Workspace.get(byName: name)
+        workspace.rootTilingContainer.apply {
+            TestWindow.new(id: 0, parent: $0)
+            TilingContainer(parent: $0, adaptiveWeight: 1, .v, .accordion, index: INDEX_BIND_LAST).apply {
+                assertEquals(TestWindow.new(id: 1, parent: $0).focusWindow(), true)
+                TestWindow.new(id: 2, parent: $0)
+            }
+        }
+
+        let result = try await parseCommand("move --boundaries-action stop right").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals(
+            workspace.layoutDescription,
+            .workspace([
+                .h_tiles([
+                    .window(0),
+                    .v_accordion([
+                        .window(1),
+                        .window(2),
+                    ]),
+                ]),
+            ]),
+        )
+        assertEquals(result.exitCode, 0)
+    }
+
     func testMoveInto_findTopMostContainerWithRightOrientation() async throws {
         let root = Workspace.get(byName: name).rootTilingContainer.apply {
             TestWindow.new(id: 0, parent: $0)

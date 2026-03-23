@@ -3,6 +3,7 @@ import AppKit
 
 final class TestWindow: Window, CustomStringConvertible {
     private var _rect: Rect?
+    private var _isHiddenInCorner: Bool = false
 
     @MainActor
     private init(_ id: UInt32, _ parent: NonLeafTreeNodeObject, _ adaptiveWeight: CGFloat, _ rect: Rect?) {
@@ -38,5 +39,18 @@ final class TestWindow: Window, CustomStringConvertible {
 
     @MainActor override func getAxRect() async throws -> Rect? { // todo change to not Optional
         _rect
+    }
+
+    override var isHiddenInCorner: Bool { _isHiddenInCorner }
+
+    override func setAxFrame(_ topLeft: CGPoint?, _ size: CGSize?) {
+        let currentRect = _rect ?? Rect(topLeftX: topLeft?.x ?? 0, topLeftY: topLeft?.y ?? 0, width: size?.width ?? 0, height: size?.height ?? 0)
+        _rect = Rect(
+            topLeftX: topLeft?.x ?? currentRect.topLeftX,
+            topLeftY: topLeft?.y ?? currentRect.topLeftY,
+            width: size?.width ?? currentRect.width,
+            height: size?.height ?? currentRect.height,
+        )
+        _isHiddenInCorner = false
     }
 }

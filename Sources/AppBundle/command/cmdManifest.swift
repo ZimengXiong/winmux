@@ -66,6 +66,8 @@ extension CmdArgs {
                 command = ResizeCommand(args: self as! ResizeCmdArgs)
             case .split:
                 command = SplitCommand(args: self as! SplitCmdArgs)
+            case .stackWith:
+                command = StackWithCommand(args: self as! StackWithCmdArgs)
             case .subscribe:
                 die("subscribe is handled separately")
             case .summonWorkspace:

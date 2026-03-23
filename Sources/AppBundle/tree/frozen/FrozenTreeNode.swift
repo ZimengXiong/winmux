@@ -1,12 +1,12 @@
 import AppKit
 import Common
 
-enum FrozenTreeNode: Sendable {
+enum FrozenTreeNode: Codable, Sendable {
     case container(FrozenContainer)
     case window(FrozenWindow)
 }
 
-struct FrozenContainer: Sendable {
+struct FrozenContainer: Codable, Sendable {
     let children: [FrozenTreeNode]
     let layout: Layout
     let orientation: Orientation
@@ -31,7 +31,7 @@ struct FrozenContainer: Sendable {
     }
 }
 
-struct FrozenWindow: Sendable {
+struct FrozenWindow: Codable, Sendable {
     let id: UInt32
     let weight: CGFloat
 
@@ -43,4 +43,39 @@ struct FrozenWindow: Sendable {
 
 @MainActor private func getWeightOrNil(_ node: TreeNode) -> CGFloat? {
     ((node.parent as? TilingContainer)?.orientation).map { node.getWeight($0) }
+}
+
+extension FrozenTreeNode {
+    private enum CodingKeys: String, CodingKey {
+        case kind
+        case container
+        case window
+    }
+
+    private enum Kind: String, Codable {
+        case container
+        case window
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        switch try container.decode(Kind.self, forKey: .kind) {
+            case .container:
+                self = .container(try container.decode(FrozenContainer.self, forKey: .container))
+            case .window:
+                self = .window(try container.decode(FrozenWindow.self, forKey: .window))
+        }
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+            case .container(let frozenContainer):
+                try container.encode(Kind.container, forKey: .kind)
+                try container.encode(frozenContainer, forKey: .container)
+            case .window(let frozenWindow):
+                try container.encode(Kind.window, forKey: .kind)
+                try container.encode(frozenWindow, forKey: .window)
+        }
+    }
 }

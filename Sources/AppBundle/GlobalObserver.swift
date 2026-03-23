@@ -75,5 +75,14 @@ enum GlobalObserver {
                 }
             }
         }
+
+        NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDragged) { _ in
+            Task { @MainActor in
+                refreshPendingWindowDragIntentFromGlobalMouseDrag()
+                if hasPinnedDraggedWindow() {
+                    scheduleRefreshSession(.globalObserver("leftMouseDraggedPinnedWindow"), optimisticallyPreLayoutWorkspaces: true)
+                }
+            }
+        }
     }
 }

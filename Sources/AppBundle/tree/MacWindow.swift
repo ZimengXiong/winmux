@@ -34,7 +34,9 @@ final class MacWindow: Window {
         allWindowsMap[windowId] = window
 
         try await debugWindowsIfRecording(window)
-        if try await !restoreClosedWindowsCacheIfNeeded(newlyDetectedWindow: window) {
+        let didRestorePersistedFrozenWorld = try await restorePersistedFrozenWorldIfNeeded(newlyDetectedWindow: window)
+        let didRestoreClosedWindowsCache = try await restoreClosedWindowsCacheIfNeeded(newlyDetectedWindow: window)
+        if !didRestorePersistedFrozenWorld && !didRestoreClosedWindowsCache {
             try await tryOnWindowDetected(window)
         }
         return window
@@ -202,7 +204,7 @@ extension Window {
     @MainActor
     func relayoutWindow(on workspace: Workspace, forceTile: Bool = false) async throws {
         let data = forceTile
-            ? unbindAndGetBindingDataForNewTilingWindow(workspace, window: self)
+            ? bindingDataForNewTilingWindow(workspace, window: self)
             : try await unbindAndGetBindingDataForNewWindow(self.asMacWindow().windowId, self.asMacWindow().macApp, workspace, window: self)
         bind(to: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
     }
@@ -215,16 +217,54 @@ private func unbindAndGetBindingDataForNewWindow(_ windowId: UInt32, _ macApp: M
     return switch try await macApp.getAxUiElementWindowType(windowId, windowLevel) {
         case .popup: BindingData(parent: macosPopupWindowsContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
         case .dialog: BindingData(parent: workspace, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
-        case .window: unbindAndGetBindingDataForNewTilingWindow(workspace, window: window)
+        case .window: bindingDataForNewTilingWindow(workspace, window: window)
     }
 }
 
-// The function is private because it's unsafe. It leaves the window in unbound state
+// The function is intentionally internal to make insertion semantics unit-testable.
+// It is unsafe because it may leave `window` in unbound state.
 @MainActor
-private func unbindAndGetBindingDataForNewTilingWindow(_ workspace: Workspace, window: Window?) -> BindingData {
+func bindingDataForNewTilingWindow(_ workspace: Workspace, window: Window?) -> BindingData {
     window?.unbindFromParent() // It's important to unbind to get correct data from below
     let mruWindow = workspace.mostRecentWindowRecursive
     if let mruWindow, let tilingParent = mruWindow.parent as? TilingContainer {
+        if tilingParent.layout == .accordion {
+            var insertionAnchor: TreeNode = tilingParent
+            var insertionParent: NonLeafTreeNodeObject = tilingParent.parent.orDie()
+            while let accordionParent = insertionParent as? TilingContainer, accordionParent.layout == .accordion {
+                insertionAnchor = accordionParent
+                insertionParent = accordionParent.parent.orDie()
+            }
+            switch insertionParent.cases {
+                case .tilingContainer(let parent):
+                    return BindingData(
+                        parent: parent,
+                        adaptiveWeight: WEIGHT_AUTO,
+                        index: insertionAnchor.ownIndex.orDie() + 1,
+                    )
+                case .workspace:
+                    let prevRoot = workspace.rootTilingContainer
+                    if prevRoot === insertionAnchor {
+                        prevRoot.unbindFromParent()
+                        _ = TilingContainer(
+                            parent: workspace,
+                            adaptiveWeight: WEIGHT_AUTO,
+                            tilingParent.orientation.opposite,
+                            .tiles,
+                            index: 0,
+                        )
+                        prevRoot.bind(to: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, index: 0)
+                    }
+                    return BindingData(
+                        parent: workspace.rootTilingContainer,
+                        adaptiveWeight: WEIGHT_AUTO,
+                        index: INDEX_BIND_LAST,
+                    )
+                case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer,
+                     .macosHiddenAppsWindowsContainer, .macosPopupWindowsContainer:
+                    die("Impossible insertion parent for tiling window")
+            }
+        }
         return BindingData(
             parent: tilingParent,
             adaptiveWeight: WEIGHT_AUTO,

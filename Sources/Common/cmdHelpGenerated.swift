@@ -129,6 +129,9 @@ let resize_help_generated = """
 let split_help_generated = """
     USAGE: split [-h|--help] [--window-id <window-id>] (horizontal|vertical|opposite)
     """
+let stack_with_help_generated = """
+    USAGE: stack-with [-h|--help] [--window-id <window-id>] (left|down|up|right)
+    """
 let subscribe_help_generated = """
     USAGE: subscribe [-h|--help] [--all] [--no-send-initial] [<event>...]
     """

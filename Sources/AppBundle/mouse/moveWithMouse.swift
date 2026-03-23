@@ -50,46 +50,33 @@ private func moveFloatingWindow(_ window: Window) async throws {
 @MainActor
 private func moveTilingWindow(_ window: Window) {
     currentlyManipulatedWithMouseWindowId = window.windowId
+    WindowTabStripPanelController.shared.setIgnoresMouseEvents(true)
+    setDraggedWindowAnchorRect(window.lastAppliedLayoutPhysicalRect, for: window.windowId)
     window.lastAppliedLayoutPhysicalRect = nil
     let mouseLocation = mouseLocation
-    let targetWorkspace = mouseLocation.monitorApproximation.activeWorkspace
-    let swapTarget = mouseLocation.findIn(tree: targetWorkspace.rootTilingContainer, virtual: false)?.takeIf { $0 != window }
-    if targetWorkspace != window.nodeWorkspace { // Move window to a different monitor
-        let index: Int = if let swapTarget, let parent = swapTarget.parent as? TilingContainer, let targetRect = swapTarget.lastAppliedLayoutPhysicalRect {
-            mouseLocation.getProjection(parent.orientation) >= targetRect.center.getProjection(parent.orientation)
-                ? swapTarget.ownIndex.orDie() + 1
-                : swapTarget.ownIndex.orDie()
-        } else {
-            0
-        }
-        window.bind(
-            to: swapTarget?.parent ?? targetWorkspace.rootTilingContainer,
-            adaptiveWeight: WEIGHT_AUTO,
-            index: index,
-        )
-    } else if let swapTarget {
-        swapWindows(window, swapTarget)
-    }
+    _ = updatePendingWindowDragIntent(sourceWindow: window, mouseLocation: mouseLocation)
 }
 
 @MainActor
 func swapWindows(_ window1: Window, _ window2: Window) {
-    if window1 == window2 { return }
-    guard let index1 = window1.ownIndex else { return }
-    guard let index2 = window1.ownIndex else { return }
+    let node1 = window1.moveNode
+    let node2 = window2.moveNode
+    if node1 == node2 { return }
+    guard let index1 = node1.ownIndex else { return }
+    guard let index2 = node2.ownIndex else { return }
 
     if index1 < index2 {
-        let binding2 = window2.unbindFromParent()
-        let binding1 = window1.unbindFromParent()
+        let binding2 = node2.unbindFromParent()
+        let binding1 = node1.unbindFromParent()
 
-        window2.bind(to: binding1.parent, adaptiveWeight: binding1.adaptiveWeight, index: binding1.index)
-        window1.bind(to: binding2.parent, adaptiveWeight: binding2.adaptiveWeight, index: binding2.index)
+        node2.bind(to: binding1.parent, adaptiveWeight: binding2.adaptiveWeight, index: binding1.index)
+        node1.bind(to: binding2.parent, adaptiveWeight: binding1.adaptiveWeight, index: binding2.index)
     } else {
-        let binding1 = window1.unbindFromParent()
-        let binding2 = window2.unbindFromParent()
+        let binding1 = node1.unbindFromParent()
+        let binding2 = node2.unbindFromParent()
 
-        window1.bind(to: binding2.parent, adaptiveWeight: binding2.adaptiveWeight, index: binding2.index)
-        window2.bind(to: binding1.parent, adaptiveWeight: binding1.adaptiveWeight, index: binding1.index)
+        node1.bind(to: binding2.parent, adaptiveWeight: binding1.adaptiveWeight, index: binding2.index)
+        node2.bind(to: binding1.parent, adaptiveWeight: binding2.adaptiveWeight, index: binding1.index)
     }
 }
 

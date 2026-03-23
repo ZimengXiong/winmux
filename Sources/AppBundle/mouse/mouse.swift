@@ -1,7 +1,44 @@
 import AppKit
 
 @MainActor var currentlyManipulatedWithMouseWindowId: UInt32? = nil
+@MainActor private var pinnedDraggedWindowId: UInt32? = nil
+@MainActor private var draggedWindowAnchorRectById: [UInt32: Rect] = [:]
 var isLeftMouseButtonDown: Bool { NSEvent.pressedMouseButtons == 1 }
+
+@MainActor
+func setPinnedDraggedWindowId(_ windowId: UInt32?) {
+    pinnedDraggedWindowId = windowId
+}
+
+@MainActor
+func isPinnedDraggedWindow(_ windowId: UInt32) -> Bool {
+    pinnedDraggedWindowId == windowId
+}
+
+@MainActor
+func hasPinnedDraggedWindow() -> Bool {
+    pinnedDraggedWindowId != nil
+}
+
+@MainActor
+func setDraggedWindowAnchorRect(_ rect: Rect?, for windowId: UInt32) {
+    if let rect {
+        draggedWindowAnchorRectById[windowId] = rect
+    } else {
+        draggedWindowAnchorRectById.removeValue(forKey: windowId)
+    }
+}
+
+@MainActor
+func draggedWindowAnchorRect(for windowId: UInt32) -> Rect? {
+    draggedWindowAnchorRectById[windowId]
+}
+
+@MainActor
+func clearDraggedWindowAnchorRect(for windowId: UInt32?) {
+    guard let windowId else { return }
+    draggedWindowAnchorRectById.removeValue(forKey: windowId)
+}
 
 @MainActor
 func isManipulatedWithMouse(_ window: Window) async throws -> Bool {

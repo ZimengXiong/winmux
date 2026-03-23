@@ -122,7 +122,8 @@ final class MacApp: AbstractApp {
         {
             nsApp.activate(options: .activateIgnoringOtherApps)
         } else {
-            MacApp.focusJob = withWindowAsync(windowId) { [nsApp] window, job in
+            MacApp.focusJob = withWindowAsync(windowId) { [nsApp, axApp] window, job in
+                AXUIElementSetAttributeValue(axApp.threadGuarded, kAXFocusedWindowAttribute as CFString, window)
                 // Raise firstly to make sure that by the time we activate the app, the window would be already on top
                 window.set(Ax.isMainAttr, true)
                 AXUIElementPerformAction(window, kAXRaiseAction as CFString)

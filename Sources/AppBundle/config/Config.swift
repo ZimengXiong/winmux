@@ -56,6 +56,8 @@ struct Config: ConvenienceCopyable {
     var onFocusedMonitorChanged: [any Command] = []
 
     var gaps: Gaps = .zero
+    var workspaceSidebar = WorkspaceSidebarConfig()
+    var windowTabs = WindowTabsConfig()
     var workspaceToMonitorForceAssignment: [String: [MonitorDescription]] = [:]
     var modes: [String: Mode] = [:]
     var onWindowDetected: [WindowDetectedCallback] = []
@@ -64,4 +66,26 @@ struct Config: ConvenienceCopyable {
 
 enum DefaultContainerOrientation: String {
     case horizontal, vertical, auto
+}
+
+struct WorkspaceSidebarConfig: ConvenienceCopyable, Equatable, Sendable {
+    var enabled: Bool = false
+    var collapsedWidth: Int = 44
+    var width: Int = 240
+    var monitor: [MonitorDescription] = [.main]
+    var workspaceLabels: [String: String] = [:]
+}
+
+struct WindowTabsConfig: ConvenienceCopyable, Equatable, Sendable {
+    var enabled: Bool = true
+    var height: Int = 34
+}
+
+extension WorkspaceSidebarConfig {
+    @MainActor
+    func resolvedMonitor(sortedMonitors: [Monitor]) -> Monitor? {
+        monitor.lazy
+            .compactMap { $0.resolveMonitor(sortedMonitors: sortedMonitors) }
+            .first
+    }
 }

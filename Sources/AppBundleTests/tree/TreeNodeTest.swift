@@ -86,4 +86,52 @@ final class TreeNodeTest: XCTestCase {
         workspace.normalizeContainers()
         XCTAssertTrue(workspace.rootTilingContainer.children.singleOrNil() is TestWindow)
     }
+
+    func testGarbageCollectUnusedWorkspacesKeepsRecentSidebarManagedEmptyWorkspace() {
+        let workspace = Workspace.get(byName: "draft")
+        workspace.markAsSidebarManaged()
+
+        Workspace.garbageCollectUnusedWorkspaces()
+
+        XCTAssertTrue(Workspace.all.contains(workspace))
+    }
+
+    func testGarbageCollectUnusedWorkspacesRemovesExpiredSidebarManagedEmptyWorkspace() {
+        let workspace = Workspace.get(byName: "draft")
+        workspace.markAsSidebarManaged()
+        workspace.setEmptySinceForTesting(Date(timeIntervalSinceNow: -301))
+
+        Workspace.garbageCollectUnusedWorkspaces()
+
+        XCTAssertFalse(Workspace.all.contains(workspace))
+    }
+
+    func testPersistedFrozenWorldCodableRoundTrip() throws {
+        let workspace = Workspace.get(byName: "1")
+        let accordion = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: 1, .h, .accordion, index: 0)
+        TestWindow.new(id: 11, parent: accordion, adaptiveWeight: 1)
+        TestWindow.new(id: 12, parent: accordion, adaptiveWeight: 1)
+
+        let frozenWorld = FrozenWorld(
+            workspaces: [FrozenWorkspace(workspace)],
+            monitors: monitors.map(FrozenMonitor.init),
+            windowIds: [11, 12],
+        )
+
+        let data = try JSONEncoder().encode(frozenWorld)
+        let decoded = try JSONDecoder().decode(FrozenWorld.self, from: data)
+
+        XCTAssertEqual(decoded.windowIds, [11, 12])
+        XCTAssertEqual(decoded.workspaces.count, 1)
+
+        let frozenChild = try XCTUnwrap(decoded.workspaces.first?.rootTilingNode.children.first)
+        switch frozenChild {
+            case .container(let container):
+                XCTAssertEqual(container.layout, .accordion)
+                XCTAssertEqual(container.orientation, .h)
+                XCTAssertEqual(container.children.count, 2)
+            case .window:
+                XCTFail("Expected nested container in persisted frozen world")
+        }
+    }
 }

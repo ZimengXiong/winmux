@@ -11,6 +11,15 @@ public final class TrayMenuModel: ObservableObject {
     /// Is "layouting" enabled
     @Published var isEnabled: Bool = true
     @Published var workspaces: [WorkspaceViewModel] = []
+    @Published var workspaceSidebarWorkspaces: [WorkspaceSidebarWorkspaceViewModel] = []
+    @Published var workspaceSidebarDropPreview: WorkspaceSidebarDropPreviewViewModel? = nil
+    @Published var windowTabStrips: [WindowTabStripViewModel] = []
+    @Published var isWorkspaceSidebarExpanded: Bool = false
+    @Published var workspaceSidebarVisibleWidth: CGFloat = 0
+    @Published var workspaceSidebarTopPadding: CGFloat = 12
+    @Published var workspaceSidebarHoveredWorkspaceName: String? = nil
+    @Published var workspaceSidebarEditingWorkspaceName: String? = nil
+    @Published var workspaceSidebarEditingText: String = ""
     @Published var experimentalUISettings: ExperimentalUISettings = ExperimentalUISettings()
     @Published var sponsorshipMessage: String = sponsorshipPrompts.randomElement().orDie()
 }
@@ -69,6 +78,83 @@ struct WorkspaceViewModel: Hashable {
     let isEffectivelyEmpty: Bool
     let isVisible: Bool
     let hasFullscreenWindows: Bool
+}
+
+struct WorkspaceSidebarWorkspaceViewModel: Hashable, Identifiable {
+    let name: String
+    let displayName: String
+    let sidebarLabel: String
+    let isGeneratedName: Bool
+    let monitorName: String?
+    let isFocused: Bool
+    let isVisible: Bool
+    let items: [WorkspaceSidebarItemViewModel]
+
+    var id: String { name }
+}
+
+struct WorkspaceSidebarItemViewModel: Hashable, Identifiable {
+    let kind: WorkspaceSidebarItemKind
+
+    var id: String {
+        switch kind {
+            case .window(let window):
+                "window:\(window.windowId)"
+            case .tabGroup(let group):
+                group.id
+        }
+    }
+}
+
+enum WorkspaceSidebarItemKind: Hashable {
+    case window(WorkspaceSidebarWindowViewModel)
+    case tabGroup(WorkspaceSidebarTabGroupViewModel)
+}
+
+struct WorkspaceSidebarTabGroupViewModel: Hashable, Identifiable {
+    let representativeWindowId: UInt32
+    let workspaceName: String
+    let title: String
+    let windowCount: Int
+    let isFocused: Bool
+    let tabs: [WorkspaceSidebarWindowViewModel]
+
+    var id: String { "group:\(representativeWindowId)" }
+}
+
+struct WorkspaceSidebarWindowViewModel: Hashable, Identifiable {
+    let windowId: UInt32
+    let workspaceName: String
+    let appName: String
+    let title: String?
+    let isFocused: Bool
+
+    var id: UInt32 { windowId }
+}
+
+struct WorkspaceSidebarDropPreviewViewModel: Hashable {
+    let sourceWindowId: UInt32
+    let label: String
+    let targetWorkspaceName: String?
+    let targetsNewWorkspace: Bool
+    let isTabGroup: Bool
+    let windowCount: Int
+}
+
+struct WindowTabStripViewModel: Identifiable {
+    let id: ObjectIdentifier
+    let workspaceName: String
+    let frame: CGRect
+    let tabs: [WindowTabItemViewModel]
+}
+
+struct WindowTabItemViewModel: Hashable, Identifiable {
+    let windowId: UInt32
+    let workspaceName: String
+    let title: String
+    let isActive: Bool
+
+    var id: UInt32 { windowId }
 }
 
 enum TrayItemType: String, Hashable {
