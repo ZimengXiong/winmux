@@ -65,6 +65,16 @@ struct WorkspaceSidebarDropTargetFrame: Equatable {
     let frame: CGRect
 }
 
+private struct WorkspaceSidebarRenameKeyEvent {
+    let modifierFlags: NSEvent.ModifierFlags
+    let characters: String?
+
+    init(_ event: NSEvent) {
+        modifierFlags = event.modifierFlags
+        characters = event.characters
+    }
+}
+
 struct WorkspaceSidebarDropTargetPreferenceKey: PreferenceKey {
     static let defaultValue: [WorkspaceSidebarDropTargetFrame] = []
 
@@ -83,6 +93,8 @@ final class WorkspaceSidebarPanel: NSPanelHud {
     static let shared = WorkspaceSidebarPanel()
 
     private let hostingView = NSHostingView(rootView: WorkspaceSidebarView(viewModel: TrayMenuModel.shared))
+    private var localRenameKeyMonitor: Any?
+    private var globalRenameKeyMonitor: Any?
     private var pendingCollapse: DispatchWorkItem?
     private var pendingCollapseFinalize: DispatchWorkItem?
     private var hoverMonitorTimer: Timer?
@@ -108,6 +120,7 @@ final class WorkspaceSidebarPanel: NSPanelHud {
         standardWindowButton(.closeButton)?.isHidden = true
         standardWindowButton(.miniaturizeButton)?.isHidden = true
         standardWindowButton(.zoomButton)?.isHidden = true
+        installRenameKeyMonitoring()
     }
 
     override var canBecomeKey: Bool { true }
@@ -221,6 +234,23 @@ final class WorkspaceSidebarPanel: NSPanelHud {
         setHovering(isMouseInsideHoverRegion())
     }
 
+    private func installRenameKeyMonitoring() {
+        guard localRenameKeyMonitor == nil, globalRenameKeyMonitor == nil else { return }
+        localRenameKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            let snapshot = WorkspaceSidebarRenameKeyEvent(event)
+            let handled = MainActor.assumeIsolated {
+                handleWorkspaceRenameTypingEvent(snapshot)
+            }
+            return handled ? nil : event
+        }
+        globalRenameKeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
+            let snapshot = WorkspaceSidebarRenameKeyEvent(event)
+            Task { @MainActor in
+                _ = handleWorkspaceRenameTypingEvent(snapshot)
+            }
+        }
+    }
+
     private func shouldLockExpansionForSidebarDrag() -> Bool {
         TrayMenuModel.shared.workspaceSidebarDropPreview != nil ||
             hasPinnedDraggedWindow() ||
@@ -316,11 +346,50 @@ final class WorkspaceSidebarPanel: NSPanelHud {
 
 @MainActor
 private func normalizedWorkspaceRenameSeed(from event: NSEvent) -> String? {
-    guard event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty else { return nil }
-    guard let characters = event.charactersIgnoringModifiers?.trimmingCharacters(in: .controlCharacters),
+    normalizedWorkspaceRenameSeed(
+        modifierFlags: event.modifierFlags,
+        characters: event.characters,
+    )
+}
+
+private func normalizedWorkspaceRenameSeed(
+    modifierFlags: NSEvent.ModifierFlags,
+    characters: String?,
+) -> String? {
+    let disallowedModifiers: NSEvent.ModifierFlags = [.command, .control, .option, .function]
+    guard modifierFlags.intersection(disallowedModifiers).isEmpty else { return nil }
+    guard let characters = characters?.trimmingCharacters(in: .controlCharacters),
           !characters.isEmpty
     else { return nil }
     return characters
+}
+
+@MainActor
+private func hoveredWorkspaceReadyForTypingRename() -> String? {
+    guard TrayMenuModel.shared.isEnabled,
+          config.workspaceSidebar.enabled,
+          WorkspaceSidebarPanel.shared.isVisible,
+          TrayMenuModel.shared.isWorkspaceSidebarExpanded,
+          TrayMenuModel.shared.workspaceSidebarEditingWorkspaceName == nil,
+          let hoveredWorkspaceName = TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName
+    else {
+        return nil
+    }
+    return hoveredWorkspaceName
+}
+
+@MainActor
+private func handleWorkspaceRenameTypingEvent(_ event: WorkspaceSidebarRenameKeyEvent) -> Bool {
+    guard let hoveredWorkspaceName = hoveredWorkspaceReadyForTypingRename(),
+          let seed = normalizedWorkspaceRenameSeed(
+              modifierFlags: event.modifierFlags,
+              characters: event.characters,
+          )
+    else {
+        return false
+    }
+    beginWorkspaceSidebarEditing(workspaceName: hoveredWorkspaceName, initialText: seed)
+    return true
 }
 
 @MainActor
@@ -333,14 +402,7 @@ private func handleWorkspaceRenameKeyDown(_ event: NSEvent) -> Bool {
         commitWorkspaceSidebarEditing(workspaceName: editing)
         return true
     }
-    guard TrayMenuModel.shared.workspaceSidebarEditingWorkspaceName == nil,
-          let hoveredWorkspaceName = TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName,
-          let seed = normalizedWorkspaceRenameSeed(from: event)
-    else {
-        return false
-    }
-    beginWorkspaceSidebarEditing(workspaceName: hoveredWorkspaceName, initialText: seed)
-    return true
+    return handleWorkspaceRenameTypingEvent(WorkspaceSidebarRenameKeyEvent(event))
 }
 
 @MainActor
