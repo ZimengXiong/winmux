@@ -111,15 +111,13 @@ final class WorkspaceSidebarPanel: NSPanelHud {
     }
 
     override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { true }
+    override var canBecomeMain: Bool { false }
 
     func prepareForTextInput() {
         NSApp.setActivationPolicy(.accessory)
         NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps])
         NSApp.activate(ignoringOtherApps: true)
         orderFrontRegardless()
-        makeMain()
-        makeKey()
         makeKeyAndOrderFront(nil)
     }
 
@@ -633,13 +631,13 @@ private struct WorkspaceSidebarEditorField: NSViewRepresentable {
         }
         if isFocused {
             DispatchQueue.main.async {
-                WorkspaceSidebarPanel.shared.prepareForTextInput()
                 guard let window = nsView.window else { return }
                 let currentEditor = nsView.currentEditor()
                 let isAlreadyEditingThisField =
                     window.firstResponder === nsView ||
                     (currentEditor != nil && window.firstResponder === currentEditor)
                 guard !isAlreadyEditingThisField else { return }
+                WorkspaceSidebarPanel.shared.prepareForTextInput()
                 window.makeFirstResponder(nsView)
                 let insertionPoint = nsView.stringValue.count
                 nsView.currentEditor()?.selectedRange = NSRange(location: insertionPoint, length: 0)
