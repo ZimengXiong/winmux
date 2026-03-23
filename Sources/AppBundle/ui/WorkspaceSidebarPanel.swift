@@ -215,6 +215,10 @@ final class WorkspaceSidebarPanel: NSPanelHud {
         setHovering(isMouseInsideHoverRegion())
     }
 
+    private func shouldLockExpansionForSidebarDrag() -> Bool {
+        TrayMenuModel.shared.workspaceSidebarDropPreview != nil || hasPinnedDraggedWindow()
+    }
+
     private func setHovering(_ isHovering: Bool) {
         if isHovering {
             pendingCollapse?.cancel()
@@ -236,11 +240,14 @@ final class WorkspaceSidebarPanel: NSPanelHud {
                 }
             }
         } else {
+            if shouldLockExpansionForSidebarDrag() {
+                return
+            }
             if TrayMenuModel.shared.isWorkspaceSidebarExpanded && pendingCollapse == nil {
                 let collapse = DispatchWorkItem { [weak self] in
                     guard let self else { return }
                     self.pendingCollapse = nil
-                    if !self.isMouseInsideHoverRegion() {
+                    if !self.isMouseInsideHoverRegion() && !self.shouldLockExpansionForSidebarDrag() {
                         let sidebarConfig = config.workspaceSidebar
                         withAnimation(.easeInOut(duration: self.animationDuration)) {
                             TrayMenuModel.shared.workspaceSidebarVisibleWidth = CGFloat(sidebarConfig.collapsedWidth)
@@ -248,7 +255,7 @@ final class WorkspaceSidebarPanel: NSPanelHud {
                         let finalize = DispatchWorkItem { [weak self] in
                             guard let self else { return }
                             self.pendingCollapseFinalize = nil
-                            guard !self.isMouseInsideHoverRegion() else { return }
+                            guard !self.isMouseInsideHoverRegion() && !self.shouldLockExpansionForSidebarDrag() else { return }
                             TrayMenuModel.shared.isWorkspaceSidebarExpanded = false
                             self.updateMousePassthrough()
                         }

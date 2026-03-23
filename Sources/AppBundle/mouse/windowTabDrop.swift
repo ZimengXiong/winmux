@@ -563,7 +563,6 @@ private func currentWindowDragIntentDestination(
     detachOrigin: TabDetachOrigin,
 ) -> WindowDragIntentDestination? {
     if let sticky = pendingWindowDragIntent,
-       subject == .window,
        sticky.sourceWindowId == sourceWindow.windowId,
        sticky.sourceSubject == subject,
        sticky.previewStyle != .sidebarWorkspaceMove,
