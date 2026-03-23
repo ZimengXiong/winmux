@@ -427,7 +427,7 @@ private func focusWorkspaceFromSidebar(_ workspaceName: String) {
     guard let token: RunSessionGuard = .isServerEnabled else { return }
     Task {
         try await runLightSession(.menuBarButton, token) {
-            _ = Workspace.get(byName: workspaceName).focusWorkspace()
+            _ = Workspace.existing(byName: workspaceName)?.focusWorkspace()
         }
     }
 }
@@ -531,7 +531,7 @@ private func focusWindowFromSidebar(_ windowId: UInt32, fallbackWorkspace: Strin
             guard let window = Window.get(byId: windowId),
                   let liveFocus = window.toLiveFocusOrNil()
             else {
-                _ = Workspace.get(byName: fallbackWorkspace).focusWorkspace()
+                _ = Workspace.existing(byName: fallbackWorkspace)?.focusWorkspace()
                 return
             }
             _ = setFocus(to: liveFocus)

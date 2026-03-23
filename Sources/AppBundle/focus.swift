@@ -36,9 +36,9 @@ private struct FrozenFocus: AeroAny, Equatable, Sendable {
     // monitorId is not part of the focus. We keep it here only for 'on-focused-monitor-changed' to work
     let monitorId_oneBased: Int
 
-    @MainActor var live: LiveFocus { // Important: don't access focus.monitorId here. monitorId is not part of the focus. Always prefer workspace
+    @MainActor fileprivate var liveOrNil: LiveFocus? { // Important: don't access focus.monitorId here. monitorId is not part of the focus. Always prefer workspace
         let window: Window? = windowId.flatMap { Window.get(byId: $0) }
-        let workspace = Workspace.get(byName: workspaceName)
+        guard let workspace = Workspace.existing(byName: workspaceName) else { return nil }
 
         let workspaceFocus = workspace.toLiveFocus()
         let windowFocus = window?.toLiveFocusOrNil() ?? workspaceFocus
@@ -47,6 +47,8 @@ private struct FrozenFocus: AeroAny, Equatable, Sendable {
             ? workspaceFocus // If window and workspace become separated prefer workspace
             : windowFocus
     }
+
+    @MainActor var live: LiveFocus { liveOrNil ?? mainMonitor.activeWorkspace.toLiveFocus() }
 }
 
 @MainActor private var _focus: FrozenFocus = {
@@ -110,11 +112,14 @@ extension Workspace {
     }
 }
 @MainActor var prevFocusedWorkspaceDate: Date = .distantPast
-@MainActor var prevFocusedWorkspace: Workspace? { _prevFocusedWorkspaceName.map { Workspace.get(byName: $0) } }
+@MainActor var prevFocusedWorkspace: Workspace? { _prevFocusedWorkspaceName.flatMap(Workspace.existing(byName:)) }
 
 // Used by focus-back-and-forth
 @MainActor private var _prevFocus: FrozenFocus? = nil
-@MainActor var prevFocus: LiveFocus? { _prevFocus?.live.takeIf { $0 != focus } }
+@MainActor var prevFocus: LiveFocus? {
+    guard let prevFocus = _prevFocus?.liveOrNil, prevFocus != focus else { return nil }
+    return prevFocus
+}
 
 @MainActor private var onFocusChangedRecursionGuard = false
 // Should be called in refreshSession

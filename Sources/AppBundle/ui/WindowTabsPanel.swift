@@ -159,7 +159,7 @@ private func focusWindowFromTabStrip(_ windowId: UInt32, fallbackWorkspace: Stri
     Task {
         try await runLightSession(.menuBarButton, token) {
             guard let window = Window.get(byId: windowId) else {
-                _ = Workspace.get(byName: fallbackWorkspace).focusWorkspace()
+                _ = Workspace.existing(byName: fallbackWorkspace)?.focusWorkspace()
                 return
             }
             _ = window.focusWindow()
@@ -174,7 +174,7 @@ private func removeWindowFromTabStrip(_ windowId: UInt32, fallbackWorkspace: Str
     Task {
         try await runLightSession(.menuBarButton, token) {
             guard let window = Window.get(byId: windowId) else {
-                _ = Workspace.get(byName: fallbackWorkspace).focusWorkspace()
+                _ = Workspace.existing(byName: fallbackWorkspace)?.focusWorkspace()
                 return
             }
             _ = removeWindowFromTabStack(window)
