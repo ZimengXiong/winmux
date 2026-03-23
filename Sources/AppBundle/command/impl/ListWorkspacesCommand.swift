@@ -16,7 +16,7 @@ struct ListWorkspacesCommand: Command {
             result = result.filter { monitors.contains($0.workspaceMonitor.rect.topLeftCorner) }
         }
         if let empty = args.filteringOptions.empty {
-            result = result.filter { $0.isEffectivelyEmpty == empty }
+            result = result.filter { !workspaceHasSidebarVisibleWindows($0) == empty }
         }
 
         if args.outputOnlyCount {

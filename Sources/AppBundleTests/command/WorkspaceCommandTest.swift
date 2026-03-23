@@ -28,4 +28,17 @@ final class WorkspaceCommandTest: XCTestCase {
         assertEquals(result.exitCode, 1)
         XCTAssertNil(Workspace.existing(byName: "2"))
     }
+
+    func testDirectWorkspaceFocusIgnoresWorkspaceWithOnlyMacosFullscreenWindows() async throws {
+        let initialWorkspace = focus.workspace
+        let hiddenWorkspace = Workspace.get(byName: "2")
+        _ = TestWindow.new(id: 10, parent: hiddenWorkspace.macOsNativeFullscreenWindowsContainer)
+
+        let result = try await WorkspaceCommand(
+            args: WorkspaceCmdArgs(target: .direct(.parse("2").getOrDie())),
+        ).run(.defaultEnv, .emptyStdin)
+
+        assertEquals(result.exitCode, 1)
+        XCTAssertEqual(focus.workspace, initialWorkspace)
+    }
 }

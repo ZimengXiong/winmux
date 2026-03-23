@@ -50,7 +50,7 @@ public final class TrayMenuModel: ObservableObject {
             displayName: workspaceDisplayName($0.name),
             suffix: suffix,
             isFocused: focus.workspace == $0,
-            isEffectivelyEmpty: $0.isEffectivelyEmpty,
+            isEffectivelyEmpty: !workspaceHasSidebarVisibleWindows($0),
             isVisible: $0.isVisible,
             hasFullscreenWindows: hasFullscreenWindows,
         )

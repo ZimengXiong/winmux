@@ -33,7 +33,9 @@ struct WorkspaceCommand: Command {
             }
             return !args.failIfNoop
         } else {
-            guard let workspace = Workspace.existing(byName: workspaceName) else {
+            guard let workspace = Workspace.existing(byName: workspaceName),
+                  isUserFacingWorkspace(workspace, focusedWorkspace: focus.workspace)
+            else {
                 return io.err("Workspace '\(workspaceName)' doesn't exist")
             }
             return workspace.focusWorkspace()
@@ -45,7 +47,14 @@ struct WorkspaceCommand: Command {
     let stdinWorkspaces: [String] = stdin?.split(separator: "\n").map { String($0).trim() }.filter { !$0.isEmpty } ?? []
     let currentMonitor = current.workspaceMonitor
     let workspaces: [Workspace] = stdin != nil
-        ? stdinWorkspaces.map { Workspace.get(byName: $0) }
+        ? stdinWorkspaces.compactMap { workspaceName in
+            guard let workspace = Workspace.existing(byName: workspaceName),
+                  isUserFacingWorkspace(workspace, focusedWorkspace: focus.workspace)
+            else {
+                return nil
+            }
+            return workspace
+        }
         : userFacingWorkspaces(
             Workspace.all.filter { $0.workspaceMonitor.rect.topLeftCorner == currentMonitor.rect.topLeftCorner },
             focusedWorkspace: current,

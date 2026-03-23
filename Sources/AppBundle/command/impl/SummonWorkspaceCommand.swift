@@ -6,7 +6,9 @@ struct SummonWorkspaceCommand: Command {
     /*conforms*/ let shouldResetClosedWindowsCache = true
 
     func run(_ env: CmdEnv, _ io: CmdIo) -> Bool {
-        guard let workspace = Workspace.existing(byName: args.target.val.raw) else {
+        guard let workspace = Workspace.existing(byName: args.target.val.raw),
+              isUserFacingWorkspace(workspace, focusedWorkspace: focus.workspace)
+        else {
             return io.err("Workspace '\(args.target.val.raw)' doesn't exist")
         }
         let monitor = focus.workspace.workspaceMonitor

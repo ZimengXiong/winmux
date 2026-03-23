@@ -53,6 +53,20 @@ func sidebarDraftWorkspaceIndex(_ name: String) -> Int? {
 }
 
 @MainActor
+func workspaceHasSidebarVisibleWindows(_ workspace: Workspace) -> Bool {
+    workspace.children.filterIsInstance(of: TilingContainer.self).contains { !$0.isEffectivelyEmpty } ||
+        !workspace.floatingWindows.isEmpty
+}
+
+@MainActor
+func isUserFacingWorkspace(_ workspace: Workspace, focusedWorkspace: Workspace? = nil) -> Bool {
+    workspaceHasSidebarVisibleWindows(workspace) ||
+        workspace.isVisible ||
+        workspace == focusedWorkspace ||
+        config.persistentWorkspaces.contains(workspace.name)
+}
+
+@MainActor
 func workspaceDisplayName(_ workspaceName: String) -> String {
     let sidebarLabel = config.workspaceSidebar.workspaceLabels[workspaceName]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     if !sidebarLabel.isEmpty {
@@ -66,12 +80,7 @@ func workspaceDisplayName(_ workspaceName: String) -> String {
 
 @MainActor
 func userFacingWorkspaces(_ workspaces: [Workspace], focusedWorkspace: Workspace? = nil) -> [Workspace] {
-    workspaces.filter {
-        !$0.isEffectivelyEmpty ||
-            $0.isVisible ||
-            $0 == focusedWorkspace ||
-            config.persistentWorkspaces.contains($0.name)
-    }
+    workspaces.filter { isUserFacingWorkspace($0, focusedWorkspace: focusedWorkspace) }
 }
 
 final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
