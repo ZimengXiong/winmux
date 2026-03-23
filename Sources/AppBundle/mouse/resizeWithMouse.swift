@@ -29,6 +29,7 @@ func resetManipulatedWithMouseIfPossible() async throws {
     WindowTabStripPanelController.shared.setIgnoresMouseEvents(false)
     if currentlyManipulatedWithMouseWindowId != nil || didApplyPendingDragIntent {
         clearDraggedWindowAnchorRect(for: currentlyManipulatedWithMouseWindowId)
+        setCurrentMouseDragSubject(.window)
         currentlyManipulatedWithMouseWindowId = nil
         for workspace in Workspace.all {
             workspace.resetResizeWeightBeforeResizeRecursive()

@@ -2,6 +2,7 @@ import AppKit
 
 @MainActor var currentlyManipulatedWithMouseWindowId: UInt32? = nil
 @MainActor private var pinnedDraggedWindowId: UInt32? = nil
+@MainActor private var currentMouseDragSubject: WindowDragSubject = .window
 @MainActor private var draggedWindowAnchorRectById: [UInt32: Rect] = [:]
 var isLeftMouseButtonDown: Bool { NSEvent.pressedMouseButtons == 1 }
 
@@ -18,6 +19,16 @@ func isPinnedDraggedWindow(_ windowId: UInt32) -> Bool {
 @MainActor
 func hasPinnedDraggedWindow() -> Bool {
     pinnedDraggedWindowId != nil
+}
+
+@MainActor
+func setCurrentMouseDragSubject(_ subject: WindowDragSubject) {
+    currentMouseDragSubject = subject
+}
+
+@MainActor
+func getCurrentMouseDragSubject() -> WindowDragSubject {
+    currentMouseDragSubject
 }
 
 @MainActor

@@ -414,13 +414,19 @@ private func createWorkspaceFromSidebarButton() {
 }
 
 @MainActor
-func createWorkspaceFromSidebarDrag(sourceWindow: Window) -> Bool {
+func createWorkspaceFromSidebarDrag(sourceNode: TreeNode, sourceWindow: Window) -> Bool {
     let workspaceName = nextSidebarDraftWorkspaceName()
     let workspace = Workspace.get(byName: workspaceName)
     workspace.markAsSidebarManaged()
     beginWorkspaceSidebarEditing(workspaceName: workspaceName, initialText: "")
-    let io = CmdIo(stdin: .emptyStdin)
-    return moveWindowToWorkspace(sourceWindow, workspace, io, focusFollowsWindow: true, failIfNoop: false)
+    let targetContainer: NonLeafTreeNodeObject
+    if sourceNode is Window, sourceWindow.isFloating {
+        targetContainer = workspace
+    } else {
+        targetContainer = workspace.rootTilingContainer
+    }
+    sourceNode.bind(to: targetContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+    return sourceWindow.focusWindow()
 }
 
 @MainActor
@@ -441,14 +447,15 @@ private func focusWindowFromSidebar(_ windowId: UInt32, fallbackWorkspace: Strin
 }
 
 @MainActor
-private func updateSidebarWindowDrag(_ windowId: UInt32) {
+private func updateSidebarWindowDrag(_ windowId: UInt32, subject: WindowDragSubject = .window) {
     guard let window = Window.get(byId: windowId) else {
         clearPendingWindowDragIntent()
         return
     }
     currentlyManipulatedWithMouseWindowId = window.windowId
+    setCurrentMouseDragSubject(subject)
     WindowTabStripPanelController.shared.setIgnoresMouseEvents(true)
-    _ = updatePendingWindowDragIntent(sourceWindow: window, mouseLocation: mouseLocation)
+    _ = updatePendingWindowDragIntent(sourceWindow: window, mouseLocation: mouseLocation, subject: subject, detachOrigin: .window)
 }
 
 @MainActor
@@ -611,9 +618,15 @@ private struct WorkspaceSidebarEditorField: NSViewRepresentable {
         if isFocused {
             DispatchQueue.main.async {
                 WorkspaceSidebarPanel.shared.prepareForTextInput()
-                guard let window = nsView.window, window.firstResponder !== nsView else { return }
+                guard let window = nsView.window else { return }
+                let currentEditor = nsView.currentEditor()
+                let isAlreadyEditingThisField =
+                    window.firstResponder === nsView ||
+                    (currentEditor != nil && window.firstResponder === currentEditor)
+                guard !isAlreadyEditingThisField else { return }
                 window.makeFirstResponder(nsView)
-                nsView.currentEditor()?.selectedRange = NSRange(location: 0, length: nsView.stringValue.count)
+                let insertionPoint = nsView.stringValue.count
+                nsView.currentEditor()?.selectedRange = NSRange(location: insertionPoint, length: 0)
             }
         }
     }
@@ -697,16 +710,16 @@ struct WorkspaceSidebarWorkspaceSection: View {
         .padding(.horizontal, workspaceSidebarSectionInnerHorizontalInset)
         .frame(width: sectionWidth, alignment: .leading)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .contentShape(sectionShape)
+        .contentShape(Rectangle())
         .onHover { hover in
             isHovered = hover
             TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName = hover ? workspace.name : nil
         }
-        .onTapGesture {
+        .simultaneousGesture(TapGesture().onEnded {
             if !isEditing {
                 focusWorkspaceFromSidebar(workspace.name)
             }
-        }
+        })
         .zIndex(isDropTarget ? 1 : 0)
         .scaleEffect(isDropTarget ? 1.012 : 1)
         .animation(.spring(response: 0.22, dampingFraction: 0.86), value: dragPreview)
@@ -782,7 +795,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
         }
     }
 
-    private func workspaceWindowButton(_ window: WorkspaceSidebarWindowViewModel, allowsDrag: Bool) -> some View {
+    private func workspaceWindowButton(_ window: WorkspaceSidebarWindowViewModel, allowsDrag: Bool, subject: WindowDragSubject = .window) -> some View {
         Button {
             focusWindowFromSidebar(window.windowId, fallbackWorkspace: window.workspaceName)
         } label: {
@@ -798,7 +811,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
         .modifier(WorkspaceSidebarOptionalDragModifier(
             isEnabled: allowsDrag,
             onChanged: {
-                updateSidebarWindowDrag(window.windowId)
+                updateSidebarWindowDrag(window.windowId, subject: subject)
             },
             onEnded: {
                 finishSidebarWindowDrag()
@@ -827,7 +840,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
             .simultaneousGesture(
                 DragGesture(minimumDistance: 8)
                     .onChanged { _ in
-                        updateSidebarWindowDrag(group.representativeWindowId)
+                        updateSidebarWindowDrag(group.representativeWindowId, subject: .group)
                     }
                     .onEnded { _ in
                         finishSidebarWindowDrag()
@@ -838,7 +851,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 ForEach(group.tabs) { tab in
-                    workspaceWindowButton(tab, allowsDrag: false)
+                    workspaceWindowButton(tab, allowsDrag: true, subject: .window)
                         .padding(.leading, 12)
                 }
             }

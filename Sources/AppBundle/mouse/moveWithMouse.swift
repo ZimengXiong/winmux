@@ -50,6 +50,7 @@ private func moveFloatingWindow(_ window: Window) async throws {
 @MainActor
 private func moveTilingWindow(_ window: Window) {
     currentlyManipulatedWithMouseWindowId = window.windowId
+    setCurrentMouseDragSubject(.window)
     WindowTabStripPanelController.shared.setIgnoresMouseEvents(true)
     setDraggedWindowAnchorRect(window.lastAppliedLayoutPhysicalRect, for: window.windowId)
     window.lastAppliedLayoutPhysicalRect = nil
@@ -59,8 +60,11 @@ private func moveTilingWindow(_ window: Window) {
 
 @MainActor
 func swapWindows(_ window1: Window, _ window2: Window) {
-    let node1 = window1.moveNode
-    let node2 = window2.moveNode
+    swapNodes(window1.moveNode, window2.moveNode)
+}
+
+@MainActor
+func swapNodes(_ node1: TreeNode, _ node2: TreeNode) {
     if node1 == node2 { return }
     guard let index1 = node1.ownIndex else { return }
     guard let index2 = node2.ownIndex else { return }

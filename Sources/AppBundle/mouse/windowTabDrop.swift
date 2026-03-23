@@ -5,12 +5,14 @@ private var pendingWindowDragIntent: PendingWindowDragIntent? = nil
 
 private struct PendingWindowDragIntent {
     let sourceWindowId: UInt32
+    let sourceSubject: WindowDragSubject
     let kind: WindowDragIntentKind
     let previewRect: Rect
     let interactionRect: Rect
     let title: String
     let subtitle: String
     let previewStyle: WindowTabDropPreviewStyle
+    let isGroup: Bool
 }
 
 private enum WindowDragIntentKind: Equatable {
@@ -20,6 +22,11 @@ private enum WindowDragIntentKind: Equatable {
     case moveToWorkspace(workspaceName: String)
     case createWorkspace
     case sidebarHover
+}
+
+enum WindowDragSubject: Equatable {
+    case window
+    case group
 }
 
 enum TabDetachOrigin {
@@ -34,6 +41,7 @@ private struct WindowDragIntentDestination {
     let title: String
     let subtitle: String
     let previewStyle: WindowTabDropPreviewStyle
+    let isGroup: Bool
 
     var preview: WindowTabDropPreviewViewModel {
         WindowTabDropPreviewViewModel(
@@ -41,14 +49,38 @@ private struct WindowDragIntentDestination {
             title: title,
             subtitle: subtitle,
             style: previewStyle,
+            isGroup: isGroup,
         )
     }
 }
 
 @MainActor
 private func workspaceSidebarCursorPreviewRect(at mouseLocation: CGPoint) -> Rect {
-    let width: CGFloat = 176
-    let height: CGFloat = 40
+    workspaceSidebarCursorPreviewRect(at: mouseLocation, sidebarRect: WorkspaceSidebarPanel.shared.visibleScreenRectNormalized())
+}
+
+private func workspaceSidebarCursorPreviewRect(at mouseLocation: CGPoint, sidebarRect: Rect?) -> Rect {
+    let width: CGFloat = 184
+    let height: CGFloat = 42
+    if let sidebarRect {
+        let horizontalInset: CGFloat = 10
+        let verticalInset: CGFloat = 8
+        let availableWidth = min(width, max(sidebarRect.width - horizontalInset * 2, 0))
+        let clampedX = max(
+            sidebarRect.minX + horizontalInset,
+            min(mouseLocation.x - (availableWidth / 2), sidebarRect.maxX - availableWidth - horizontalInset),
+        )
+        let clampedY = max(
+            sidebarRect.minY + verticalInset,
+            min(mouseLocation.y - (height / 2), sidebarRect.maxY - height - verticalInset),
+        )
+        return Rect(
+            topLeftX: clampedX,
+            topLeftY: clampedY,
+            width: availableWidth,
+            height: height,
+        )
+    }
     return Rect(
         topLeftX: mouseLocation.x + 16,
         topLeftY: mouseLocation.y - height - 12,
@@ -58,8 +90,16 @@ private func workspaceSidebarCursorPreviewRect(at mouseLocation: CGPoint) -> Rec
 }
 
 @MainActor
-private func sidebarDragSourceTitle(for sourceWindow: Window) -> String {
-    let moveNode = sourceWindow.moveNode
+private func dragSubjectNode(for sourceWindow: Window, subject: WindowDragSubject) -> TreeNode {
+    switch subject {
+        case .window: sourceWindow
+        case .group: sourceWindow.moveNode
+    }
+}
+
+@MainActor
+private func sidebarDragSourceTitle(for sourceWindow: Window, subject: WindowDragSubject) -> String {
+    let moveNode = dragSubjectNode(for: sourceWindow, subject: subject)
     if moveNode is TilingContainer {
         let windowCount = max(moveNode.allLeafWindowsRecursive.count, 1)
         return "Tab Group • \(windowCount) windows"
@@ -68,7 +108,7 @@ private func sidebarDragSourceTitle(for sourceWindow: Window) -> String {
 }
 
 @MainActor
-private func updateSidebarDragFeedback(sourceWindow: Window, destination: WindowDragIntentDestination?) {
+private func updateSidebarDragFeedback(sourceWindow: Window, subject: WindowDragSubject, destination: WindowDragIntentDestination?) {
     guard let destination, destination.previewStyle == .sidebarWorkspaceMove else {
         let hadPinnedWindow = hasPinnedDraggedWindow()
         setPinnedDraggedWindowId(nil)
@@ -81,9 +121,10 @@ private func updateSidebarDragFeedback(sourceWindow: Window, destination: Window
         return
     }
 
-    let moveNode = sourceWindow.moveNode
+    let moveNode = dragSubjectNode(for: sourceWindow, subject: subject)
     let isTabGroup = moveNode is TilingContainer
     let windowCount = max(moveNode.allLeafWindowsRecursive.count, 1)
+    let sourceLabel = sidebarDragSourceTitle(for: sourceWindow, subject: subject)
     let targetWorkspaceName: String? = switch destination.kind {
         case .moveToWorkspace(let workspaceName): workspaceName
         case .createWorkspace: nil
@@ -92,7 +133,7 @@ private func updateSidebarDragFeedback(sourceWindow: Window, destination: Window
     if case .moveToWorkspace = destination.kind {
         TrayMenuModel.shared.workspaceSidebarDropPreview = WorkspaceSidebarDropPreviewViewModel(
             sourceWindowId: sourceWindow.windowId,
-            label: sidebarDisplayLabel(for: sourceWindow),
+            label: sourceLabel,
             targetWorkspaceName: targetWorkspaceName,
             targetsNewWorkspace: false,
             isTabGroup: isTabGroup,
@@ -101,7 +142,7 @@ private func updateSidebarDragFeedback(sourceWindow: Window, destination: Window
     } else if destination.kind == .createWorkspace {
         TrayMenuModel.shared.workspaceSidebarDropPreview = WorkspaceSidebarDropPreviewViewModel(
             sourceWindowId: sourceWindow.windowId,
-            label: sidebarDisplayLabel(for: sourceWindow),
+            label: sourceLabel,
             targetWorkspaceName: nil,
             targetsNewWorkspace: true,
             isTabGroup: isTabGroup,
@@ -131,12 +172,13 @@ private func currentWindowTabDropDestination(sourceWindow: Window, mouseLocation
 }
 
 @MainActor
-private func currentSidebarWorkspaceDropDestination(sourceWindow: Window, mouseLocation: CGPoint) -> WindowDragIntentDestination? {
-    let sourceLabel = sidebarDragSourceTitle(for: sourceWindow)
+private func currentSidebarWorkspaceDropDestination(sourceWindow: Window, mouseLocation: CGPoint, subject: WindowDragSubject) -> WindowDragIntentDestination? {
+    let sourceLabel = sidebarDragSourceTitle(for: sourceWindow, subject: subject)
+    let isGroup = subject == .group
     if let target = workspaceSidebarDropTarget(at: mouseLocation) {
         switch target.kind {
             case .workspace(let workspaceName):
-                if sourceWindow.nodeWorkspace?.name != workspaceName {
+                if dragSubjectNode(for: sourceWindow, subject: subject).nodeWorkspace?.name != workspaceName {
                     return WindowDragIntentDestination(
                         kind: .moveToWorkspace(workspaceName: workspaceName),
                         previewRect: workspaceSidebarCursorPreviewRect(at: mouseLocation),
@@ -144,6 +186,7 @@ private func currentSidebarWorkspaceDropDestination(sourceWindow: Window, mouseL
                         title: sourceLabel,
                         subtitle: "Drop to send this item to \(workspaceName)",
                         previewStyle: .sidebarWorkspaceMove,
+                        isGroup: isGroup,
                     )
                 }
             case .newWorkspace:
@@ -154,6 +197,7 @@ private func currentSidebarWorkspaceDropDestination(sourceWindow: Window, mouseL
                     title: sourceLabel,
                     subtitle: "Drop to create a workspace and move this item there",
                     previewStyle: .sidebarWorkspaceMove,
+                    isGroup: isGroup,
                 )
         }
     }
@@ -167,6 +211,7 @@ private func currentSidebarWorkspaceDropDestination(sourceWindow: Window, mouseL
         title: sourceLabel,
         subtitle: "Drag across a workspace to move this item",
         previewStyle: .sidebarWorkspaceMove,
+        isGroup: isGroup,
     )
 }
 
@@ -187,6 +232,7 @@ private func currentTabDetachDestination(sourceWindow: Window, mouseLocation: CG
         title: "Detach Tab",
         subtitle: "Release to pull this window out of the stack",
         previewStyle: .detach,
+        isGroup: false,
     )
 }
 
@@ -249,6 +295,7 @@ extension CGPoint {
                     title: "Insert Into Tabs",
                     subtitle: "Drop near the top edge to add this window",
                     previewStyle: .tabInsert,
+                    isGroup: false,
                 )
             case .tilingContainer(let container):
                 if let targetWindow = container.tabActiveWindow,
@@ -264,6 +311,7 @@ extension CGPoint {
                         title: "Insert Into Tabs",
                         subtitle: "Drop near the top edge to add this window",
                         previewStyle: .tabInsert,
+                        isGroup: false,
                     )
                 }
 
@@ -283,22 +331,33 @@ extension CGPoint {
 
 @MainActor
 func updatePendingWindowDragIntent(sourceWindow: Window, mouseLocation: CGPoint) -> Bool {
-    guard let destination = currentWindowDragIntentDestination(sourceWindow: sourceWindow, mouseLocation: mouseLocation) else {
-        updateSidebarDragFeedback(sourceWindow: sourceWindow, destination: nil)
+    updatePendingWindowDragIntent(sourceWindow: sourceWindow, mouseLocation: mouseLocation, subject: .window, detachOrigin: .window)
+}
+
+@MainActor
+func updatePendingWindowDragIntent(
+    sourceWindow: Window,
+    mouseLocation: CGPoint,
+    subject: WindowDragSubject,
+    detachOrigin: TabDetachOrigin,
+) -> Bool {
+    guard let destination = currentWindowDragIntentDestination(
+        sourceWindow: sourceWindow,
+        mouseLocation: mouseLocation,
+        subject: subject,
+        detachOrigin: detachOrigin
+    ) else {
+        updateSidebarDragFeedback(sourceWindow: sourceWindow, subject: subject, destination: nil)
         clearPendingWindowDragIntent()
         return false
     }
-    updateSidebarDragFeedback(sourceWindow: sourceWindow, destination: destination)
-    return setPendingWindowDragIntent(sourceWindowId: sourceWindow.windowId, destination: destination)
+    updateSidebarDragFeedback(sourceWindow: sourceWindow, subject: subject, destination: destination)
+    return setPendingWindowDragIntent(sourceWindowId: sourceWindow.windowId, sourceSubject: subject, destination: destination)
 }
 
 @MainActor
 func updatePendingDetachedTabIntent(sourceWindow: Window, mouseLocation: CGPoint, origin: TabDetachOrigin) -> Bool {
-    guard let destination = currentTabDetachDestination(sourceWindow: sourceWindow, mouseLocation: mouseLocation, origin: origin) else {
-        clearPendingWindowDragIntent()
-        return false
-    }
-    return setPendingWindowDragIntent(sourceWindowId: sourceWindow.windowId, destination: destination)
+    updatePendingWindowDragIntent(sourceWindow: sourceWindow, mouseLocation: mouseLocation, subject: .window, detachOrigin: origin)
 }
 
 @MainActor
@@ -306,16 +365,23 @@ func refreshPendingWindowDragIntentFromGlobalMouseDrag() {
     guard let windowId = currentlyManipulatedWithMouseWindowId,
           let sourceWindow = Window.get(byId: windowId)
     else { return }
-    _ = updatePendingWindowDragIntent(sourceWindow: sourceWindow, mouseLocation: mouseLocation)
+    _ = updatePendingWindowDragIntent(
+        sourceWindow: sourceWindow,
+        mouseLocation: mouseLocation,
+        subject: getCurrentMouseDragSubject(),
+        detachOrigin: .window,
+    )
 }
 
 @MainActor
-private func setPendingWindowDragIntent(sourceWindowId: UInt32, destination: WindowDragIntentDestination) -> Bool {
+private func setPendingWindowDragIntent(sourceWindowId: UInt32, sourceSubject: WindowDragSubject, destination: WindowDragIntentDestination) -> Bool {
     if let pendingWindowDragIntent,
        pendingWindowDragIntent.sourceWindowId == sourceWindowId,
+       pendingWindowDragIntent.sourceSubject == sourceSubject,
        pendingWindowDragIntent.kind == destination.kind,
        pendingWindowDragIntent.title == destination.title,
        pendingWindowDragIntent.subtitle == destination.subtitle,
+       pendingWindowDragIntent.isGroup == destination.isGroup,
        pendingWindowDragIntent.previewRect.isEqual(to: destination.previewRect),
        pendingWindowDragIntent.interactionRect.isEqual(to: destination.interactionRect)
     {
@@ -324,12 +390,14 @@ private func setPendingWindowDragIntent(sourceWindowId: UInt32, destination: Win
 
     pendingWindowDragIntent = PendingWindowDragIntent(
         sourceWindowId: sourceWindowId,
+        sourceSubject: sourceSubject,
         kind: destination.kind,
         previewRect: destination.previewRect,
         interactionRect: destination.interactionRect,
         title: destination.title,
         subtitle: destination.subtitle,
         previewStyle: destination.previewStyle,
+        isGroup: destination.isGroup,
     )
     WindowTabDropPreviewPanel.shared.show(destination.preview)
     return true
@@ -350,8 +418,10 @@ func applyPendingWindowDragIntentIfPossible() -> Bool {
           let sourceWindow = Window.get(byId: pendingWindowDragIntent.sourceWindowId),
           pendingWindowDragIntent.interactionRect.contains(mouseLocation)
     else { return false }
+    let sourceNode = dragSubjectNode(for: sourceWindow, subject: pendingWindowDragIntent.sourceSubject)
     switch pendingWindowDragIntent.kind {
         case .tabStack(let targetWindowId):
+            guard pendingWindowDragIntent.sourceSubject == .window else { return false }
             guard let targetWindow = Window.get(byId: targetWindowId),
                   sourceWindow != targetWindow
             else { return false }
@@ -366,16 +436,20 @@ func applyPendingWindowDragIntentIfPossible() -> Bool {
             guard let targetWindow = Window.get(byId: targetWindowId)
             else { return false }
             resetClosedWindowsCache()
-            swapWindows(sourceWindow, targetWindow)
+            swapNodes(sourceNode, targetWindow.moveNode)
             return true
         case .moveToWorkspace(let workspaceName):
             let targetWorkspace = Workspace.get(byName: workspaceName)
             resetClosedWindowsCache()
-            applyWorkspaceMove(sourceWindow: sourceWindow, mouseLocation: mouseLocation, targetWorkspace: targetWorkspace)
+            if pendingWindowDragIntent.previewStyle == .sidebarWorkspaceMove {
+                applySidebarWorkspaceMove(sourceNode: sourceNode, sourceWindow: sourceWindow, targetWorkspace: targetWorkspace)
+            } else {
+                applyWorkspaceMove(sourceNode: sourceNode, sourceWindow: sourceWindow, mouseLocation: mouseLocation, targetWorkspace: targetWorkspace)
+            }
             return true
         case .createWorkspace:
             resetClosedWindowsCache()
-            return createWorkspaceFromSidebarDrag(sourceWindow: sourceWindow)
+            return createWorkspaceFromSidebarDrag(sourceNode: sourceNode, sourceWindow: sourceWindow)
         case .sidebarHover:
             return false
     }
@@ -463,9 +537,15 @@ func removeWindowFromTabStack(_ window: Window) -> Bool {
 }
 
 @MainActor
-private func currentWindowDragIntentDestination(sourceWindow: Window, mouseLocation: CGPoint) -> WindowDragIntentDestination? {
+private func currentWindowDragIntentDestination(
+    sourceWindow: Window,
+    mouseLocation: CGPoint,
+    subject: WindowDragSubject,
+    detachOrigin: TabDetachOrigin,
+) -> WindowDragIntentDestination? {
     if let sticky = pendingWindowDragIntent,
        sticky.sourceWindowId == sourceWindow.windowId,
+       sticky.sourceSubject == subject,
        sticky.previewStyle != .sidebarWorkspaceMove,
        sticky.interactionRect.contains(mouseLocation)
     {
@@ -476,25 +556,29 @@ private func currentWindowDragIntentDestination(sourceWindow: Window, mouseLocat
             title: sticky.title,
             subtitle: sticky.subtitle,
             previewStyle: sticky.previewStyle,
+            isGroup: sticky.isGroup,
         )
     }
 
-    if let sidebarDestination = currentSidebarWorkspaceDropDestination(sourceWindow: sourceWindow, mouseLocation: mouseLocation) {
+    if let sidebarDestination = currentSidebarWorkspaceDropDestination(sourceWindow: sourceWindow, mouseLocation: mouseLocation, subject: subject) {
         return sidebarDestination
     }
 
-    if config.windowTabs.enabled,
+    if subject == .window,
+       config.windowTabs.enabled,
        let tabDestination = currentWindowTabDropDestination(sourceWindow: sourceWindow, mouseLocation: mouseLocation)
     {
         return tabDestination
     }
 
-    if let detachDestination = currentTabDetachDestination(sourceWindow: sourceWindow, mouseLocation: mouseLocation, origin: .window) {
+    if subject == .window,
+       let detachDestination = currentTabDetachDestination(sourceWindow: sourceWindow, mouseLocation: mouseLocation, origin: detachOrigin) {
         return detachDestination
     }
 
+    let sourceNode = dragSubjectNode(for: sourceWindow, subject: subject)
     let targetWorkspace = mouseLocation.monitorApproximation.activeWorkspace
-    if targetWorkspace != sourceWindow.moveNode.nodeWorkspace {
+    if targetWorkspace != sourceNode.nodeWorkspace {
         let previewRect = targetWorkspace.rootTilingContainer.lastAppliedLayoutPhysicalRect ?? targetWorkspace.workspaceMonitor.visibleRectPaddedByOuterGaps
         return WindowDragIntentDestination(
             kind: .moveToWorkspace(workspaceName: targetWorkspace.name),
@@ -503,17 +587,18 @@ private func currentWindowDragIntentDestination(sourceWindow: Window, mouseLocat
             title: "Move Here",
             subtitle: "Drop to move this item to this workspace",
             previewStyle: .workspaceMove,
+            isGroup: subject == .group,
         )
     }
 
-    return currentSwapDestination(sourceWindow: sourceWindow, mouseLocation: mouseLocation)
+    return currentSwapDestination(sourceWindow: sourceWindow, mouseLocation: mouseLocation, subject: subject)
 }
 
 @MainActor
-private func currentSwapDestination(sourceWindow: Window, mouseLocation: CGPoint) -> WindowDragIntentDestination? {
+private func currentSwapDestination(sourceWindow: Window, mouseLocation: CGPoint, subject: WindowDragSubject) -> WindowDragIntentDestination? {
     let targetWorkspace = mouseLocation.monitorApproximation.activeWorkspace
     guard let targetWindow = mouseLocation.findIn(tree: targetWorkspace.rootTilingContainer, virtual: false) else { return nil }
-    let sourceNode = sourceWindow.moveNode
+    let sourceNode = dragSubjectNode(for: sourceWindow, subject: subject)
     let targetNode = targetWindow.moveNode
     guard sourceNode != targetNode,
           let previewRect = targetNode.swapDropZoneRect,
@@ -528,12 +613,24 @@ private func currentSwapDestination(sourceWindow: Window, mouseLocation: CGPoint
         title: isTabGroup ? "Swap With Tab Group" : "Swap Positions",
         subtitle: isTabGroup ? "Drop in the body to move around the whole group" : "Drop in the body to swap these windows",
         previewStyle: .swap,
+        isGroup: subject == .group,
     )
 }
 
 @MainActor
-private func applyWorkspaceMove(sourceWindow: Window, mouseLocation: CGPoint, targetWorkspace: Workspace) {
-    let sourceNode = sourceWindow.moveNode
+private func applySidebarWorkspaceMove(sourceNode: TreeNode, sourceWindow: Window, targetWorkspace: Workspace) {
+    let targetContainer: NonLeafTreeNodeObject
+    if sourceNode is Window, sourceWindow.isFloating {
+        targetContainer = targetWorkspace
+    } else {
+        targetContainer = targetWorkspace.rootTilingContainer
+    }
+    sourceNode.bind(to: targetContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+    _ = sourceWindow.focusWindow()
+}
+
+@MainActor
+private func applyWorkspaceMove(sourceNode: TreeNode, sourceWindow: Window, mouseLocation: CGPoint, targetWorkspace: Workspace) {
     let swapTarget = mouseLocation.findIn(tree: targetWorkspace.rootTilingContainer, virtual: false)?.takeIf { $0.moveNode != sourceNode }
     let index: Int
     if let swapTarget {

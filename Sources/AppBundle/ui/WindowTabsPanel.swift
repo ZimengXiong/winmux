@@ -140,6 +140,7 @@ struct WindowTabDropPreviewViewModel: Equatable {
     let title: String
     let subtitle: String
     let style: WindowTabDropPreviewStyle
+    let isGroup: Bool
 }
 
 enum WindowTabDropPreviewStyle: Equatable {
@@ -196,8 +197,9 @@ private func updateMoveFromTabStrip(_ windowId: UInt32) {
         return
     }
     currentlyManipulatedWithMouseWindowId = window.windowId
+    setCurrentMouseDragSubject(.group)
     WindowTabStripPanelController.shared.setIgnoresMouseEvents(true)
-    _ = updatePendingWindowDragIntent(sourceWindow: window, mouseLocation: mouseLocation)
+    _ = updatePendingWindowDragIntent(sourceWindow: window, mouseLocation: mouseLocation, subject: .group, detachOrigin: .window)
 }
 
 @MainActor
@@ -259,6 +261,61 @@ private struct WindowTabStripView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.clear)
+    }
+}
+
+private struct WindowTabDropPreviewChrome: View {
+    let title: String
+    let subtitle: String
+    let accent: Color
+    let iconName: String
+    let isPresented: Bool
+    let borderStyle: StrokeStyle
+    let bodyContent: AnyView
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(accent.opacity(0.14))
+                    .frame(width: 28, height: 22)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(accent.opacity(0.36), lineWidth: 1)
+                    .frame(width: 28, height: 22)
+                Image(systemName: iconName)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(accent)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(Color.primary)
+                    .lineLimit(1)
+                Text(subtitle)
+                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .foregroundStyle(Color.primary.opacity(0.72))
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+
+            bodyContent
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(nsColor: .windowBackgroundColor))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(accent.opacity(0.42), style: borderStyle)
+                }
+        )
+        .scaleEffect(isPresented ? 1 : 0.96)
+        .opacity(1)
+        .shadow(color: accent.opacity(0.14), radius: 12, y: 6)
     }
 }
 
@@ -336,120 +393,65 @@ private struct WindowTabDropPreviewView: View {
     }
 
     private var tabInsertPreview: some View {
-        ZStack(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(nsColor: .windowBackgroundColor),
-                            Color(nsColor: .underPageBackgroundColor),
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom,
-                    ),
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(Color.accentColor.opacity(0.72), lineWidth: 1.5)
-                }
-
-            HStack(spacing: 12) {
-                HStack(spacing: 6) {
+        WindowTabDropPreviewChrome(
+            title: model.title,
+            subtitle: model.subtitle,
+            accent: Color.accentColor,
+            iconName: model.isGroup ? "square.stack.3d.up.fill" : "plus.rectangle.on.rectangle",
+            isPresented: isPresented,
+            borderStyle: StrokeStyle(lineWidth: 1.5),
+            bodyContent: AnyView(
+                HStack(spacing: 5) {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(Color.primary.opacity(0.16))
-                        .frame(width: 42, height: 14)
+                        .frame(width: 26, height: 12)
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(Color.accentColor)
-                        .frame(width: 54, height: 16)
+                        .frame(width: 38, height: 14)
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(Color.primary.opacity(0.16))
-                        .frame(width: 34, height: 14)
+                        .frame(width: 20, height: 12)
                 }
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(model.title)
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    Text(model.subtitle)
-                        .font(.system(size: 10, weight: .medium, design: .rounded))
-                        .foregroundStyle(Color.primary.opacity(0.72))
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-        }
-        .scaleEffect(isPresented ? 1 : 0.97)
-        .opacity(1)
-        .shadow(color: Color.accentColor.opacity(0.18), radius: 12, y: 4)
+            ),
+        )
     }
 
     private func genericPreview(accent: Color, dash: [CGFloat]) -> some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(nsColor: .windowBackgroundColor))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(accent.opacity(0.55), style: StrokeStyle(lineWidth: 1.5, dash: dash))
-                }
-
-            VStack(spacing: 3) {
-                Text(model.title)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                Text(model.subtitle)
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(Color.primary.opacity(0.7))
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color(nsColor: .windowBackgroundColor))
-                    .shadow(color: Color.black.opacity(0.14), radius: 12, y: 6),
-            )
-            .scaleEffect(isPresented ? 1 : 0.96)
-            .opacity(1)
-        }
+        WindowTabDropPreviewChrome(
+            title: model.title,
+            subtitle: model.subtitle,
+            accent: accent,
+            iconName: model.isGroup ? "square.stack.3d.up.fill" : "macwindow",
+            isPresented: isPresented,
+            borderStyle: StrokeStyle(lineWidth: 1.5, dash: dash),
+            bodyContent: AnyView(
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(accent.opacity(0.9))
+                    .frame(width: 24, height: 20)
+            ),
+        )
     }
 
     private var sidebarWorkspaceMovePreview: some View {
-        let iconName = model.title.hasPrefix("Tab Group") ? "square.stack.3d.up.fill" : "macwindow"
-        return HStack(spacing: 8) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.accentColor.opacity(0.16))
-                    .frame(width: 24, height: 18)
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(Color.accentColor.opacity(0.5), lineWidth: 1)
-                    .frame(width: 24, height: 18)
-                Image(systemName: iconName)
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
-            }
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(model.title)
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Color.primary)
-                    .lineLimit(1)
-                Text(model.subtitle)
-                    .font(.system(size: 9, weight: .medium, design: .rounded))
-                    .foregroundStyle(Color.primary.opacity(0.62))
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(nsColor: .windowBackgroundColor).opacity(0.98))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(Color.accentColor.opacity(0.25), lineWidth: 1)
-                }
-                .shadow(color: Color.black.opacity(0.12), radius: 12, y: 6),
+        WindowTabDropPreviewChrome(
+            title: model.title,
+            subtitle: model.subtitle,
+            accent: Color.accentColor,
+            iconName: model.isGroup ? "square.stack.3d.up.fill" : "macwindow",
+            isPresented: isPresented,
+            borderStyle: StrokeStyle(lineWidth: 1),
+            bodyContent: AnyView(
+                Text("Sidebar")
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color.accentColor.opacity(0.92))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(Color.accentColor.opacity(0.12))
+                    )
+            ),
         )
-        .scaleEffect(isPresented ? 1 : 0.94)
-        .opacity(1)
     }
 }
