@@ -413,7 +413,6 @@ private func showWorkspaceSidebarError(_ body: String) {
 private func createWorkspaceFromSidebarButton() {
     guard let token: RunSessionGuard = .isServerEnabled else { return }
     let workspaceName = nextSidebarDraftWorkspaceName()
-    beginWorkspaceSidebarEditing(workspaceName: workspaceName, initialText: "")
     Task { @MainActor in
         do {
             try await runLightSession(.menuBarButton, token) {
@@ -422,7 +421,6 @@ private func createWorkspaceFromSidebarButton() {
                 _ = workspace.focusWorkspace()
             }
         } catch {
-            cancelWorkspaceSidebarEditing(workspaceName: workspaceName)
             showWorkspaceSidebarError(error.localizedDescription)
         }
     }
@@ -433,7 +431,6 @@ func createWorkspaceFromSidebarDrag(sourceNode: TreeNode, sourceWindow: Window) 
     let workspaceName = nextSidebarDraftWorkspaceName()
     let workspace = Workspace.get(byName: workspaceName)
     workspace.markAsSidebarManaged()
-    beginWorkspaceSidebarEditing(workspaceName: workspaceName, initialText: "")
     let targetContainer: NonLeafTreeNodeObject
     if sourceNode is Window, sourceWindow.isFloating {
         targetContainer = workspace
