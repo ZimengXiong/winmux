@@ -210,6 +210,7 @@ final class WorkspaceSidebarPanel: NSPanelHud {
 
     private func resetHiddenSidebarState() {
         workspaceSidebarDropTargets = []
+        TrayMenuModel.shared.workspaceSidebarDropPreview = nil
         TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName = nil
         TrayMenuModel.shared.workspaceSidebarVisibleWidth = 0
         orderOut(nil)
