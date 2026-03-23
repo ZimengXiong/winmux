@@ -72,8 +72,7 @@ func updateWorkspaceSidebarModel() async {
 }
 
 private func sidebarDraftWorkspaceFallbackDisplayName(_ workspaceName: String) -> String {
-    let suffix = workspaceName.replacingOccurrences(of: "__sidebar_draft_workspace_", with: "")
-    if let index = Int(suffix) {
+    if let index = sidebarDraftWorkspaceIndex(workspaceName) {
         return "Workspace \(index)"
     }
     return "Workspace"

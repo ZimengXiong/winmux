@@ -3,7 +3,6 @@ import Common
 
 @MainActor private var workspaceNameToWorkspace: [String: Workspace] = [:]
 private let sidebarDraftWorkspacePrefix = "__sidebar_draft_workspace_"
-@MainActor private var sidebarDraftWorkspaceCounter: UInt64 = 0
 
 @MainActor private var screenPointToPrevVisibleWorkspace: [CGPoint: String] = [:]
 @MainActor private var screenPointToVisibleWorkspace: [CGPoint: Workspace] = [:]
@@ -35,17 +34,22 @@ private func getStubWorkspace(forPoint point: CGPoint) -> Workspace {
 
 @MainActor
 func nextSidebarDraftWorkspaceName() -> String {
-    while true {
-        sidebarDraftWorkspaceCounter += 1
-        let candidate = "\(sidebarDraftWorkspacePrefix)\(sidebarDraftWorkspaceCounter)"
-        if workspaceNameToWorkspace[candidate] == nil {
-            return candidate
-        }
+    let usedIndices = Set(workspaceNameToWorkspace.keys.compactMap(sidebarDraftWorkspaceIndex))
+    var candidate = 1
+    while usedIndices.contains(candidate) {
+        candidate += 1
     }
+    return "\(sidebarDraftWorkspacePrefix)\(candidate)"
 }
 
 func isSidebarDraftWorkspaceName(_ name: String) -> Bool {
     name.hasPrefix(sidebarDraftWorkspacePrefix)
+}
+
+func sidebarDraftWorkspaceIndex(_ name: String) -> Int? {
+    guard isSidebarDraftWorkspaceName(name) else { return nil }
+    let suffix = name.replacingOccurrences(of: sidebarDraftWorkspacePrefix, with: "")
+    return Int(suffix)
 }
 
 final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {

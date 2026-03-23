@@ -127,7 +127,9 @@ final class WindowTabsTest: XCTestCase {
 
         XCTAssertGreaterThan(windowKeepRect.height, stripKeepRect.height)
         XCTAssertLessThan(stripKeepRect.maxY, windowKeepRect.maxY)
-        XCTAssertLessThan(windowKeepRect.width, accordion.lastAppliedLayoutPhysicalRect.orDie().width)
+        XCTAssertEqual(windowKeepRect.minX, window.lastAppliedLayoutPhysicalRect.orDie().minX)
+        XCTAssertEqual(windowKeepRect.maxX, window.lastAppliedLayoutPhysicalRect.orDie().maxX)
+        XCTAssertLessThanOrEqual(windowKeepRect.topLeftY, window.lastAppliedLayoutPhysicalRect.orDie().topLeftY)
     }
 
     @MainActor

@@ -275,7 +275,8 @@ extension Window {
         guard let parent = parent as? TilingContainer, parent.layout == .accordion else { return nil }
         return switch origin {
             case .window:
-                parent.lastAppliedLayoutPhysicalRect?.insetBy(left: 24, right: 24, top: 14, bottom: 18)
+                lastAppliedLayoutPhysicalRect?.expanded(left: 0, right: 0, top: 8, bottom: 12)
+                    ?? parent.lastAppliedLayoutPhysicalRect?.insetBy(left: 24, right: 24, top: 14, bottom: 18)
             case .tabStrip:
                 (parent.windowTabDropZoneRect ?? parent.windowTabBarRect)?.expanded(left: 4, right: 4, top: 4, bottom: 6)
         }
@@ -627,6 +628,8 @@ private func currentSwapDestination(sourceWindow: Window, mouseLocation: CGPoint
         previewRect.expanded(left: 10, right: 10, top: 6, bottom: 10)
     }
     guard sourceNode != targetNode,
+          !sourceNode.parentsWithSelf.contains(targetNode),
+          !targetNode.parentsWithSelf.contains(sourceNode),
           interactionRect.contains(mouseLocation)
     else { return nil }
     let isTabGroup = targetNode is TilingContainer

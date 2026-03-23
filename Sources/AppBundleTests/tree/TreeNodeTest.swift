@@ -117,6 +117,22 @@ final class TreeNodeTest: XCTestCase {
         )
     }
 
+    func testNextSidebarDraftWorkspaceNameUsesLowestAvailableIndex() {
+        _ = Workspace.get(byName: "__sidebar_draft_workspace_1")
+        _ = Workspace.get(byName: "__sidebar_draft_workspace_3")
+
+        XCTAssertEqual(nextSidebarDraftWorkspaceName(), "__sidebar_draft_workspace_2")
+    }
+
+    func testNextSidebarDraftWorkspaceNameResetsAfterDraftWorkspacesAreCollected() {
+        _ = Workspace.get(byName: "__sidebar_draft_workspace_1")
+        _ = Workspace.get(byName: "__sidebar_draft_workspace_2")
+
+        Workspace.garbageCollectUnusedWorkspaces()
+
+        XCTAssertEqual(nextSidebarDraftWorkspaceName(), "__sidebar_draft_workspace_1")
+    }
+
     func testCancelManipulatedWithMouseStateClearsDragTracking() {
         let workspace = Workspace.get(byName: "a")
         let window = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
