@@ -669,6 +669,9 @@ private struct WorkspaceSidebarEditorField: NSViewRepresentable {
     func makeNSView(context: Context) -> WorkspaceSidebarEditorNSTextField {
         let view = WorkspaceSidebarEditorNSTextField()
         view.delegate = context.coordinator
+        view.isEditable = true
+        view.isSelectable = true
+        view.isEnabled = true
         view.drawsBackground = false
         view.isBordered = false
         view.isBezeled = false
@@ -703,9 +706,10 @@ private struct WorkspaceSidebarEditorField: NSViewRepresentable {
                     (currentEditor != nil && window.firstResponder === currentEditor)
                 guard !isAlreadyEditingThisField else { return }
                 WorkspaceSidebarPanel.shared.prepareForTextInput()
-                window.makeFirstResponder(nsView)
+                guard window.makeFirstResponder(nsView) else { return }
                 let insertionPoint = nsView.stringValue.count
-                nsView.currentEditor()?.selectedRange = NSRange(location: insertionPoint, length: 0)
+                let editor = nsView.currentEditor() ?? window.fieldEditor(true, for: nsView)
+                editor?.selectedRange = NSRange(location: insertionPoint, length: 0)
             }
         }
     }
