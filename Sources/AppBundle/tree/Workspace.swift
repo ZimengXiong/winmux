@@ -3,7 +3,6 @@ import Common
 
 @MainActor private var workspaceNameToWorkspace: [String: Workspace] = [:]
 private let sidebarDraftWorkspacePrefix = "__sidebar_draft_workspace_"
-private let sidebarManagedEmptyWorkspaceRetentionInterval: TimeInterval = 5 * 60
 @MainActor private var sidebarDraftWorkspaceCounter: UInt64 = 0
 
 @MainActor private var screenPointToPrevVisibleWorkspace: [CGPoint: String] = [:]
@@ -17,7 +16,8 @@ private let sidebarManagedEmptyWorkspaceRetentionInterval: TimeInterval = 5 * 60
 
 @MainActor
 private func getStubWorkspace(forPoint point: CGPoint) -> Workspace {
-    if let prev = screenPointToPrevVisibleWorkspace[point].map({ Workspace.get(byName: $0) }),
+    if let prevName = screenPointToPrevVisibleWorkspace[point],
+       let prev = Workspace.existing(byName: prevName),
        !prev.isVisible && prev.workspaceMonitor.rect.topLeftCorner == point && prev.forceAssignedMonitor == nil
     {
         return prev
@@ -77,6 +77,10 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
         }
     }
 
+    @MainActor static func existing(byName name: String) -> Workspace? {
+        workspaceNameToWorkspace[name]
+    }
+
     nonisolated static func < (lhs: Workspace, rhs: Workspace) -> Bool {
         lhs.nameLogicalSegments < rhs.nameLogicalSegments
     }
@@ -102,19 +106,17 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
 
     @MainActor
     static func garbageCollectUnusedWorkspaces() {
-        for name in config.persistentWorkspaces {
-            _ = get(byName: name) // Make sure that all persistent workspaces are "cached"
-        }
         let now = Date()
         for workspace in workspaceNameToWorkspace.values {
             workspace.refreshEmptyLifecycle(now: now)
         }
         workspaceNameToWorkspace = workspaceNameToWorkspace.filter { (_, workspace: Workspace) in
-            config.persistentWorkspaces.contains(workspace.name) ||
-                !workspace.isEffectivelyEmpty ||
-                workspace.shouldRetainEmptyWorkspace(now: now) ||
+            !workspace.isEffectivelyEmpty ||
                 workspace.isVisible ||
                 workspace.name == focus.workspace.name
+        }
+        screenPointToPrevVisibleWorkspace = screenPointToPrevVisibleWorkspace.filter { _, workspaceName in
+            workspaceNameToWorkspace[workspaceName] != nil
         }
     }
 
@@ -146,8 +148,7 @@ extension Workspace {
 
     @MainActor
     func shouldRetainEmptyWorkspace(now: Date = .now) -> Bool {
-        guard isSidebarManaged, let emptySince else { return false }
-        return now.timeIntervalSince(emptySince) < sidebarManagedEmptyWorkspaceRetentionInterval
+        false
     }
 
     @MainActor

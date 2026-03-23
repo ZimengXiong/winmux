@@ -87,19 +87,9 @@ final class TreeNodeTest: XCTestCase {
         XCTAssertTrue(workspace.rootTilingContainer.children.singleOrNil() is TestWindow)
     }
 
-    func testGarbageCollectUnusedWorkspacesKeepsRecentSidebarManagedEmptyWorkspace() {
+    func testGarbageCollectUnusedWorkspacesRemovesSidebarManagedEmptyWorkspaceImmediately() {
         let workspace = Workspace.get(byName: "draft")
         workspace.markAsSidebarManaged()
-
-        Workspace.garbageCollectUnusedWorkspaces()
-
-        XCTAssertTrue(Workspace.all.contains(workspace))
-    }
-
-    func testGarbageCollectUnusedWorkspacesRemovesExpiredSidebarManagedEmptyWorkspace() {
-        let workspace = Workspace.get(byName: "draft")
-        workspace.markAsSidebarManaged()
-        workspace.setEmptySinceForTesting(Date(timeIntervalSinceNow: -301))
 
         Workspace.garbageCollectUnusedWorkspaces()
 
