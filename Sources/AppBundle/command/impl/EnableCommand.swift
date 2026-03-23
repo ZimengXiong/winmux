@@ -23,12 +23,10 @@ struct EnableCommand: Command {
         TrayMenuModel.shared.isEnabled = newState
         if !newState {
             TrayMenuModel.shared.isWorkspaceSidebarExpanded = false
+            clearPendingWindowDragIntent()
         }
         WorkspaceSidebarPanel.shared.refresh()
         WindowTabStripPanelController.shared.refresh()
-        if !newState {
-            WindowTabDropPreviewPanel.shared.hide()
-        }
         if newState {
             for workspace in Workspace.all {
                 for window in workspace.allLeafWindowsRecursive where window.isFloating {

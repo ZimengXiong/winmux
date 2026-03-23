@@ -131,6 +131,31 @@ final class WindowTabsTest: XCTestCase {
     }
 
     @MainActor
+    func testResolvedDraggedWindowAnchorRectUsesWholeGroupForGroupDrag() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let accordion = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let window = TestWindow.new(id: 1, parent: accordion)
+        _ = TestWindow.new(id: 2, parent: accordion)
+        let windowRect = Rect(topLeftX: 12, topLeftY: 40, width: 300, height: 220)
+        let groupRect = Rect(topLeftX: 0, topLeftY: 0, width: 320, height: 260)
+        window.lastAppliedLayoutPhysicalRect = windowRect
+        accordion.lastAppliedLayoutPhysicalRect = groupRect
+
+        let resolvedWindowRect = resolvedDraggedWindowAnchorRect(for: window, subject: .window).orDie()
+        XCTAssertEqual(resolvedWindowRect.topLeftX, windowRect.topLeftX)
+        XCTAssertEqual(resolvedWindowRect.topLeftY, windowRect.topLeftY)
+        XCTAssertEqual(resolvedWindowRect.width, windowRect.width)
+        XCTAssertEqual(resolvedWindowRect.height, windowRect.height)
+
+        let resolvedGroupRect = resolvedDraggedWindowAnchorRect(for: window, subject: .group).orDie()
+        XCTAssertEqual(resolvedGroupRect.topLeftX, groupRect.topLeftX)
+        XCTAssertEqual(resolvedGroupRect.topLeftY, groupRect.topLeftY)
+        XCTAssertEqual(resolvedGroupRect.width, groupRect.width)
+        XCTAssertEqual(resolvedGroupRect.height, groupRect.height)
+    }
+
+    @MainActor
     func testWindowAndAccordionTabInsertZonesUseSameTopBarShape() {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")

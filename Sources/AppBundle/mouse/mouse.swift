@@ -69,6 +69,16 @@ func clearDraggedWindowAnchorRect(for windowId: UInt32?) {
 }
 
 @MainActor
+func resolvedDraggedWindowAnchorRect(for window: Window, subject: WindowDragSubject) -> Rect? {
+    switch subject {
+        case .window:
+            window.lastAppliedLayoutPhysicalRect ?? window.moveNode.lastAppliedLayoutPhysicalRect
+        case .group:
+            window.moveNode.lastAppliedLayoutPhysicalRect ?? window.lastAppliedLayoutPhysicalRect
+    }
+}
+
+@MainActor
 func isManipulatedWithMouse(_ window: Window) async throws -> Bool {
     try await (!window.isHiddenInCorner && // Don't allow to resize/move windows of hidden workspaces
         isLeftMouseButtonDown &&

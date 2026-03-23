@@ -393,6 +393,7 @@ private func setPendingWindowDragIntent(sourceWindowId: UInt32, sourceSubject: W
        pendingWindowDragIntent.kind == destination.kind,
        pendingWindowDragIntent.title == destination.title,
        pendingWindowDragIntent.subtitle == destination.subtitle,
+       pendingWindowDragIntent.previewStyle == destination.previewStyle,
        pendingWindowDragIntent.isGroup == destination.isGroup,
        pendingWindowDragIntent.previewRect.isEqual(to: destination.previewRect),
        pendingWindowDragIntent.interactionRect.isEqual(to: destination.interactionRect)

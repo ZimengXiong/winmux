@@ -201,9 +201,7 @@ private func updateMoveFromTabStrip(_ windowId: UInt32) {
     currentlyManipulatedWithMouseWindowId = window.windowId
     setCurrentMouseManipulationKind(.move)
     setCurrentMouseDragSubject(.group)
-    if draggedWindowAnchorRect(for: window.windowId) == nil {
-        setDraggedWindowAnchorRect(window.lastAppliedLayoutPhysicalRect ?? window.moveNode.lastAppliedLayoutPhysicalRect, for: window.windowId)
-    }
+    setDraggedWindowAnchorRect(resolvedDraggedWindowAnchorRect(for: window, subject: .group), for: window.windowId)
     WindowTabStripPanelController.shared.setIgnoresMouseEvents(true)
     _ = updatePendingWindowDragIntent(sourceWindow: window, mouseLocation: mouseLocation, subject: .group, detachOrigin: .window)
 }
@@ -314,11 +312,15 @@ private struct WindowTabDropPreviewChrome: View {
                 .fill(Color(nsColor: .windowBackgroundColor).opacity(0.98))
                 .overlay {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(accent.opacity(0.08))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
                         .strokeBorder(accent.opacity(0.28), style: borderStyle)
                 }
         )
         .scaleEffect(isPresented ? 1 : 0.96)
-        .opacity(1)
+        .opacity(isPresented ? 1 : 0.92)
         .shadow(color: Color.black.opacity(0.12), radius: 14, y: 6)
     }
 }
