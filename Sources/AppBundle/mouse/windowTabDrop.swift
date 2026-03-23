@@ -100,9 +100,14 @@ private func dragSubjectNode(for sourceWindow: Window, subject: WindowDragSubjec
 @MainActor
 private func sidebarDragSourceTitle(for sourceWindow: Window, subject: WindowDragSubject) -> String {
     let moveNode = dragSubjectNode(for: sourceWindow, subject: subject)
-    if moveNode is TilingContainer {
+    if let group = moveNode as? TilingContainer {
         let windowCount = max(moveNode.allLeafWindowsRecursive.count, 1)
-        return "Tab Group • \(windowCount) windows"
+        let representativeWindow =
+            group.tabActiveWindow ??
+            group.mostRecentWindowRecursive ??
+            group.anyLeafWindowRecursive ??
+            sourceWindow
+        return "\(sidebarDisplayLabel(for: representativeWindow)) • \(windowCount) windows"
     }
     return sidebarDisplayLabel(for: sourceWindow)
 }
@@ -375,6 +380,7 @@ func refreshPendingWindowDragIntentFromGlobalMouseDrag() {
           let sourceWindow = Window.get(byId: windowId)
     else {
         clearPendingWindowDragIntent()
+        cancelManipulatedWithMouseState()
         return
     }
     _ = updatePendingWindowDragIntent(

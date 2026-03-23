@@ -450,6 +450,7 @@ private func focusWindowFromSidebar(_ windowId: UInt32, fallbackWorkspace: Strin
 private func updateSidebarWindowDrag(_ windowId: UInt32, subject: WindowDragSubject = .window) {
     guard let window = Window.get(byId: windowId) else {
         clearPendingWindowDragIntent()
+        cancelManipulatedWithMouseState()
         return
     }
     currentlyManipulatedWithMouseWindowId = window.windowId
@@ -1237,7 +1238,7 @@ struct WorkspaceSidebarPreviewRow: View {
 
     private var previewLabel: String {
         if preview.isTabGroup {
-            return "\(preview.label) • \(preview.windowCount) windows"
+            return preview.label
         }
         return preview.label
     }

@@ -79,6 +79,18 @@ func resolvedDraggedWindowAnchorRect(for window: Window, subject: WindowDragSubj
 }
 
 @MainActor
+func cancelManipulatedWithMouseState() {
+    clearDraggedWindowAnchorRect(for: currentlyManipulatedWithMouseWindowId)
+    setCurrentMouseManipulationKind(.none)
+    setCurrentMouseDragSubject(.window)
+    currentlyManipulatedWithMouseWindowId = nil
+    WindowTabStripPanelController.shared.setIgnoresMouseEvents(false)
+    for workspace in Workspace.all {
+        workspace.resetResizeWeightBeforeResizeRecursive()
+    }
+}
+
+@MainActor
 func isManipulatedWithMouse(_ window: Window) async throws -> Bool {
     try await (!window.isHiddenInCorner && // Don't allow to resize/move windows of hidden workspaces
         isLeftMouseButtonDown &&

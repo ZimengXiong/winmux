@@ -27,15 +27,8 @@ func resizedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutabl
 func resetManipulatedWithMouseIfPossible() async throws {
     let didApplyPendingDragIntent = applyPendingWindowDragIntentIfPossible()
     clearPendingWindowDragIntent()
-    WindowTabStripPanelController.shared.setIgnoresMouseEvents(false)
     if currentlyManipulatedWithMouseWindowId != nil || didApplyPendingDragIntent {
-        clearDraggedWindowAnchorRect(for: currentlyManipulatedWithMouseWindowId)
-        setCurrentMouseManipulationKind(.none)
-        setCurrentMouseDragSubject(.window)
-        currentlyManipulatedWithMouseWindowId = nil
-        for workspace in Workspace.all {
-            workspace.resetResizeWeightBeforeResizeRecursive()
-        }
+        cancelManipulatedWithMouseState()
         scheduleRefreshSession(.resetManipulatedWithMouse, optimisticallyPreLayoutWorkspaces: true)
     }
 }
@@ -95,7 +88,7 @@ extension TreeNode {
             .also { putUserData(key: adaptiveWeightBeforeResizeWithMouseKey, data: $0) }
     }
 
-    fileprivate func resetResizeWeightBeforeResizeRecursive() {
+    func resetResizeWeightBeforeResizeRecursive() {
         cleanUserData(key: adaptiveWeightBeforeResizeWithMouseKey)
         for child in children {
             child.resetResizeWeightBeforeResizeRecursive()

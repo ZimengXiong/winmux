@@ -24,6 +24,7 @@ struct EnableCommand: Command {
         if !newState {
             TrayMenuModel.shared.isWorkspaceSidebarExpanded = false
             clearPendingWindowDragIntent()
+            cancelManipulatedWithMouseState()
         }
         WorkspaceSidebarPanel.shared.refresh()
         WindowTabStripPanelController.shared.refresh()

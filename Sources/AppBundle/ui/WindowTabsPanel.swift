@@ -196,6 +196,7 @@ private func updateDetachedTabFromTabStrip(_ windowId: UInt32) {
 private func updateMoveFromTabStrip(_ windowId: UInt32) {
     guard let window = Window.get(byId: windowId) else {
         clearPendingWindowDragIntent()
+        cancelManipulatedWithMouseState()
         return
     }
     currentlyManipulatedWithMouseWindowId = window.windowId
@@ -277,36 +278,47 @@ private struct WindowTabDropPreviewChrome: View {
     let borderStyle: StrokeStyle
 
     var body: some View {
-        HStack(spacing: 12) {
-            Capsule(style: .continuous)
-                .fill(accent.opacity(0.8))
-                .frame(width: 4, height: 28)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Color.primary)
-                    .lineLimit(1)
-                Text(subtitle)
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .foregroundStyle(Color.primary.opacity(0.72))
-                    .lineLimit(1)
+        GeometryReader { geometry in
+            let isCompact = geometry.size.width < 180 || geometry.size.height < 52
+            let isUltraCompact = geometry.size.width < 132 || geometry.size.height < 40
+
+            HStack(spacing: isCompact ? 8 : 12) {
+                Capsule(style: .continuous)
+                    .fill(accent.opacity(0.8))
+                    .frame(width: 4, height: isCompact ? 22 : 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: isCompact ? 11 : 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Color.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                    if !isUltraCompact {
+                        Text(subtitle)
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
+                            .foregroundStyle(Color.primary.opacity(0.72))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                if !isCompact {
+                    Text(badgeText)
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .foregroundStyle(accent.opacity(0.92))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(accent.opacity(0.1))
+                        )
+                }
             }
-
-            Spacer(minLength: 0)
-
-            Text(badgeText)
-                .font(.system(size: 9, weight: .bold, design: .rounded))
-                .foregroundStyle(accent.opacity(0.92))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(accent.opacity(0.1))
-                )
+            .padding(.horizontal, isCompact ? 10 : 12)
+            .padding(.vertical, isCompact ? 7 : 9)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color(nsColor: .windowBackgroundColor).opacity(0.98))
@@ -365,6 +377,11 @@ private struct WindowTabItemView: View {
             DragGesture(minimumDistance: 10)
                 .onChanged { _ in
                     updateDetachedTabFromTabStrip(tab.windowId)
+                }
+                .onEnded { _ in
+                    Task { @MainActor in
+                        try? await resetManipulatedWithMouseIfPossible()
+                    }
                 },
         )
     }

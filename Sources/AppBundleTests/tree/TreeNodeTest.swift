@@ -117,6 +117,22 @@ final class TreeNodeTest: XCTestCase {
         )
     }
 
+    func testCancelManipulatedWithMouseStateClearsDragTracking() {
+        let workspace = Workspace.get(byName: "a")
+        let window = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+        setDraggedWindowAnchorRect(Rect(topLeftX: 0, topLeftY: 0, width: 100, height: 100), for: window.windowId)
+        currentlyManipulatedWithMouseWindowId = window.windowId
+        setCurrentMouseManipulationKind(.move)
+        setCurrentMouseDragSubject(.group)
+
+        cancelManipulatedWithMouseState()
+
+        XCTAssertNil(currentlyManipulatedWithMouseWindowId)
+        XCTAssertEqual(getCurrentMouseManipulationKind(), .none)
+        XCTAssertEqual(getCurrentMouseDragSubject(), .window)
+        XCTAssertNil(draggedWindowAnchorRect(for: window.windowId))
+    }
+
     func testExitMacOsNativeUnconventionalStateRestoresWindowToPreviousWorkspaceAfterAutoDestroy() async throws {
         let workspaceA = Workspace.get(byName: "a")
         let window = TestWindow.new(id: 1, parent: workspaceA.rootTilingContainer)
