@@ -137,8 +137,7 @@ final class WorkspaceSidebarPanel: NSPanelHud {
               let screen = NSScreen.screens.getOrNil(atIndex: monitor.monitorAppKitNsScreenScreensId - 1)
         else {
             stopHoverMonitoring()
-            workspaceSidebarDropTargets = []
-            orderOut(nil)
+            resetHiddenSidebarState()
             return
         }
 
@@ -146,8 +145,7 @@ final class WorkspaceSidebarPanel: NSPanelHud {
         let expandedWidth = CGFloat(sidebarConfig.width)
         let collapsedWidth = CGFloat(sidebarConfig.collapsedWidth)
         guard expandedWidth > 0, collapsedWidth > 0 else {
-            workspaceSidebarDropTargets = []
-            orderOut(nil)
+            resetHiddenSidebarState()
             return
         }
 
@@ -208,6 +206,13 @@ final class WorkspaceSidebarPanel: NSPanelHud {
         pendingCollapseFinalize = nil
         hoverMonitorTimer?.invalidate()
         hoverMonitorTimer = nil
+    }
+
+    private func resetHiddenSidebarState() {
+        workspaceSidebarDropTargets = []
+        TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName = nil
+        TrayMenuModel.shared.workspaceSidebarVisibleWidth = 0
+        orderOut(nil)
     }
 
     private func updateHoverStateFromMousePosition() {
