@@ -212,6 +212,8 @@ final class WorkspaceSidebarPanel: NSPanelHud {
         workspaceSidebarDropTargets = []
         TrayMenuModel.shared.workspaceSidebarDropPreview = nil
         TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName = nil
+        TrayMenuModel.shared.workspaceSidebarEditingWorkspaceName = nil
+        TrayMenuModel.shared.workspaceSidebarEditingText = ""
         TrayMenuModel.shared.workspaceSidebarVisibleWidth = 0
         orderOut(nil)
     }
