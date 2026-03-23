@@ -1,8 +1,15 @@
 import AppKit
 
+enum MouseManipulationKind {
+    case none
+    case move
+    case resize
+}
+
 @MainActor var currentlyManipulatedWithMouseWindowId: UInt32? = nil
 @MainActor private var pinnedDraggedWindowId: UInt32? = nil
 @MainActor private var currentMouseDragSubject: WindowDragSubject = .window
+@MainActor private var currentMouseManipulationKind: MouseManipulationKind = .none
 @MainActor private var draggedWindowAnchorRectById: [UInt32: Rect] = [:]
 var isLeftMouseButtonDown: Bool { NSEvent.pressedMouseButtons == 1 }
 
@@ -29,6 +36,16 @@ func setCurrentMouseDragSubject(_ subject: WindowDragSubject) {
 @MainActor
 func getCurrentMouseDragSubject() -> WindowDragSubject {
     currentMouseDragSubject
+}
+
+@MainActor
+func setCurrentMouseManipulationKind(_ kind: MouseManipulationKind) {
+    currentMouseManipulationKind = kind
+}
+
+@MainActor
+func getCurrentMouseManipulationKind() -> MouseManipulationKind {
+    currentMouseManipulationKind
 }
 
 @MainActor

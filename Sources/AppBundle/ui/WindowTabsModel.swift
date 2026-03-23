@@ -42,8 +42,10 @@ func updateWindowTabModel() async {
         }
     }
 
-    TrayMenuModel.shared.windowTabStrips = strips
-    WindowTabStripPanelController.shared.refresh()
+    if TrayMenuModel.shared.windowTabStrips != strips {
+        TrayMenuModel.shared.windowTabStrips = strips
+        WindowTabStripPanelController.shared.refresh()
+    }
 }
 
 extension TreeNode {

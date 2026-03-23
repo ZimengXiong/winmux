@@ -5,13 +5,16 @@ import AppKit
 @MainActor
 func updateWorkspaceSidebarModel() async {
     guard TrayMenuModel.shared.isEnabled, config.workspaceSidebar.enabled else {
-        TrayMenuModel.shared.workspaceSidebarWorkspaces = []
+        if !TrayMenuModel.shared.workspaceSidebarWorkspaces.isEmpty {
+            TrayMenuModel.shared.workspaceSidebarWorkspaces = []
+        }
         WorkspaceSidebarPanel.shared.refresh()
         return
     }
 
     let currentFocus = focus
     let workspaceLabels = config.workspaceSidebar.workspaceLabels
+    let previousTopPadding = TrayMenuModel.shared.workspaceSidebarTopPadding
 
     if let sidebarMonitor = config.workspaceSidebar.resolvedMonitor(sortedMonitors: sortedMonitors) {
         let gaps = ResolvedGaps(gaps: config.gaps, monitor: sidebarMonitor)
@@ -19,6 +22,7 @@ func updateWorkspaceSidebarModel() async {
     } else {
         TrayMenuModel.shared.workspaceSidebarTopPadding = 12
     }
+    let didTopPaddingChange = TrayMenuModel.shared.workspaceSidebarTopPadding != previousTopPadding
 
     var sidebarWorkspaces: [WorkspaceSidebarWorkspaceViewModel] = []
     var aliveWindowIds: Set<UInt32> = []
@@ -58,10 +62,13 @@ func updateWorkspaceSidebarModel() async {
     }
 
     sidebarWindowTitleCache = sidebarWindowTitleCache.filter { aliveWindowIds.contains($0.key) }
-    if TrayMenuModel.shared.workspaceSidebarWorkspaces != sidebarWorkspaces {
+    let didWorkspaceChange = TrayMenuModel.shared.workspaceSidebarWorkspaces != sidebarWorkspaces
+    if didWorkspaceChange {
         TrayMenuModel.shared.workspaceSidebarWorkspaces = sidebarWorkspaces
     }
-    WorkspaceSidebarPanel.shared.refresh()
+    if didWorkspaceChange || didTopPaddingChange || !WorkspaceSidebarPanel.shared.isVisible {
+        WorkspaceSidebarPanel.shared.refresh()
+    }
 }
 
 @MainActor

@@ -453,7 +453,11 @@ private func updateSidebarWindowDrag(_ windowId: UInt32, subject: WindowDragSubj
         return
     }
     currentlyManipulatedWithMouseWindowId = window.windowId
+    setCurrentMouseManipulationKind(.move)
     setCurrentMouseDragSubject(subject)
+    if draggedWindowAnchorRect(for: window.windowId) == nil {
+        setDraggedWindowAnchorRect(window.lastAppliedLayoutPhysicalRect ?? window.moveNode.lastAppliedLayoutPhysicalRect, for: window.windowId)
+    }
     WindowTabStripPanelController.shared.setIgnoresMouseEvents(true)
     _ = updatePendingWindowDragIntent(sourceWindow: window, mouseLocation: mouseLocation, subject: subject, detachOrigin: .window)
 }
@@ -697,6 +701,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
 
     private var contentWidth: CGFloat { workspaceSidebarContentWidth(expansionProgress) }
     private var sectionWidth: CGFloat { workspaceSidebarSectionWidth(expansionProgress) }
+    private var isCompact: Bool { expansionProgress < workspaceSidebarRowsRevealProgress }
     private var showsWindowRows: Bool { expansionProgress >= workspaceSidebarRowsRevealProgress }
     private var isDropTarget: Bool { dragPreview?.targetWorkspaceName == workspace.name }
     private var activeSidebarDragSourceWindowId: UInt32? { dragPreview?.sourceWindowId }
@@ -752,7 +757,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
         VStack(alignment: .leading, spacing: 4) {
             header
                 .frame(height: headerHeight)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: isCompact ? .center : .leading)
             windowRows
             dropPreviewRow
         }
@@ -873,61 +878,67 @@ struct WorkspaceSidebarWorkspaceSection: View {
     }
 
     private var header: some View {
-        workspaceBadge
-            .frame(width: 22, height: 22, alignment: .center)
-            .overlay(alignment: .leading) {
-                HStack(alignment: .center, spacing: 0) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        if isEditing {
-                            WorkspaceSidebarEditorField(
-                                text: editingText,
-                                isFocused: focusedWorkspaceEditor.wrappedValue == workspace.name,
-                                onCommit: onCommitEditing,
-                                onCancel: onCancelEditing
-                            )
-                            .frame(height: 18)
-                            .focused(focusedWorkspaceEditor, equals: workspace.name)
-                        } else {
-                            Text(workspace.displayName)
-                                .font(.system(size: 12, weight: workspace.isFocused ? .semibold : .medium, design: .default))
-                                .foregroundStyle(workspace.isFocused ? Color.primary : Color.secondary)
-                                .lineLimit(1)
-                        }
-                        if let monitorName = workspace.monitorName, !isEditing, showsWindowRows {
-                            Text(monitorName)
-                                .font(.system(size: 10, weight: .regular, design: .default))
-                                .foregroundStyle(Color.secondary.opacity(0.7))
-                                .lineLimit(1)
-                        }
-                    }
-                    Spacer(minLength: 0)
-                    if isEditing {
-                        HStack(spacing: 6) {
-                            Button(action: onCommitEditing) {
-                                Image(systemName: "checkmark.circle.fill")
+        Group {
+            if isCompact {
+                workspaceBadge
+                    .frame(width: 22, height: 22, alignment: .center)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            } else {
+                workspaceBadge
+                    .frame(width: 22, height: 22, alignment: .center)
+                    .overlay(alignment: .leading) {
+                        HStack(alignment: .center, spacing: 0) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                if isEditing {
+                                    WorkspaceSidebarEditorField(
+                                        text: editingText,
+                                        isFocused: focusedWorkspaceEditor.wrappedValue == workspace.name,
+                                        onCommit: onCommitEditing,
+                                        onCancel: onCancelEditing
+                                    )
+                                    .frame(height: 18)
+                                    .focused(focusedWorkspaceEditor, equals: workspace.name)
+                                } else {
+                                    Text(workspace.displayName)
+                                        .font(.system(size: 12, weight: workspace.isFocused ? .semibold : .medium, design: .default))
+                                        .foregroundStyle(workspace.isFocused ? Color.primary : Color.secondary)
+                                        .lineLimit(1)
+                                }
+                                if let monitorName = workspace.monitorName, !isEditing, showsWindowRows {
+                                    Text(monitorName)
+                                        .font(.system(size: 10, weight: .regular, design: .default))
+                                        .foregroundStyle(Color.secondary.opacity(0.7))
+                                        .lineLimit(1)
+                                }
                             }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(Color.accentColor)
-                            Button(action: onCancelEditing) {
-                                Image(systemName: "xmark.circle.fill")
+                            Spacer(minLength: 0)
+                            if isEditing {
+                                HStack(spacing: 6) {
+                                    Button(action: onCommitEditing) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                    }
+                                    .buttonStyle(.plain)
+                                    .foregroundStyle(Color.accentColor)
+                                    Button(action: onCancelEditing) {
+                                        Image(systemName: "xmark.circle.fill")
+                                    }
+                                    .buttonStyle(.plain)
+                                    .foregroundStyle(Color.secondary)
+                                }
+                            } else {
+                                Button(action: onBeginEditing) {
+                                    Image(systemName: "square.and.pencil")
+                                        .font(.system(size: 11, weight: .medium))
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundStyle((isHovered || workspace.isFocused) ? Color.primary : Color.secondary.opacity(0.8))
                             }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(Color.secondary)
                         }
-                    } else {
-                        Button(action: onBeginEditing) {
-                            Image(systemName: "square.and.pencil")
-                                .font(.system(size: 11, weight: .medium))
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle((isHovered || workspace.isFocused) ? Color.primary : Color.secondary.opacity(0.8))
-                        .opacity(expansionProgress)
+                        .frame(width: contentWidth, alignment: .leading)
+                        .padding(.leading, 30) // 22 (badge) + 8 (spacing)
                     }
-                }
-                .frame(width: contentWidth, alignment: .leading)
-                .opacity(expansionProgress)
-                .padding(.leading, 30) // 22 (badge) + 8 (spacing)
             }
+        }
     }
 
     private var sectionBackgroundFill: Color {
@@ -982,6 +993,7 @@ struct WorkspaceSidebarCreateWorkspaceSection: View {
     @State private var isHovered = false
     private var sectionWidth: CGFloat { workspaceSidebarSectionWidth(expansionProgress) }
     private var contentWidth: CGFloat { workspaceSidebarContentWidth(expansionProgress) }
+    private var isCompact: Bool { expansionProgress < workspaceSidebarRowsRevealProgress }
     private var isDropTarget: Bool { dragPreview?.targetsNewWorkspace == true }
     private var sectionShape: RoundedRectangle {
         RoundedRectangle(cornerRadius: workspaceSidebarSectionCornerRadius, style: .continuous)
@@ -990,22 +1002,32 @@ struct WorkspaceSidebarCreateWorkspaceSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Button(action: onCreateWorkspace) {
-                HStack(spacing: 8) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 13, weight: .semibold))
-                        .frame(width: 22, height: 22, alignment: .center)
-                        .foregroundStyle(Color.accentColor)
-                    Text("New Workspace")
-                        .font(.system(size: 12, weight: .semibold, design: .default))
-                        .foregroundStyle(Color.primary)
-                        .lineLimit(1)
-                        .opacity(expansionProgress)
-                    Spacer(minLength: 0)
+                Group {
+                    if isCompact {
+                        ZStack {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(Color.accentColor)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 22, alignment: .center)
+                    } else {
+                        HStack(spacing: 8) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 13, weight: .semibold))
+                                .frame(width: 22, height: 22, alignment: .center)
+                                .foregroundStyle(Color.accentColor)
+                            Text("New Workspace")
+                                .font(.system(size: 12, weight: .semibold, design: .default))
+                                .foregroundStyle(Color.primary)
+                                .lineLimit(1)
+                            Spacer(minLength: 0)
+                        }
+                    }
                 }
                 .padding(.vertical, 8)
                 .padding(.horizontal, 8)
-                .frame(width: sectionWidth, alignment: .leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(width: sectionWidth, alignment: isCompact ? .center : .leading)
+                .frame(maxWidth: .infinity, alignment: isCompact ? .center : .leading)
                 .background(
                     sectionShape
                         .fill(Color(nsColor: .controlBackgroundColor).opacity(isDropTarget ? 0.34 : (isHovered ? 0.4 : 0.2)))
@@ -1034,8 +1056,8 @@ struct WorkspaceSidebarCreateWorkspaceSection: View {
                 ))
             }
         }
-        .frame(width: sectionWidth, alignment: .leading)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(width: sectionWidth, alignment: isCompact ? .center : .leading)
+        .frame(maxWidth: .infinity, alignment: isCompact ? .center : .leading)
         .zIndex(isDropTarget ? 1 : 0)
         .scaleEffect(isDropTarget ? 1.012 : 1)
         .animation(.spring(response: 0.22, dampingFraction: 0.84), value: dragPreview)
@@ -1205,10 +1227,10 @@ struct WorkspaceSidebarPreviewRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(Color.accentColor.opacity(0.12))
+                .fill(Color.accentColor.opacity(0.1))
                 .overlay {
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .strokeBorder(Color.accentColor.opacity(0.34), style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
+                        .strokeBorder(Color.accentColor.opacity(0.2), lineWidth: 1)
                 }
         )
         .contentShape(Rectangle())

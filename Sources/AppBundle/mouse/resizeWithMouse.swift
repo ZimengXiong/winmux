@@ -26,9 +26,11 @@ func resizedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutabl
 @MainActor
 func resetManipulatedWithMouseIfPossible() async throws {
     let didApplyPendingDragIntent = applyPendingWindowDragIntentIfPossible()
+    clearPendingWindowDragIntent()
     WindowTabStripPanelController.shared.setIgnoresMouseEvents(false)
     if currentlyManipulatedWithMouseWindowId != nil || didApplyPendingDragIntent {
         clearDraggedWindowAnchorRect(for: currentlyManipulatedWithMouseWindowId)
+        setCurrentMouseManipulationKind(.none)
         setCurrentMouseDragSubject(.window)
         currentlyManipulatedWithMouseWindowId = nil
         for workspace in Workspace.all {
@@ -79,6 +81,8 @@ private func resizeWithMouse(_ window: Window) async throws { // todo cover with
                 }
             }
             currentlyManipulatedWithMouseWindowId = window.windowId
+            setCurrentMouseManipulationKind(.resize)
+            clearPendingWindowDragIntent()
     }
 }
 

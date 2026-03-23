@@ -127,11 +127,13 @@ private struct WindowTabDropPreviewContent: Equatable {
     let title: String
     let subtitle: String
     let style: WindowTabDropPreviewStyle
+    let isGroup: Bool
 
     init(model: WindowTabDropPreviewViewModel) {
         title = model.title
         subtitle = model.subtitle
         style = model.style
+        isGroup = model.isGroup
     }
 }
 
@@ -197,7 +199,11 @@ private func updateMoveFromTabStrip(_ windowId: UInt32) {
         return
     }
     currentlyManipulatedWithMouseWindowId = window.windowId
+    setCurrentMouseManipulationKind(.move)
     setCurrentMouseDragSubject(.group)
+    if draggedWindowAnchorRect(for: window.windowId) == nil {
+        setDraggedWindowAnchorRect(window.lastAppliedLayoutPhysicalRect ?? window.moveNode.lastAppliedLayoutPhysicalRect, for: window.windowId)
+    }
     WindowTabStripPanelController.shared.setIgnoresMouseEvents(true)
     _ = updatePendingWindowDragIntent(sourceWindow: window, mouseLocation: mouseLocation, subject: .group, detachOrigin: .window)
 }
@@ -268,25 +274,15 @@ private struct WindowTabDropPreviewChrome: View {
     let title: String
     let subtitle: String
     let accent: Color
-    let iconName: String
+    let badgeText: String
     let isPresented: Bool
     let borderStyle: StrokeStyle
-    let bodyContent: AnyView
 
     var body: some View {
-        HStack(spacing: 10) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(accent.opacity(0.14))
-                    .frame(width: 28, height: 22)
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(accent.opacity(0.36), lineWidth: 1)
-                    .frame(width: 28, height: 22)
-                Image(systemName: iconName)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(accent)
-            }
-
+        HStack(spacing: 12) {
+            Capsule(style: .continuous)
+                .fill(accent.opacity(0.8))
+                .frame(width: 4, height: 28)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
@@ -300,22 +296,30 @@ private struct WindowTabDropPreviewChrome: View {
 
             Spacer(minLength: 0)
 
-            bodyContent
+            Text(badgeText)
+                .font(.system(size: 9, weight: .bold, design: .rounded))
+                .foregroundStyle(accent.opacity(0.92))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(accent.opacity(0.1))
+                )
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.vertical, 9)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(nsColor: .windowBackgroundColor))
+                .fill(Color(nsColor: .windowBackgroundColor).opacity(0.98))
                 .overlay {
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(accent.opacity(0.42), style: borderStyle)
+                        .strokeBorder(accent.opacity(0.28), style: borderStyle)
                 }
         )
         .scaleEffect(isPresented ? 1 : 0.96)
         .opacity(1)
-        .shadow(color: accent.opacity(0.14), radius: 12, y: 6)
+        .shadow(color: Color.black.opacity(0.12), radius: 14, y: 6)
     }
 }
 
@@ -397,39 +401,27 @@ private struct WindowTabDropPreviewView: View {
             title: model.title,
             subtitle: model.subtitle,
             accent: Color.accentColor,
-            iconName: model.isGroup ? "square.stack.3d.up.fill" : "plus.rectangle.on.rectangle",
+            badgeText: "Tabs",
             isPresented: isPresented,
             borderStyle: StrokeStyle(lineWidth: 1.5),
-            bodyContent: AnyView(
-                HStack(spacing: 5) {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color.primary.opacity(0.16))
-                        .frame(width: 26, height: 12)
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color.accentColor)
-                        .frame(width: 38, height: 14)
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(Color.primary.opacity(0.16))
-                        .frame(width: 20, height: 12)
-                }
-            ),
         )
     }
 
     private func genericPreview(accent: Color, dash: [CGFloat]) -> some View {
-        WindowTabDropPreviewChrome(
+        let badgeText: String = switch model.style {
+            case .detach: "Detach"
+            case .swap: "Swap"
+            case .workspaceMove: "Move"
+            case .sidebarWorkspaceMove: "Move"
+            case .tabInsert: "Tabs"
+        }
+        return WindowTabDropPreviewChrome(
             title: model.title,
             subtitle: model.subtitle,
             accent: accent,
-            iconName: model.isGroup ? "square.stack.3d.up.fill" : "macwindow",
+            badgeText: badgeText,
             isPresented: isPresented,
             borderStyle: StrokeStyle(lineWidth: 1.5, dash: dash),
-            bodyContent: AnyView(
-                Image(systemName: "arrow.up.left.and.arrow.down.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(accent.opacity(0.9))
-                    .frame(width: 24, height: 20)
-            ),
         )
     }
 
@@ -438,20 +430,9 @@ private struct WindowTabDropPreviewView: View {
             title: model.title,
             subtitle: model.subtitle,
             accent: Color.accentColor,
-            iconName: model.isGroup ? "square.stack.3d.up.fill" : "macwindow",
+            badgeText: "Sidebar",
             isPresented: isPresented,
             borderStyle: StrokeStyle(lineWidth: 1),
-            bodyContent: AnyView(
-                Text("Sidebar")
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
-                    .foregroundStyle(Color.accentColor.opacity(0.92))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(Color.accentColor.opacity(0.12))
-                    )
-            ),
         )
     }
 }

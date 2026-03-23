@@ -141,7 +141,7 @@ struct WorkspaceSidebarDropPreviewViewModel: Hashable {
     let windowCount: Int
 }
 
-struct WindowTabStripViewModel: Identifiable {
+struct WindowTabStripViewModel: Identifiable, Equatable {
     let id: ObjectIdentifier
     let workspaceName: String
     let frame: CGRect

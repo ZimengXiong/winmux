@@ -112,9 +112,7 @@ private func updateSidebarDragFeedback(sourceWindow: Window, subject: WindowDrag
     guard let destination, destination.previewStyle == .sidebarWorkspaceMove else {
         let hadPinnedWindow = hasPinnedDraggedWindow()
         setPinnedDraggedWindowId(nil)
-        if TrayMenuModel.shared.workspaceSidebarDropPreview != nil {
-            TrayMenuModel.shared.workspaceSidebarDropPreview = nil
-        }
+        setWorkspaceSidebarDropPreviewIfChanged(nil)
         if hadPinnedWindow {
             scheduleRefreshSession(.globalObserver("sidebarGhostExit"), optimisticallyPreLayoutWorkspaces: true)
         }
@@ -131,25 +129,25 @@ private func updateSidebarDragFeedback(sourceWindow: Window, subject: WindowDrag
         case .sidebarHover, .tabStack, .detachTab, .swap: nil
     }
     if case .moveToWorkspace = destination.kind {
-        TrayMenuModel.shared.workspaceSidebarDropPreview = WorkspaceSidebarDropPreviewViewModel(
+        setWorkspaceSidebarDropPreviewIfChanged(WorkspaceSidebarDropPreviewViewModel(
             sourceWindowId: sourceWindow.windowId,
             label: sourceLabel,
             targetWorkspaceName: targetWorkspaceName,
             targetsNewWorkspace: false,
             isTabGroup: isTabGroup,
             windowCount: windowCount,
-        )
+        ))
     } else if destination.kind == .createWorkspace {
-        TrayMenuModel.shared.workspaceSidebarDropPreview = WorkspaceSidebarDropPreviewViewModel(
+        setWorkspaceSidebarDropPreviewIfChanged(WorkspaceSidebarDropPreviewViewModel(
             sourceWindowId: sourceWindow.windowId,
             label: sourceLabel,
             targetWorkspaceName: nil,
             targetsNewWorkspace: true,
             isTabGroup: isTabGroup,
             windowCount: windowCount,
-        )
-    } else if TrayMenuModel.shared.workspaceSidebarDropPreview != nil {
-        TrayMenuModel.shared.workspaceSidebarDropPreview = nil
+        ))
+    } else {
+        setWorkspaceSidebarDropPreviewIfChanged(nil)
     }
 
     let pinnedWindowId = currentlyManipulatedWithMouseWindowId == sourceWindow.windowId ? sourceWindow.windowId : nil
@@ -162,6 +160,13 @@ private func updateSidebarDragFeedback(sourceWindow: Window, subject: WindowDrag
         scheduleRefreshSession(.globalObserver("sidebarGhostEnter"), optimisticallyPreLayoutWorkspaces: true)
     } else {
         setPinnedDraggedWindowId(pinnedWindowId)
+    }
+}
+
+@MainActor
+private func setWorkspaceSidebarDropPreviewIfChanged(_ preview: WorkspaceSidebarDropPreviewViewModel?) {
+    if TrayMenuModel.shared.workspaceSidebarDropPreview != preview {
+        TrayMenuModel.shared.workspaceSidebarDropPreview = preview
     }
 }
 
@@ -362,9 +367,16 @@ func updatePendingDetachedTabIntent(sourceWindow: Window, mouseLocation: CGPoint
 
 @MainActor
 func refreshPendingWindowDragIntentFromGlobalMouseDrag() {
+    guard isLeftMouseButtonDown, getCurrentMouseManipulationKind() == .move else {
+        clearPendingWindowDragIntent()
+        return
+    }
     guard let windowId = currentlyManipulatedWithMouseWindowId,
           let sourceWindow = Window.get(byId: windowId)
-    else { return }
+    else {
+        clearPendingWindowDragIntent()
+        return
+    }
     _ = updatePendingWindowDragIntent(
         sourceWindow: sourceWindow,
         mouseLocation: mouseLocation,
@@ -407,7 +419,7 @@ private func setPendingWindowDragIntent(sourceWindowId: UInt32, sourceSubject: W
 func clearPendingWindowDragIntent() {
     pendingWindowDragIntent = nil
     setPinnedDraggedWindowId(nil)
-    TrayMenuModel.shared.workspaceSidebarDropPreview = nil
+    setWorkspaceSidebarDropPreviewIfChanged(nil)
     WindowTabDropPreviewPanel.shared.hide()
 }
 
@@ -544,6 +556,7 @@ private func currentWindowDragIntentDestination(
     detachOrigin: TabDetachOrigin,
 ) -> WindowDragIntentDestination? {
     if let sticky = pendingWindowDragIntent,
+       subject == .window,
        sticky.sourceWindowId == sourceWindow.windowId,
        sticky.sourceSubject == subject,
        sticky.previewStyle != .sidebarWorkspaceMove,
@@ -600,9 +613,13 @@ private func currentSwapDestination(sourceWindow: Window, mouseLocation: CGPoint
     guard let targetWindow = mouseLocation.findIn(tree: targetWorkspace.rootTilingContainer, virtual: false) else { return nil }
     let sourceNode = dragSubjectNode(for: sourceWindow, subject: subject)
     let targetNode = targetWindow.moveNode
+    guard let previewRect = targetNode.swapDropZoneRect else { return nil }
+    let interactionRect = if subject == .group {
+        previewRect.expanded(left: 4, right: 4, top: 4, bottom: 6)
+    } else {
+        previewRect.expanded(left: 10, right: 10, top: 6, bottom: 10)
+    }
     guard sourceNode != targetNode,
-          let previewRect = targetNode.swapDropZoneRect,
-          let interactionRect = targetNode.swapDropZoneRect?.expanded(left: 10, right: 10, top: 6, bottom: 10),
           interactionRect.contains(mouseLocation)
     else { return nil }
     let isTabGroup = targetNode is TilingContainer

@@ -50,6 +50,7 @@ private func moveFloatingWindow(_ window: Window) async throws {
 @MainActor
 private func moveTilingWindow(_ window: Window) {
     currentlyManipulatedWithMouseWindowId = window.windowId
+    setCurrentMouseManipulationKind(.move)
     setCurrentMouseDragSubject(.window)
     WindowTabStripPanelController.shared.setIgnoresMouseEvents(true)
     setDraggedWindowAnchorRect(window.lastAppliedLayoutPhysicalRect, for: window.windowId)
