@@ -39,13 +39,7 @@ func updateWorkspaceSidebarModel() async {
 
         let sidebarLabel = workspaceLabels[workspace.name] ?? ""
         let isGeneratedName = isSidebarDraftWorkspaceName(workspace.name)
-        let displayName = if !sidebarLabel.isEmpty {
-            sidebarLabel
-        } else if isGeneratedName {
-            sidebarDraftWorkspaceFallbackDisplayName(workspace.name)
-        } else {
-            workspace.name
-        }
+        let displayName = workspaceDisplayName(workspace.name)
 
         sidebarWorkspaces.append(
             WorkspaceSidebarWorkspaceViewModel(
@@ -69,13 +63,6 @@ func updateWorkspaceSidebarModel() async {
     if didWorkspaceChange || didTopPaddingChange || !WorkspaceSidebarPanel.shared.isVisible {
         WorkspaceSidebarPanel.shared.refresh()
     }
-}
-
-private func sidebarDraftWorkspaceFallbackDisplayName(_ workspaceName: String) -> String {
-    if let index = sidebarDraftWorkspaceIndex(workspaceName) {
-        return "Workspace \(index)"
-    }
-    return "Workspace"
 }
 
 @MainActor

@@ -43,7 +43,10 @@ struct WorkspaceCommand: Command {
     let currentMonitor = current.workspaceMonitor
     let workspaces: [Workspace] = stdin != nil
         ? stdinWorkspaces.map { Workspace.get(byName: $0) }
-        : Workspace.all.filter { $0.workspaceMonitor.rect.topLeftCorner == currentMonitor.rect.topLeftCorner }
+        : userFacingWorkspaces(
+            Workspace.all.filter { $0.workspaceMonitor.rect.topLeftCorner == currentMonitor.rect.topLeftCorner },
+            focusedWorkspace: current,
+        )
             .toSet()
             .union([current])
             .sorted()

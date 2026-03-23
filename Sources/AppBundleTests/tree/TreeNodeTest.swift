@@ -133,6 +133,32 @@ final class TreeNodeTest: XCTestCase {
         XCTAssertEqual(nextSidebarDraftWorkspaceName(), "__sidebar_draft_workspace_1")
     }
 
+    func testWorkspaceDisplayNameUsesSidebarDraftFallback() {
+        XCTAssertEqual(workspaceDisplayName("__sidebar_draft_workspace_4"), "Workspace 4")
+    }
+
+    func testUserFacingWorkspacesExcludeHiddenEmptyWorkspace() {
+        let focusedWorkspace = Workspace.get(byName: "focused")
+        let hiddenEmptyWorkspace = Workspace.get(byName: "hidden-empty")
+        let occupiedWorkspace = Workspace.get(byName: "occupied")
+        _ = TestWindow.new(id: 2, parent: occupiedWorkspace.rootTilingContainer)
+
+        let result = userFacingWorkspaces(
+            [focusedWorkspace, hiddenEmptyWorkspace, occupiedWorkspace],
+            focusedWorkspace: focusedWorkspace,
+        )
+
+        XCTAssertEqual(result, [focusedWorkspace, occupiedWorkspace])
+    }
+
+    func testRestorableWorkspacesExcludeEmptyWorkspace() {
+        let emptyWorkspace = Workspace.get(byName: "empty")
+        let occupiedWorkspace = Workspace.get(byName: "occupied")
+        _ = TestWindow.new(id: 3, parent: occupiedWorkspace.rootTilingContainer)
+
+        XCTAssertEqual(restorableWorkspaces([emptyWorkspace, occupiedWorkspace]), [occupiedWorkspace])
+    }
+
     func testCancelManipulatedWithMouseStateClearsDragTracking() {
         let workspace = Workspace.get(byName: "a")
         let window = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)

@@ -31,11 +31,12 @@ public final class TrayMenuModel: ObservableObject {
         sortedMonitors
         .map {
             let hasFullscreenWindows = $0.activeWorkspace.allLeafWindowsRecursive.contains { $0.isFullscreen }
-            let activeWorkspaceName = hasFullscreenWindows ? "[\($0.activeWorkspace.name)]" : $0.activeWorkspace.name
-            return ($0.activeWorkspace == focus.workspace && sortedMonitors.count > 1 ? "*" : "") + activeWorkspaceName
+            let activeWorkspaceName = workspaceDisplayName($0.activeWorkspace.name)
+            let formattedActiveWorkspaceName = hasFullscreenWindows ? "[\(activeWorkspaceName)]" : activeWorkspaceName
+            return ($0.activeWorkspace == focus.workspace && sortedMonitors.count > 1 ? "*" : "") + formattedActiveWorkspaceName
         }
         .joined(separator: " │ ")
-    TrayMenuModel.shared.workspaces = Workspace.all.map {
+    TrayMenuModel.shared.workspaces = userFacingWorkspaces(Workspace.all, focusedWorkspace: focus.workspace).map {
         let apps = $0.allLeafWindowsRecursive.map { $0.app.name?.takeIf { !$0.isEmpty } }.filterNotNil().toSet()
         let dash = " - "
         let suffix = switch true {
@@ -46,6 +47,7 @@ public final class TrayMenuModel: ObservableObject {
         let hasFullscreenWindows = $0.allLeafWindowsRecursive.contains { $0.isFullscreen }
         return WorkspaceViewModel(
             name: $0.name,
+            displayName: workspaceDisplayName($0.name),
             suffix: suffix,
             isFocused: focus.workspace == $0,
             isEffectivelyEmpty: $0.isEffectivelyEmpty,
@@ -73,6 +75,7 @@ public final class TrayMenuModel: ObservableObject {
 
 struct WorkspaceViewModel: Hashable {
     let name: String
+    let displayName: String
     let suffix: String
     let isFocused: Bool
     let isEffectivelyEmpty: Bool

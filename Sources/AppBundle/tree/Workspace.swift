@@ -52,6 +52,28 @@ func sidebarDraftWorkspaceIndex(_ name: String) -> Int? {
     return Int(suffix)
 }
 
+@MainActor
+func workspaceDisplayName(_ workspaceName: String) -> String {
+    let sidebarLabel = config.workspaceSidebar.workspaceLabels[workspaceName]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    if !sidebarLabel.isEmpty {
+        return sidebarLabel
+    }
+    if let index = sidebarDraftWorkspaceIndex(workspaceName) {
+        return "Workspace \(index)"
+    }
+    return workspaceName
+}
+
+@MainActor
+func userFacingWorkspaces(_ workspaces: [Workspace], focusedWorkspace: Workspace? = nil) -> [Workspace] {
+    workspaces.filter {
+        !$0.isEffectivelyEmpty ||
+            $0.isVisible ||
+            $0 == focusedWorkspace ||
+            config.persistentWorkspaces.contains($0.name)
+    }
+}
+
 final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
     let name: String
     nonisolated private let nameLogicalSegments: StringLogicalSegments

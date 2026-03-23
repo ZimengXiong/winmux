@@ -5,6 +5,11 @@ struct FrozenWorld: Codable, Sendable {
 }
 
 @MainActor
+func restorableWorkspaces(_ workspaces: [Workspace]) -> [Workspace] {
+    workspaces.filter { !collectAllWindowIds(workspace: $0).isEmpty }
+}
+
+@MainActor
 func collectAllWindowIds(workspace: Workspace) -> [UInt32] {
     workspace.floatingWindows.map { $0.windowId } +
         workspace.macOsNativeFullscreenWindowsContainer.children.map { ($0 as! Window).windowId } +

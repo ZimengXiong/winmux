@@ -26,7 +26,7 @@ private func persistedFrozenWorldUrl() throws -> URL {
 
 @MainActor
 private func currentFrozenWorld() -> FrozenWorld {
-    let workspaces = Workspace.all
+    let workspaces = restorableWorkspaces(Workspace.all)
     return FrozenWorld(
         workspaces: workspaces.map(FrozenWorkspace.init),
         monitors: monitors.map(FrozenMonitor.init),
