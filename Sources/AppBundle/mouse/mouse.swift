@@ -9,6 +9,7 @@ enum MouseManipulationKind {
 @MainActor var currentlyManipulatedWithMouseWindowId: UInt32? = nil
 @MainActor private var pinnedDraggedWindowId: UInt32? = nil
 @MainActor private var currentMouseDragSubject: WindowDragSubject = .window
+@MainActor private var currentMouseTabDetachOrigin: TabDetachOrigin = .window
 @MainActor private var currentMouseManipulationKind: MouseManipulationKind = .none
 @MainActor private var draggedWindowAnchorRectById: [UInt32: Rect] = [:]
 var isLeftMouseButtonDown: Bool { NSEvent.pressedMouseButtons == 1 }
@@ -36,6 +37,16 @@ func setCurrentMouseDragSubject(_ subject: WindowDragSubject) {
 @MainActor
 func getCurrentMouseDragSubject() -> WindowDragSubject {
     currentMouseDragSubject
+}
+
+@MainActor
+func setCurrentMouseTabDetachOrigin(_ origin: TabDetachOrigin) {
+    currentMouseTabDetachOrigin = origin
+}
+
+@MainActor
+func getCurrentMouseTabDetachOrigin() -> TabDetachOrigin {
+    currentMouseTabDetachOrigin
 }
 
 @MainActor
@@ -83,6 +94,7 @@ func cancelManipulatedWithMouseState() {
     clearDraggedWindowAnchorRect(for: currentlyManipulatedWithMouseWindowId)
     setCurrentMouseManipulationKind(.none)
     setCurrentMouseDragSubject(.window)
+    setCurrentMouseTabDetachOrigin(.window)
     currentlyManipulatedWithMouseWindowId = nil
     WindowTabStripPanelController.shared.setIgnoresMouseEvents(false)
     for workspace in Workspace.all {

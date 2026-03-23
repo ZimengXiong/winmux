@@ -463,6 +463,7 @@ private func updateSidebarWindowDrag(_ windowId: UInt32, subject: WindowDragSubj
     currentlyManipulatedWithMouseWindowId = window.windowId
     setCurrentMouseManipulationKind(.move)
     setCurrentMouseDragSubject(subject)
+    setCurrentMouseTabDetachOrigin(.window)
     setDraggedWindowAnchorRect(resolvedDraggedWindowAnchorRect(for: window, subject: subject), for: window.windowId)
     WindowTabStripPanelController.shared.setIgnoresMouseEvents(true)
     _ = updatePendingWindowDragIntent(sourceWindow: window, mouseLocation: mouseLocation, subject: subject, detachOrigin: .window)

@@ -187,8 +187,15 @@ private func removeWindowFromTabStrip(_ windowId: UInt32, fallbackWorkspace: Str
 private func updateDetachedTabFromTabStrip(_ windowId: UInt32) {
     guard let window = Window.get(byId: windowId) else {
         clearPendingWindowDragIntent()
+        cancelManipulatedWithMouseState()
         return
     }
+    currentlyManipulatedWithMouseWindowId = window.windowId
+    setCurrentMouseManipulationKind(.move)
+    setCurrentMouseDragSubject(.window)
+    setCurrentMouseTabDetachOrigin(.tabStrip)
+    setDraggedWindowAnchorRect(resolvedDraggedWindowAnchorRect(for: window, subject: .window), for: window.windowId)
+    WindowTabStripPanelController.shared.setIgnoresMouseEvents(true)
     _ = updatePendingDetachedTabIntent(sourceWindow: window, mouseLocation: mouseLocation, origin: .tabStrip)
 }
 
@@ -199,9 +206,16 @@ private func updateMoveFromTabStrip(_ windowId: UInt32) {
         cancelManipulatedWithMouseState()
         return
     }
+    if getCurrentMouseManipulationKind() == .move &&
+        currentlyManipulatedWithMouseWindowId != nil &&
+        getCurrentMouseDragSubject() == .window
+    {
+        return
+    }
     currentlyManipulatedWithMouseWindowId = window.windowId
     setCurrentMouseManipulationKind(.move)
     setCurrentMouseDragSubject(.group)
+    setCurrentMouseTabDetachOrigin(.window)
     setDraggedWindowAnchorRect(resolvedDraggedWindowAnchorRect(for: window, subject: .group), for: window.windowId)
     WindowTabStripPanelController.shared.setIgnoresMouseEvents(true)
     _ = updatePendingWindowDragIntent(sourceWindow: window, mouseLocation: mouseLocation, subject: .group, detachOrigin: .window)

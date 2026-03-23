@@ -387,7 +387,7 @@ func refreshPendingWindowDragIntentFromGlobalMouseDrag() {
         sourceWindow: sourceWindow,
         mouseLocation: mouseLocation,
         subject: getCurrentMouseDragSubject(),
-        detachOrigin: .window,
+        detachOrigin: getCurrentMouseTabDetachOrigin(),
     )
 }
 

@@ -124,12 +124,14 @@ final class TreeNodeTest: XCTestCase {
         currentlyManipulatedWithMouseWindowId = window.windowId
         setCurrentMouseManipulationKind(.move)
         setCurrentMouseDragSubject(.group)
+        setCurrentMouseTabDetachOrigin(.tabStrip)
 
         cancelManipulatedWithMouseState()
 
         XCTAssertNil(currentlyManipulatedWithMouseWindowId)
         XCTAssertEqual(getCurrentMouseManipulationKind(), .none)
         XCTAssertEqual(getCurrentMouseDragSubject(), .window)
+        XCTAssertEqual(getCurrentMouseTabDetachOrigin(), .window)
         XCTAssertNil(draggedWindowAnchorRect(for: window.windowId))
     }
 
