@@ -255,20 +255,6 @@ private struct WindowTabStripView: View {
                         .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
                 }
                 .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .gesture(
-                    DragGesture(minimumDistance: 10)
-                        .onChanged { _ in
-                            if let activeTab {
-                                updateMoveFromTabStrip(activeTab.windowId)
-                            }
-                        },
-                )
-                .simultaneousGesture(
-                    DragGesture(minimumDistance: 10)
-                        .onEnded { _ in
-                            finishMoveFromTabStrip()
-                        },
-                )
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -282,6 +268,17 @@ private struct WindowTabStripView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.clear)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 10)
+                .onChanged { _ in
+                    if let activeTab {
+                        updateMoveFromTabStrip(activeTab.windowId)
+                    }
+                }
+                .onEnded { _ in
+                    finishMoveFromTabStrip()
+                },
+        )
     }
 }
 

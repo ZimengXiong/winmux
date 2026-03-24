@@ -941,15 +941,15 @@ struct WorkspaceSidebarWorkspaceSection: View {
                 )
             }
             .buttonStyle(.plain)
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 8)
-                    .onChanged { _ in
-                        updateSidebarWindowDrag(group.representativeWindowId, subject: .group)
-                    }
-                    .onEnded { _ in
-                        finishSidebarWindowDrag()
-                    },
-            )
+            .modifier(WorkspaceSidebarOptionalDragModifier(
+                isEnabled: true,
+                onChanged: {
+                    updateSidebarWindowDrag(group.representativeWindowId, subject: .group)
+                },
+                onEnded: {
+                    finishSidebarWindowDrag()
+                },
+            ))
             .opacity(activeSidebarDragSourceWindowId == group.representativeWindowId ? 0.38 : 1)
             .scaleEffect(activeSidebarDragSourceWindowId == group.representativeWindowId ? 0.985 : 1)
 
