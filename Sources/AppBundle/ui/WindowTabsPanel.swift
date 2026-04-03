@@ -155,13 +155,22 @@ final class WindowDragCursorProxyPanel: NSPanelHud {
         }
         let proxyWidth: CGFloat = min(max(CGFloat(label.count) * 7 + 36, 80), 200)
         let proxyHeight: CGFloat = 28
-        // Offset: slightly below and to the right of the cursor
-        let frame = CGRect(
-            x: mouseScreenPoint.x + 14,
-            y: mouseScreenPoint.y - proxyHeight - 6,
-            width: proxyWidth,
-            height: proxyHeight,
-        )
+        let screenFrame = NSScreen.main?.visibleFrame ?? .zero
+
+        // Default: right and below cursor
+        var x = mouseScreenPoint.x + 14
+        var y = mouseScreenPoint.y - proxyHeight - 6
+
+        // Flip left if clipping right edge
+        if x + proxyWidth > screenFrame.maxX {
+            x = mouseScreenPoint.x - proxyWidth - 14
+        }
+        // Push up if clipping bottom edge
+        if y < screenFrame.minY {
+            y = mouseScreenPoint.y + 6
+        }
+
+        let frame = CGRect(x: x, y: y, width: proxyWidth, height: proxyHeight)
         setFrame(frame, display: true, animate: false)
         orderFrontRegardless()
     }
@@ -262,6 +271,26 @@ private func removeWindowFromTabStrip(_ windowId: UInt32, fallbackWorkspace: Str
 }
 
 @MainActor
+private func reorderTabInStrip(_ windowId: UInt32, toIndex targetIndex: Int) {
+    guard let token: RunSessionGuard = .isServerEnabled else { return }
+    Task {
+        try await runLightSession(.menuBarButton, token) {
+            guard let window = Window.get(byId: windowId),
+                  let parent = window.parent as? TilingContainer,
+                  parent.layout == .accordion,
+                  let currentIndex = window.ownIndex
+            else { return }
+            let clampedTarget = max(0, min(targetIndex, parent.children.count - 1))
+            guard clampedTarget != currentIndex else { return }
+            let binding = window.unbindFromParent()
+            window.bind(to: parent, adaptiveWeight: binding.adaptiveWeight, index: clampedTarget)
+            window.markAsMostRecentChild()
+            _ = window.focusWindow()
+        }
+    }
+}
+
+@MainActor
 private func updateDetachedTabFromTabStrip(_ windowId: UInt32) {
     guard let window = Window.get(byId: windowId) else {
         clearPendingWindowDragIntent()
@@ -344,21 +373,79 @@ private let windowTabStripCornerRadius: CGFloat = 14
 private let windowTabItemCornerRadius: CGFloat = 10
 private let windowTabPreviewCornerRadius: CGFloat = 6
 
-// MARK: - Tab Strip View
+// MARK: - Tab Strip View (manages reorder drag state for all tabs)
+
+private let tabReorderVerticalEscapeThreshold: CGFloat = 18
 
 private struct WindowTabStripView: View {
     let strip: WindowTabStripViewModel
 
+    @State private var draggingTabId: UInt32? = nil
+    @State private var dragTranslationX: CGFloat = 0
+    @State private var hasCommittedToDetach = false
+
     var body: some View {
         let count = max(strip.tabs.count, 1)
         let tabWidth = max(100, min(220, (strip.frame.width - 12) / CGFloat(count)))
+        let itemHeight = max(strip.frame.height - 6, 22)
+        let effectiveTabWidth = tabWidth + 2 // include HStack spacing
+
+        let draggingIndex = draggingTabId.flatMap { id in strip.tabs.firstIndex(where: { $0.windowId == id }) }
+        let targetIndex: Int? = draggingIndex.map { srcIdx in
+            let delta = Int(round(dragTranslationX / effectiveTabWidth))
+            return max(0, min(srcIdx + delta, strip.tabs.count - 1))
+        }
 
         HStack(spacing: 2) {
             ForEach(strip.tabs) { tab in
                 WindowTabItemView(
                     tab: tab,
                     width: tabWidth,
-                    height: max(strip.frame.height - 6, 22)
+                    height: itemHeight,
+                    isDragSource: draggingTabId == tab.windowId
+                )
+                .offset(x: tabVisualOffset(
+                    for: tab,
+                    draggingIndex: draggingIndex,
+                    targetIndex: targetIndex,
+                    effectiveTabWidth: effectiveTabWidth
+                ))
+                .zIndex(draggingTabId == tab.windowId ? 1 : 0)
+                .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.82), value: targetIndex)
+                .highPriorityGesture(
+                    DragGesture(minimumDistance: 8)
+                        .onChanged { value in
+                            if hasCommittedToDetach {
+                                updateDetachedTabFromTabStrip(tab.windowId)
+                                return
+                            }
+
+                            let dy = value.translation.height
+
+                            // If vertical drag exceeds threshold, commit to detach
+                            if abs(dy) > tabReorderVerticalEscapeThreshold, strip.tabs.count > 1 {
+                                hasCommittedToDetach = true
+                                draggingTabId = nil
+                                dragTranslationX = 0
+                                updateDetachedTabFromTabStrip(tab.windowId)
+                                return
+                            }
+
+                            draggingTabId = tab.windowId
+                            dragTranslationX = value.translation.width
+                        }
+                        .onEnded { _ in
+                            if hasCommittedToDetach {
+                                hasCommittedToDetach = false
+                                Task { @MainActor in
+                                    try? await resetManipulatedWithMouseIfPossible()
+                                }
+                            } else if let srcIdx = draggingIndex, let tgtIdx = targetIndex, srcIdx != tgtIdx {
+                                reorderTabInStrip(tab.windowId, toIndex: tgtIdx)
+                            }
+                            draggingTabId = nil
+                            dragTranslationX = 0
+                        },
                 )
             }
         }
@@ -386,6 +473,43 @@ private struct WindowTabStripView: View {
                 },
         )
     }
+
+    private func tabVisualOffset(
+        for tab: WindowTabItemViewModel,
+        draggingIndex: Int?,
+        targetIndex: Int?,
+        effectiveTabWidth: CGFloat
+    ) -> CGFloat {
+        guard let draggingIndex, let targetIndex else {
+            // Dragged tab follows cursor 1:1
+            if tab.windowId == draggingTabId {
+                return dragTranslationX
+            }
+            return 0
+        }
+
+        // The dragged tab follows the cursor directly
+        if tab.windowId == draggingTabId {
+            return dragTranslationX
+        }
+
+        guard let tabIndex = strip.tabs.firstIndex(where: { $0.id == tab.id }) else { return 0 }
+
+        // Tabs between source and target shift to make room
+        if draggingIndex < targetIndex {
+            // Dragging right: tabs in (source, target] shift one slot left
+            if tabIndex > draggingIndex, tabIndex <= targetIndex {
+                return -effectiveTabWidth
+            }
+        } else if draggingIndex > targetIndex {
+            // Dragging left: tabs in [target, source) shift one slot right
+            if tabIndex >= targetIndex, tabIndex < draggingIndex {
+                return effectiveTabWidth
+            }
+        }
+
+        return 0
+    }
 }
 
 // MARK: - Tab Item View (hover animations)
@@ -394,6 +518,7 @@ private struct WindowTabItemView: View {
     let tab: WindowTabItemViewModel
     let width: CGFloat
     let height: CGFloat
+    let isDragSource: Bool
 
     @State private var isHovered = false
 
@@ -414,6 +539,9 @@ private struct WindowTabItemView: View {
         }
         .contentShape(RoundedRectangle(cornerRadius: windowTabItemCornerRadius, style: .continuous))
         .buttonStyle(.plain)
+        .scaleEffect(isDragSource ? 1.04 : 1.0)
+        .opacity(isDragSource ? 0.85 : 1.0)
+        .animation(.easeInOut(duration: 0.12), value: isDragSource)
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.12)) {
                 isHovered = hovering
@@ -424,17 +552,6 @@ private struct WindowTabItemView: View {
                 removeWindowFromTabStrip(tab.windowId, fallbackWorkspace: tab.workspaceName)
             }
         }
-        .highPriorityGesture(
-            DragGesture(minimumDistance: 10)
-                .onChanged { _ in
-                    updateDetachedTabFromTabStrip(tab.windowId)
-                }
-                .onEnded { _ in
-                    Task { @MainActor in
-                        try? await resetManipulatedWithMouseIfPossible()
-                    }
-                },
-        )
     }
 
     private var foregroundColor: Color {
@@ -446,12 +563,12 @@ private struct WindowTabItemView: View {
 
     @ViewBuilder
     private var background: some View {
-        if tab.isActive {
+        if tab.isActive || isDragSource {
             RoundedRectangle(cornerRadius: windowTabItemCornerRadius, style: .continuous)
-                .fill(Color.primary.opacity(0.07))
+                .fill(Color.primary.opacity(isDragSource ? 0.10 : 0.07))
                 .overlay {
                     RoundedRectangle(cornerRadius: windowTabItemCornerRadius, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.05), lineWidth: 0.5)
+                        .strokeBorder(Color.primary.opacity(isDragSource ? 0.08 : 0.05), lineWidth: 0.5)
                 }
         } else if isHovered {
             RoundedRectangle(cornerRadius: windowTabItemCornerRadius, style: .continuous)

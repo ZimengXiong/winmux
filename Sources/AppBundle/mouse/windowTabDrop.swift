@@ -247,7 +247,7 @@ private func swapDestination(
     let interactionRect = if subject == .group {
         previewRect.expanded(left: 4, right: 4, top: 4, bottom: 6)
     } else {
-        previewRect.expanded(left: 10, right: 10, top: 6, bottom: 10)
+        previewRect.expanded(left: 10, right: 10, top: 10, bottom: 10)
     }
     guard mouseLocation.map(interactionRect.contains) ?? true else { return nil }
     let isTabGroup = targetNode is TilingContainer
@@ -375,7 +375,7 @@ extension Window {
         guard let parent = parent as? TilingContainer, parent.layout == .accordion else { return nil }
         return switch origin {
             case .window:
-                lastAppliedLayoutPhysicalRect?.expanded(left: 0, right: 0, top: 8, bottom: 12)
+                lastAppliedLayoutPhysicalRect?.expanded(left: 8, right: 8, top: 8, bottom: 12)
                     ?? parent.lastAppliedLayoutPhysicalRect?.insetBy(left: 24, right: 24, top: 14, bottom: 18)
             case .tabStrip:
                 (parent.windowTabDropZoneRect ?? parent.windowTabBarRect)?.expanded(left: 4, right: 4, top: 4, bottom: 6)
@@ -720,10 +720,10 @@ private func currentWindowDragIntentDestination(
         return sidebarDestination
     }
 
-    // When dragging from the sidebar, suppress window drop hints
-    // while the mouse is within the sidebar's visible bounds.
-    if getCurrentMouseDragStartedInSidebar(),
-       let sidebarRect = WorkspaceSidebarPanel.shared.visibleScreenRectNormalized(),
+    // Suppress window drop hints when the mouse is within the sidebar's
+    // visible bounds during any drag — windows behind the sidebar
+    // should never show hints since they're visually obscured.
+    if let sidebarRect = WorkspaceSidebarPanel.shared.visibleScreenRectNormalized(),
        sidebarRect.contains(mouseLocation)
     {
         return nil
@@ -765,7 +765,7 @@ private func currentWindowDragIntentDestination(
     let sourceNode = dragSubjectNode(for: sourceWindow, subject: subject)
     let targetWorkspace = mouseLocation.monitorApproximation.activeWorkspace
     if targetWorkspace != sourceNode.nodeWorkspace {
-        let previewRect = targetWorkspace.rootTilingContainer.lastAppliedLayoutPhysicalRect ?? targetWorkspace.workspaceMonitor.visibleRectPaddedByOuterGaps
+        let previewRect = targetWorkspace.workspaceMonitor.visibleRectPaddedByOuterGaps
         return WindowDragIntentDestination(
             kind: .moveToWorkspace(workspaceName: targetWorkspace.name),
             previewRect: previewRect,
@@ -945,7 +945,7 @@ extension TreeNode {
             case let container as TilingContainer:
                 (container.windowTabDropInteractionRect?.height ?? rect.height * 0.2) + 4
             default:
-                rect.height * 0.2
+                max(rect.height * 0.2, 40)
         }
         let swapRect = rect.insetBy(
             left: 2,

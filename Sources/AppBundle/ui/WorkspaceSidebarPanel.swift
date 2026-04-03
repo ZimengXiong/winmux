@@ -441,7 +441,7 @@ final class WorkspaceSidebarPanel: NSPanelHud {
             hasPinnedDraggedWindow: hasPinnedDraggedWindow(),
             isSidebarDragInProgress: getCurrentMouseManipulationKind() == .move && getCurrentMouseDragStartedInSidebar(),
             hasActiveEditor: TrayMenuModel.shared.workspaceSidebarEditingWorkspaceName != nil,
-        )
+        ) || isMouseWindowDragInProgress()
     }
 
     private func animateVisibleSidebarWidth(_ width: CGFloat, animation: Animation) {
@@ -1182,7 +1182,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
             )
             .transition(.asymmetric(
                 insertion: .move(edge: .top).combined(with: .scale(scale: 0.96, anchor: .top)).combined(with: .opacity),
-                removal: .opacity,
+                removal: .identity,
             ))
         }
     }
@@ -1220,7 +1220,8 @@ struct WorkspaceSidebarWorkspaceSection: View {
                 isHovering: hover,
             )
         }
-        .opacity(activeSidebarDragSourceWindowId == window.windowId ? 0.38 : 1)
+        .opacity(activeSidebarDragSourceWindowId == window.windowId ? 0.3 : 1)
+        .scaleEffect(activeSidebarDragSourceWindowId == window.windowId ? 0.96 : 1)
     }
 
     private func workspaceTabGroupView(_ group: WorkspaceSidebarTabGroupViewModel) -> some View {
@@ -1249,7 +1250,8 @@ struct WorkspaceSidebarWorkspaceSection: View {
                     finishSidebarWindowDrag()
                 },
             ))
-            .opacity(activeSidebarDragSourceWindowId == group.representativeWindowId ? 0.38 : 1)
+            .opacity(activeSidebarDragSourceWindowId == group.representativeWindowId ? 0.3 : 1)
+            .scaleEffect(activeSidebarDragSourceWindowId == group.representativeWindowId ? 0.96 : 1)
 
             VStack(alignment: .leading, spacing: 1) {
                 ForEach(group.tabs) { tab in
@@ -1330,7 +1332,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
 
     private var sectionBackgroundFill: Color {
         if isDropTarget {
-            return Color.accentColor.opacity(0.1)
+            return Color.accentColor.opacity(0.15)
         } else if isHovered {
             return Color(nsColor: .controlBackgroundColor).opacity(0.5)
         } else if workspace.isFocused {
@@ -1343,7 +1345,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
 
     private var sectionBorderColor: Color {
         if isDropTarget {
-            return Color.accentColor.opacity(0.45)
+            return Color.accentColor.opacity(0.6)
         }
         if workspace.isFocused {
             return Color.accentColor.opacity(0.12)
