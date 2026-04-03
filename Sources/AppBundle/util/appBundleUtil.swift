@@ -135,6 +135,11 @@ extension CGPoint: @retroactive Hashable { // todo migrate to self written Point
     let isDebug = false
 #endif
 
+func debugFocusLog(_ message: @autoclosure () -> String) {
+    guard isDebug else { return }
+    fputs("[focus-debug] \(Date()) \(message())\n", stderr)
+}
+
 @inlinable
 func checkCancellation() throws(CancellationError) {
     if Task.isCancelled {

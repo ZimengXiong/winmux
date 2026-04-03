@@ -117,8 +117,16 @@ final class MacApp: AbstractApp {
         // Performance optimization. If possible avoid doing AX requests
         // (important for apps which are slow at responding even such basic AX requests. E.g. Godot)
         // Beware of the macOS bug: https://github.com/nikitabobko/AeroSpace/issues/101
-        if (!NSScreen.screensHaveSeparateSpaces || monitors.count == 1) &&
-            (lastNativeFocusedWindowId == windowId || windowsCount == 1)
+        let useActivationOnly = (!NSScreen.screensHaveSeparateSpaces || monitors.count == 1) &&
+            shouldUseActivationOnlyForNativeFocus(
+                targetWindowId: windowId,
+                lastNativeFocusedWindowId: lastNativeFocusedWindowId,
+                logicalWindowsCount: logicalWindowCount,
+            )
+        debugFocusLog(
+            "MacApp.nativeFocus app=\(nsApp.localizedName ?? rawAppBundleId ?? String(pid)) target=\(windowId) lastNative=\(lastNativeFocusedWindowId?.description ?? "nil") logicalWindowsCount=\(logicalWindowCount) windowsCount=\(windowsCount) strategy=\(useActivationOnly ? "activate" : "ax-focus")"
+        )
+        if useActivationOnly
         {
             nsApp.activate(options: .activateIgnoringOtherApps)
         } else {
@@ -154,6 +162,18 @@ final class MacApp: AbstractApp {
         try await thread?.runInLoop { [axApp] job in
             axApp.threadGuarded.get(Ax.windowsAttr)?.count
         }
+    }
+
+    @MainActor
+    private var logicalWindowCount: Int {
+        var result = 0
+        for window in MacWindow.allWindows where window.macApp === self {
+            result += 1
+            if result > 1 {
+                return result
+            }
+        }
+        return result
     }
 
     func getAxRect(_ windowId: UInt32) async throws -> Rect? {
@@ -328,6 +348,14 @@ final class MacApp: AbstractApp {
             try? body(window.ax, job)
         } ?? .cancelled
     }
+}
+
+func shouldUseActivationOnlyForNativeFocus(
+    targetWindowId: UInt32,
+    lastNativeFocusedWindowId: UInt32?,
+    logicalWindowsCount: Int,
+) -> Bool {
+    lastNativeFocusedWindowId == targetWindowId || logicalWindowsCount == 1
 }
 
 private final class AxWindow {

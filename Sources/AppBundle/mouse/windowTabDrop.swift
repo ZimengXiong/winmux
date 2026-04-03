@@ -469,7 +469,16 @@ func updatePendingWindowDragIntent(
     detachOrigin: TabDetachOrigin,
 ) -> Bool {
     // Show cursor drag proxy during sidebar-originated drags
-    if getCurrentMouseDragStartedInSidebar() {
+    // or tab-strip-originated drags when hovering over the sidebar
+    let showCursorProxy: Bool = {
+        if getCurrentMouseDragStartedInSidebar() { return true }
+        if detachOrigin == .tabStrip,
+           let sidebarRect = WorkspaceSidebarPanel.shared.visibleScreenRectNormalized(),
+           sidebarRect.contains(mouseLocation)
+        { return true }
+        return false
+    }()
+    if showCursorProxy {
         let label = sidebarDragSourceTitle(for: sourceWindow, subject: subject)
         let isGroup = subject == .group || dragSubjectNode(for: sourceWindow, subject: subject) is TilingContainer
         WindowDragCursorProxyPanel.shared.show(
@@ -477,6 +486,8 @@ func updatePendingWindowDragIntent(
             isGroup: isGroup,
             mouseScreenPoint: NSEvent.mouseLocation,
         )
+    } else if detachOrigin == .tabStrip {
+        WindowDragCursorProxyPanel.shared.hide()
     }
 
     guard let destination = currentWindowDragIntentDestination(

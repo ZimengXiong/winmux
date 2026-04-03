@@ -50,11 +50,15 @@ extension TreeNode {
     }
 
     var mostRecentWorkspaceFocusableWindowRecursive: Window? {
+        mostRecentWorkspaceFocusableWindowRecursive(excluding: nil)
+    }
+
+    func mostRecentWorkspaceFocusableWindowRecursive(excluding excludedWindow: Window?) -> Window? {
         switch nodeCases {
             case .window(let window):
-                return window.participatesInWorkspaceFocus ? window : nil
+                return window != excludedWindow && window.participatesInWorkspaceFocus ? window : nil
             case .tilingContainer, .workspace:
-                return childrenByMostRecentUse.lazy.compactMap(\.mostRecentWorkspaceFocusableWindowRecursive).first
+                return childrenByMostRecentUse.lazy.compactMap { $0.mostRecentWorkspaceFocusableWindowRecursive(excluding: excludedWindow) }.first
             case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer,
                  .macosHiddenAppsWindowsContainer, .macosPopupWindowsContainer:
                 return nil

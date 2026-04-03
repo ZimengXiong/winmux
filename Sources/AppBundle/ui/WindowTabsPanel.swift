@@ -386,7 +386,8 @@ private struct WindowTabStripView: View {
 
     var body: some View {
         let count = max(strip.tabs.count, 1)
-        let tabWidth = max(100, min(220, (strip.frame.width - 12) / CGFloat(count)))
+        let stripWidth = strip.frame.width
+        let tabWidth = max(120, min(220, (stripWidth - 12) / CGFloat(count)))
         let itemHeight = max(strip.frame.height - 6, 22)
         let effectiveTabWidth = tabWidth + 2 // include HStack spacing
 
@@ -396,62 +397,65 @@ private struct WindowTabStripView: View {
             return max(0, min(srcIdx + delta, strip.tabs.count - 1))
         }
 
-        HStack(spacing: 2) {
-            ForEach(strip.tabs) { tab in
-                WindowTabItemView(
-                    tab: tab,
-                    width: tabWidth,
-                    height: itemHeight,
-                    isDragSource: draggingTabId == tab.windowId
-                )
-                .offset(x: tabVisualOffset(
-                    for: tab,
-                    draggingIndex: draggingIndex,
-                    targetIndex: targetIndex,
-                    effectiveTabWidth: effectiveTabWidth
-                ))
-                .zIndex(draggingTabId == tab.windowId ? 1 : 0)
-                .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.82), value: targetIndex)
-                .highPriorityGesture(
-                    DragGesture(minimumDistance: 8)
-                        .onChanged { value in
-                            if hasCommittedToDetach {
-                                updateDetachedTabFromTabStrip(tab.windowId)
-                                return
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 2) {
+                ForEach(strip.tabs) { tab in
+                    WindowTabItemView(
+                        tab: tab,
+                        width: tabWidth,
+                        height: itemHeight,
+                        isDragSource: draggingTabId == tab.windowId
+                    )
+                    .offset(x: tabVisualOffset(
+                        for: tab,
+                        draggingIndex: draggingIndex,
+                        targetIndex: targetIndex,
+                        effectiveTabWidth: effectiveTabWidth
+                    ))
+                    .zIndex(draggingTabId == tab.windowId ? 1 : 0)
+                    .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.82), value: targetIndex)
+                    .highPriorityGesture(
+                        DragGesture(minimumDistance: 8)
+                            .onChanged { value in
+                                if hasCommittedToDetach {
+                                    updateDetachedTabFromTabStrip(tab.windowId)
+                                    return
+                                }
+
+                                let dy = value.translation.height
+
+                                // If vertical drag exceeds threshold, commit to detach
+                                if abs(dy) > tabReorderVerticalEscapeThreshold, strip.tabs.count > 1 {
+                                    hasCommittedToDetach = true
+                                    draggingTabId = nil
+                                    dragTranslationX = 0
+                                    updateDetachedTabFromTabStrip(tab.windowId)
+                                    return
+                                }
+
+                                draggingTabId = tab.windowId
+                                dragTranslationX = value.translation.width
                             }
-
-                            let dy = value.translation.height
-
-                            // If vertical drag exceeds threshold, commit to detach
-                            if abs(dy) > tabReorderVerticalEscapeThreshold, strip.tabs.count > 1 {
-                                hasCommittedToDetach = true
+                            .onEnded { _ in
+                                if hasCommittedToDetach {
+                                    hasCommittedToDetach = false
+                                    Task { @MainActor in
+                                        try? await resetManipulatedWithMouseIfPossible()
+                                    }
+                                } else if let srcIdx = draggingIndex, let tgtIdx = targetIndex, srcIdx != tgtIdx {
+                                    reorderTabInStrip(tab.windowId, toIndex: tgtIdx)
+                                }
                                 draggingTabId = nil
                                 dragTranslationX = 0
-                                updateDetachedTabFromTabStrip(tab.windowId)
-                                return
-                            }
-
-                            draggingTabId = tab.windowId
-                            dragTranslationX = value.translation.width
-                        }
-                        .onEnded { _ in
-                            if hasCommittedToDetach {
-                                hasCommittedToDetach = false
-                                Task { @MainActor in
-                                    try? await resetManipulatedWithMouseIfPossible()
-                                }
-                            } else if let srcIdx = draggingIndex, let tgtIdx = targetIndex, srcIdx != tgtIdx {
-                                reorderTabInStrip(tab.windowId, toIndex: tgtIdx)
-                            }
-                            draggingTabId = nil
-                            dragTranslationX = 0
-                        },
-                )
+                            },
+                    )
+                }
             }
+            .padding(.horizontal, 4)
         }
-        .padding(.horizontal, 4)
         .padding(.vertical, 3)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(width: stripWidth, height: strip.frame.height)
+        .clipped()
         .background(
             RoundedRectangle(cornerRadius: windowTabStripCornerRadius, style: .continuous)
                 .fill(Color(nsColor: .windowBackgroundColor).opacity(0.94))

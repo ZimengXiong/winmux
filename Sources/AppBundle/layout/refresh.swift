@@ -36,30 +36,35 @@ func runRefreshSessionBlocking(
     let state = signposter.beginInterval(#function, "event: \(event) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
     defer { signposter.endInterval(#function, state) }
     if !TrayMenuModel.shared.isEnabled { return }
+    let focusSnapshot = captureRefreshSessionFocusSnapshot()
+    debugFocusLog("runRefreshSessionBlocking begin event=\(event) snapshot=\(debugDescribe(focusSnapshot))")
     try await $refreshSessionEvent.withValue(event) {
         try await $_isStartup.withValue(event.isStartup) {
-            let frontmostActivationPolicy = NSWorkspace.shared.frontmostApplication?.activationPolicy
-            let nativeFocused = try await getNativeFocusedWindow()
-            if let nativeFocused { try await debugWindowsIfRecording(nativeFocused) }
-            updateFocusCache(nativeFocused)
+            try await $_refreshSessionFocusSnapshot.withValue(focusSnapshot) {
+                let frontmostActivationPolicy = NSWorkspace.shared.frontmostApplication?.activationPolicy
+                let nativeFocused = try await getNativeFocusedWindow()
+                if let nativeFocused { try await debugWindowsIfRecording(nativeFocused) }
+                updateFocusCache(nativeFocused)
 
-            if shouldLayoutWorkspaces && optimisticallyPreLayoutWorkspaces { try await layoutWorkspaces() }
+                if shouldLayoutWorkspaces && optimisticallyPreLayoutWorkspaces { try await layoutWorkspaces() }
 
-            refreshModel()
-            try await refresh()
-            gcMonitors()
+                refreshModel()
+                try await refresh()
+                gcMonitors()
 
-            updateTrayText()
-            await updateWorkspaceSidebarModel()
-            SecureInputPanel.shared.refresh()
-            try await normalizeLayoutReason()
-            if shouldLayoutWorkspaces {
-                try await layoutWorkspaces()
-                if shouldSyncFocusBackToMacOs(nativeFocused: nativeFocused, frontmostActivationPolicy: frontmostActivationPolicy) {
-                    focus.windowOrNil?.nativeFocus()
+                updateTrayText()
+                await updateWorkspaceSidebarModel()
+                SecureInputPanel.shared.refresh()
+                try await normalizeLayoutReason()
+                if shouldLayoutWorkspaces {
+                    try await layoutWorkspaces()
+                    if shouldSyncFocusBackToMacOs(nativeFocused: nativeFocused, frontmostActivationPolicy: frontmostActivationPolicy) {
+                        focus.windowOrNil?.nativeFocus()
+                    }
                 }
+                await updateWindowTabModel()
+                debugFocusLog("runRefreshSessionBlocking end event=\(event) nativeFocused=\(nativeFocused?.windowId.description ?? "nil") focus=\(debugDescribe(focus))")
             }
-            await updateWindowTabModel()
         }
     }
 }
@@ -74,29 +79,34 @@ func runLightSession<T>(
     defer { signposter.endInterval(#function, state) }
     activeRefreshTask?.cancel() // Give priority to runSession
     activeRefreshTask = nil
+    let focusSnapshot = captureRefreshSessionFocusSnapshot()
+    debugFocusLog("runLightSession begin event=\(event) snapshot=\(debugDescribe(focusSnapshot))")
     return try await $refreshSessionEvent.withValue(event) {
         try await $_isStartup.withValue(event.isStartup) {
-            let nativeFocused = try await getNativeFocusedWindow()
-            if let nativeFocused { try await debugWindowsIfRecording(nativeFocused) }
-            updateFocusCache(nativeFocused)
-            let focusBefore = focus.windowOrNil
+            try await $_refreshSessionFocusSnapshot.withValue(focusSnapshot) {
+                let nativeFocused = try await getNativeFocusedWindow()
+                if let nativeFocused { try await debugWindowsIfRecording(nativeFocused) }
+                updateFocusCache(nativeFocused)
+                let focusBefore = focus.windowOrNil
 
-            refreshModel()
-            let result = try await body()
-            refreshModel()
+                refreshModel()
+                let result = try await body()
+                refreshModel()
 
-            let focusAfter = focus.windowOrNil
+                let focusAfter = focus.windowOrNil
 
-            updateTrayText()
-            await updateWorkspaceSidebarModel()
-            SecureInputPanel.shared.refresh()
-            try await layoutWorkspaces()
-            await updateWindowTabModel()
-            if focusBefore != focusAfter {
-                focusAfter?.nativeFocus() // syncFocusToMacOs
+                updateTrayText()
+                await updateWorkspaceSidebarModel()
+                SecureInputPanel.shared.refresh()
+                try await layoutWorkspaces()
+                await updateWindowTabModel()
+                if focusBefore != focusAfter {
+                    focusAfter?.nativeFocus() // syncFocusToMacOs
+                }
+                scheduleRefreshSession(event)
+                debugFocusLog("runLightSession end event=\(event) nativeFocused=\(nativeFocused?.windowId.description ?? "nil") focusBefore=\(focusBefore?.windowId.description ?? "nil") focusAfter=\(focusAfter?.windowId.description ?? "nil") logicalFocus=\(debugDescribe(focus))")
+                return result
             }
-            scheduleRefreshSession(event)
-            return result
         }
     }
 }
@@ -152,6 +162,9 @@ private func refresh() async throws {
 
 func refreshObs(_: AXObserver, _: AXUIElement, notif: CFString, _: UnsafeMutableRawPointer?) {
     let notif = notif as String
+    if notif == kAXFocusedWindowChangedNotification as String || notif == kAXUIElementDestroyedNotification as String {
+        debugFocusLog("refreshObs notif=\(notif)")
+    }
     Task { @MainActor in
         if !TrayMenuModel.shared.isEnabled { return }
         scheduleRefreshSession(.ax(notif))

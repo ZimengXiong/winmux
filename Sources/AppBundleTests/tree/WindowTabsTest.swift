@@ -86,6 +86,150 @@ final class WindowTabsTest: XCTestCase {
     }
 
     @MainActor
+    func testFocusAfterWindowClosurePrefersPreviousActiveTabOverMacOsFallback() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let firstTab = TestWindow.new(id: 1, parent: accordion)
+        _ = TestWindow.new(id: 2, parent: accordion)
+        _ = TestWindow.new(id: 3, parent: accordion)
+        let expectedTab = TestWindow.new(id: 4, parent: accordion)
+        let closingWindow = TestWindow.new(id: 9, parent: workspace)
+
+        XCTAssertTrue(expectedTab.focusWindow())
+        let previousFocus = focus
+
+        XCTAssertTrue(closingWindow.focusWindow())
+
+        // Simulate macOS surfacing a different tab in the same group before GC runs.
+        XCTAssertTrue(firstTab.focusWindow())
+
+        let replacementFocus = focusAfterWindowClosure(
+            closingWindow: closingWindow,
+            deadWindowWorkspace: workspace,
+            currentFocus: focus,
+            previousFocus: previousFocus,
+            previousPreviousFocus: nil,
+            refreshSnapshotCloseFallback: nil,
+            refreshSnapshotPreviousFocus: nil,
+            refreshSnapshotPreviousPreviousFocus: nil,
+            previousFocusedWorkspace: prevFocusedWorkspace,
+            previousFocusedWorkspaceDate: .now,
+        )
+
+        XCTAssertEqual(replacementFocus?.windowOrNil, expectedTab)
+    }
+
+    @MainActor
+    func testFocusAfterWindowClosureUsesRefreshSnapshotWhenPrevFocusWasOverwritten() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let firstTab = TestWindow.new(id: 1, parent: accordion)
+        _ = TestWindow.new(id: 2, parent: accordion)
+        _ = TestWindow.new(id: 3, parent: accordion)
+        let expectedTab = TestWindow.new(id: 4, parent: accordion)
+        let closingWindow = TestWindow.new(id: 9, parent: workspace)
+
+        XCTAssertTrue(expectedTab.focusWindow())
+        let snapshotPreviousFocus = focus
+
+        XCTAssertTrue(closingWindow.focusWindow())
+        XCTAssertTrue(firstTab.focusWindow())
+
+        let replacementFocus = focusAfterWindowClosure(
+            closingWindow: closingWindow,
+            deadWindowWorkspace: workspace,
+            currentFocus: focus,
+            previousFocus: closingWindow.toLiveFocusOrNil(),
+            previousPreviousFocus: nil,
+            refreshSnapshotCloseFallback: nil,
+            refreshSnapshotPreviousFocus: snapshotPreviousFocus,
+            refreshSnapshotPreviousPreviousFocus: nil,
+            previousFocusedWorkspace: prevFocusedWorkspace,
+            previousFocusedWorkspaceDate: .now,
+        )
+
+        XCTAssertEqual(replacementFocus?.windowOrNil, expectedTab)
+    }
+
+    @MainActor
+    func testFocusAfterWindowClosureFallsBackToPreviousPreviousFocusAfterInterimFallbackFocus() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let firstTab = TestWindow.new(id: 1, parent: accordion)
+        _ = TestWindow.new(id: 2, parent: accordion)
+        _ = TestWindow.new(id: 3, parent: accordion)
+        let expectedTab = TestWindow.new(id: 4, parent: accordion)
+        let closingWindow = TestWindow.new(id: 9, parent: workspace)
+
+        XCTAssertTrue(expectedTab.focusWindow())
+        XCTAssertTrue(closingWindow.focusWindow())
+        XCTAssertTrue(firstTab.focusWindow())
+
+        let replacementFocus = focusAfterWindowClosure(
+            closingWindow: closingWindow,
+            deadWindowWorkspace: workspace,
+            currentFocus: focus,
+            previousFocus: closingWindow.toLiveFocusOrNil(),
+            previousPreviousFocus: expectedTab.toLiveFocusOrNil(),
+            refreshSnapshotCloseFallback: nil,
+            refreshSnapshotPreviousFocus: nil,
+            refreshSnapshotPreviousPreviousFocus: nil,
+            previousFocusedWorkspace: prevFocusedWorkspace,
+            previousFocusedWorkspaceDate: .now,
+        )
+
+        XCTAssertEqual(replacementFocus?.windowOrNil, expectedTab)
+    }
+
+    @MainActor
+    func testFocusAfterWindowClosureUsesPreFallbackWorkspaceCandidateWhenHistoryIsStale() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let firstTab = TestWindow.new(id: 1, parent: accordion)
+        _ = TestWindow.new(id: 2, parent: accordion)
+        _ = TestWindow.new(id: 3, parent: accordion)
+        let expectedTab = TestWindow.new(id: 4, parent: accordion)
+        let closingWindow = TestWindow.new(id: 9, parent: workspace)
+
+        XCTAssertTrue(expectedTab.focusWindow())
+        let closeFallback = workspace.toLiveFocus(excluding: closingWindow)
+
+        XCTAssertTrue(closingWindow.focusWindow())
+        XCTAssertTrue(firstTab.focusWindow())
+
+        let replacementFocus = focusAfterWindowClosure(
+            closingWindow: closingWindow,
+            deadWindowWorkspace: workspace,
+            currentFocus: focus,
+            previousFocus: nil,
+            previousPreviousFocus: nil,
+            refreshSnapshotCloseFallback: closeFallback,
+            refreshSnapshotPreviousFocus: nil,
+            refreshSnapshotPreviousPreviousFocus: nil,
+            previousFocusedWorkspace: prevFocusedWorkspace,
+            previousFocusedWorkspaceDate: .now,
+        )
+
+        XCTAssertEqual(replacementFocus?.windowOrNil, expectedTab)
+    }
+
+    func testNativeFocusShortcutIsDisabledForTabbedLogicalWindows() {
+        XCTAssertFalse(shouldUseActivationOnlyForNativeFocus(
+            targetWindowId: 4,
+            lastNativeFocusedWindowId: 1,
+            logicalWindowsCount: 4,
+        ))
+    }
+
+    @MainActor
     func testWindowDropAndSwapZonesDoNotOverlap() {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")

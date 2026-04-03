@@ -84,19 +84,36 @@ final class MacWindow: Window {
         if !skipClosedWindowsCache { cacheClosedWindowIfNeeded() }
         let parent = unbindFromParent().parent
         let deadWindowWorkspace = parent.nodeWorkspace
-        let focus = focus
-        if let deadWindowWorkspace, deadWindowWorkspace == focus.workspace ||
-            deadWindowWorkspace == prevFocusedWorkspace && prevFocusedWorkspaceDate.distance(to: .now) < 1
-        {
+        let currentFocus = focus
+        let previousFocus = prevFocus
+        let previousPreviousFocus = prevPrevFocus
+        let refreshSnapshot = refreshSessionFocusSnapshot
+        let refreshSnapshotCloseFallback = refreshSnapshot?.focus.windowId == windowId
+            ? refreshSnapshot?.fallbackWhenFocusedWindowCloses?.liveOrNil
+            : nil
+        let refreshSnapshotPreviousFocus = refreshSessionFocusSnapshot?.prevFocus?.liveOrNil
+        let refreshSnapshotPreviousPreviousFocus = refreshSessionFocusSnapshot?.prevPrevFocus?.liveOrNil
+        debugFocusLog(
+            "MacWindow.garbageCollect closing=\(windowId) currentFocus=\(debugDescribe(currentFocus)) prev=\(debugDescribe(previousFocus)) prevPrev=\(debugDescribe(previousPreviousFocus)) snapshot=\(debugDescribe(refreshSnapshot))"
+        )
+        if let replacementFocus = focusAfterWindowClosure(
+            closingWindow: self,
+            deadWindowWorkspace: deadWindowWorkspace,
+            currentFocus: currentFocus,
+            previousFocus: previousFocus,
+            previousPreviousFocus: previousPreviousFocus,
+            refreshSnapshotCloseFallback: refreshSnapshotCloseFallback,
+            refreshSnapshotPreviousFocus: refreshSnapshotPreviousFocus,
+            refreshSnapshotPreviousPreviousFocus: refreshSnapshotPreviousPreviousFocus,
+            previousFocusedWorkspace: prevFocusedWorkspace,
+            previousFocusedWorkspaceDate: prevFocusedWorkspaceDate,
+        ) {
             switch parent.cases {
                 case .tilingContainer, .workspace, .macosHiddenAppsWindowsContainer, .macosFullscreenWindowsContainer:
-                    let deadWindowFocus = deadWindowWorkspace.toLiveFocus()
-                    _ = setFocus(to: deadWindowFocus)
-                    // Guard against "Apple Reminders popup" bug: https://github.com/nikitabobko/AeroSpace/issues/201
-                    if focus.windowOrNil?.app.pid != app.pid {
-                        // Force focus to fix macOS annoyance with focused apps without windows.
-                        //   https://github.com/nikitabobko/AeroSpace/issues/65
-                        deadWindowFocus.windowOrNil?.nativeFocus()
+                    debugFocusLog("MacWindow.garbageCollect replacement closing=\(windowId) replacement=\(debugDescribe(replacementFocus))")
+                    _ = setFocus(to: replacementFocus)
+                    if replacementFocus.windowOrNil != currentFocus.windowOrNil {
+                        replacementFocus.windowOrNil?.nativeFocus()
                     }
                 case .macosPopupWindowsContainer, .macosMinimizedWindowsContainer:
                     break // Don't switch back on popup destruction
@@ -198,6 +215,53 @@ final class MacWindow: Window {
     override func getAxRect() async throws -> Rect? {
         try await macApp.getAxRect(windowId)
     }
+}
+
+@MainActor
+func focusAfterWindowClosure(
+    closingWindow: Window,
+    deadWindowWorkspace: Workspace?,
+    currentFocus: LiveFocus,
+    previousFocus: LiveFocus?,
+    previousPreviousFocus: LiveFocus?,
+    refreshSnapshotCloseFallback: LiveFocus?,
+    refreshSnapshotPreviousFocus: LiveFocus?,
+    refreshSnapshotPreviousPreviousFocus: LiveFocus?,
+    previousFocusedWorkspace: Workspace?,
+    previousFocusedWorkspaceDate: Date,
+    now: Date = .now,
+) -> LiveFocus? {
+    guard let deadWindowWorkspace else { return nil }
+    guard deadWindowWorkspace == currentFocus.workspace ||
+        deadWindowWorkspace == previousFocusedWorkspace && previousFocusedWorkspaceDate.distance(to: now) < 1
+    else {
+        debugFocusLog("focusAfterWindowClosure closing=\(closingWindow.windowId) skipped currentFocus=\(debugDescribe(currentFocus)) previousFocusedWorkspace=\(previousFocusedWorkspace?.name ?? "nil")")
+        return nil
+    }
+
+    func isValidReplacement(_ candidate: LiveFocus?) -> Bool {
+        candidate?.windowOrNil != closingWindow &&
+            candidate?.workspace == deadWindowWorkspace &&
+            candidate?.windowOrNil?.participatesInWorkspaceFocus != false
+    }
+
+    let fallbackHistory: [LiveFocus?] = [
+        refreshSnapshotCloseFallback,
+        refreshSnapshotPreviousFocus,
+        previousFocus,
+        (refreshSnapshotPreviousFocus?.windowOrNil == closingWindow) ? refreshSnapshotPreviousPreviousFocus : nil,
+        (previousFocus?.windowOrNil == closingWindow) ? previousPreviousFocus : nil,
+    ]
+    for candidate in fallbackHistory where isValidReplacement(candidate) {
+        debugFocusLog(
+            "focusAfterWindowClosure closing=\(closingWindow.windowId) choseCandidate=\(debugDescribe(candidate)) current=\(debugDescribe(currentFocus)) snapshotCloseFallback=\(debugDescribe(refreshSnapshotCloseFallback)) snapshotPrev=\(debugDescribe(refreshSnapshotPreviousFocus)) snapshotPrevPrev=\(debugDescribe(refreshSnapshotPreviousPreviousFocus)) prev=\(debugDescribe(previousFocus)) prevPrev=\(debugDescribe(previousPreviousFocus))"
+        )
+        return candidate
+    }
+
+    let fallback = deadWindowWorkspace.toLiveFocus()
+    debugFocusLog("focusAfterWindowClosure closing=\(closingWindow.windowId) defaultFallback=\(debugDescribe(fallback))")
+    return fallback
 }
 
 extension Window {
