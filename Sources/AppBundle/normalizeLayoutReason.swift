@@ -63,7 +63,13 @@ func exitMacOsNativeUnconventionalState(
     workspace fallbackWorkspace: Workspace,
 ) async throws {
     window.layoutReason = .standard
-    let workspace = prevWorkspaceName.map(Workspace.get(byName:)) ?? fallbackWorkspace
+    let workspace = prevWorkspaceName
+        .map {
+            let workspace = Workspace.get(byName: $0)
+            workspace.seedMonitorIfNeeded(fallbackWorkspace.workspaceMonitor)
+            return workspace
+        }
+        ?? fallbackWorkspace
     switch prevParentKind {
         case .workspace:
             window.bindAsFloatingWindow(to: workspace)

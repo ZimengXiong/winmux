@@ -8,6 +8,9 @@ func movedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutableR
     let windowId = ax.containingWindowId()
     let notif = notif as String
     Task { @MainActor in
+        if shouldIgnoreMovedObsForCurrentDragSession(windowId: windowId) {
+            return
+        }
         guard let token: RunSessionGuard = .isServerEnabled else { return }
         guard let windowId, let window = Window.get(byId: windowId), try await isManipulatedWithMouse(window) else {
             scheduleRefreshSession(.ax(notif))
@@ -25,7 +28,7 @@ func movedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutableR
 
 @MainActor
 private func moveWithMouse(_ window: Window) async throws { // todo cover with tests
-    resetClosedWindowsCache()
+    syncClosedWindowsCacheToCurrentWorld()
     guard let parent = window.parent else { return }
     switch parent.cases {
         case .workspace:
@@ -49,14 +52,16 @@ private func moveFloatingWindow(_ window: Window) async throws {
 
 @MainActor
 private func moveTilingWindow(_ window: Window) {
-    currentlyManipulatedWithMouseWindowId = window.windowId
-    setCurrentMouseManipulationKind(.move)
-    setCurrentMouseDragSubject(.window)
-    setCurrentMouseTabDetachOrigin(.window)
-    setCurrentMouseDragStartedInSidebar(false)
-    WindowTabStripPanelController.shared.setIgnoresMouseEvents(true)
-    setDraggedWindowAnchorRect(window.lastAppliedLayoutPhysicalRect, for: window.windowId)
-    window.lastAppliedLayoutPhysicalRect = nil
+    let didStartSession = beginWindowMoveWithMouseSessionIfNeeded(
+        windowId: window.windowId,
+        subject: .window,
+        detachOrigin: .window,
+        startedInSidebar: false,
+        anchorRect: window.lastAppliedLayoutPhysicalRect,
+    )
+    if didStartSession {
+        window.lastAppliedLayoutPhysicalRect = nil
+    }
     let mouseLocation = mouseLocation
     _ = updatePendingWindowDragIntent(sourceWindow: window, mouseLocation: mouseLocation)
 }
@@ -76,15 +81,16 @@ func swapNodes(_ node1: TreeNode, _ node2: TreeNode) {
         let binding2 = node2.unbindFromParent()
         let binding1 = node1.unbindFromParent()
 
-        node2.bind(to: binding1.parent, adaptiveWeight: binding2.adaptiveWeight, index: binding1.index)
-        node1.bind(to: binding2.parent, adaptiveWeight: binding1.adaptiveWeight, index: binding2.index)
+        node2.bind(to: binding1.parent, adaptiveWeight: binding1.adaptiveWeight, index: binding1.index)
+        node1.bind(to: binding2.parent, adaptiveWeight: binding2.adaptiveWeight, index: binding2.index)
     } else {
         let binding1 = node1.unbindFromParent()
         let binding2 = node2.unbindFromParent()
 
-        node1.bind(to: binding2.parent, adaptiveWeight: binding1.adaptiveWeight, index: binding2.index)
-        node2.bind(to: binding1.parent, adaptiveWeight: binding2.adaptiveWeight, index: binding1.index)
+        node1.bind(to: binding2.parent, adaptiveWeight: binding2.adaptiveWeight, index: binding2.index)
+        node2.bind(to: binding1.parent, adaptiveWeight: binding1.adaptiveWeight, index: binding1.index)
     }
+    node1.markAsMostRecentChild()
 }
 
 extension CGPoint {

@@ -7,7 +7,7 @@ protocol Command: AeroAny, Equatable, Sendable {
     @MainActor
     func run(_ env: CmdEnv, _ io: CmdIo) async throws -> Bool
 
-    /// We should reset closedWindowsCache when the command can potentiall change the tree
+    /// We should refresh closedWindowsCache when the command can change the tree or visible workspace assignment
     var shouldResetClosedWindowsCache: Bool { get }
 }
 
@@ -45,9 +45,12 @@ extension [Command] {
     func runCmdSeq(_ env: CmdEnv, _ io: sending CmdIo) async throws -> Bool {
         var isSucc = true
         for command in self {
-            isSucc = try await command.run(env, io) && isSucc
-            if command.shouldResetClosedWindowsCache { resetClosedWindowsCache() }
+            let commandSucc = try await command.run(env, io)
+            isSucc = commandSucc && isSucc
             refreshModel()
+            if commandSucc && command.shouldResetClosedWindowsCache {
+                syncClosedWindowsCacheToCurrentWorld()
+            }
         }
         return isSucc
     }

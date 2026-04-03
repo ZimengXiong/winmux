@@ -49,6 +49,18 @@ extension TreeNode {
         self as? Window ?? mostRecentChild?.mostRecentWindowRecursive
     }
 
+    var mostRecentWorkspaceFocusableWindowRecursive: Window? {
+        switch nodeCases {
+            case .window(let window):
+                return window.participatesInWorkspaceFocus ? window : nil
+            case .tilingContainer, .workspace:
+                return childrenByMostRecentUse.lazy.compactMap(\.mostRecentWorkspaceFocusableWindowRecursive).first
+            case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer,
+                 .macosHiddenAppsWindowsContainer, .macosPopupWindowsContainer:
+                return nil
+        }
+    }
+
     var anyLeafWindowRecursive: Window? {
         if let window = self as? Window {
             return window
@@ -103,6 +115,20 @@ extension TreeNode {
             case .workspace, nil, .macosMinimizedWindowsContainer,
                  .macosFullscreenWindowsContainer, .macosHiddenAppsWindowsContainer, .macosPopupWindowsContainer:
                 return nil
+        }
+    }
+}
+
+extension Window {
+    var participatesInWorkspaceFocus: Bool {
+        guard let parent else { return false }
+        return switch getChildParentRelation(child: self, parent: parent) {
+            case .floatingWindow, .tiling:
+                true
+            case .macosNativeFullscreenWindow, .macosNativeHiddenAppWindow,
+                 .macosNativeMinimizedWindow, .macosPopupWindow,
+                 .rootTilingContainer, .shimContainerRelation:
+                false
         }
     }
 }

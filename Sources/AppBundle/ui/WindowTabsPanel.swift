@@ -190,14 +190,46 @@ private func updateDetachedTabFromTabStrip(_ windowId: UInt32) {
         cancelManipulatedWithMouseState()
         return
     }
-    currentlyManipulatedWithMouseWindowId = window.windowId
-    setCurrentMouseManipulationKind(.move)
-    setCurrentMouseDragSubject(.window)
-    setCurrentMouseTabDetachOrigin(.tabStrip)
-    setCurrentMouseDragStartedInSidebar(false)
-    setDraggedWindowAnchorRect(resolvedDraggedWindowAnchorRect(for: window, subject: .window), for: window.windowId)
-    WindowTabStripPanelController.shared.setIgnoresMouseEvents(true)
+    _ = beginWindowMoveWithMouseSessionIfNeeded(
+        windowId: window.windowId,
+        subject: .window,
+        detachOrigin: .tabStrip,
+        startedInSidebar: false,
+        anchorRect: resolvedDraggedWindowAnchorRect(for: window, subject: .window),
+    )
     _ = updatePendingDetachedTabIntent(sourceWindow: window, mouseLocation: mouseLocation, origin: .tabStrip)
+}
+
+@MainActor
+func shouldDeferWindowTabStripGroupDragToDetachedTabDrag() -> Bool {
+    getCurrentMouseManipulationKind() == .move &&
+        getCurrentMouseDragSubject() == .window &&
+        getCurrentMouseTabDetachOrigin() == .tabStrip
+}
+
+func isWindowTabStripDragInProgress(
+    kind: MouseManipulationKind,
+    subject: WindowDragSubject,
+    detachOrigin: TabDetachOrigin,
+    startedInSidebar: Bool,
+) -> Bool {
+    guard kind == .move, !startedInSidebar else { return false }
+    return detachOrigin == .tabStrip || subject == .group
+}
+
+@MainActor
+func isWindowTabStripDragInProgress() -> Bool {
+    isWindowTabStripDragInProgress(
+        kind: getCurrentMouseManipulationKind(),
+        subject: getCurrentMouseDragSubject(),
+        detachOrigin: getCurrentMouseTabDetachOrigin(),
+        startedInSidebar: getCurrentMouseDragStartedInSidebar(),
+    )
+}
+
+@MainActor
+func shouldHandleWindowTabStripGroupDragEnd() -> Bool {
+    !shouldDeferWindowTabStripGroupDragToDetachedTabDrag()
 }
 
 @MainActor
@@ -207,71 +239,67 @@ private func updateMoveFromTabStrip(_ windowId: UInt32) {
         cancelManipulatedWithMouseState()
         return
     }
-    if getCurrentMouseManipulationKind() == .move &&
-        currentlyManipulatedWithMouseWindowId != nil &&
-        getCurrentMouseDragSubject() == .window
-    {
+    if shouldDeferWindowTabStripGroupDragToDetachedTabDrag() {
         return
     }
-    currentlyManipulatedWithMouseWindowId = window.windowId
-    setCurrentMouseManipulationKind(.move)
-    setCurrentMouseDragSubject(.group)
-    setCurrentMouseTabDetachOrigin(.window)
-    setCurrentMouseDragStartedInSidebar(false)
-    setDraggedWindowAnchorRect(resolvedDraggedWindowAnchorRect(for: window, subject: .group), for: window.windowId)
-    WindowTabStripPanelController.shared.setIgnoresMouseEvents(true)
+    _ = beginWindowMoveWithMouseSessionIfNeeded(
+        windowId: window.windowId,
+        subject: .group,
+        detachOrigin: .window,
+        startedInSidebar: false,
+        anchorRect: resolvedDraggedWindowAnchorRect(for: window, subject: .group),
+    )
     _ = updatePendingWindowDragIntent(sourceWindow: window, mouseLocation: mouseLocation, subject: .group, detachOrigin: .window)
 }
 
 @MainActor
 private func finishMoveFromTabStrip() {
+    guard shouldHandleWindowTabStripGroupDragEnd() else { return }
     Task { @MainActor in
         try? await resetManipulatedWithMouseIfPossible()
     }
 }
+
+// MARK: - Constants
+
+private let windowTabStripCornerRadius: CGFloat = 14
+private let windowTabItemCornerRadius: CGFloat = 10
+private let windowTabPreviewCornerRadius: CGFloat = 6
+
+// MARK: - Tab Strip View
 
 private struct WindowTabStripView: View {
     let strip: WindowTabStripViewModel
 
     var body: some View {
         let count = max(strip.tabs.count, 1)
-        let tabWidth = max(128, min(220, (strip.frame.width - 10) / CGFloat(count)))
-        let activeTab = strip.tabs.first(where: \.isActive) ?? strip.tabs.first
+        let tabWidth = max(100, min(220, (strip.frame.width - 12) / CGFloat(count)))
 
-        ZStack {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(nsColor: .windowBackgroundColor).opacity(0.96),
-                            Color(nsColor: .underPageBackgroundColor).opacity(0.9),
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom,
-                    ),
+        HStack(spacing: 2) {
+            ForEach(strip.tabs) { tab in
+                WindowTabItemView(
+                    tab: tab,
+                    width: tabWidth,
+                    height: max(strip.frame.height - 6, 22)
                 )
-                .overlay {
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
-                }
-                .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(strip.tabs) { tab in
-                        WindowTabItemView(tab: tab, width: tabWidth, height: max(strip.frame.height - 4, 24))
-                    }
-                }
-                .padding(.horizontal, 4)
-                .padding(.vertical, 2)
             }
         }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 3)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.clear)
+        .background(
+            RoundedRectangle(cornerRadius: windowTabStripCornerRadius, style: .continuous)
+                .fill(Color(nsColor: .windowBackgroundColor).opacity(0.94))
+                .overlay {
+                    RoundedRectangle(cornerRadius: windowTabStripCornerRadius, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5)
+                }
+                .shadow(color: Color.black.opacity(0.08), radius: 8, y: 3)
+        )
         .simultaneousGesture(
             DragGesture(minimumDistance: 10)
                 .onChanged { _ in
-                    if let activeTab {
+                    if let activeTab = strip.tabs.first(where: \.isActive) ?? strip.tabs.first {
                         updateMoveFromTabStrip(activeTab.windowId)
                     }
                 }
@@ -282,111 +310,43 @@ private struct WindowTabStripView: View {
     }
 }
 
-private struct WindowTabDropPreviewChrome: View {
-    let title: String
-    let subtitle: String
-    let accent: Color
-    let badgeText: String
-    let isPresented: Bool
-    let borderStyle: StrokeStyle
-
-    var body: some View {
-        GeometryReader { geometry in
-            let isCompact = geometry.size.width < 180 || geometry.size.height < 52
-            let isUltraCompact = geometry.size.width < 132 || geometry.size.height < 40
-
-            HStack(spacing: isCompact ? 8 : 12) {
-                Capsule(style: .continuous)
-                    .fill(accent.opacity(0.8))
-                    .frame(width: 4, height: isCompact ? 22 : 28)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: isCompact ? 11 : 12, weight: .semibold, design: .rounded))
-                        .foregroundStyle(Color.primary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
-                    if !isUltraCompact {
-                        Text(subtitle)
-                            .font(.system(size: 10, weight: .medium, design: .rounded))
-                            .foregroundStyle(Color.primary.opacity(0.72))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.85)
-                    }
-                }
-
-                Spacer(minLength: 0)
-
-                if !isCompact {
-                    Text(badgeText)
-                        .font(.system(size: 9, weight: .bold, design: .rounded))
-                        .foregroundStyle(accent.opacity(0.92))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .background(
-                            Capsule(style: .continuous)
-                                .fill(accent.opacity(0.1))
-                        )
-                }
-            }
-            .padding(.horizontal, isCompact ? 10 : 12)
-            .padding(.vertical, isCompact ? 7 : 9)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(nsColor: .windowBackgroundColor).opacity(0.98))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(accent.opacity(0.08))
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(accent.opacity(0.28), style: borderStyle)
-                }
-        )
-        .scaleEffect(isPresented ? 1 : 0.96)
-        .opacity(isPresented ? 1 : 0.92)
-        .shadow(color: Color.black.opacity(0.12), radius: 14, y: 6)
-    }
-}
+// MARK: - Tab Item View (with hover animation)
 
 private struct WindowTabItemView: View {
     let tab: WindowTabItemViewModel
     let width: CGFloat
     let height: CGFloat
 
+    @State private var isHovered = false
+
     var body: some View {
         Button {
+            guard !isWindowTabStripDragInProgress() else { return }
             focusWindowFromTabStrip(tab.windowId, fallbackWorkspace: tab.workspaceName)
         } label: {
-            HStack(spacing: 8) {
-                Capsule(style: .continuous)
-                    .fill(tab.isActive ? Color.accentColor : Color.secondary.opacity(0.25))
-                    .frame(width: 6, height: 20)
-                Text(tab.title)
-                    .font(.system(size: 12, weight: tab.isActive ? .semibold : .medium, design: .rounded))
-                    .lineLimit(1)
-                    .foregroundStyle(tab.isActive ? Color.primary : Color.primary.opacity(0.72))
-            }
-            .padding(.horizontal, 12)
-            .frame(width: width, height: height, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .fill(tab.isActive ? Color.primary.opacity(0.08) : Color.clear),
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .strokeBorder(tab.isActive ? Color.primary.opacity(0.12) : Color.clear, lineWidth: 1)
+            Text(tab.title)
+                .font(.system(size: 11, weight: tab.isActive ? .medium : .regular))
+                .lineLimit(1)
+                .foregroundStyle(foregroundColor)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .frame(width: width, height: height)
+                .background(background)
+        }
+        .contentShape(RoundedRectangle(cornerRadius: windowTabItemCornerRadius, style: .continuous))
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.12)) {
+                isHovered = hovering
             }
         }
-        .contentShape(Rectangle())
-        .buttonStyle(.plain)
         .contextMenu {
             Button("Remove Tab From Stack") {
                 removeWindowFromTabStrip(tab.windowId, fallbackWorkspace: tab.workspaceName)
             }
         }
-        .simultaneousGesture(
+        .highPriorityGesture(
             DragGesture(minimumDistance: 10)
                 .onChanged { _ in
                     updateDetachedTabFromTabStrip(tab.windowId)
@@ -398,73 +358,77 @@ private struct WindowTabItemView: View {
                 },
         )
     }
+
+    private var foregroundColor: Color {
+        if tab.isActive {
+            return Color.primary
+        }
+        return isHovered ? Color.primary.opacity(0.8) : Color.secondary.opacity(0.65)
+    }
+
+    @ViewBuilder
+    private var background: some View {
+        if tab.isActive {
+            RoundedRectangle(cornerRadius: windowTabItemCornerRadius, style: .continuous)
+                .fill(Color.primary.opacity(0.07))
+                .overlay {
+                    RoundedRectangle(cornerRadius: windowTabItemCornerRadius, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.05), lineWidth: 0.5)
+                }
+        } else if isHovered {
+            RoundedRectangle(cornerRadius: windowTabItemCornerRadius, style: .continuous)
+                .fill(Color.primary.opacity(0.04))
+        }
+    }
 }
 
+// MARK: - Drop Preview (Border-Only)
+
 private struct WindowTabDropPreviewView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let model: WindowTabDropPreviewViewModel
     @State private var isPresented = false
 
     var body: some View {
-        Group {
-            switch model.style {
-                case .tabInsert:
-                    tabInsertPreview
-                case .detach:
-                    genericPreview(accent: Color.orange, dash: [7, 5])
-                case .swap:
-                    genericPreview(accent: Color.accentColor, dash: [7, 5])
-                case .workspaceMove:
-                    genericPreview(accent: Color.green.opacity(0.85), dash: [7, 5])
-                case .sidebarWorkspaceMove:
-                    sidebarWorkspaceMovePreview
+        let cfg = borderConfig(for: model.style)
+
+        RoundedRectangle(cornerRadius: windowTabPreviewCornerRadius, style: .continuous)
+            .strokeBorder(
+                cfg.color.opacity(isPresented ? cfg.opacity : 0.15),
+                style: cfg.strokeStyle
+            )
+            .background(
+                RoundedRectangle(cornerRadius: windowTabPreviewCornerRadius, style: .continuous)
+                    .fill(cfg.color.opacity(isPresented ? 0.03 : 0))
+            )
+            .scaleEffect(reduceMotion ? 1 : (isPresented ? 1 : 0.994))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.clear)
+            .onAppear {
+                withAnimation(reduceMotion ? .easeOut(duration: 0.1) : .spring(response: 0.18, dampingFraction: 0.78)) {
+                    isPresented = true
+                }
             }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.clear)
-        .onAppear {
-            withAnimation(.spring(response: 0.22, dampingFraction: 0.82)) {
-                isPresented = true
-            }
-        }
     }
 
-    private var tabInsertPreview: some View {
-        WindowTabDropPreviewChrome(
-            title: model.title,
-            subtitle: model.subtitle,
-            accent: Color.accentColor,
-            badgeText: "Tabs",
-            isPresented: isPresented,
-            borderStyle: StrokeStyle(lineWidth: 1.5),
-        )
+    private struct BorderConfig {
+        let color: Color
+        let opacity: Double
+        let strokeStyle: StrokeStyle
     }
 
-    private func genericPreview(accent: Color, dash: [CGFloat]) -> some View {
-        let badgeText: String = switch model.style {
-            case .detach: "Detach"
-            case .swap: "Swap"
-            case .workspaceMove: "Move"
-            case .sidebarWorkspaceMove: "Move"
-            case .tabInsert: "Tabs"
+    private func borderConfig(for style: WindowTabDropPreviewStyle) -> BorderConfig {
+        switch style {
+            case .tabInsert:
+                return BorderConfig(color: .accentColor, opacity: 0.65, strokeStyle: StrokeStyle(lineWidth: 2.5))
+            case .detach:
+                return BorderConfig(color: .orange, opacity: 0.55, strokeStyle: StrokeStyle(lineWidth: 2, dash: [7, 5]))
+            case .swap:
+                return BorderConfig(color: .accentColor, opacity: 0.45, strokeStyle: StrokeStyle(lineWidth: 2, dash: [7, 5]))
+            case .workspaceMove:
+                return BorderConfig(color: .green, opacity: 0.5, strokeStyle: StrokeStyle(lineWidth: 2, dash: [7, 5]))
+            case .sidebarWorkspaceMove:
+                return BorderConfig(color: .accentColor, opacity: 0.5, strokeStyle: StrokeStyle(lineWidth: 2))
         }
-        return WindowTabDropPreviewChrome(
-            title: model.title,
-            subtitle: model.subtitle,
-            accent: accent,
-            badgeText: badgeText,
-            isPresented: isPresented,
-            borderStyle: StrokeStyle(lineWidth: 1.5, dash: dash),
-        )
-    }
-
-    private var sidebarWorkspaceMovePreview: some View {
-        WindowTabDropPreviewChrome(
-            title: model.title,
-            subtitle: model.subtitle,
-            accent: Color.accentColor,
-            badgeText: "Sidebar",
-            isPresented: isPresented,
-            borderStyle: StrokeStyle(lineWidth: 1),
-        )
     }
 }

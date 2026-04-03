@@ -45,11 +45,44 @@ final class WindowTabsTest: XCTestCase {
         assertEquals(leading.focusWindow(), true)
         assertEquals(root.layoutDescription, .h_tiles([
             .window(0),
-            .v_accordion([
-                .window(1),
-            ]),
+            .window(1),
             .window(2),
         ]))
+    }
+
+    @MainActor
+    func testRemoveWindowFromNestedTwoTabStackFlattensDeadAccordion() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let stack = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let remaining = TestWindow.new(id: 1, parent: stack)
+        let removed = TestWindow.new(id: 2, parent: stack)
+
+        XCTAssertTrue(removeWindowFromTabStack(removed))
+
+        XCTAssertTrue(remaining.parent === root)
+        XCTAssertTrue(remaining.moveNode === remaining)
+        XCTAssertFalse(root.children.contains(where: { $0 === stack }))
+    }
+
+    @MainActor
+    func testRemoveWindowFromRootTabStackPreservesRemainingActiveTab() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        root.layout = .accordion
+        let removed = TestWindow.new(id: 1, parent: root)
+        let expectedActive = TestWindow.new(id: 2, parent: root)
+        _ = TestWindow.new(id: 3, parent: root)
+        expectedActive.markAsMostRecentChild()
+
+        XCTAssertTrue(removeWindowFromTabStack(removed))
+
+        let rebuiltAccordion = root.children.first as? TilingContainer
+        XCTAssertNotNil(rebuiltAccordion)
+        XCTAssertEqual(rebuiltAccordion?.layout, .accordion)
+        XCTAssertEqual(rebuiltAccordion?.tabActiveWindow, expectedActive)
     }
 
     @MainActor
@@ -133,7 +166,7 @@ final class WindowTabsTest: XCTestCase {
     }
 
     @MainActor
-    func testBodyDragSuppressesSameAccordionTabInsertTarget() {
+    func testSameAccordionTabInsertTargetIsSuppressedForDetachDrags() {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
         let accordion = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
@@ -145,7 +178,7 @@ final class WindowTabsTest: XCTestCase {
             targetWindow: target,
             detachOrigin: .window,
         ))
-        XCTAssertFalse(shouldSuppressSameAccordionTabDestination(
+        XCTAssertTrue(shouldSuppressSameAccordionTabDestination(
             sourceWindow: source,
             targetWindow: target,
             detachOrigin: .tabStrip,
@@ -175,6 +208,540 @@ final class WindowTabsTest: XCTestCase {
         XCTAssertEqual(resolvedGroupRect.topLeftY, groupRect.topLeftY)
         XCTAssertEqual(resolvedGroupRect.width, groupRect.width)
         XCTAssertEqual(resolvedGroupRect.height, groupRect.height)
+    }
+
+    @MainActor
+    func testPinnedDraggedWindowRectUsesWindowRectForGroupSidebarDrag() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let accordion = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let window = TestWindow.new(id: 1, parent: accordion)
+        _ = TestWindow.new(id: 2, parent: accordion)
+        let windowRect = Rect(topLeftX: 12, topLeftY: 40, width: 300, height: 220)
+        let groupRect = Rect(topLeftX: 0, topLeftY: 0, width: 320, height: 260)
+        window.lastAppliedLayoutPhysicalRect = windowRect
+        accordion.lastAppliedLayoutPhysicalRect = groupRect
+
+        let pinnedRect = pinnedDraggedWindowRect(
+            for: window,
+            subject: .group,
+            fallbackAnchorRect: groupRect,
+        )
+
+        XCTAssertEqual(pinnedRect.topLeftX, windowRect.topLeftX)
+        XCTAssertEqual(pinnedRect.topLeftY, windowRect.topLeftY)
+        XCTAssertEqual(pinnedRect.width, windowRect.width)
+        XCTAssertEqual(pinnedRect.height, windowRect.height)
+    }
+
+    @MainActor
+    func testPinnedDraggedWindowRectFallsBackWhenWindowRectMissing() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let accordion = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let window = TestWindow.new(id: 1, parent: accordion)
+        _ = TestWindow.new(id: 2, parent: accordion)
+        let groupRect = Rect(topLeftX: 0, topLeftY: 0, width: 320, height: 260)
+        accordion.lastAppliedLayoutPhysicalRect = groupRect
+
+        let pinnedRect = pinnedDraggedWindowRect(
+            for: window,
+            subject: .group,
+            fallbackAnchorRect: groupRect,
+        )
+
+        XCTAssertEqual(pinnedRect.topLeftX, groupRect.topLeftX)
+        XCTAssertEqual(pinnedRect.topLeftY, groupRect.topLeftY)
+        XCTAssertEqual(pinnedRect.width, groupRect.width)
+        XCTAssertEqual(pinnedRect.height, groupRect.height)
+    }
+
+    @MainActor
+    func testSwapNodesPreservesDestinationSlotWeights() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let first = TestWindow.new(id: 1, parent: root, adaptiveWeight: 1)
+        let second = TestWindow.new(id: 2, parent: root, adaptiveWeight: 3)
+
+        swapNodes(second, first)
+
+        XCTAssertEqual(root.children.first, second)
+        XCTAssertEqual(root.children.last, first)
+        XCTAssertEqual(second.hWeight, 1)
+        XCTAssertEqual(first.hWeight, 3)
+    }
+
+    @MainActor
+    func testSwapNodesKeepsDraggedSourceMostRecentWhenMovingBackward() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        _ = TestWindow.new(id: 1, parent: root)
+        let source = TestWindow.new(id: 2, parent: root)
+
+        XCTAssertTrue(source.focusWindow())
+
+        swapNodes(source, root.children.first.orDie())
+
+        XCTAssertEqual(root.mostRecentWindowRecursive, source)
+    }
+
+    @MainActor
+    func testApplyWindowSwapDragIntentFocusesDraggedWindow() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let source = TestWindow.new(id: 1, parent: root)
+        let target = TestWindow.new(id: 2, parent: root)
+
+        XCTAssertTrue(target.focusWindow())
+        XCTAssertTrue(applyWindowSwapDragIntent(
+            sourceWindow: source,
+            sourceSubject: .window,
+            targetWindow: target,
+        ))
+
+        XCTAssertEqual(focus.windowOrNil, source)
+    }
+
+    @MainActor
+    func testApplyWindowSwapDragIntentFocusesDraggedTabGroupRepresentative() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let source = TestWindow.new(id: 1, parent: accordion)
+        _ = TestWindow.new(id: 2, parent: accordion)
+        let target = TestWindow.new(id: 3, parent: root)
+
+        XCTAssertTrue(target.focusWindow())
+        XCTAssertTrue(applyWindowSwapDragIntent(
+            sourceWindow: source,
+            sourceSubject: .group,
+            targetWindow: target,
+        ))
+
+        XCTAssertEqual(focus.windowOrNil, source)
+    }
+
+    @MainActor
+    func testWorkspaceMoveBindingDataWrapsRootAccordionInsteadOfTargetingWorkspace() {
+        setUpWorkspacesForTests()
+        let targetWorkspace = Workspace.get(byName: "target")
+        let rootAccordion = targetWorkspace.rootTilingContainer
+        rootAccordion.layout = .accordion
+        if rootAccordion.orientation != .h {
+            rootAccordion.changeOrientation(.h)
+        }
+        let target = TestWindow.new(id: 10, parent: rootAccordion)
+        _ = TestWindow.new(id: 11, parent: rootAccordion)
+        rootAccordion.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 600, height: 400)
+        target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 600, height: 366)
+
+        let binding = workspaceMoveBindingData(
+            targetWorkspace: targetWorkspace,
+            swapTarget: target,
+            mouseLocation: CGPoint(x: 500, y: 350),
+        )
+
+        XCTAssertTrue(binding.parent === targetWorkspace.rootTilingContainer)
+        XCTAssertEqual(targetWorkspace.rootTilingContainer.layout, .tiles)
+        XCTAssertEqual(targetWorkspace.rootTilingContainer.children.count, 1)
+        XCTAssertTrue(targetWorkspace.rootTilingContainer.children.first === rootAccordion)
+        XCTAssertEqual(binding.index, 1)
+        XCTAssertTrue(targetWorkspace.floatingWindows.isEmpty)
+    }
+
+    @MainActor
+    func testWorkspaceAppendBindingDataWrapsRootAccordionInsteadOfAppendingAsTab() {
+        setUpWorkspacesForTests()
+        let sourceWorkspace = Workspace.get(byName: "source")
+        let source = TestWindow.new(id: 1, parent: sourceWorkspace.rootTilingContainer)
+        let targetWorkspace = Workspace.get(byName: "target")
+        let rootAccordion = targetWorkspace.rootTilingContainer
+        rootAccordion.layout = .accordion
+        _ = TestWindow.new(id: 10, parent: rootAccordion)
+        _ = TestWindow.new(id: 11, parent: rootAccordion)
+
+        let binding = workspaceAppendBindingData(targetWorkspace: targetWorkspace, index: INDEX_BIND_LAST)
+        source.bind(to: binding.parent, adaptiveWeight: binding.adaptiveWeight, index: binding.index)
+
+        XCTAssertEqual(targetWorkspace.rootTilingContainer.layout, .tiles)
+        XCTAssertTrue(targetWorkspace.rootTilingContainer.children.first === rootAccordion)
+        XCTAssertTrue(targetWorkspace.rootTilingContainer.children.last === source)
+        XCTAssertEqual(rootAccordion.children.count, 2)
+    }
+
+    @MainActor
+    func testWorkspaceMoveBindingDataWithoutSwapTargetAppendsInsteadOfPrepending() {
+        setUpWorkspacesForTests()
+        let targetWorkspace = Workspace.get(byName: "target")
+        let first = TestWindow.new(id: 10, parent: targetWorkspace.rootTilingContainer)
+        let second = TestWindow.new(id: 11, parent: targetWorkspace.rootTilingContainer)
+
+        let binding = workspaceMoveBindingData(
+            targetWorkspace: targetWorkspace,
+            swapTarget: nil,
+            mouseLocation: CGPoint(x: 999, y: 999),
+        )
+        let source = TestWindow.new(id: 1, parent: Workspace.get(byName: "source").rootTilingContainer)
+        source.bind(to: binding.parent, adaptiveWeight: binding.adaptiveWeight, index: binding.index)
+
+        XCTAssertTrue(targetWorkspace.rootTilingContainer.children.first === first)
+        XCTAssertTrue(targetWorkspace.rootTilingContainer.children[targetWorkspace.rootTilingContainer.children.count - 2] === second)
+        XCTAssertTrue(targetWorkspace.rootTilingContainer.children.last === source)
+    }
+
+    func testStickyWindowDragIntentDisabledForDetachPreview() {
+        XCTAssertFalse(shouldUseStickyWindowDragIntent(previewStyle: .detach))
+    }
+
+    func testStickyWindowDragIntentEnabledForTabInsertAndSwapPreviews() {
+        XCTAssertTrue(shouldUseStickyWindowDragIntent(previewStyle: .tabInsert))
+        XCTAssertTrue(shouldUseStickyWindowDragIntent(previewStyle: .swap))
+        XCTAssertFalse(shouldUseStickyWindowDragIntent(previewStyle: .workspaceMove))
+        XCTAssertFalse(shouldUseStickyWindowDragIntent(previewStyle: .sidebarWorkspaceMove))
+    }
+
+    @MainActor
+    func testTabInsertWindowDragIntentKindTracksWindowTabsFeatureFlag() {
+        config.windowTabs.enabled = true
+        XCTAssertTrue(isWindowDragIntentKindEnabled(.tabStack(targetWindowId: 1)))
+
+        config.windowTabs.enabled = false
+        XCTAssertFalse(isWindowDragIntentKindEnabled(.tabStack(targetWindowId: 1)))
+        XCTAssertTrue(isWindowDragIntentKindEnabled(.swap(targetWindowId: 1)))
+    }
+
+    @MainActor
+    func testBeginWindowMoveSessionPreservesAnchorRectAcrossRepeatedCallbacks() {
+        setUpWorkspacesForTests()
+        cancelManipulatedWithMouseState()
+        let workspace = Workspace.get(byName: "tabs")
+        let accordion = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let window = TestWindow.new(id: 1, parent: accordion)
+        _ = TestWindow.new(id: 2, parent: accordion)
+        let groupRect = Rect(topLeftX: 5, topLeftY: 7, width: 320, height: 240)
+
+        XCTAssertTrue(beginWindowMoveWithMouseSessionIfNeeded(
+            windowId: window.windowId,
+            subject: .group,
+            detachOrigin: .window,
+            startedInSidebar: true,
+            anchorRect: groupRect,
+        ))
+        XCTAssertFalse(beginWindowMoveWithMouseSessionIfNeeded(
+            windowId: window.windowId,
+            subject: .group,
+            detachOrigin: .window,
+            startedInSidebar: true,
+            anchorRect: nil,
+        ))
+
+        let preservedRect = draggedWindowAnchorRect(for: window.windowId).orDie()
+        XCTAssertEqual(preservedRect.topLeftX, groupRect.topLeftX)
+        XCTAssertEqual(preservedRect.topLeftY, groupRect.topLeftY)
+        XCTAssertEqual(preservedRect.width, groupRect.width)
+        XCTAssertEqual(preservedRect.height, groupRect.height)
+    }
+
+    @MainActor
+    func testBeginWindowMoveSessionClearsPreviousWindowAnchorWhenDragSourceChanges() {
+        setUpWorkspacesForTests()
+        cancelManipulatedWithMouseState()
+        let workspace = Workspace.get(byName: "tabs")
+        let firstWindow = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+        let secondWindow = TestWindow.new(id: 2, parent: workspace.rootTilingContainer)
+
+        XCTAssertTrue(beginWindowMoveWithMouseSessionIfNeeded(
+            windowId: firstWindow.windowId,
+            subject: .window,
+            detachOrigin: .window,
+            startedInSidebar: false,
+            anchorRect: Rect(topLeftX: 0, topLeftY: 0, width: 200, height: 120),
+        ))
+        XCTAssertTrue(beginWindowMoveWithMouseSessionIfNeeded(
+            windowId: secondWindow.windowId,
+            subject: .window,
+            detachOrigin: .window,
+            startedInSidebar: false,
+            anchorRect: Rect(topLeftX: 20, topLeftY: 24, width: 180, height: 100),
+        ))
+
+        XCTAssertNil(draggedWindowAnchorRect(for: firstWindow.windowId))
+        XCTAssertNotNil(draggedWindowAnchorRect(for: secondWindow.windowId))
+    }
+
+    @MainActor
+    func testStickySwapHintDoesNotSurviveTargetRemoval() {
+        setUpWorkspacesForTests()
+        clearPendingWindowDragIntent()
+        let workspace = Workspace.get(byName: "tabs")
+        XCTAssertTrue(workspace.focusWorkspace())
+        let root = workspace.rootTilingContainer
+        let source = TestWindow.new(id: 1, parent: root)
+        let target = TestWindow.new(id: 2, parent: root)
+        source.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 200, height: 220)
+        target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 220, topLeftY: 0, width: 200, height: 220)
+        let mouseLocation = target.swapDropZoneRect.orDie().center
+
+        XCTAssertTrue(updatePendingWindowDragIntent(sourceWindow: source, mouseLocation: mouseLocation))
+
+        target.unbindFromParent()
+
+        XCTAssertFalse(updatePendingWindowDragIntent(sourceWindow: source, mouseLocation: mouseLocation))
+    }
+
+    @MainActor
+    func testStickySwapHintDoesNotSurviveTargetGeometryChanges() {
+        setUpWorkspacesForTests()
+        clearPendingWindowDragIntent()
+        let workspace = Workspace.get(byName: "tabs")
+        XCTAssertTrue(workspace.focusWorkspace())
+        let root = workspace.rootTilingContainer
+        let source = TestWindow.new(id: 1, parent: root)
+        let target = TestWindow.new(id: 2, parent: root)
+        source.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 200, height: 220)
+        target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 220, topLeftY: 0, width: 200, height: 220)
+        let mouseLocation = target.swapDropZoneRect.orDie().center
+
+        XCTAssertTrue(updatePendingWindowDragIntent(sourceWindow: source, mouseLocation: mouseLocation))
+
+        target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 520, topLeftY: 0, width: 200, height: 220)
+
+        XCTAssertFalse(updatePendingWindowDragIntent(sourceWindow: source, mouseLocation: mouseLocation))
+    }
+
+    @MainActor
+    func testStickyTabInsertHintDoesNotSurviveTargetRemoval() {
+        setUpWorkspacesForTests()
+        clearPendingWindowDragIntent()
+        config.windowTabs.enabled = true
+        let workspace = Workspace.get(byName: "tabs")
+        XCTAssertTrue(workspace.focusWorkspace())
+        let root = workspace.rootTilingContainer
+        let source = TestWindow.new(id: 1, parent: root)
+        let target = TestWindow.new(id: 2, parent: root)
+        root.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 220)
+        source.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 200, height: 220)
+        target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 220, topLeftY: 0, width: 200, height: 220)
+        let mouseLocation = target.tabDropInteractionRect.orDie().center
+
+        XCTAssertTrue(updatePendingWindowDragIntent(sourceWindow: source, mouseLocation: mouseLocation))
+
+        target.unbindFromParent()
+
+        XCTAssertFalse(updatePendingWindowDragIntent(sourceWindow: source, mouseLocation: mouseLocation))
+    }
+
+    @MainActor
+    func testStickyTabInsertHintDoesNotSurviveTargetGeometryChanges() {
+        setUpWorkspacesForTests()
+        clearPendingWindowDragIntent()
+        config.windowTabs.enabled = true
+        let workspace = Workspace.get(byName: "tabs")
+        XCTAssertTrue(workspace.focusWorkspace())
+        let root = workspace.rootTilingContainer
+        let source = TestWindow.new(id: 1, parent: root)
+        let target = TestWindow.new(id: 2, parent: root)
+        root.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 220)
+        source.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 200, height: 220)
+        target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 220, topLeftY: 0, width: 200, height: 220)
+        let mouseLocation = target.tabDropInteractionRect.orDie().center
+
+        XCTAssertTrue(updatePendingWindowDragIntent(sourceWindow: source, mouseLocation: mouseLocation))
+
+        target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 520, topLeftY: 0, width: 200, height: 220)
+
+        XCTAssertFalse(updatePendingWindowDragIntent(sourceWindow: source, mouseLocation: mouseLocation))
+    }
+
+    @MainActor
+    func testStickyTabInsertHintDoesNotSurviveWindowTabsBeingDisabled() {
+        setUpWorkspacesForTests()
+        clearPendingWindowDragIntent()
+        config.windowTabs.enabled = true
+        let workspace = Workspace.get(byName: "tabs")
+        XCTAssertTrue(workspace.focusWorkspace())
+        let root = workspace.rootTilingContainer
+        let source = TestWindow.new(id: 1, parent: root)
+        let target = TestWindow.new(id: 2, parent: root)
+        root.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 220)
+        source.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 200, height: 220)
+        target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 220, topLeftY: 0, width: 200, height: 220)
+        let mouseLocation = target.tabDropInteractionRect.orDie().center
+
+        XCTAssertTrue(updatePendingWindowDragIntent(sourceWindow: source, mouseLocation: mouseLocation))
+
+        config.windowTabs.enabled = false
+
+        XCTAssertFalse(updatePendingWindowDragIntent(sourceWindow: source, mouseLocation: mouseLocation))
+    }
+
+    @MainActor
+    func testWindowTabStripGroupDragDefersToDetachedTabDrag() {
+        setUpWorkspacesForTests()
+        cancelManipulatedWithMouseState()
+
+        XCTAssertTrue(beginWindowMoveWithMouseSessionIfNeeded(
+            windowId: 42,
+            subject: .window,
+            detachOrigin: .tabStrip,
+            startedInSidebar: false,
+            anchorRect: nil,
+        ))
+
+        XCTAssertTrue(shouldDeferWindowTabStripGroupDragToDetachedTabDrag())
+    }
+
+    @MainActor
+    func testWindowTabStripGroupDragEndIsIgnoredForDetachedTabDrags() {
+        setUpWorkspacesForTests()
+        cancelManipulatedWithMouseState()
+
+        XCTAssertTrue(beginWindowMoveWithMouseSessionIfNeeded(
+            windowId: 42,
+            subject: .window,
+            detachOrigin: .tabStrip,
+            startedInSidebar: false,
+            anchorRect: nil,
+        ))
+
+        XCTAssertFalse(shouldHandleWindowTabStripGroupDragEnd())
+    }
+
+    @MainActor
+    func testWindowTabStripGroupDragEndRunsForGroupDrags() {
+        setUpWorkspacesForTests()
+        cancelManipulatedWithMouseState()
+
+        XCTAssertTrue(beginWindowMoveWithMouseSessionIfNeeded(
+            windowId: 42,
+            subject: .group,
+            detachOrigin: .window,
+            startedInSidebar: false,
+            anchorRect: nil,
+        ))
+
+        XCTAssertTrue(shouldHandleWindowTabStripGroupDragEnd())
+    }
+
+    func testWindowTabStripDragInProgressRecognizesDetachedTabDrag() {
+        XCTAssertTrue(isWindowTabStripDragInProgress(
+            kind: .move,
+            subject: .window,
+            detachOrigin: .tabStrip,
+            startedInSidebar: false,
+        ))
+    }
+
+    func testWindowTabStripDragInProgressRecognizesGroupDrag() {
+        XCTAssertTrue(isWindowTabStripDragInProgress(
+            kind: .move,
+            subject: .group,
+            detachOrigin: .window,
+            startedInSidebar: false,
+        ))
+    }
+
+    func testWindowTabStripDragInProgressIgnoresRegularWindowMove() {
+        XCTAssertFalse(isWindowTabStripDragInProgress(
+            kind: .move,
+            subject: .window,
+            detachOrigin: .window,
+            startedInSidebar: false,
+        ))
+        XCTAssertFalse(isWindowTabStripDragInProgress(
+            kind: .move,
+            subject: .group,
+            detachOrigin: .window,
+            startedInSidebar: true,
+        ))
+    }
+
+    func testMovedObsIgnoresSidebarManagedDragSession() {
+        XCTAssertTrue(shouldIgnoreMovedObsForManagedWindowDragSession(
+            observedWindowId: 10,
+            currentWindowId: 10,
+            kind: .move,
+            subject: .window,
+            detachOrigin: .window,
+            startedInSidebar: true,
+        ))
+    }
+
+    func testMovedObsIgnoresTabStripDetachDragSession() {
+        XCTAssertTrue(shouldIgnoreMovedObsForManagedWindowDragSession(
+            observedWindowId: 10,
+            currentWindowId: 10,
+            kind: .move,
+            subject: .window,
+            detachOrigin: .tabStrip,
+            startedInSidebar: false,
+        ))
+    }
+
+    func testMovedObsIgnoresManagedGroupDragSession() {
+        XCTAssertTrue(shouldIgnoreMovedObsForManagedWindowDragSession(
+            observedWindowId: 10,
+            currentWindowId: 10,
+            kind: .move,
+            subject: .group,
+            detachOrigin: .window,
+            startedInSidebar: false,
+        ))
+    }
+
+    func testMovedObsKeepsNormalBodyDragSessionActive() {
+        XCTAssertFalse(shouldIgnoreMovedObsForManagedWindowDragSession(
+            observedWindowId: 10,
+            currentWindowId: 10,
+            kind: .move,
+            subject: .window,
+            detachOrigin: .window,
+            startedInSidebar: false,
+        ))
+    }
+
+    @MainActor
+    func testSwapDestinationIsSuppressedForFloatingWindowSource() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let source = TestWindow.new(id: 1, parent: workspace)
+
+        XCTAssertTrue(shouldSuppressSwapDestination(sourceWindow: source, subject: .window))
+    }
+
+    @MainActor
+    func testSwapDestinationGateAllowsTiledWindowSource() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let source = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+
+        XCTAssertFalse(shouldSuppressSwapDestination(sourceWindow: source, subject: .window))
+    }
+
+    @MainActor
+    func testCrossWorkspaceBodyMovePreservesFloatingSourceLayout() {
+        setUpWorkspacesForTests()
+        let sourceWorkspace = Workspace.get(byName: "source")
+        let source = TestWindow.new(id: 1, parent: sourceWorkspace)
+        let targetWorkspace = Workspace.get(byName: "target")
+        let target = TestWindow.new(id: 10, parent: targetWorkspace.rootTilingContainer)
+        target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 360, height: 240)
+
+        applyWorkspaceMove(
+            sourceNode: source,
+            sourceWindow: source,
+            mouseLocation: CGPoint(x: 50, y: 50),
+            targetWorkspace: targetWorkspace,
+        )
+
+        XCTAssertTrue(source.parent === targetWorkspace)
+        XCTAssertTrue(targetWorkspace.floatingWindows.contains(source))
+        XCTAssertEqual(targetWorkspace.rootTilingContainer.children.count, 1)
+        XCTAssertTrue(targetWorkspace.rootTilingContainer.children.first === target)
     }
 
     @MainActor

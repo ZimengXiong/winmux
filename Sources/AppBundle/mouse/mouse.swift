@@ -1,6 +1,6 @@
 import AppKit
 
-enum MouseManipulationKind {
+enum MouseManipulationKind: Equatable {
     case none
     case move
     case resize
@@ -13,7 +13,12 @@ enum MouseManipulationKind {
 @MainActor private var currentMouseDragStartedInSidebar: Bool = false
 @MainActor private var currentMouseManipulationKind: MouseManipulationKind = .none
 @MainActor private var draggedWindowAnchorRectById: [UInt32: Rect] = [:]
-var isLeftMouseButtonDown: Bool { NSEvent.pressedMouseButtons == 1 }
+
+func isLeftMouseButtonPressed(mask: Int) -> Bool {
+    (mask & 0x1) != 0
+}
+
+var isLeftMouseButtonDown: Bool { isLeftMouseButtonPressed(mask: NSEvent.pressedMouseButtons) }
 
 @MainActor
 func setPinnedDraggedWindowId(_ windowId: UInt32?) {
@@ -101,6 +106,44 @@ func resolvedDraggedWindowAnchorRect(for window: Window, subject: WindowDragSubj
 }
 
 @MainActor
+@discardableResult
+func beginWindowMoveWithMouseSessionIfNeeded(
+    windowId: UInt32,
+    subject: WindowDragSubject,
+    detachOrigin: TabDetachOrigin,
+    startedInSidebar: Bool,
+    anchorRect: Rect?,
+) -> Bool {
+    let previousWindowId = currentlyManipulatedWithMouseWindowId
+    let previousKind = getCurrentMouseManipulationKind()
+    let previousSubject = getCurrentMouseDragSubject()
+    let previousDetachOrigin = getCurrentMouseTabDetachOrigin()
+    let previousStartedInSidebar = getCurrentMouseDragStartedInSidebar()
+
+    if previousKind == .move,
+       previousWindowId == windowId,
+       previousSubject == subject,
+       previousDetachOrigin == detachOrigin,
+       previousStartedInSidebar == startedInSidebar
+    {
+        return false
+    }
+
+    if previousWindowId != windowId {
+        clearDraggedWindowAnchorRect(for: previousWindowId)
+    }
+
+    currentlyManipulatedWithMouseWindowId = windowId
+    setCurrentMouseManipulationKind(.move)
+    setCurrentMouseDragSubject(subject)
+    setCurrentMouseTabDetachOrigin(detachOrigin)
+    setCurrentMouseDragStartedInSidebar(startedInSidebar)
+    setDraggedWindowAnchorRect(anchorRect, for: windowId)
+    WindowTabStripPanelController.shared.setIgnoresMouseEvents(true)
+    return true
+}
+
+@MainActor
 func cancelManipulatedWithMouseState() {
     clearDraggedWindowAnchorRect(for: currentlyManipulatedWithMouseWindowId)
     setCurrentMouseManipulationKind(.none)
@@ -120,6 +163,33 @@ func isManipulatedWithMouse(_ window: Window) async throws -> Bool {
         isLeftMouseButtonDown &&
         (currentlyManipulatedWithMouseWindowId == nil || window.windowId == currentlyManipulatedWithMouseWindowId))
         .andAsync { @Sendable @MainActor in try await getNativeFocusedWindow() == window }
+}
+
+func shouldIgnoreMovedObsForManagedWindowDragSession(
+    observedWindowId: UInt32?,
+    currentWindowId: UInt32?,
+    kind: MouseManipulationKind,
+    subject: WindowDragSubject,
+    detachOrigin: TabDetachOrigin,
+    startedInSidebar: Bool,
+) -> Bool {
+    guard kind == .move,
+          observedWindowId != nil,
+          observedWindowId == currentWindowId
+    else { return false }
+    return startedInSidebar || detachOrigin == .tabStrip || subject == .group
+}
+
+@MainActor
+func shouldIgnoreMovedObsForCurrentDragSession(windowId: UInt32?) -> Bool {
+    shouldIgnoreMovedObsForManagedWindowDragSession(
+        observedWindowId: windowId,
+        currentWindowId: currentlyManipulatedWithMouseWindowId,
+        kind: getCurrentMouseManipulationKind(),
+        subject: getCurrentMouseDragSubject(),
+        detachOrigin: getCurrentMouseTabDetachOrigin(),
+        startedInSidebar: getCurrentMouseDragStartedInSidebar(),
+    )
 }
 
 /// Same motivation as in monitorFrameNormalized

@@ -31,7 +31,7 @@ public final class TrayMenuModel: ObservableObject {
         sortedMonitors
         .map {
             let hasFullscreenWindows = $0.activeWorkspace.allLeafWindowsRecursive.contains { $0.isFullscreen }
-            let activeWorkspaceName = workspaceDisplayName($0.activeWorkspace.name)
+            let activeWorkspaceName = $0.activeWorkspace.isSystemStub ? "-" : workspaceDisplayName($0.activeWorkspace.name)
             let formattedActiveWorkspaceName = hasFullscreenWindows ? "[\(activeWorkspaceName)]" : activeWorkspaceName
             return ($0.activeWorkspace == focus.workspace && sortedMonitors.count > 1 ? "*" : "") + formattedActiveWorkspaceName
         }
@@ -59,7 +59,8 @@ public final class TrayMenuModel: ObservableObject {
         let hasFullscreenWindows = $0.activeWorkspace.allLeafWindowsRecursive.contains { $0.isFullscreen }
         return TrayItem(
             type: .workspace,
-            name: $0.activeWorkspace.name,
+            name: $0.activeWorkspace.isSystemStub ? "-" : $0.activeWorkspace.name,
+            displayName: $0.activeWorkspace.isSystemStub ? "-" : workspaceDisplayName($0.activeWorkspace.name),
             isActive: $0.activeWorkspace == focus.workspace,
             hasFullscreenWindows: hasFullscreenWindows,
         )
@@ -170,9 +171,20 @@ private let validLetters = "A" ... "Z"
 struct TrayItem: Hashable, Identifiable {
     let type: TrayItemType
     let name: String
+    let displayName: String
     let isActive: Bool
     let hasFullscreenWindows: Bool
+
+    init(type: TrayItemType, name: String, displayName: String? = nil, isActive: Bool, hasFullscreenWindows: Bool) {
+        self.type = type
+        self.name = name
+        self.displayName = displayName ?? name
+        self.isActive = isActive
+        self.hasFullscreenWindows = hasFullscreenWindows
+    }
+
     var systemImageName: String? {
+        guard displayName == name else { return nil }
         // System image type is only valid for numbers 0 to 50 and single capital char workspace name
         if let number = Int(name) {
             if !(0 ... 50).contains(number) { return nil }

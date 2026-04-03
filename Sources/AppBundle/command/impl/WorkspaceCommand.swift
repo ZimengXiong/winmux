@@ -4,7 +4,7 @@ import Foundation
 
 struct WorkspaceCommand: Command {
     let args: WorkspaceCmdArgs
-    /*conforms*/ let shouldResetClosedWindowsCache = false
+    /*conforms*/ let shouldResetClosedWindowsCache = true
 
     func run(_ env: CmdEnv, _ io: CmdIo) -> Bool { // todo refactor
         guard let target = args.resolveTargetOrReportError(env, io) else { return false }
@@ -17,7 +17,6 @@ struct WorkspaceCommand: Command {
                     isNext: nextPrev == .next,
                     wrapAround: args.wrapAround,
                     stdin: args.useStdin ? io.readStdin() : nil,
-                    target: target,
                 )
                 guard let workspace else { return false }
                 workspaceName = workspace.name
@@ -43,30 +42,77 @@ struct WorkspaceCommand: Command {
     }
 }
 
-@MainActor func getNextPrevWorkspace(current: Workspace, isNext: Bool, wrapAround: Bool, stdin: String?, target: LiveFocus) -> Workspace? {
-    let stdinWorkspaces: [String] = stdin?.split(separator: "\n").map { String($0).trim() }.filter { !$0.isEmpty } ?? []
-    let currentMonitor = current.workspaceMonitor
-    let workspaces: [Workspace] = stdin != nil
-        ? stdinWorkspaces.compactMap { workspaceName in
-            guard let workspace = Workspace.existing(byName: workspaceName),
-                  isUserFacingWorkspace(workspace, focusedWorkspace: focus.workspace)
-            else {
-                return nil
+private struct RelativeWorkspaceNavigation {
+    let workspaces: [Workspace]
+    let anchorIndex: Int
+}
+
+@MainActor
+private func resolveRelativeWorkspaceCandidates(current: Workspace, stdin: String?) -> [Workspace] {
+    if let stdin {
+        var seen: Set<Workspace> = []
+        return stdin
+            .split(separator: "\n")
+            .map { String($0).trim() }
+            .filter { !$0.isEmpty }
+            .compactMap { workspaceName in
+                guard let workspace = Workspace.existing(byName: workspaceName),
+                      isUserFacingWorkspace(workspace, focusedWorkspace: current),
+                      seen.insert(workspace).inserted
+                else {
+                    return nil
+                }
+                return workspace
             }
-            return workspace
-        }
-        : userFacingWorkspaces(
-            Workspace.all.filter { $0.workspaceMonitor.rect.topLeftCorner == currentMonitor.rect.topLeftCorner },
-            focusedWorkspace: current,
-        )
-            .toSet()
-            .union([current])
-            .sorted()
-    let index = workspaces.firstIndex(where: { $0 == target.workspace }) ?? 0
-    let workspace: Workspace? = if wrapAround {
-        workspaces.get(wrappingIndex: isNext ? index + 1 : index - 1)
-    } else {
-        workspaces.getOrNil(atIndex: isNext ? index + 1 : index - 1)
     }
-    return workspace
+
+    let currentMonitor = current.workspaceMonitor
+    return userFacingWorkspaces(
+        Workspace.all.filter { $0.workspaceMonitor.rect.topLeftCorner == currentMonitor.rect.topLeftCorner },
+        focusedWorkspace: current,
+    )
+        .toSet()
+        .union([current])
+        .sorted()
+}
+
+@MainActor
+private func resolveRelativeWorkspaceNavigation(
+    workspaces: [Workspace],
+    current: Workspace,
+    isNext: Bool,
+    stdinProvided: Bool,
+) -> RelativeWorkspaceNavigation {
+    if let anchorIndex = workspaces.firstIndex(of: current) {
+        return RelativeWorkspaceNavigation(workspaces: workspaces, anchorIndex: anchorIndex)
+    }
+
+    if stdinProvided, workspaces == workspaces.sorted() {
+        let anchored = (workspaces + [current]).sorted()
+        return RelativeWorkspaceNavigation(
+            workspaces: anchored,
+            anchorIndex: anchored.firstIndex(of: current).orDie(),
+        )
+    }
+
+    return isNext
+        ? RelativeWorkspaceNavigation(workspaces: [current] + workspaces, anchorIndex: 0)
+        : RelativeWorkspaceNavigation(workspaces: workspaces + [current], anchorIndex: workspaces.count)
+}
+
+@MainActor
+func getNextPrevWorkspace(current: Workspace, isNext: Bool, wrapAround: Bool, stdin: String?) -> Workspace? {
+    let workspaces = resolveRelativeWorkspaceCandidates(current: current, stdin: stdin)
+    guard !workspaces.isEmpty else { return nil }
+
+    let navigation = resolveRelativeWorkspaceNavigation(
+        workspaces: workspaces,
+        current: current,
+        isNext: isNext,
+        stdinProvided: stdin != nil,
+    )
+    let targetIndex = isNext ? navigation.anchorIndex + 1 : navigation.anchorIndex - 1
+    return wrapAround
+        ? navigation.workspaces.get(wrappingIndex: targetIndex)
+        : navigation.workspaces.getOrNil(atIndex: targetIndex)
 }

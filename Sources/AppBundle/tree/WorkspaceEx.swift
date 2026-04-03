@@ -1,6 +1,15 @@
 import Common
 
 extension Workspace {
+    private func existingContainer<T: TreeNode>(_ type: T.Type) -> T? {
+        let containers = children.filterIsInstance(of: T.self)
+        return switch containers.count {
+            case 0: nil
+            case 1: containers.singleOrNil().orDie()
+            default: dieT("Workspace must contain zero or one \(T.self)")
+        }
+    }
+
     @MainActor var rootTilingContainer: TilingContainer {
         let containers = children.filterIsInstance(of: TilingContainer.self)
         switch containers.count {
@@ -22,22 +31,20 @@ extension Workspace {
         children.filterIsInstance(of: Window.self)
     }
 
+    var existingMacOsNativeFullscreenWindowsContainer: MacosFullscreenWindowsContainer? {
+        existingContainer(MacosFullscreenWindowsContainer.self)
+    }
+
     @MainActor var macOsNativeFullscreenWindowsContainer: MacosFullscreenWindowsContainer {
-        let containers = children.filterIsInstance(of: MacosFullscreenWindowsContainer.self)
-        return switch containers.count {
-            case 0: MacosFullscreenWindowsContainer(parent: self)
-            case 1: containers.singleOrNil().orDie()
-            default: dieT("Workspace must contain zero or one MacosFullscreenWindowsContainer")
-        }
+        existingMacOsNativeFullscreenWindowsContainer ?? MacosFullscreenWindowsContainer(parent: self)
+    }
+
+    var existingMacOsNativeHiddenAppsWindowsContainer: MacosHiddenAppsWindowsContainer? {
+        existingContainer(MacosHiddenAppsWindowsContainer.self)
     }
 
     @MainActor var macOsNativeHiddenAppsWindowsContainer: MacosHiddenAppsWindowsContainer {
-        let containers = children.filterIsInstance(of: MacosHiddenAppsWindowsContainer.self)
-        return switch containers.count {
-            case 0: MacosHiddenAppsWindowsContainer(parent: self)
-            case 1: containers.singleOrNil().orDie()
-            default: dieT("Workspace must contain zero or one MacosHiddenAppsWindowsContainer")
-        }
+        existingMacOsNativeHiddenAppsWindowsContainer ?? MacosHiddenAppsWindowsContainer(parent: self)
     }
 
     @MainActor var forceAssignedMonitor: Monitor? {

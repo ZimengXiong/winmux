@@ -5,6 +5,17 @@ import Common
 private var activeRefreshTask: Task<(), any Error>? = nil
 
 @MainActor
+func shouldSyncFocusBackToMacOs(nativeFocused: Window?, frontmostActivationPolicy: NSApplication.ActivationPolicy?) -> Bool {
+    if nativeFocused?.participatesInWorkspaceFocus == false {
+        return false
+    }
+    if nativeFocused == nil && frontmostActivationPolicy == .accessory {
+        return false
+    }
+    return true
+}
+
+@MainActor
 func scheduleRefreshSession(
     _ event: RefreshSessionEvent,
     optimisticallyPreLayoutWorkspaces: Bool = false,
@@ -27,6 +38,7 @@ func runRefreshSessionBlocking(
     if !TrayMenuModel.shared.isEnabled { return }
     try await $refreshSessionEvent.withValue(event) {
         try await $_isStartup.withValue(event.isStartup) {
+            let frontmostActivationPolicy = NSWorkspace.shared.frontmostApplication?.activationPolicy
             let nativeFocused = try await getNativeFocusedWindow()
             if let nativeFocused { try await debugWindowsIfRecording(nativeFocused) }
             updateFocusCache(nativeFocused)
@@ -43,7 +55,9 @@ func runRefreshSessionBlocking(
             try await normalizeLayoutReason()
             if shouldLayoutWorkspaces {
                 try await layoutWorkspaces()
-                focus.windowOrNil?.nativeFocus()
+                if shouldSyncFocusBackToMacOs(nativeFocused: nativeFocused, frontmostActivationPolicy: frontmostActivationPolicy) {
+                    focus.windowOrNil?.nativeFocus()
+                }
             }
             await updateWindowTabModel()
         }

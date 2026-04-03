@@ -4,6 +4,8 @@ import AppKit
 final class TestWindow: Window, CustomStringConvertible {
     private var _rect: Rect?
     private var _isHiddenInCorner: Bool = false
+    var nativeIsMacosFullscreen: Bool = false
+    var nativeIsMacosMinimized: Bool = false
 
     @MainActor
     private init(_ id: UInt32, _ parent: NonLeafTreeNodeObject, _ adaptiveWeight: CGFloat, _ rect: Rect?) {
@@ -40,6 +42,10 @@ final class TestWindow: Window, CustomStringConvertible {
     @MainActor override func getAxRect() async throws -> Rect? { // todo change to not Optional
         _rect
     }
+
+    @MainActor override var isMacosFullscreen: Bool { get async throws { nativeIsMacosFullscreen } }
+
+    @MainActor override var isMacosMinimized: Bool { get async throws { nativeIsMacosMinimized } }
 
     override var isHiddenInCorner: Bool { _isHiddenInCorner }
 

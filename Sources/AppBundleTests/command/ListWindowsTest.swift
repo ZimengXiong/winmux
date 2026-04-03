@@ -72,5 +72,29 @@ final class ListWindowsTest: XCTestCase {
             ]
             assertEquals(windows.format([.interVar("window-id"), .interVar("right-padding"), .literal(" | "), .interVar("window-title")]), .success(["2  | title1", "10 | title2"]))
         }
+
+        Workspace.get(byName: name).rootTilingContainer.apply {
+            let window = TestWindow.new(id: 42, parent: $0)
+            window.unbindFromParent()
+
+            let windows = [AeroObj.window(window: window, title: "detached")]
+
+            assertEquals(windows.format([.interVar("workspace")]), .success(["NULL-WORKSPACE"]))
+        }
+    }
+
+    func testListWindowsAllIgnoresNonUserFacingWorkspace() async throws {
+        let visibleWorkspace = Workspace.get(byName: "visible")
+        visibleWorkspace.rootTilingContainer.apply {
+            _ = TestWindow.new(id: 1, parent: $0).focusWindow()
+        }
+        let fullscreenOnlyWorkspace = Workspace.get(byName: "fullscreen-only")
+        _ = TestWindow.new(id: 2, parent: fullscreenOnlyWorkspace.macOsNativeFullscreenWindowsContainer)
+
+        let command = parseCommand("list-windows --all --count").cmdOrDie as! ListWindowsCommand
+
+        let result = try await command.run(.defaultEnv, .emptyStdin)
+
+        assertEquals(result.stdout, ["1"])
     }
 }

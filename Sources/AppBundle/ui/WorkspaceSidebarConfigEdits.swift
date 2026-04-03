@@ -43,9 +43,6 @@ func updateWorkspaceSidebarLabelConfig(
         bodyLines.append(line)
     }
     if let label, !wroteLabel {
-        if !bodyLines.isEmpty, !bodyLines.last!.isEmpty {
-            bodyLines.append("")
-        }
         bodyLines.append(tomlWorkspaceLabelLine(workspaceName: workspaceName, label: label))
     }
 

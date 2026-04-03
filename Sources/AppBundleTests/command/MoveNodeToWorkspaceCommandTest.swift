@@ -32,7 +32,8 @@ final class MoveNodeToWorkspaceCommandTest: XCTestCase {
         }
 
         try await MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "b")).run(.defaultEnv, .emptyStdin)
-        assertEquals(focus.workspace.name, "a")
+        XCTAssertNil(Workspace.existing(byName: "a"))
+        XCTAssertNotEqual(focus.workspace.name, "b")
     }
 
     func testAnotherWindowSubject() async throws {
@@ -53,6 +54,34 @@ final class MoveNodeToWorkspaceCommandTest: XCTestCase {
         try await MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "b")).run(.defaultEnv, .emptyStdin)
         XCTAssertTrue(workspaceA.isEffectivelyEmpty)
         assertEquals(Workspace.get(byName: "b").children.filterIsInstance(of: Window.self).singleOrNil()?.windowId, 1)
+    }
+
+    func testNewWorkspaceKeepsSourceMonitorPreferenceBeforeItBecomesVisible() async throws {
+        let workspaceA = Workspace.get(byName: "a")
+        workspaceA.rootTilingContainer.apply {
+            _ = TestWindow.new(id: 1, parent: $0).focusWindow()
+        }
+
+        try await MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "b")).run(.defaultEnv, .emptyStdin)
+
+        XCTAssertEqual(Workspace.get(byName: "b").preferredMonitorPointForTesting, workspaceA.workspaceMonitor.rect.topLeftCorner)
+    }
+
+    func testMoveWindowToWorkspaceWrapsRootAccordionInsteadOfTabbingIntoIt() async throws {
+        let sourceWorkspace = Workspace.get(byName: "a")
+        let window = TestWindow.new(id: 1, parent: sourceWorkspace.rootTilingContainer)
+        let targetWorkspace = Workspace.get(byName: "b")
+        let rootAccordion = targetWorkspace.rootTilingContainer
+        rootAccordion.layout = .accordion
+        _ = TestWindow.new(id: 2, parent: rootAccordion)
+        _ = TestWindow.new(id: 3, parent: rootAccordion)
+
+        XCTAssertTrue(moveWindowToWorkspace(window, targetWorkspace, CmdIo(stdin: .emptyStdin), focusFollowsWindow: false, failIfNoop: false))
+
+        XCTAssertEqual(targetWorkspace.rootTilingContainer.layout, .tiles)
+        XCTAssertTrue(targetWorkspace.rootTilingContainer.children.first === rootAccordion)
+        XCTAssertTrue(targetWorkspace.rootTilingContainer.children.last === window)
+        XCTAssertEqual(rootAccordion.children.count, 2)
     }
 
     func testSummonWindow() async throws {

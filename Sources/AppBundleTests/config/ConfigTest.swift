@@ -540,6 +540,26 @@ final class ConfigTest: XCTestCase {
         XCTAssertTrue(updated.contains("\"2\" = \"Web\""))
     }
 
+    func testUpdateWorkspaceSidebarLabelConfigAddsNewLabelWithoutExtraBlankLine() {
+        let updated = updateWorkspaceSidebarLabelConfig(
+            in: """
+            [workspace-sidebar.workspace-labels]
+            "1" = "Code"
+            """,
+            workspaceName: "2",
+            label: "Web",
+        )
+
+        XCTAssertEqual(
+            updated,
+            """
+            [workspace-sidebar.workspace-labels]
+            "1" = "Code"
+            "2" = "Web"
+            """,
+        )
+    }
+
     func testUpdateWorkspaceSidebarLabelConfigRemovesLastLabelSection() {
         let updated = updateWorkspaceSidebarLabelConfig(
             in: """

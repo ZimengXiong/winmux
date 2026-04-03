@@ -25,20 +25,10 @@ private func persistedFrozenWorldUrl() throws -> URL {
 }
 
 @MainActor
-private func currentFrozenWorld() -> FrozenWorld {
-    let workspaces = restorableWorkspaces(Workspace.all)
-    return FrozenWorld(
-        workspaces: workspaces.map(FrozenWorkspace.init),
-        monitors: monitors.map(FrozenMonitor.init),
-        windowIds: workspaces.flatMap { collectAllWindowIds(workspace: $0) }.toSet(),
-    )
-}
-
-@MainActor
 func persistFrozenWorldForRestartIfPossible() {
     do {
         let url = try persistedFrozenWorldUrl()
-        let world = currentFrozenWorld()
+        let world = snapshotCurrentFrozenWorld()
         guard !world.windowIds.isEmpty else {
             try? FileManager.default.removeItem(at: url)
             return

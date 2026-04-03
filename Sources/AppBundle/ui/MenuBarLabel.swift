@@ -62,6 +62,7 @@ struct MenuBarLabel: View {
                         let trayItem = TrayItem(
                             type: .workspace,
                             name: item.name,
+                            displayName: item.displayName,
                             isActive: item.isFocused,
                             hasFullscreenWindows: item.hasFullscreenWindows,
                         )
@@ -95,7 +96,13 @@ struct MenuBarLabel: View {
                 .bold()
                 .padding(.bottom, 6)
             ForEach(otherWorkspaces, id: \.name) { item in
-                itemView(for: TrayItem(type: .workspace, name: item.name, isActive: false, hasFullscreenWindows: item.hasFullscreenWindows))
+                itemView(for: TrayItem(
+                    type: .workspace,
+                    name: item.name,
+                    displayName: item.displayName,
+                    isActive: false,
+                    hasFullscreenWindows: item.hasFullscreenWindows,
+                ))
             }
         }
         .opacity(0.6)
@@ -126,9 +133,10 @@ struct MenuBarLabel: View {
 
     @ViewBuilder
     fileprivate func itemSubView(for item: TrayItem) -> some View {
+        let renderedName = item.displayName
         // If workspace name contains emojis we use the plain emoji in text to avoid visibility issues scaling the emoji to fit the squares
-        if item.name.containsEmoji() {
-            Text(item.name)
+        if renderedName.containsEmoji() {
+            Text(renderedName)
                 .font(.system(.largeTitle))
                 .foregroundStyle(finalColor)
                 .frame(height: itemSize)
@@ -141,7 +149,7 @@ struct MenuBarLabel: View {
                     .foregroundStyle(finalColor)
                     .frame(width: itemSize, height: itemSize)
             } else {
-                let text = Text(item.name)
+                let text = Text(renderedName)
                     .font(.system(.largeTitle))
                     .bold()
                     .padding(.horizontal, itemBorderSize * 2)

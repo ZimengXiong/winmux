@@ -17,7 +17,7 @@ struct ListWindowsCommand: Command {
             }
         } else {
             var workspaces: Set<Workspace> = args.filteringOptions.workspaces.isEmpty
-                ? Workspace.all.toSet()
+                ? userFacingWorkspaces(Workspace.all, focusedWorkspace: focus.workspace).toSet()
                 : args.filteringOptions.workspaces
                     .flatMap { filter in
                         switch filter {

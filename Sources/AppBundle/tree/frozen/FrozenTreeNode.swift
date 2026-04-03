@@ -34,10 +34,33 @@ struct FrozenContainer: Codable, Sendable {
 struct FrozenWindow: Codable, Sendable {
     let id: UInt32
     let weight: CGFloat
+    let isFullscreen: Bool
+    let noOuterGapsInFullscreen: Bool
+    let layoutReason: LayoutReason
 
     @MainActor init(_ window: Window) {
         id = window.windowId
         weight = getWeightOrNil(window) ?? 1
+        isFullscreen = window.isFullscreen
+        noOuterGapsInFullscreen = window.noOuterGapsInFullscreen
+        layoutReason = window.layoutReason
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case weight
+        case isFullscreen
+        case noOuterGapsInFullscreen
+        case layoutReason
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UInt32.self, forKey: .id)
+        weight = try container.decode(CGFloat.self, forKey: .weight)
+        isFullscreen = try container.decode(Bool.self, forKey: .isFullscreen)
+        noOuterGapsInFullscreen = try container.decode(Bool.self, forKey: .noOuterGapsInFullscreen)
+        layoutReason = try container.decodeIfPresent(LayoutReason.self, forKey: .layoutReason) ?? .standard
     }
 }
 

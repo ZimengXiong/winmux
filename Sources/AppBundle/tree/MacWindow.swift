@@ -213,6 +213,7 @@ extension Window {
 // The function is private because it's unsafe. It leaves the window in unbound state
 @MainActor
 private func unbindAndGetBindingDataForNewWindow(_ windowId: UInt32, _ macApp: MacApp, _ workspace: Workspace, window: Window?) async throws -> BindingData {
+    let workspace = materializeWorkspaceForUserWindowIfNeeded(workspace)
     let windowLevel = getWindowLevel(for: windowId)
     return switch try await macApp.getAxUiElementWindowType(windowId, windowLevel) {
         case .popup: BindingData(parent: macosPopupWindowsContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
@@ -225,6 +226,7 @@ private func unbindAndGetBindingDataForNewWindow(_ windowId: UInt32, _ macApp: M
 // It is unsafe because it may leave `window` in unbound state.
 @MainActor
 func bindingDataForNewTilingWindow(_ workspace: Workspace, window: Window?) -> BindingData {
+    let workspace = materializeWorkspaceForUserWindowIfNeeded(workspace)
     window?.unbindFromParent() // It's important to unbind to get correct data from below
     let mruWindow = workspace.mostRecentWindowRecursive
     if let mruWindow, let tilingParent = mruWindow.parent as? TilingContainer {

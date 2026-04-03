@@ -17,12 +17,12 @@ struct MoveNodeToWorkspaceCommand: Command {
                     isNext: nextPrev == .next,
                     wrapAround: args.wrapAround,
                     stdin: args.useStdin ? io.readStdin() : nil,
-                    target: target,
                 )
                 guard let ws else { return io.err("Can't resolve next or prev workspace") }
                 targetWorkspace = ws
             case .direct(let name):
                 targetWorkspace = Workspace.get(byName: name.raw)
+                targetWorkspace.seedMonitorIfNeeded(window.nodeMonitor ?? target.workspace.workspaceMonitor)
         }
         return moveWindowToWorkspace(window, targetWorkspace, io, focusFollowsWindow: args.focusFollowsWindow, failIfNoop: args.failIfNoop)
     }
@@ -36,7 +36,11 @@ func moveWindowToWorkspace(_ window: Window, _ targetWorkspace: Workspace, _ io:
         }
         return !failIfNoop
     }
-    let targetContainer: NonLeafTreeNodeObject = window.isFloating ? targetWorkspace : targetWorkspace.rootTilingContainer
-    window.bind(to: targetContainer, adaptiveWeight: WEIGHT_AUTO, index: index)
+    if window.isFloating {
+        window.bind(to: targetWorkspace, adaptiveWeight: WEIGHT_AUTO, index: index)
+    } else {
+        let binding = workspaceAppendBindingData(targetWorkspace: targetWorkspace, index: index)
+        window.bind(to: binding.parent, adaptiveWeight: binding.adaptiveWeight, index: binding.index)
+    }
     return focusFollowsWindow ? window.focusWindow() : true
 }

@@ -31,27 +31,28 @@ struct FrozenWorkspace: Codable, Sendable {
         rootTilingNode = FrozenContainer(workspace.rootTilingContainer)
         floatingWindows = workspace.floatingWindows.map(FrozenWindow.init)
         macosUnconventionalWindows =
-            workspace.macOsNativeHiddenAppsWindowsContainer.children.map { FrozenWindow($0 as! Window) } +
-            workspace.macOsNativeFullscreenWindowsContainer.children.map { FrozenWindow($0 as! Window) }
+            workspaceOwnedMinimizedWindows(workspace).map(FrozenWindow.init) +
+            (workspace.existingMacOsNativeHiddenAppsWindowsContainer?.children.map { FrozenWindow($0 as! Window) } ?? []) +
+            (workspace.existingMacOsNativeFullscreenWindowsContainer?.children.map { FrozenWindow($0 as! Window) } ?? [])
     }
 }
 
 @MainActor func cacheClosedWindowIfNeeded() {
-    let allWs = restorableWorkspaces(Workspace.all)
-    let allWindowIds = allWs.flatMap { collectAllWindowIds(workspace: $0) }.toSet()
-    if allWindowIds.isSubset(of: closedWindowsCache.windowIds) {
+    let frozenWorld = snapshotCurrentFrozenWorld()
+    if frozenWorld.windowIds.isSubset(of: closedWindowsCache.windowIds) {
         return // already cached
     }
-    closedWindowsCache = FrozenWorld(
-        workspaces: allWs.map { FrozenWorkspace($0) },
-        monitors: monitors.map(FrozenMonitor.init),
-        windowIds: allWindowIds,
-    )
+    closedWindowsCache = frozenWorld
 }
 
 @MainActor
 func replaceClosedWindowsCache(_ frozenWorld: FrozenWorld) {
     closedWindowsCache = frozenWorld
+}
+
+@MainActor
+func syncClosedWindowsCacheToCurrentWorld() {
+    closedWindowsCache = snapshotCurrentFrozenWorld()
 }
 
 @MainActor func restoreClosedWindowsCacheIfNeeded(newlyDetectedWindow: Window) async throws -> Bool {
@@ -65,31 +66,52 @@ func restoreFrozenWorldIfNeeded(_ frozenWorld: FrozenWorld, newlyDetectedWindow:
     }
     let monitors = monitors
     let topLeftCornerToMonitor = monitors.grouped { $0.rect.topLeftCorner }
+    let restoredWorkspaceNames = Set(frozenWorld.workspaces.map(\.name))
 
     for frozenWorkspace in frozenWorld.workspaces {
         let workspace = Workspace.get(byName: frozenWorkspace.name)
+        let frozenWindowById = collectFrozenWindows(frozenWorkspace)
         _ = topLeftCornerToMonitor[frozenWorkspace.monitor.topLeftCorner]?
             .singleOrNil()?
             .setActiveWorkspace(workspace)
         for frozenWindow in frozenWorkspace.floatingWindows {
-            MacWindow.get(byId: frozenWindow.id)?.bindAsFloatingWindow(to: workspace)
+            if let window = Window.get(byId: frozenWindow.id) {
+                applyFrozenWindowState(window, frozenWindow)
+                window.bindAsFloatingWindow(to: workspace)
+            }
         }
-        for frozenWindow in frozenWorkspace.macosUnconventionalWindows { // Will get fixed by normalizations
-            MacWindow.get(byId: frozenWindow.id)?.bindAsFloatingWindow(to: workspace)
+        for frozenWindow in frozenWorkspace.macosUnconventionalWindows {
+            if let window = Window.get(byId: frozenWindow.id) {
+                try await restoreFrozenUnconventionalWindow(window, frozenWindow, on: workspace)
+            }
         }
         let prevRoot = workspace.rootTilingContainer // Save prevRoot into a variable to avoid it being garbage collected earlier than needed
         let potentialOrphans = prevRoot.allLeafWindowsRecursive
         prevRoot.unbindFromParent()
         restoreTreeRecursive(frozenContainer: frozenWorkspace.rootTilingNode, parent: workspace, index: INDEX_BIND_LAST)
         for window in (potentialOrphans - workspace.rootTilingContainer.allLeafWindowsRecursive) {
+            if let frozenWindow = frozenWindowById[window.windowId] {
+                if case .macos = frozenWindow.layoutReason {
+                    try await restoreFrozenUnconventionalWindow(window, frozenWindow, on: workspace)
+                    continue
+                }
+                applyFrozenWindowState(window, frozenWindow)
+            }
             try await window.relayoutWindow(on: workspace, forceTile: true)
         }
     }
 
     for monitor in frozenWorld.monitors {
-        _ = topLeftCornerToMonitor[monitor.topLeftCorner]?
-            .singleOrNil()?
-            .setActiveWorkspace(Workspace.get(byName: monitor.visibleWorkspace))
+        guard let targetMonitor = topLeftCornerToMonitor[monitor.topLeftCorner]?.singleOrNil() else { continue }
+        let targetWorkspace: Workspace
+        if let existingVisibleWorkspace = Workspace.existing(byName: monitor.visibleWorkspace),
+           restoredWorkspaceNames.contains(existingVisibleWorkspace.name) || existingVisibleWorkspace.isSystemStub
+        {
+            targetWorkspace = existingVisibleWorkspace
+        } else {
+            targetWorkspace = getStubWorkspace(for: targetMonitor)
+        }
+        _ = targetMonitor.setActiveWorkspace(targetWorkspace)
     }
     return true
 }
@@ -109,7 +131,8 @@ private func restoreTreeRecursive(frozenContainer: FrozenContainer, parent: NonL
         switch child {
             case .window(let w):
                 // Stop the loop if can't find the window, because otherwise all the subsequent windows will have incorrect index
-                guard let window = MacWindow.get(byId: w.id) else { return false }
+                guard let window = Window.get(byId: w.id) else { return false }
+                applyFrozenWindowState(window, w)
                 window.bind(to: container, adaptiveWeight: w.weight, index: index)
             case .container(let c):
                 // There is no reason to continue
@@ -117,6 +140,71 @@ private func restoreTreeRecursive(frozenContainer: FrozenContainer, parent: NonL
         }
     }
     return true
+}
+
+@MainActor
+private func applyFrozenWindowState(_ window: Window, _ frozenWindow: FrozenWindow) {
+    window.isFullscreen = frozenWindow.isFullscreen
+    window.noOuterGapsInFullscreen = frozenWindow.noOuterGapsInFullscreen
+    window.layoutReason = frozenWindow.layoutReason
+}
+
+@MainActor
+private func restoreFrozenUnconventionalWindow(
+    _ window: Window,
+    _ frozenWindow: FrozenWindow,
+    on workspace: Workspace,
+) async throws {
+    applyFrozenWindowState(window, frozenWindow)
+
+    let isMacosFullscreen = try await window.isMacosFullscreen
+    let isMacosMinimized = try await (!isMacosFullscreen).andAsync { @MainActor @Sendable in try await window.isMacosMinimized }
+    let isMacosWindowOfHiddenApp = !isMacosFullscreen && !isMacosMinimized &&
+        !config.automaticallyUnhideMacosHiddenApps && (window.app as? MacApp)?.nsApp.isHidden == true
+
+    switch true {
+        case isMacosFullscreen:
+            window.bind(to: workspace.macOsNativeFullscreenWindowsContainer, adaptiveWeight: WEIGHT_DOESNT_MATTER, index: INDEX_BIND_LAST)
+        case isMacosMinimized:
+            window.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+        case isMacosWindowOfHiddenApp:
+            window.bind(to: workspace.macOsNativeHiddenAppsWindowsContainer, adaptiveWeight: WEIGHT_DOESNT_MATTER, index: INDEX_BIND_LAST)
+        default:
+            switch frozenWindow.layoutReason {
+                case .macos(let prevParentKind, let prevWorkspaceName):
+                    try await exitMacOsNativeUnconventionalState(
+                        window: window,
+                        prevParentKind: prevParentKind,
+                        prevWorkspaceName: prevWorkspaceName,
+                        workspace: workspace,
+                    )
+                case .standard:
+                    window.bindAsFloatingWindow(to: workspace)
+            }
+    }
+}
+
+private func collectFrozenWindows(_ frozenWorkspace: FrozenWorkspace) -> [UInt32: FrozenWindow] {
+    var result = [UInt32: FrozenWindow]()
+    for frozenWindow in frozenWorkspace.floatingWindows {
+        result[frozenWindow.id] = frozenWindow
+    }
+    for frozenWindow in frozenWorkspace.macosUnconventionalWindows {
+        result[frozenWindow.id] = frozenWindow
+    }
+    collectFrozenWindowsRecursive(frozenWorkspace.rootTilingNode, result: &result)
+    return result
+}
+
+private func collectFrozenWindowsRecursive(_ frozenContainer: FrozenContainer, result: inout [UInt32: FrozenWindow]) {
+    for child in frozenContainer.children {
+        switch child {
+            case .window(let frozenWindow):
+                result[frozenWindow.id] = frozenWindow
+            case .container(let container):
+                collectFrozenWindowsRecursive(container, result: &result)
+        }
+    }
 }
 
 // Consider the following case:
@@ -128,8 +216,8 @@ private func restoreTreeRecursive(frozenContainer: FrozenContainer, parent: NonL
 // 6. Unlock the screen
 // 7. The wrong cache is used
 //
-// That's why we have to reset the cache every time layout changes. The layout can only be changed by running commands
-// and with mouse manipulations
+// That's why we have to refresh the cache every time layout or visible workspace assignment changes. Those changes can
+// be caused by running commands and with mouse manipulations.
 @MainActor func resetClosedWindowsCache() {
     closedWindowsCache = FrozenWorld(workspaces: [], monitors: [], windowIds: [])
 }

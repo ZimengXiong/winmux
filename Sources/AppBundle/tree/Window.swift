@@ -43,7 +43,7 @@ open class Window: TreeNode, Hashable {
     func setAxFrame(_ topLeft: CGPoint?, _ size: CGSize?) { die("Not implemented") }
 }
 
-enum LayoutReason: Equatable {
+enum LayoutReason: Codable, Equatable, Sendable {
     case standard
     /// Reason for the cur temp layout is macOS native fullscreen, minimize, or hide
     case macos(prevParentKind: NonLeafTreeNodeKind, prevWorkspaceName: String?)

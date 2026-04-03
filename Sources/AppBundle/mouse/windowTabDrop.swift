@@ -15,7 +15,7 @@ private struct PendingWindowDragIntent {
     let isGroup: Bool
 }
 
-private enum WindowDragIntentKind: Equatable {
+enum WindowDragIntentKind: Equatable {
     case tabStack(targetWindowId: UInt32)
     case detachTab(windowId: UInt32)
     case swap(targetWindowId: UInt32)
@@ -24,12 +24,31 @@ private enum WindowDragIntentKind: Equatable {
     case sidebarHover
 }
 
+@MainActor
+func isWindowDragIntentKindEnabled(_ kind: WindowDragIntentKind) -> Bool {
+    switch kind {
+        case .tabStack:
+            return config.windowTabs.enabled
+        case .detachTab, .swap, .moveToWorkspace, .createWorkspace, .sidebarHover:
+            return true
+    }
+}
+
+func shouldUseStickyWindowDragIntent(previewStyle: WindowTabDropPreviewStyle) -> Bool {
+    switch previewStyle {
+        case .tabInsert, .swap:
+            return true
+        case .detach, .workspaceMove, .sidebarWorkspaceMove:
+            return false
+    }
+}
+
 enum WindowDragSubject: Equatable {
     case window
     case group
 }
 
-enum TabDetachOrigin {
+enum TabDetachOrigin: Equatable {
     case window
     case tabStrip
 }
@@ -158,13 +177,28 @@ private func updateSidebarDragFeedback(sourceWindow: Window, subject: WindowDrag
     let pinnedWindowId = currentlyManipulatedWithMouseWindowId == sourceWindow.windowId ? sourceWindow.windowId : nil
     let previousPinnedWindowId = isPinnedDraggedWindow(sourceWindow.windowId) ? sourceWindow.windowId : nil
     if let pinnedWindowId, let anchorRect = draggedWindowAnchorRect(for: pinnedWindowId) {
-        sourceWindow.setAxFrame(anchorRect.topLeftCorner, anchorRect.size)
+        let pinnedWindowRect = pinnedDraggedWindowRect(
+            for: sourceWindow,
+            subject: subject,
+            fallbackAnchorRect: anchorRect,
+        )
+        sourceWindow.setAxFrame(pinnedWindowRect.topLeftCorner, pinnedWindowRect.size)
     }
     if pinnedWindowId != previousPinnedWindowId {
         setPinnedDraggedWindowId(pinnedWindowId)
         scheduleRefreshSession(.globalObserver("sidebarGhostEnter"), optimisticallyPreLayoutWorkspaces: true)
     } else {
         setPinnedDraggedWindowId(pinnedWindowId)
+    }
+}
+
+@MainActor
+func pinnedDraggedWindowRect(for sourceWindow: Window, subject: WindowDragSubject, fallbackAnchorRect: Rect) -> Rect {
+    switch subject {
+        case .window:
+            return fallbackAnchorRect
+        case .group:
+            return resolvedDraggedWindowAnchorRect(for: sourceWindow, subject: .window) ?? fallbackAnchorRect
     }
 }
 
@@ -176,29 +210,97 @@ private func setWorkspaceSidebarDropPreviewIfChanged(_ preview: WorkspaceSidebar
 }
 
 @MainActor
+private func tabStackDestination(targetWindow: Window, mouseLocation: CGPoint? = nil) -> WindowDragIntentDestination? {
+    guard isWindowDragIntentKindEnabled(.tabStack(targetWindowId: targetWindow.windowId)),
+          let dropRect = targetWindow.tabDropZoneRect,
+          let interactionRect = targetWindow.tabDropInteractionRect,
+          mouseLocation.map(interactionRect.contains) ?? true
+    else { return nil }
+    return WindowDragIntentDestination(
+        kind: .tabStack(targetWindowId: targetWindow.windowId),
+        previewRect: dropRect,
+        interactionRect: interactionRect,
+        title: "Insert Into Tabs",
+        subtitle: "Drop near the top edge to add this window",
+        previewStyle: .tabInsert,
+        isGroup: false,
+    )
+}
+
+@MainActor
+private func swapDestination(
+    sourceWindow: Window,
+    targetWindow: Window,
+    mouseLocation: CGPoint? = nil,
+    subject: WindowDragSubject,
+) -> WindowDragIntentDestination? {
+    if shouldSuppressSwapDestination(sourceWindow: sourceWindow, subject: subject) {
+        return nil
+    }
+    let sourceNode = dragSubjectNode(for: sourceWindow, subject: subject)
+    let targetNode = targetWindow.moveNode
+    guard sourceNode != targetNode,
+          !sourceNode.parentsWithSelf.contains(targetNode),
+          !targetNode.parentsWithSelf.contains(sourceNode),
+          let previewRect = targetNode.swapDropZoneRect
+    else { return nil }
+    let interactionRect = if subject == .group {
+        previewRect.expanded(left: 4, right: 4, top: 4, bottom: 6)
+    } else {
+        previewRect.expanded(left: 10, right: 10, top: 6, bottom: 10)
+    }
+    guard mouseLocation.map(interactionRect.contains) ?? true else { return nil }
+    let isTabGroup = targetNode is TilingContainer
+    return WindowDragIntentDestination(
+        kind: .swap(targetWindowId: targetWindow.windowId),
+        previewRect: previewRect,
+        interactionRect: interactionRect,
+        title: isTabGroup ? "Swap With Tab Group" : "Swap Positions",
+        subtitle: isTabGroup ? "Drop in the body to move around the whole group" : "Drop in the body to swap these windows",
+        previewStyle: .swap,
+        isGroup: subject == .group,
+    )
+}
+
+@MainActor
 private func currentWindowTabDropDestination(sourceWindow: Window, mouseLocation: CGPoint) -> WindowDragIntentDestination? {
     let targetWorkspace = mouseLocation.monitorApproximation.activeWorkspace
     return mouseLocation.findWindowTabDropDestination(in: targetWorkspace.rootTilingContainer, excluding: sourceWindow)
+}
+
+func isActionableSidebarWorkspaceDropTarget(
+    sourceWorkspaceName: String?,
+    targetKind: WorkspaceSidebarDropTargetKind?,
+) -> Bool {
+    switch targetKind {
+        case .workspace(let workspaceName):
+            return sourceWorkspaceName != workspaceName
+        case .newWorkspace:
+            return true
+        case nil:
+            return false
+    }
 }
 
 @MainActor
 private func currentSidebarWorkspaceDropDestination(sourceWindow: Window, mouseLocation: CGPoint, subject: WindowDragSubject) -> WindowDragIntentDestination? {
     let sourceLabel = sidebarDragSourceTitle(for: sourceWindow, subject: subject)
     let isGroup = subject == .group
-    if let target = workspaceSidebarDropTarget(at: mouseLocation) {
+    let sourceWorkspaceName = dragSubjectNode(for: sourceWindow, subject: subject).nodeWorkspace?.name
+    if let target = workspaceSidebarDropTarget(at: mouseLocation),
+       isActionableSidebarWorkspaceDropTarget(sourceWorkspaceName: sourceWorkspaceName, targetKind: target.kind)
+    {
         switch target.kind {
             case .workspace(let workspaceName):
-                if dragSubjectNode(for: sourceWindow, subject: subject).nodeWorkspace?.name != workspaceName {
-                    return WindowDragIntentDestination(
-                        kind: .moveToWorkspace(workspaceName: workspaceName),
-                        previewRect: workspaceSidebarCursorPreviewRect(at: mouseLocation),
-                        interactionRect: target.rect.expanded(left: 14, right: 14, top: 12, bottom: 12),
-                        title: sourceLabel,
-                        subtitle: "Drop to send this item to \(workspaceName)",
-                        previewStyle: .sidebarWorkspaceMove,
-                        isGroup: isGroup,
-                    )
-                }
+                return WindowDragIntentDestination(
+                    kind: .moveToWorkspace(workspaceName: workspaceName),
+                    previewRect: workspaceSidebarCursorPreviewRect(at: mouseLocation),
+                    interactionRect: target.rect.expanded(left: 14, right: 14, top: 12, bottom: 12),
+                    title: sourceLabel,
+                    subtitle: "Drop to send this item to \(workspaceName)",
+                    previewStyle: .sidebarWorkspaceMove,
+                    isGroup: isGroup,
+                )
             case .newWorkspace:
                 return WindowDragIntentDestination(
                     kind: .createWorkspace,
@@ -211,18 +313,7 @@ private func currentSidebarWorkspaceDropDestination(sourceWindow: Window, mouseL
                 )
         }
     }
-    guard let sidebarRect = WorkspaceSidebarPanel.shared.visibleScreenRectNormalized(),
-          sidebarRect.contains(mouseLocation)
-    else { return nil }
-    return WindowDragIntentDestination(
-        kind: .sidebarHover,
-        previewRect: workspaceSidebarCursorPreviewRect(at: mouseLocation),
-        interactionRect: sidebarRect,
-        title: sourceLabel,
-        subtitle: "Drag across a workspace to move this item",
-        previewStyle: .sidebarWorkspaceMove,
-        isGroup: isGroup,
-    )
+    return nil
 }
 
 @MainActor
@@ -247,9 +338,8 @@ private func currentTabDetachDestination(sourceWindow: Window, mouseLocation: CG
 }
 
 @MainActor
-func shouldSuppressSameAccordionTabDestination(sourceWindow: Window, targetWindow: Window, detachOrigin: TabDetachOrigin) -> Bool {
-    guard detachOrigin == .window,
-          let sourceParent = sourceWindow.parent as? TilingContainer,
+func shouldSuppressSameAccordionTabDestination(sourceWindow: Window, targetWindow: Window, detachOrigin _: TabDetachOrigin) -> Bool {
+    guard let sourceParent = sourceWindow.parent as? TilingContainer,
           sourceParent.layout == .accordion,
           targetWindow.parent === sourceParent
     else { return false }
@@ -275,9 +365,9 @@ extension Window {
            parent.layout == .accordion,
            let rect = parent.lastAppliedLayoutPhysicalRect
         {
-            return rect.insetBy(left: 10, right: 10, top: 10, bottom: 10)
+            return rect.insetBy(left: 2, right: 2, top: 2, bottom: 2)
         }
-        return lastAppliedLayoutPhysicalRect?.insetBy(left: 10, right: 10, top: 10, bottom: 10)
+        return lastAppliedLayoutPhysicalRect?.insetBy(left: 2, right: 2, top: 2, bottom: 2)
     }
 
     @MainActor
@@ -304,36 +394,13 @@ extension CGPoint {
         guard node.lastAppliedLayoutPhysicalRect?.contains(self) == true else { return nil }
         switch node.tilingTreeNodeCasesOrDie() {
             case .window(let window):
-                guard window != sourceWindow,
-                      let dropRect = window.tabDropZoneRect,
-                      let interactionRect = window.tabDropInteractionRect,
-                      interactionRect.contains(self)
-                else { return nil }
-                return WindowDragIntentDestination(
-                    kind: .tabStack(targetWindowId: window.windowId),
-                    previewRect: dropRect,
-                    interactionRect: interactionRect,
-                    title: "Insert Into Tabs",
-                    subtitle: "Drop near the top edge to add this window",
-                    previewStyle: .tabInsert,
-                    isGroup: false,
-                )
+                guard window != sourceWindow else { return nil }
+                return tabStackDestination(targetWindow: window, mouseLocation: self)
             case .tilingContainer(let container):
-                if let targetWindow = container.tabActiveWindow,
-                   targetWindow != sourceWindow,
-                   let tabBarRect = targetWindow.tabDropZoneRect,
-                   let interactionRect = targetWindow.tabDropInteractionRect,
-                   interactionRect.contains(self)
+                if let targetWindow = container.tabActiveWindow, targetWindow != sourceWindow,
+                   let destination = tabStackDestination(targetWindow: targetWindow, mouseLocation: self)
                 {
-                    return WindowDragIntentDestination(
-                        kind: .tabStack(targetWindowId: targetWindow.windowId),
-                        previewRect: tabBarRect,
-                        interactionRect: interactionRect,
-                        title: "Insert Into Tabs",
-                        subtitle: "Drop near the top edge to add this window",
-                        previewStyle: .tabInsert,
-                        isGroup: false,
-                    )
+                    return destination
                 }
 
                 switch container.layout {
@@ -347,6 +414,45 @@ extension CGPoint {
                         return findWindowTabDropDestination(in: child, excluding: sourceWindow)
                 }
         }
+    }
+}
+
+@MainActor
+private func currentStickyWindowDragIntentDestination(
+    sourceWindow: Window,
+    mouseLocation: CGPoint,
+    subject: WindowDragSubject,
+    detachOrigin: TabDetachOrigin,
+) -> WindowDragIntentDestination? {
+    guard let sticky = pendingWindowDragIntent,
+          sticky.sourceWindowId == sourceWindow.windowId,
+          sticky.sourceSubject == subject,
+          shouldUseStickyWindowDragIntent(previewStyle: sticky.previewStyle),
+          sticky.interactionRect.contains(mouseLocation)
+    else { return nil }
+
+    switch sticky.kind {
+        case .tabStack(let targetWindowId):
+            guard subject == .window,
+                  let targetWindow = Window.get(byId: targetWindowId),
+                  targetWindow != sourceWindow,
+                  !shouldSuppressSameAccordionTabDestination(
+                      sourceWindow: sourceWindow,
+                      targetWindow: targetWindow,
+                      detachOrigin: detachOrigin
+                  )
+            else { return nil }
+            return tabStackDestination(targetWindow: targetWindow, mouseLocation: mouseLocation)
+        case .swap(let targetWindowId):
+            guard let targetWindow = Window.get(byId: targetWindowId) else { return nil }
+            return swapDestination(
+                sourceWindow: sourceWindow,
+                targetWindow: targetWindow,
+                mouseLocation: mouseLocation,
+                subject: subject,
+            )
+        case .detachTab, .moveToWorkspace, .createWorkspace, .sidebarHover:
+            return nil
     }
 }
 
@@ -446,7 +552,8 @@ func applyPendingWindowDragIntentIfPossible() -> Bool {
     defer { clearPendingWindowDragIntent() }
     guard let pendingWindowDragIntent,
           let sourceWindow = Window.get(byId: pendingWindowDragIntent.sourceWindowId),
-          pendingWindowDragIntent.interactionRect.contains(mouseLocation)
+          pendingWindowDragIntent.interactionRect.contains(mouseLocation),
+          isWindowDragIntentKindEnabled(pendingWindowDragIntent.kind)
     else { return false }
     let sourceNode = dragSubjectNode(for: sourceWindow, subject: pendingWindowDragIntent.sourceSubject)
     switch pendingWindowDragIntent.kind {
@@ -455,22 +562,25 @@ func applyPendingWindowDragIntentIfPossible() -> Bool {
             guard let targetWindow = Window.get(byId: targetWindowId),
                   sourceWindow != targetWindow
             else { return false }
-            resetClosedWindowsCache()
+            syncClosedWindowsCacheToCurrentWorld()
             createOrAppendWindowTabStack(sourceWindow: sourceWindow, onto: targetWindow)
             return true
         case .detachTab(let windowId):
             guard sourceWindow.windowId == windowId else { return false }
-            resetClosedWindowsCache()
+            syncClosedWindowsCacheToCurrentWorld()
             return removeWindowFromTabStack(sourceWindow)
         case .swap(let targetWindowId):
             guard let targetWindow = Window.get(byId: targetWindowId)
             else { return false }
-            resetClosedWindowsCache()
-            swapNodes(sourceNode, targetWindow.moveNode)
-            return true
+            syncClosedWindowsCacheToCurrentWorld()
+            return applyWindowSwapDragIntent(
+                sourceWindow: sourceWindow,
+                sourceSubject: pendingWindowDragIntent.sourceSubject,
+                targetWindow: targetWindow,
+            )
         case .moveToWorkspace(let workspaceName):
             guard let targetWorkspace = Workspace.existing(byName: workspaceName) else { return false }
-            resetClosedWindowsCache()
+            syncClosedWindowsCacheToCurrentWorld()
             if pendingWindowDragIntent.previewStyle == .sidebarWorkspaceMove {
                 applySidebarWorkspaceMove(sourceNode: sourceNode, sourceWindow: sourceWindow, targetWorkspace: targetWorkspace)
             } else {
@@ -478,11 +588,22 @@ func applyPendingWindowDragIntentIfPossible() -> Bool {
             }
             return true
         case .createWorkspace:
-            resetClosedWindowsCache()
+            syncClosedWindowsCacheToCurrentWorld()
             return createWorkspaceFromSidebarDrag(sourceNode: sourceNode, sourceWindow: sourceWindow)
         case .sidebarHover:
             return false
     }
+}
+
+@MainActor
+func applyWindowSwapDragIntent(
+    sourceWindow: Window,
+    sourceSubject: WindowDragSubject,
+    targetWindow: Window,
+) -> Bool {
+    let sourceNode = dragSubjectNode(for: sourceWindow, subject: sourceSubject)
+    swapNodes(sourceNode, targetWindow.moveNode)
+    return sourceWindow.focusWindow()
 }
 
 @MainActor
@@ -530,9 +651,17 @@ func removeWindowFromTabStack(_ window: Window) -> Bool {
     }
 
     if let grandParent = parent.parent as? TilingContainer {
-        let parentIndex = parent.ownIndex.orDie()
         window.unbindFromParent()
-        window.bind(to: grandParent, adaptiveWeight: WEIGHT_AUTO, index: parentIndex + 1)
+        if parent.children.count == 1 {
+            let parentBinding = parent.unbindFromParent()
+            let remainingChild = parent.children.singleOrNil().orDie()
+            remainingChild.unbindFromParent()
+            remainingChild.bind(to: grandParent, adaptiveWeight: parentBinding.adaptiveWeight, index: parentBinding.index)
+            window.bind(to: grandParent, adaptiveWeight: WEIGHT_AUTO, index: parentBinding.index + 1)
+        } else {
+            let parentIndex = parent.ownIndex.orDie()
+            window.bind(to: grandParent, adaptiveWeight: WEIGHT_AUTO, index: parentIndex + 1)
+        }
         window.markAsMostRecentChild()
         _ = window.focusWindow()
         return true
@@ -543,6 +672,7 @@ func removeWindowFromTabStack(_ window: Window) -> Bool {
     let accordionOrientation = parent.orientation
 
     window.unbindFromParent()
+    let remainingMostRecentChild = parent.mostRecentChild
     parent.layout = .tiles
     parent.changeOrientation(accordionOrientation.opposite)
 
@@ -558,6 +688,7 @@ func removeWindowFromTabStack(_ window: Window) -> Bool {
             child.unbindFromParent()
             child.bind(to: nestedAccordion, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
         }
+        remainingMostRecentChild?.markAsMostRecentChild()
     }
 
     window.bind(to: parent, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
@@ -577,22 +708,13 @@ private func currentWindowDragIntentDestination(
         return sidebarDestination
     }
 
-    if let sticky = pendingWindowDragIntent,
-       sticky.sourceWindowId == sourceWindow.windowId,
-       sticky.sourceSubject == subject,
-       sticky.previewStyle != .sidebarWorkspaceMove,
-       sticky.previewStyle != .workspaceMove,
-       sticky.interactionRect.contains(mouseLocation)
-    {
-        return WindowDragIntentDestination(
-            kind: sticky.kind,
-            previewRect: sticky.previewRect,
-            interactionRect: sticky.interactionRect,
-            title: sticky.title,
-            subtitle: sticky.subtitle,
-            previewStyle: sticky.previewStyle,
-            isGroup: sticky.isGroup,
-        )
+    if let stickyDestination = currentStickyWindowDragIntentDestination(
+        sourceWindow: sourceWindow,
+        mouseLocation: mouseLocation,
+        subject: subject,
+        detachOrigin: detachOrigin,
+    ) {
+        return stickyDestination
     }
 
     if subject == .window,
@@ -641,65 +763,116 @@ private func currentWindowDragIntentDestination(
 private func currentSwapDestination(sourceWindow: Window, mouseLocation: CGPoint, subject: WindowDragSubject) -> WindowDragIntentDestination? {
     let targetWorkspace = mouseLocation.monitorApproximation.activeWorkspace
     guard let targetWindow = mouseLocation.findIn(tree: targetWorkspace.rootTilingContainer, virtual: false) else { return nil }
-    let sourceNode = dragSubjectNode(for: sourceWindow, subject: subject)
-    let targetNode = targetWindow.moveNode
-    guard let previewRect = targetNode.swapDropZoneRect else { return nil }
-    let interactionRect = if subject == .group {
-        previewRect.expanded(left: 4, right: 4, top: 4, bottom: 6)
-    } else {
-        previewRect.expanded(left: 10, right: 10, top: 6, bottom: 10)
-    }
-    guard sourceNode != targetNode,
-          !sourceNode.parentsWithSelf.contains(targetNode),
-          !targetNode.parentsWithSelf.contains(sourceNode),
-          interactionRect.contains(mouseLocation)
-    else { return nil }
-    let isTabGroup = targetNode is TilingContainer
-    return WindowDragIntentDestination(
-        kind: .swap(targetWindowId: targetWindow.windowId),
-        previewRect: previewRect,
-        interactionRect: interactionRect,
-        title: isTabGroup ? "Swap With Tab Group" : "Swap Positions",
-        subtitle: isTabGroup ? "Drop in the body to move around the whole group" : "Drop in the body to swap these windows",
-        previewStyle: .swap,
-        isGroup: subject == .group,
+    return swapDestination(
+        sourceWindow: sourceWindow,
+        targetWindow: targetWindow,
+        mouseLocation: mouseLocation,
+        subject: subject,
     )
+}
+
+func shouldSuppressSwapDestination(sourceWindow: Window, subject: WindowDragSubject) -> Bool {
+    subject == .window && sourceWindow.isFloating
 }
 
 @MainActor
 private func applySidebarWorkspaceMove(sourceNode: TreeNode, sourceWindow: Window, targetWorkspace: Workspace) {
-    let targetContainer: NonLeafTreeNodeObject
     if sourceNode is Window, sourceWindow.isFloating {
-        targetContainer = targetWorkspace
+        sourceNode.bind(to: targetWorkspace, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
     } else {
-        targetContainer = targetWorkspace.rootTilingContainer
+        let binding = workspaceAppendBindingData(targetWorkspace: targetWorkspace, index: INDEX_BIND_LAST)
+        sourceNode.bind(to: binding.parent, adaptiveWeight: binding.adaptiveWeight, index: binding.index)
     }
-    sourceNode.bind(to: targetContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+    _ = sourceWindow.focusWindow()
+}
+
+// Internal to keep cross-workspace insertion semantics unit-testable.
+@MainActor
+func applyWorkspaceMove(sourceNode: TreeNode, sourceWindow: Window, mouseLocation: CGPoint, targetWorkspace: Workspace) {
+    if sourceNode is Window, sourceWindow.isFloating {
+        sourceNode.bind(to: targetWorkspace, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+        _ = sourceWindow.focusWindow()
+        return
+    }
+    let swapTarget = mouseLocation.findIn(tree: targetWorkspace.rootTilingContainer, virtual: false)?.takeIf { $0.moveNode != sourceNode }
+    let binding = workspaceMoveBindingData(
+        targetWorkspace: targetWorkspace,
+        swapTarget: swapTarget,
+        mouseLocation: mouseLocation,
+    )
+    sourceNode.bind(to: binding.parent, adaptiveWeight: binding.adaptiveWeight, index: binding.index)
     _ = sourceWindow.focusWindow()
 }
 
 @MainActor
-private func applyWorkspaceMove(sourceNode: TreeNode, sourceWindow: Window, mouseLocation: CGPoint, targetWorkspace: Workspace) {
-    let swapTarget = mouseLocation.findIn(tree: targetWorkspace.rootTilingContainer, virtual: false)?.takeIf { $0.moveNode != sourceNode }
-    let index: Int
-    if let swapTarget {
-        let targetNode = swapTarget.moveNode
-        if let targetParent = targetNode.parent as? TilingContainer, let targetRect = targetNode.lastAppliedLayoutPhysicalRect {
-            index = mouseLocation.getProjection(targetParent.orientation) >= targetRect.center.getProjection(targetParent.orientation)
-                ? targetNode.ownIndex.orDie() + 1
-                : targetNode.ownIndex.orDie()
-        } else {
-            index = 0
-        }
-    } else {
-        index = 0
+func workspaceMoveBindingData(
+    targetWorkspace: Workspace,
+    swapTarget: Window?,
+    mouseLocation: CGPoint,
+) -> BindingData {
+    guard let swapTarget else {
+        return workspaceAppendBindingData(targetWorkspace: targetWorkspace, index: INDEX_BIND_LAST)
     }
-    sourceNode.bind(
-        to: swapTarget?.moveNode.parent ?? targetWorkspace.rootTilingContainer,
+
+    let targetNode = swapTarget.moveNode
+    if let targetParent = targetNode.parent as? TilingContainer,
+       let targetRect = targetNode.lastAppliedLayoutPhysicalRect
+    {
+        let index = mouseLocation.getProjection(targetParent.orientation) >= targetRect.center.getProjection(targetParent.orientation)
+            ? targetNode.ownIndex.orDie() + 1
+            : targetNode.ownIndex.orDie()
+        return BindingData(
+            parent: targetParent,
+            adaptiveWeight: WEIGHT_AUTO,
+            index: index,
+        )
+    }
+
+    if targetNode === targetWorkspace.rootTilingContainer {
+        let targetRect = targetNode.lastAppliedLayoutPhysicalRect ?? targetWorkspace.workspaceMonitor.visibleRectPaddedByOuterGaps
+        let insertionParent = workspaceSiblingInsertionRoot(targetWorkspace)
+        let index = mouseLocation.getProjection(insertionParent.orientation) >= targetRect.center.getProjection(insertionParent.orientation)
+            ? 1
+            : 0
+        return BindingData(
+            parent: insertionParent,
+            adaptiveWeight: WEIGHT_AUTO,
+            index: index,
+        )
+    }
+
+    return BindingData(
+        parent: targetWorkspace.rootTilingContainer,
+        adaptiveWeight: WEIGHT_AUTO,
+        index: 0,
+    )
+}
+
+@MainActor
+func workspaceAppendBindingData(targetWorkspace: Workspace, index: Int) -> BindingData {
+    BindingData(
+        parent: workspaceSiblingInsertionRoot(targetWorkspace),
         adaptiveWeight: WEIGHT_AUTO,
         index: index,
     )
-    _ = sourceWindow.focusWindow()
+}
+
+@MainActor
+private func workspaceSiblingInsertionRoot(_ workspace: Workspace) -> TilingContainer {
+    let root = workspace.rootTilingContainer
+    guard root.layout == .accordion, !root.children.isEmpty else { return root }
+
+    let previousRoot = root
+    previousRoot.unbindFromParent()
+    _ = TilingContainer(
+        parent: workspace,
+        adaptiveWeight: WEIGHT_AUTO,
+        previousRoot.orientation.opposite,
+        .tiles,
+        index: 0,
+    )
+    previousRoot.bind(to: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, index: 0)
+    return workspace.rootTilingContainer
 }
 
 private extension Rect {
@@ -743,45 +916,41 @@ extension TreeNode {
     @MainActor
     var swapDropZoneRect: Rect? {
         guard let rect = lastAppliedLayoutPhysicalRect else { return nil }
-        let insetX = min(max(rect.width * 0.08, 12), 28)
-        let insetY = min(max(rect.height * 0.08, 12), 24)
+        // Exclude the top region where the tab insert interaction zone lives,
+        // so dragging over the top ~20% triggers the tab group hint instead.
         let topExclusion: CGFloat = switch self {
             case let window as Window:
-                (window.tabDropInteractionRect?.height ?? 0) + 8
+                (window.tabDropInteractionRect?.height ?? rect.height * 0.2) + 4
             case let container as TilingContainer:
-                (container.windowTabDropInteractionRect?.height ?? 0) + 8
+                (container.windowTabDropInteractionRect?.height ?? rect.height * 0.2) + 4
             default:
-                0
+                rect.height * 0.2
         }
         let swapRect = rect.insetBy(
-            left: min(insetX, rect.width * 0.2),
-            right: min(insetX, rect.width * 0.2),
-            top: min(max(topExclusion, insetY), rect.height * 0.45),
-            bottom: min(insetY, rect.height * 0.18),
+            left: 2,
+            right: 2,
+            top: min(topExclusion, rect.height * 0.4),
+            bottom: 2,
         )
-        if swapRect.width >= 48, swapRect.height >= 28 {
-            return swapRect
-        }
-        let fallbackTopInset = min(topExclusion, rect.height * 0.35)
-        let fallbackRect = rect.insetBy(left: 0, right: 0, top: fallbackTopInset, bottom: 0)
-        return fallbackRect.width > 0 && fallbackRect.height > 0 ? fallbackRect : nil
+        guard swapRect.width > 0, swapRect.height > 0 else { return nil }
+        return swapRect
     }
 }
 
 private extension Rect {
     func tabInsertPreviewRect(barHeight: CGFloat) -> Rect {
-        let topInset = min(max(barHeight * 0.08, 3), 6)
-        let effectiveHeight = min(max(barHeight + 14, 40), max(height - topInset, 0))
-        let sideInset = min(max(width * 0.04, 8), 18)
+        // Show the border at the full width of the window, cropped to
+        // the tab bar region height so it outlines the top strip area.
+        let effectiveHeight = min(max(barHeight + 8, 36), max(height, 0))
         return insetBy(
-            left: sideInset,
-            right: sideInset,
-            top: topInset,
-            bottom: max(height - effectiveHeight - topInset, 0),
+            left: 2,
+            right: 2,
+            top: 2,
+            bottom: max(height - effectiveHeight, 0),
         )
     }
 
     func tabInsertInteractionRect(barHeight: CGFloat) -> Rect {
-        tabInsertPreviewRect(barHeight: barHeight).expanded(left: 24, right: 24, top: 12, bottom: 14)
+        tabInsertPreviewRect(barHeight: barHeight).expanded(left: 20, right: 20, top: 10, bottom: 12)
     }
 }

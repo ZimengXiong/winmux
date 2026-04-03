@@ -2,6 +2,31 @@ import AppKit
 
 @MainActor var sidebarWindowTitleCache: [UInt32: String] = [:]
 
+struct WorkspaceSidebarTransientState: Equatable {
+    let hoveredWorkspaceName: String?
+    let editingWorkspaceName: String?
+    let editingText: String
+}
+
+func sanitizedWorkspaceSidebarTransientState(
+    visibleWorkspaceNames: Set<String>,
+    state: WorkspaceSidebarTransientState,
+) -> WorkspaceSidebarTransientState {
+    let hoveredWorkspaceName =
+        state.hoveredWorkspaceName != nil && visibleWorkspaceNames.contains(state.hoveredWorkspaceName.orDie())
+            ? state.hoveredWorkspaceName
+            : nil
+    let editingWorkspaceName =
+        state.editingWorkspaceName != nil && visibleWorkspaceNames.contains(state.editingWorkspaceName.orDie())
+            ? state.editingWorkspaceName
+            : nil
+    return WorkspaceSidebarTransientState(
+        hoveredWorkspaceName: hoveredWorkspaceName,
+        editingWorkspaceName: editingWorkspaceName,
+        editingText: editingWorkspaceName == nil ? "" : state.editingText,
+    )
+}
+
 @MainActor
 func updateWorkspaceSidebarModel() async {
     guard TrayMenuModel.shared.isEnabled, config.workspaceSidebar.enabled else {
@@ -27,15 +52,15 @@ func updateWorkspaceSidebarModel() async {
     var sidebarWorkspaces: [WorkspaceSidebarWorkspaceViewModel] = []
     var aliveWindowIds: Set<UInt32> = []
     for workspace in Workspace.all {
+        let isEditingWorkspace = TrayMenuModel.shared.workspaceSidebarEditingWorkspaceName == workspace.name
+        if !shouldShowWorkspaceInSidebar(workspace, currentFocus: currentFocus, isEditingWorkspace: isEditingWorkspace) {
+            continue
+        }
         let sidebarItems = await buildWorkspaceSidebarItems(
             for: workspace,
             currentFocus: currentFocus,
             aliveWindowIds: &aliveWindowIds,
         )
-        let isEditingWorkspace = TrayMenuModel.shared.workspaceSidebarEditingWorkspaceName == workspace.name
-        if sidebarItems.isEmpty && !workspace.isVisible && currentFocus.workspace != workspace && !isEditingWorkspace {
-            continue
-        }
 
         let sidebarLabel = workspaceLabels[workspace.name] ?? ""
         let isGeneratedName = isSidebarDraftWorkspaceName(workspace.name)
@@ -56,6 +81,23 @@ func updateWorkspaceSidebarModel() async {
     }
 
     sidebarWindowTitleCache = sidebarWindowTitleCache.filter { aliveWindowIds.contains($0.key) }
+    let sanitizedTransientState = sanitizedWorkspaceSidebarTransientState(
+        visibleWorkspaceNames: Set(sidebarWorkspaces.map(\.name)),
+        state: WorkspaceSidebarTransientState(
+            hoveredWorkspaceName: TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName,
+            editingWorkspaceName: TrayMenuModel.shared.workspaceSidebarEditingWorkspaceName,
+            editingText: TrayMenuModel.shared.workspaceSidebarEditingText,
+        ),
+    )
+    if TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName != sanitizedTransientState.hoveredWorkspaceName {
+        TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName = sanitizedTransientState.hoveredWorkspaceName
+    }
+    if TrayMenuModel.shared.workspaceSidebarEditingWorkspaceName != sanitizedTransientState.editingWorkspaceName {
+        TrayMenuModel.shared.workspaceSidebarEditingWorkspaceName = sanitizedTransientState.editingWorkspaceName
+    }
+    if TrayMenuModel.shared.workspaceSidebarEditingText != sanitizedTransientState.editingText {
+        TrayMenuModel.shared.workspaceSidebarEditingText = sanitizedTransientState.editingText
+    }
     let didWorkspaceChange = TrayMenuModel.shared.workspaceSidebarWorkspaces != sidebarWorkspaces
     if didWorkspaceChange {
         TrayMenuModel.shared.workspaceSidebarWorkspaces = sidebarWorkspaces

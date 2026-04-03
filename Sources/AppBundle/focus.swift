@@ -41,7 +41,7 @@ private struct FrozenFocus: AeroAny, Equatable, Sendable {
         guard let workspace = Workspace.existing(byName: workspaceName) else { return nil }
 
         let workspaceFocus = workspace.toLiveFocus()
-        let windowFocus = window?.toLiveFocusOrNil() ?? workspaceFocus
+        let windowFocus = window?.takeIf(\.participatesInWorkspaceFocus)?.toLiveFocusOrNil() ?? workspaceFocus
 
         return workspaceFocus.workspace != windowFocus.workspace
             ? workspaceFocus // If window and workspace become separated prefer workspace
@@ -93,9 +93,7 @@ extension Workspace {
     @MainActor func focusWorkspace() -> Bool { setFocus(to: toLiveFocus()) }
 
     func toLiveFocus() -> LiveFocus {
-        // todo unfortunately mostRecentWindowRecursive may recursively reach empty rootTilingContainer
-        //      while floating or macos unconventional windows might be presented
-        if let wd = mostRecentWindowRecursive ?? anyLeafWindowRecursive {
+        if let wd = mostRecentWorkspaceFocusableWindowRecursive {
             LiveFocus(windowOrNil: wd, workspace: self)
         } else {
             LiveFocus(windowOrNil: nil, workspace: self) // emptyWorkspace
