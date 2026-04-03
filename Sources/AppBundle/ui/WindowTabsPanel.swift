@@ -3,6 +3,7 @@ import SwiftUI
 
 private let windowTabStripPanelPrefix = "AeroSpace.windowTabs.strip."
 private let windowTabDropPreviewPanelId = "AeroSpace.windowTabs.dropPreview"
+private let windowDragCursorProxyPanelId = "AeroSpace.windowTabs.cursorProxy"
 
 @MainActor
 final class WindowTabStripPanelController {
@@ -120,6 +121,83 @@ final class WindowTabDropPreviewPanel: NSPanelHud {
     func hide() {
         currentContent = nil
         orderOut(nil)
+    }
+}
+
+// MARK: - Cursor Drag Proxy (follows cursor during sidebar-originated drags)
+
+@MainActor
+final class WindowDragCursorProxyPanel: NSPanelHud {
+    static let shared = WindowDragCursorProxyPanel()
+
+    private let hostingView = NSHostingView(rootView: AnyView(EmptyView()))
+    private var currentLabel: String? = nil
+
+    override private init() {
+        super.init()
+        identifier = NSUserInterfaceItemIdentifier(windowDragCursorProxyPanelId)
+        hasShadow = false
+        isFloatingPanel = true
+        isExcludedFromWindowsMenu = true
+        animationBehavior = .none
+        ignoresMouseEvents = true
+        backgroundColor = .clear
+        level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue + 3)
+        contentView = hostingView
+        hostingView.frame = contentView?.bounds ?? .zero
+        hostingView.autoresizingMask = [.width, .height]
+    }
+
+    func show(label: String, isGroup: Bool, mouseScreenPoint: CGPoint) {
+        if currentLabel != label {
+            hostingView.rootView = AnyView(WindowDragCursorProxyView(label: label, isGroup: isGroup))
+            currentLabel = label
+        }
+        let proxyWidth: CGFloat = min(max(CGFloat(label.count) * 7 + 36, 80), 200)
+        let proxyHeight: CGFloat = 28
+        // Offset: slightly below and to the right of the cursor
+        let frame = CGRect(
+            x: mouseScreenPoint.x + 14,
+            y: mouseScreenPoint.y - proxyHeight - 6,
+            width: proxyWidth,
+            height: proxyHeight,
+        )
+        setFrame(frame, display: true, animate: false)
+        orderFrontRegardless()
+    }
+
+    func hide() {
+        currentLabel = nil
+        orderOut(nil)
+    }
+}
+
+private struct WindowDragCursorProxyView: View {
+    let label: String
+    let isGroup: Bool
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: isGroup ? "square.stack" : "macwindow")
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(Color.primary.opacity(0.5))
+            Text(label)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(Color.primary.opacity(0.7))
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color(nsColor: .windowBackgroundColor).opacity(0.85))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.12), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                }
+                .shadow(color: Color.black.opacity(0.1), radius: 4, y: 2)
+        )
     }
 }
 
@@ -310,7 +388,7 @@ private struct WindowTabStripView: View {
     }
 }
 
-// MARK: - Tab Item View (with hover animation)
+// MARK: - Tab Item View (hover animations)
 
 private struct WindowTabItemView: View {
     let tab: WindowTabItemViewModel
@@ -382,7 +460,7 @@ private struct WindowTabItemView: View {
     }
 }
 
-// MARK: - Drop Preview (Border-Only)
+// MARK: - Drop Preview (visible fill + border)
 
 private struct WindowTabDropPreviewView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -393,19 +471,19 @@ private struct WindowTabDropPreviewView: View {
         let cfg = borderConfig(for: model.style)
 
         RoundedRectangle(cornerRadius: windowTabPreviewCornerRadius, style: .continuous)
-            .strokeBorder(
-                cfg.color.opacity(isPresented ? cfg.opacity : 0.15),
-                style: cfg.strokeStyle
-            )
-            .background(
+            .fill(cfg.color.opacity(isPresented ? cfg.fillOpacity : 0))
+            .overlay {
                 RoundedRectangle(cornerRadius: windowTabPreviewCornerRadius, style: .continuous)
-                    .fill(cfg.color.opacity(isPresented ? 0.03 : 0))
-            )
-            .scaleEffect(reduceMotion ? 1 : (isPresented ? 1 : 0.994))
+                    .strokeBorder(
+                        cfg.color.opacity(isPresented ? cfg.borderOpacity : 0.1),
+                        style: cfg.strokeStyle
+                    )
+            }
+            .scaleEffect(reduceMotion ? 1 : (isPresented ? 1 : 0.996))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.clear)
             .onAppear {
-                withAnimation(reduceMotion ? .easeOut(duration: 0.1) : .spring(response: 0.18, dampingFraction: 0.78)) {
+                withAnimation(reduceMotion ? .easeOut(duration: 0.1) : .spring(response: 0.18, dampingFraction: 0.82)) {
                     isPresented = true
                 }
             }
@@ -413,22 +491,28 @@ private struct WindowTabDropPreviewView: View {
 
     private struct BorderConfig {
         let color: Color
-        let opacity: Double
+        let fillOpacity: Double
+        let borderOpacity: Double
         let strokeStyle: StrokeStyle
     }
 
     private func borderConfig(for style: WindowTabDropPreviewStyle) -> BorderConfig {
         switch style {
             case .tabInsert:
-                return BorderConfig(color: .accentColor, opacity: 0.65, strokeStyle: StrokeStyle(lineWidth: 2.5))
+                // Solid accent, visible fill — "join this tab group"
+                return BorderConfig(color: .accentColor, fillOpacity: 0.08, borderOpacity: 0.7, strokeStyle: StrokeStyle(lineWidth: 2.5))
             case .detach:
-                return BorderConfig(color: .orange, opacity: 0.55, strokeStyle: StrokeStyle(lineWidth: 2, dash: [7, 5]))
+                // Orange dashed, light fill — "pulling out of group"
+                return BorderConfig(color: .orange, fillOpacity: 0.06, borderOpacity: 0.6, strokeStyle: StrokeStyle(lineWidth: 2, dash: [7, 5]))
             case .swap:
-                return BorderConfig(color: .accentColor, opacity: 0.45, strokeStyle: StrokeStyle(lineWidth: 2, dash: [7, 5]))
+                // Accent dashed, visible fill — "swap positions"
+                return BorderConfig(color: .accentColor, fillOpacity: 0.06, borderOpacity: 0.55, strokeStyle: StrokeStyle(lineWidth: 2, dash: [7, 5]))
             case .workspaceMove:
-                return BorderConfig(color: .green, opacity: 0.5, strokeStyle: StrokeStyle(lineWidth: 2, dash: [7, 5]))
+                // Green, visible fill — "move to workspace"
+                return BorderConfig(color: .green, fillOpacity: 0.07, borderOpacity: 0.6, strokeStyle: StrokeStyle(lineWidth: 2, dash: [7, 5]))
             case .sidebarWorkspaceMove:
-                return BorderConfig(color: .accentColor, opacity: 0.5, strokeStyle: StrokeStyle(lineWidth: 2))
+                // Accent solid — sidebar drop target
+                return BorderConfig(color: .accentColor, fillOpacity: 0.06, borderOpacity: 0.6, strokeStyle: StrokeStyle(lineWidth: 2))
         }
     }
 }

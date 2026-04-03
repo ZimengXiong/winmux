@@ -468,6 +468,17 @@ func updatePendingWindowDragIntent(
     subject: WindowDragSubject,
     detachOrigin: TabDetachOrigin,
 ) -> Bool {
+    // Show cursor drag proxy during sidebar-originated drags
+    if getCurrentMouseDragStartedInSidebar() {
+        let label = sidebarDragSourceTitle(for: sourceWindow, subject: subject)
+        let isGroup = subject == .group || dragSubjectNode(for: sourceWindow, subject: subject) is TilingContainer
+        WindowDragCursorProxyPanel.shared.show(
+            label: label,
+            isGroup: isGroup,
+            mouseScreenPoint: NSEvent.mouseLocation,
+        )
+    }
+
     guard let destination = currentWindowDragIntentDestination(
         sourceWindow: sourceWindow,
         mouseLocation: mouseLocation,
@@ -545,6 +556,7 @@ func clearPendingWindowDragIntent() {
     setPinnedDraggedWindowId(nil)
     setWorkspaceSidebarDropPreviewIfChanged(nil)
     WindowTabDropPreviewPanel.shared.hide()
+    WindowDragCursorProxyPanel.shared.hide()
 }
 
 @MainActor
@@ -706,6 +718,15 @@ private func currentWindowDragIntentDestination(
 ) -> WindowDragIntentDestination? {
     if let sidebarDestination = currentSidebarWorkspaceDropDestination(sourceWindow: sourceWindow, mouseLocation: mouseLocation, subject: subject) {
         return sidebarDestination
+    }
+
+    // When dragging from the sidebar, suppress window drop hints
+    // while the mouse is within the sidebar's visible bounds.
+    if getCurrentMouseDragStartedInSidebar(),
+       let sidebarRect = WorkspaceSidebarPanel.shared.visibleScreenRectNormalized(),
+       sidebarRect.contains(mouseLocation)
+    {
+        return nil
     }
 
     if let stickyDestination = currentStickyWindowDragIntentDestination(
