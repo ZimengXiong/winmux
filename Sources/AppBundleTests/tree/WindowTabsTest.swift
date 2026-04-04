@@ -303,9 +303,11 @@ final class WindowTabsTest: XCTestCase {
         let workspace = Workspace.get(byName: "tabs")
         let root = workspace.rootTilingContainer
         let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
-        _ = TestWindow.new(id: 1, parent: accordion)
+        let active = TestWindow.new(id: 1, parent: accordion)
         _ = TestWindow.new(id: 2, parent: accordion)
         accordion.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 400, height: 260)
+        active.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 400, height: 226)
+        active.markAsMostRecentChild()
 
         let tabBarRect = accordion.windowTabBarRect.orDie()
         let tabDropZone = accordion.windowTabDropZoneRect.orDie()
@@ -410,6 +412,87 @@ final class WindowTabsTest: XCTestCase {
         XCTAssertEqual(topPreview.maxY, fullRect.minY + fullRect.height / 2)
         XCTAssertEqual(bottomPreview.minY, fullRect.minY + fullRect.height / 2)
         XCTAssertEqual(bottomPreview.maxY, fullRect.maxY - 1)
+    }
+
+    @MainActor
+    func testResolvedSplitPreviewUsesAncestorBranchRectForSameAxisNestedInsertions() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let leftStack = TilingContainer.newVTiles(parent: root, adaptiveWeight: WEIGHT_AUTO)
+        let target = TestWindow.new(id: 1, parent: leftStack)
+        let sibling = TestWindow.new(id: 2, parent: leftStack)
+        _ = TestWindow.new(id: 3, parent: root)
+
+        root.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 220)
+        leftStack.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 200, height: 220)
+        target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 200, height: 100)
+        sibling.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 100, width: 200, height: 120)
+
+        let preview = resolvedWindowStackSplitPreview(targetNode: target.moveNode, position: .right).orDie()
+
+        XCTAssertEqual(preview.geometry, .splitRight)
+        XCTAssertEqual(preview.rect.minX, 100)
+        XCTAssertEqual(preview.rect.maxX, 199)
+        XCTAssertEqual(preview.rect.minY, 1)
+        XCTAssertEqual(preview.rect.maxY, 219)
+        XCTAssertGreaterThan(preview.rect.height, target.lastAppliedLayoutPhysicalRect.orDie().height)
+    }
+
+    @MainActor
+    func testResolvedSplitPreviewUsesVisibleBranchBoundsWhenSiblingOverflowsLayoutSlot() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let leftStack = TilingContainer.newVTiles(parent: root, adaptiveWeight: WEIGHT_AUTO)
+        let target = TestWindow.new(id: 1, parent: leftStack)
+        let overflowingSibling = TestWindow.new(id: 2, parent: leftStack)
+        _ = TestWindow.new(id: 3, parent: root)
+
+        root.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 220)
+        leftStack.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 200, height: 220)
+        target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 200, height: 100)
+        overflowingSibling.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 100, width: 200, height: 120)
+        target.lastKnownActualRect = Rect(topLeftX: 0, topLeftY: 0, width: 200, height: 100)
+        overflowingSibling.lastKnownActualRect = Rect(topLeftX: 0, topLeftY: 100, width: 260, height: 120)
+
+        let preview = resolvedWindowStackSplitPreview(targetNode: target.moveNode, position: .right).orDie()
+
+        XCTAssertEqual(preview.geometry, .splitRight)
+        XCTAssertEqual(preview.rect.minX, 130)
+        XCTAssertEqual(preview.rect.maxX, 259)
+        XCTAssertEqual(preview.rect.minY, 1)
+        XCTAssertEqual(preview.rect.maxY, 219)
+    }
+
+    @MainActor
+    func testResolveWindowDragActualRectKeepsCachedOverflowWhenCandidateMatchesLayout() {
+        let cached = Rect(topLeftX: 180, topLeftY: 0, width: 260, height: 220)
+        let layout = Rect(topLeftX: 180, topLeftY: 0, width: 200, height: 220)
+
+        let resolved = resolveWindowDragActualRect(cached: cached, candidate: layout, layout: layout)
+
+        XCTAssertEqual(resolved.minX, 180)
+        XCTAssertEqual(resolved.maxX, 440)
+    }
+
+    @MainActor
+    func testWindowDragTargetLookupCanExcludeDraggedSourceWindowFromOverlapHitTesting() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let source = TestWindow.new(id: 1, parent: root)
+        let target = TestWindow.new(id: 2, parent: root)
+        source.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 180, height: 220)
+        target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 180, topLeftY: 0, width: 180, height: 220)
+        source.lastKnownActualRect = Rect(topLeftX: 0, topLeftY: 0, width: 240, height: 220)
+        target.lastKnownActualRect = Rect(topLeftX: 180, topLeftY: 0, width: 180, height: 220)
+        source.markAsMostRecentChild()
+
+        let overlapPoint = CGPoint(x: 200, y: 110)
+
+        XCTAssertTrue(overlapPoint.findWindowDragTarget(in: root) === source)
+        XCTAssertTrue(overlapPoint.findWindowDragTarget(in: root, excluding: source) === target)
     }
 
     @MainActor

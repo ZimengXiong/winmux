@@ -39,6 +39,7 @@ final class MacWindow: Window {
         // atomic synchronous section
         if let existing = allWindowsMap[windowId] { return existing }
         let window = MacWindow(windowId, macApp, lastFloatingSize: rect?.size, parent: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
+        window.lastKnownActualRect = rect
         allWindowsMap[windowId] = window
 
         try await debugWindowsIfRecording(window)
@@ -219,7 +220,12 @@ final class MacWindow: Window {
     }
 
     override func getAxRect() async throws -> Rect? {
-        try await macApp.getAxRect(windowId)
+        let rect = try await macApp.getAxRect(windowId)
+        let windowId = self.windowId
+        await MainActor.run {
+            Window.get(byId: windowId)?.lastKnownActualRect = rect
+        }
+        return rect
     }
 }
 

@@ -5,6 +5,14 @@ private let windowDropPreviewInset: CGFloat = 1
 
 @MainActor
 private var pendingWindowDragIntent: PendingWindowDragIntent? = nil
+@MainActor
+private var windowDragActualRectRefreshTask: Task<Void, Never>? = nil
+@MainActor
+private var windowDragActualRectCache: [UInt32: Rect] = [:]
+@MainActor
+private var lastWindowDragHitTestLogSignature: String? = nil
+@MainActor
+private var lastWindowDragIntentLogSignature: String? = nil
 
 private struct PendingWindowDragIntent {
     let sourceWindowId: UInt32
@@ -131,6 +139,133 @@ private struct WindowDragIntentDestination {
             isGroup: isGroup,
         )
     }
+}
+
+struct WindowStackSplitPreview {
+    let rect: Rect
+    let geometry: WindowTabDropPreviewGeometry
+}
+
+private func debugDescribe(_ rect: Rect?) -> String {
+    guard let rect else { return "nil" }
+    return "(\(rect.topLeftX), \(rect.topLeftY), \(rect.width), \(rect.height))"
+}
+
+private func debugDescribe(_ point: CGPoint) -> String {
+    "(\(point.x), \(point.y))"
+}
+
+func resolveWindowDragActualRect(cached: Rect?, candidate: Rect, layout: Rect?) -> Rect {
+    guard let cached, let layout else { return candidate }
+    guard candidate.isApproximatelyEqual(to: layout, tolerance: 1) else { return candidate }
+    guard cached.area > candidate.area + 1 else { return candidate }
+    guard cached.intersection(candidate).area >= candidate.area * 0.85 else { return candidate }
+    return cached
+}
+
+@MainActor
+private func currentWindowDragActualRect(_ window: Window) -> Rect? {
+    guard let current = window.lastKnownActualRect else { return windowDragActualRectCache[window.windowId] }
+    return resolveWindowDragActualRect(
+        cached: windowDragActualRectCache[window.windowId],
+        candidate: current,
+        layout: window.lastAppliedLayoutPhysicalRect,
+    )
+}
+
+private func debugDescribe(_ subject: WindowDragSubject) -> String {
+    switch subject {
+        case .window: "window"
+        case .group: "group"
+    }
+}
+
+private func debugDescribe(_ kind: WindowDragIntentKind) -> String {
+    switch kind {
+        case .tabStack(let targetWindowId):
+            "tabStack(target:\(targetWindowId))"
+        case .detachTab(let windowId):
+            "detachTab(window:\(windowId))"
+        case .stackSplit(let targetWindowId, let position):
+            "stackSplit(target:\(targetWindowId), position:\(position))"
+        case .swap(let targetWindowId):
+            "swap(target:\(targetWindowId))"
+        case .moveToWorkspace(let workspaceName):
+            "moveToWorkspace(\(workspaceName))"
+        case .createWorkspace:
+            "createWorkspace"
+        case .sidebarHover:
+            "sidebarHover"
+    }
+}
+
+@MainActor
+private func debugDescribe(_ window: Window?) -> String {
+    guard let window else { return "nil" }
+    return "w:\(window.windowId) actual=\(debugDescribe(window.lastKnownActualRect)) layout=\(debugDescribe(window.lastAppliedLayoutPhysicalRect)) visible=\(debugDescribe(window.windowDragVisibleRect)) moveVisible=\(debugDescribe(window.moveNode.windowDragVisibleRect))"
+}
+
+@MainActor
+private func logWindowDragHitTestIfNeeded(signature: String, _ message: @autoclosure () -> String) {
+    guard lastWindowDragHitTestLogSignature != signature else { return }
+    lastWindowDragHitTestLogSignature = signature
+    debugFocusLog(message())
+}
+
+@MainActor
+private func logWindowDragIntentIfNeeded(signature: String, _ message: @autoclosure () -> String) {
+    guard lastWindowDragIntentLogSignature != signature else { return }
+    lastWindowDragIntentLogSignature = signature
+    debugFocusLog(message())
+}
+
+@MainActor
+func refreshVisibleWindowActualRectsForCurrentDrag(sourceWindowId: UInt32) {
+    windowDragActualRectRefreshTask?.cancel()
+    windowDragActualRectRefreshTask = Task { @MainActor in
+        let visibleWindows = Workspace.all
+            .filter(\.isVisible)
+            .flatMap(\.allLeafWindowsRecursive)
+        windowDragActualRectCache = visibleWindows.reduce(into: [:]) { result, window in
+            if let rect = window.lastKnownActualRect {
+                result[window.windowId] = rect
+            }
+        }
+        for window in visibleWindows {
+            let previousRect = window.lastKnownActualRect
+            let refreshedRect = try? await window.getAxRect()
+            if let refreshedRect {
+                windowDragActualRectCache[window.windowId] = resolveWindowDragActualRect(
+                    cached: windowDragActualRectCache[window.windowId],
+                    candidate: refreshedRect,
+                    layout: window.lastAppliedLayoutPhysicalRect,
+                )
+            }
+            if let refreshedRect, !(previousRect.map { $0.isEqual(to: refreshedRect) } ?? false) {
+                debugFocusLog(
+                    "windowDragActualRect.refresh source=\(sourceWindowId) target=\(window.windowId) old=\(debugDescribe(previousRect)) new=\(debugDescribe(refreshedRect)) layout=\(debugDescribe(window.lastAppliedLayoutPhysicalRect))"
+                )
+            }
+        }
+        guard currentlyManipulatedWithMouseWindowId == sourceWindowId,
+              let sourceWindow = Window.get(byId: sourceWindowId)
+        else { return }
+        _ = updatePendingWindowDragIntent(
+            sourceWindow: sourceWindow,
+            mouseLocation: mouseLocation,
+            subject: getCurrentMouseDragSubject(),
+            detachOrigin: getCurrentMouseTabDetachOrigin(),
+        )
+    }
+}
+
+@MainActor
+func cancelWindowDragActualRectRefresh() {
+    windowDragActualRectRefreshTask?.cancel()
+    windowDragActualRectRefreshTask = nil
+    windowDragActualRectCache = [:]
+    lastWindowDragHitTestLogSignature = nil
+    lastWindowDragIntentLogSignature = nil
 }
 
 @MainActor
@@ -340,19 +475,19 @@ private func stackSplitDestination(
           !sourceNode.parentsWithSelf.contains(targetNode),
           !targetNode.parentsWithSelf.contains(sourceNode),
           canOfferWindowStackSplit(sourceNode: sourceNode, targetNode: targetNode, position: position),
-          let previewRect = targetNode.stackSplitPreviewRect(position: position),
+          let preview = resolvedWindowStackSplitPreview(targetNode: targetNode, position: position),
           let interactionRect = targetNode.stackSplitDropZoneRect(position: position)?
           .expanded(left: subject == .group ? 4 : 10, right: subject == .group ? 4 : 10, top: 0, bottom: 0)
     else { return nil }
     guard mouseLocation.map(interactionRect.contains) ?? true else { return nil }
     return WindowDragIntentDestination(
         kind: .stackSplit(targetWindowId: targetWindow.windowId, position: position),
-        previewRect: previewRect,
+        previewRect: preview.rect,
         interactionRect: interactionRect,
         title: position.title,
         subtitle: position.subtitle,
         previewStyle: .stackSplit,
-        previewGeometry: position.previewGeometry,
+        previewGeometry: preview.geometry,
         isGroup: subject == .group,
     )
 }
@@ -417,7 +552,18 @@ private func currentWindowSurfaceDestination(
     detachOrigin: TabDetachOrigin,
 ) -> WindowDragIntentDestination? {
     let targetWorkspace = mouseLocation.monitorApproximation.activeWorkspace
-    guard let targetWindow = mouseLocation.findIn(tree: targetWorkspace.rootTilingContainer, virtual: false) else { return nil }
+    let sourceNode = dragSubjectNode(for: sourceWindow, subject: subject)
+    guard let targetWindow = mouseLocation.findWindowDragTarget(in: targetWorkspace.rootTilingContainer, excluding: sourceNode) else {
+        logWindowDragHitTestIfNeeded(
+            signature: "surface:none:source=\(sourceWindow.windowId):subject=\(debugDescribe(subject))",
+            "windowDragTarget.none source=\(debugDescribe(sourceWindow)) subject=\(debugDescribe(subject)) mouse=\(debugDescribe(mouseLocation)) workspace=\(targetWorkspace.name)"
+        )
+        return nil
+    }
+    logWindowDragHitTestIfNeeded(
+        signature: "surface:target=\(targetWindow.windowId):source=\(sourceWindow.windowId):subject=\(debugDescribe(subject))",
+        "windowDragTarget.surface source=\(debugDescribe(sourceWindow)) subject=\(debugDescribe(subject)) mouse=\(debugDescribe(mouseLocation)) target=\(debugDescribe(targetWindow))"
+    )
     return windowSurfaceDestination(
         sourceWindow: sourceWindow,
         targetWindow: targetWindow,
@@ -441,9 +587,9 @@ private func stickyTargetWindow(for sticky: PendingWindowDragIntent) -> Window? 
 private func stickyTargetTrackingRect(targetWindow: Window, previewStyle: WindowTabDropPreviewStyle) -> Rect? {
     switch previewStyle {
         case .tabInsert:
-            targetWindow.lastAppliedLayoutPhysicalRect?.expanded(by: 16)
+            targetWindow.windowDragVisibleRect?.expanded(by: 16)
         case .stackSplit, .swap:
-            targetWindow.moveNode.lastAppliedLayoutPhysicalRect?.expanded(by: 16)
+            targetWindow.moveNode.windowDragVisibleRect?.expanded(by: 16)
         case .detach, .workspaceMove, .sidebarWorkspaceMove:
             nil
     }
@@ -530,16 +676,54 @@ func shouldSuppressSameAccordionTabDestination(sourceWindow: Window, targetWindo
     return true
 }
 
+extension Rect {
+    fileprivate static func union(_ rects: some Sequence<Rect>) -> Rect? {
+        var iterator = rects.makeIterator()
+        guard let first = iterator.next() else { return nil }
+        var minX = first.minX
+        var minY = first.minY
+        var maxX = first.maxX
+        var maxY = first.maxY
+        while let rect = iterator.next() {
+            minX = min(minX, rect.minX)
+            minY = min(minY, rect.minY)
+            maxX = max(maxX, rect.maxX)
+            maxY = max(maxY, rect.maxY)
+        }
+        return Rect(topLeftX: minX, topLeftY: minY, width: maxX - minX, height: maxY - minY)
+    }
+}
+
+extension TreeNode {
+    @MainActor
+    fileprivate var windowDragVisibleRect: Rect? {
+        switch self {
+            case let window as Window:
+                return currentWindowDragActualRect(window) ?? window.lastAppliedLayoutPhysicalRect
+            case let container as TilingContainer:
+                if container.layout == .accordion {
+                    let activeWindowRect = container.tabActiveWindow?.windowDragVisibleRect
+                    let tabBarRect = container.windowTabBarRect
+                    return Rect.union([activeWindowRect, tabBarRect].compactMap { $0 }) ?? container.lastAppliedLayoutPhysicalRect
+                }
+                let childRects = container.children.compactMap { $0.windowDragVisibleRect }
+                return Rect.union(childRects) ?? container.lastAppliedLayoutPhysicalRect
+            default:
+                return lastAppliedLayoutPhysicalRect
+        }
+    }
+}
+
 extension Window {
     @MainActor
     var tabDropZoneRect: Rect? {
-        guard let rect = lastAppliedLayoutPhysicalRect else { return nil }
+        guard let rect = windowDragVisibleRect else { return nil }
         return rect.tabInsertPreviewRect(barHeight: CGFloat(config.windowTabs.height))
     }
 
     @MainActor
     var tabDropInteractionRect: Rect? {
-        guard let rect = lastAppliedLayoutPhysicalRect else { return nil }
+        guard let rect = windowDragVisibleRect else { return nil }
         return rect.tabInsertInteractionRect(barHeight: CGFloat(config.windowTabs.height))
     }
 
@@ -569,13 +753,58 @@ extension Window {
 
 extension CGPoint {
     @MainActor
+    func findWindowDragTarget(in tree: TilingContainer, excluding excludedNode: TreeNode? = nil) -> Window? {
+        findWindowDragTarget(in: tree as TreeNode, excluding: excludedNode)
+    }
+
+    @MainActor
+    private func findWindowDragTarget(in node: TreeNode, excluding excludedNode: TreeNode?) -> Window? {
+        if let excludedNode, (node === excludedNode || node.parentsWithSelf.contains(excludedNode)) {
+            return nil
+        }
+        guard node.windowDragVisibleRect?.contains(self) == true else { return nil }
+        switch node.tilingTreeNodeCasesOrDie() {
+            case .window(let window):
+                return window
+            case .tilingContainer(let container):
+                switch container.layout {
+                    case .tiles:
+                        let candidates = container.childrenByMostRecentUse.filter { $0.windowDragVisibleRect?.contains(self) == true }
+                        if candidates.count > 1 {
+                            let candidateSummary = candidates.map { candidate in
+                                if let window = candidate as? Window {
+                                    return "w:\(window.windowId) visible=\(debugDescribe(candidate.windowDragVisibleRect))"
+                                } else {
+                                    return "node:\(ObjectIdentifier(candidate)) visible=\(debugDescribe(candidate.windowDragVisibleRect))"
+                                }
+                            }.joined(separator: " | ")
+                            let signature = "surface-overlap:container=\(ObjectIdentifier(container).hashValue):excluded=\(ObjectIdentifier(excludedNode ?? NilTreeNode.instance).hashValue):candidates=\(candidates.map { ObjectIdentifier($0).hashValue })"
+                            logWindowDragHitTestIfNeeded(
+                                signature: signature,
+                                "windowDragTarget.overlap mouse=\(debugDescribe(self)) container=\(ObjectIdentifier(container)) excluded=\(String(describing: excludedNode.map(ObjectIdentifier.init))) candidates=[\(candidateSummary)]"
+                            )
+                        }
+                        for child in candidates {
+                            if let window = findWindowDragTarget(in: child, excluding: excludedNode) {
+                                return window
+                            }
+                        }
+                        return nil
+                    case .accordion:
+                        guard let child = container.mostRecentChild else { return nil }
+                        return findWindowDragTarget(in: child, excluding: excludedNode)
+                }
+        }
+    }
+
+    @MainActor
     fileprivate func findWindowTabDropDestination(in tree: TilingContainer, excluding sourceWindow: Window) -> WindowDragIntentDestination? {
         findWindowTabDropDestination(in: tree as TreeNode, excluding: sourceWindow)
     }
 
     @MainActor
     private func findWindowTabDropDestination(in node: TreeNode, excluding sourceWindow: Window) -> WindowDragIntentDestination? {
-        guard node.lastAppliedLayoutPhysicalRect?.contains(self) == true else { return nil }
+        guard node.windowDragVisibleRect?.contains(self) == true else { return nil }
         switch node.tilingTreeNodeCasesOrDie() {
             case .window(let window):
                 guard window != sourceWindow else { return nil }
@@ -589,10 +818,12 @@ extension CGPoint {
 
                 switch container.layout {
                     case .tiles:
-                        guard let child = container.children.first(where: { $0.lastAppliedLayoutPhysicalRect?.contains(self) == true }) else {
-                            return nil
+                        for child in container.childrenByMostRecentUse where child.windowDragVisibleRect?.contains(self) == true {
+                            if let destination = findWindowTabDropDestination(in: child, excluding: sourceWindow) {
+                                return destination
+                            }
                         }
-                        return findWindowTabDropDestination(in: child, excluding: sourceWindow)
+                        return nil
                     case .accordion:
                         guard let child = container.mostRecentChild else { return nil }
                         return findWindowTabDropDestination(in: child, excluding: sourceWindow)
@@ -619,13 +850,17 @@ private func currentStickyWindowDragIntentDestination(
 
     let intentReferenceRect: Rect? = switch sticky.previewStyle {
         case .tabInsert:
-            targetWindow.lastAppliedLayoutPhysicalRect
+            targetWindow.windowDragVisibleRect
         case .stackSplit, .swap:
-            targetWindow.moveNode.lastAppliedLayoutPhysicalRect
+            targetWindow.moveNode.windowDragVisibleRect
         case .detach, .workspaceMove, .sidebarWorkspaceMove:
             nil
     }
     guard let intentReferenceRect else { return nil }
+    logWindowDragHitTestIfNeeded(
+        signature: "sticky:target=\(targetWindow.windowId):style=\(sticky.previewStyle):preview=\(debugDescribe(sticky.previewRect))",
+        "windowDragTarget.sticky source=\(debugDescribe(sourceWindow)) subject=\(debugDescribe(subject)) mouse=\(debugDescribe(mouseLocation)) target=\(debugDescribe(targetWindow)) trackingRect=\(debugDescribe(trackingRect)) referenceRect=\(debugDescribe(intentReferenceRect)) preview=\(debugDescribe(sticky.previewRect)) style=\(sticky.previewStyle)"
+    )
     return windowSurfaceDestination(
         sourceWindow: sourceWindow,
         targetWindow: targetWindow,
@@ -726,6 +961,7 @@ private func setPendingWindowDragIntent(sourceWindowId: UInt32, sourceSubject: W
         return true
     }
 
+    let previousIntent = pendingWindowDragIntent
     pendingWindowDragIntent = PendingWindowDragIntent(
         sourceWindowId: sourceWindowId,
         sourceSubject: sourceSubject,
@@ -738,13 +974,26 @@ private func setPendingWindowDragIntent(sourceWindowId: UInt32, sourceSubject: W
         previewGeometry: destination.previewGeometry,
         isGroup: destination.isGroup,
     )
+    let signature =
+        "intent:source=\(sourceWindowId):subject=\(debugDescribe(sourceSubject)):kind=\(debugDescribe(destination.kind)):preview=\(debugDescribe(destination.previewRect)):interaction=\(debugDescribe(destination.interactionRect))"
+    logWindowDragIntentIfNeeded(
+        signature: signature,
+        "windowDragIntent.update mouse=\(debugDescribe(mouseLocation)) source=\(debugDescribe(Window.get(byId: sourceWindowId))) subject=\(debugDescribe(sourceSubject)) prevKind=\(previousIntent.map { debugDescribe($0.kind) } ?? "nil") prevPreview=\(debugDescribe(previousIntent?.previewRect)) newKind=\(debugDescribe(destination.kind)) newPreview=\(debugDescribe(destination.previewRect)) newInteraction=\(debugDescribe(destination.interactionRect)) style=\(destination.previewStyle) geometry=\(destination.previewGeometry)"
+    )
     WindowTabDropPreviewPanel.shared.show(destination.preview)
     return true
 }
 
 @MainActor
 func clearPendingWindowDragIntent() {
+    if let pendingWindowDragIntent {
+        logWindowDragIntentIfNeeded(
+            signature: "intent-cleared:source=\(pendingWindowDragIntent.sourceWindowId):kind=\(debugDescribe(pendingWindowDragIntent.kind))",
+            "windowDragIntent.clear mouse=\(debugDescribe(mouseLocation)) source=\(debugDescribe(Window.get(byId: pendingWindowDragIntent.sourceWindowId))) kind=\(debugDescribe(pendingWindowDragIntent.kind)) preview=\(debugDescribe(pendingWindowDragIntent.previewRect))"
+        )
+    }
     pendingWindowDragIntent = nil
+    lastWindowDragIntentLogSignature = nil
     setPinnedDraggedWindowId(nil)
     setWorkspaceSidebarDropPreviewIfChanged(nil)
     WindowTabDropPreviewPanel.shared.hide()
@@ -848,6 +1097,19 @@ func canOfferWindowStackSplit(
     position: WindowStackSplitPosition,
 ) -> Bool {
     windowStackSplitContext(targetNode: targetNode, position: position) != nil
+}
+
+@MainActor
+func resolvedWindowStackSplitPreview(targetNode: TreeNode, position: WindowStackSplitPosition) -> WindowStackSplitPreview? {
+    guard let splitContext = windowStackSplitContext(targetNode: targetNode, position: position) else { return nil }
+    let referenceNode = splitContext.wrapsTargetDirectly ? targetNode : splitContext.anchorNode
+    guard let referenceRect = referenceNode.windowDragVisibleRect,
+          let previewRect = referenceRect.stackSplitPreviewRect(position: position)
+    else { return nil }
+    return WindowStackSplitPreview(
+        rect: previewRect,
+        geometry: position.previewGeometry,
+    )
 }
 
 @MainActor
@@ -1198,18 +1460,67 @@ extension Rect {
     fileprivate func isEqual(to other: Rect) -> Bool {
         topLeftX == other.topLeftX && topLeftY == other.topLeftY && width == other.width && height == other.height
     }
+
+    fileprivate var area: CGFloat {
+        width * height
+    }
+
+    fileprivate func intersection(_ other: Rect) -> Rect {
+        let minX = max(self.minX, other.minX)
+        let minY = max(self.minY, other.minY)
+        let maxX = min(self.maxX, other.maxX)
+        let maxY = min(self.maxY, other.maxY)
+        return Rect(
+            topLeftX: minX,
+            topLeftY: minY,
+            width: max(maxX - minX, 0),
+            height: max(maxY - minY, 0),
+        )
+    }
+
+    fileprivate func isApproximatelyEqual(to other: Rect, tolerance: CGFloat) -> Bool {
+        abs(topLeftX - other.topLeftX) <= tolerance &&
+            abs(topLeftY - other.topLeftY) <= tolerance &&
+            abs(width - other.width) <= tolerance &&
+            abs(height - other.height) <= tolerance
+    }
+
+    fileprivate func stackSplitPreviewRect(position: WindowStackSplitPosition) -> Rect? {
+        let rawRect = switch position {
+            case .left:
+                Rect(topLeftX: topLeftX, topLeftY: topLeftY, width: width / 2, height: height)
+            case .right:
+                Rect(topLeftX: topLeftX + width / 2, topLeftY: topLeftY, width: width / 2, height: height)
+            case .above:
+                Rect(topLeftX: topLeftX, topLeftY: topLeftY, width: width, height: height / 2)
+            case .below:
+                Rect(topLeftX: topLeftX, topLeftY: topLeftY + height / 2, width: width, height: height / 2)
+        }
+        let previewRect = switch position {
+            case .left:
+                rawRect.insetBy(left: windowDropPreviewInset, right: 0, top: windowDropPreviewInset, bottom: windowDropPreviewInset)
+            case .right:
+                rawRect.insetBy(left: 0, right: windowDropPreviewInset, top: windowDropPreviewInset, bottom: windowDropPreviewInset)
+            case .above:
+                rawRect.insetBy(left: windowDropPreviewInset, right: windowDropPreviewInset, top: windowDropPreviewInset, bottom: 0)
+            case .below:
+                rawRect.insetBy(left: windowDropPreviewInset, right: windowDropPreviewInset, top: 0, bottom: windowDropPreviewInset)
+        }
+        guard previewRect.width > 0, previewRect.height > 0 else { return nil }
+        return previewRect
+    }
 }
 
 extension TilingContainer {
     @MainActor
     var windowTabDropZoneRect: Rect? {
-        guard showsWindowTabs, let rect = lastAppliedLayoutPhysicalRect else { return nil }
+        guard showsWindowTabs, let rect = windowDragVisibleRect else { return nil }
         return rect.tabInsertPreviewRect(barHeight: windowTabBarHeight)
     }
 
     @MainActor
     var windowTabDropInteractionRect: Rect? {
-        guard showsWindowTabs, let rect = lastAppliedLayoutPhysicalRect else { return nil }
+        guard showsWindowTabs, let rect = windowDragVisibleRect else { return nil }
         return rect.tabInsertInteractionRect(barHeight: windowTabBarHeight)
     }
 }
@@ -1217,7 +1528,7 @@ extension TilingContainer {
 extension TreeNode {
     @MainActor
     private var bodyDropZoneRect: Rect? {
-        guard let rect = lastAppliedLayoutPhysicalRect else { return nil }
+        guard let rect = windowDragVisibleRect else { return nil }
         let topExclusion: CGFloat = switch self {
             case let window as Window:
                 window.tabDropInteractionRect?.height ?? rect.height * 0.2
@@ -1300,29 +1611,7 @@ extension TreeNode {
 
     @MainActor
     func stackSplitPreviewRect(position: WindowStackSplitPosition) -> Rect? {
-        guard let rect = lastAppliedLayoutPhysicalRect else { return nil }
-        let rawRect = switch position {
-            case .left:
-                Rect(topLeftX: rect.topLeftX, topLeftY: rect.topLeftY, width: rect.width / 2, height: rect.height)
-            case .right:
-                Rect(topLeftX: rect.topLeftX + rect.width / 2, topLeftY: rect.topLeftY, width: rect.width / 2, height: rect.height)
-            case .above:
-                Rect(topLeftX: rect.topLeftX, topLeftY: rect.topLeftY, width: rect.width, height: rect.height / 2)
-            case .below:
-                Rect(topLeftX: rect.topLeftX, topLeftY: rect.topLeftY + rect.height / 2, width: rect.width, height: rect.height / 2)
-        }
-        let previewRect = switch position {
-            case .left:
-                rawRect.insetBy(left: windowDropPreviewInset, right: 0, top: windowDropPreviewInset, bottom: windowDropPreviewInset)
-            case .right:
-                rawRect.insetBy(left: 0, right: windowDropPreviewInset, top: windowDropPreviewInset, bottom: windowDropPreviewInset)
-            case .above:
-                rawRect.insetBy(left: windowDropPreviewInset, right: windowDropPreviewInset, top: windowDropPreviewInset, bottom: 0)
-            case .below:
-                rawRect.insetBy(left: windowDropPreviewInset, right: windowDropPreviewInset, top: 0, bottom: windowDropPreviewInset)
-        }
-        guard previewRect.width > 0, previewRect.height > 0 else { return nil }
-        return previewRect
+        windowDragVisibleRect?.stackSplitPreviewRect(position: position)
     }
 
     @MainActor

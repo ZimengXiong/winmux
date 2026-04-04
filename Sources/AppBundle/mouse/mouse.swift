@@ -140,11 +140,13 @@ func beginWindowMoveWithMouseSessionIfNeeded(
     setCurrentMouseDragStartedInSidebar(startedInSidebar)
     setDraggedWindowAnchorRect(anchorRect, for: windowId)
     WindowTabStripPanelController.shared.setIgnoresMouseEvents(true)
+    refreshVisibleWindowActualRectsForCurrentDrag(sourceWindowId: windowId)
     return true
 }
 
 @MainActor
 func cancelManipulatedWithMouseState() {
+    cancelWindowDragActualRectRefresh()
     clearDraggedWindowAnchorRect(for: currentlyManipulatedWithMouseWindowId)
     setCurrentMouseManipulationKind(.none)
     setCurrentMouseDragSubject(.window)

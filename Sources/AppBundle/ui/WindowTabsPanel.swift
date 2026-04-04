@@ -64,6 +64,9 @@ private final class WindowTabStripPanel: NSPanelHud {
         hostingView.autoresizingMask = [.width, .height]
     }
 
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
+
     func update(with strip: WindowTabStripViewModel) {
         let nextContent = WindowTabStripContent(strip: strip)
         if currentContent != nextContent {
@@ -278,11 +281,13 @@ private func focusWindowFromTabStrip(_ windowId: UInt32, fallbackWorkspace: Stri
     guard let token: RunSessionGuard = .isServerEnabled else { return }
     Task {
         try await runLightSession(.menuBarButton, token) {
-            guard let window = Window.get(byId: windowId) else {
+            guard let window = Window.get(byId: windowId),
+                  let liveFocus = window.toLiveFocusOrNil()
+            else {
                 _ = Workspace.existing(byName: fallbackWorkspace)?.focusWorkspace()
                 return
             }
-            _ = window.focusWindow()
+            _ = setFocus(to: liveFocus)
             window.nativeFocus()
         }
     }

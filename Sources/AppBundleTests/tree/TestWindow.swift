@@ -11,6 +11,7 @@ final class TestWindow: Window, CustomStringConvertible {
     private init(_ id: UInt32, _ parent: NonLeafTreeNodeObject, _ adaptiveWeight: CGFloat, _ rect: Rect?) {
         _rect = rect
         super.init(id: id, TestApp.shared, lastFloatingSize: nil, parent: parent, adaptiveWeight: adaptiveWeight, index: INDEX_BIND_LAST)
+        lastKnownActualRect = rect
     }
 
     @discardableResult
@@ -40,7 +41,8 @@ final class TestWindow: Window, CustomStringConvertible {
     }
 
     @MainActor override func getAxRect() async throws -> Rect? { // todo change to not Optional
-        _rect
+        lastKnownActualRect = _rect
+        return _rect
     }
 
     @MainActor override var isMacosFullscreen: Bool { get async throws { nativeIsMacosFullscreen } }
@@ -57,6 +59,11 @@ final class TestWindow: Window, CustomStringConvertible {
             width: size?.width ?? currentRect.width,
             height: size?.height ?? currentRect.height,
         )
+        let windowId = self.windowId
+        let rect = _rect
+        Task { @MainActor in
+            Window.get(byId: windowId)?.lastKnownActualRect = rect
+        }
         _isHiddenInCorner = false
     }
 }
