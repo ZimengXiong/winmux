@@ -121,6 +121,10 @@ extension TreeNode {
                 return nil
         }
     }
+
+    func directChild(in ancestor: TilingContainer) -> TreeNode? {
+        parentsWithSelf.first(where: { $0.parent === ancestor })
+    }
 }
 
 extension Window {
@@ -131,8 +135,22 @@ extension Window {
                 true
             case .macosNativeFullscreenWindow, .macosNativeHiddenAppWindow,
                  .macosNativeMinimizedWindow, .macosPopupWindow,
-                 .rootTilingContainer, .shimContainerRelation:
+                .rootTilingContainer, .shimContainerRelation:
                 false
         }
+    }
+
+    @MainActor
+    var nearestWindowTabGroup: TilingContainer? {
+        parentsWithSelf
+            .lazy
+            .compactMap { $0 as? TilingContainer }
+            .first(where: \.isWindowTabGroup)
+    }
+}
+
+extension TilingContainer {
+    var isWindowTabGroup: Bool {
+        layout == .accordion && children.count > 1
     }
 }

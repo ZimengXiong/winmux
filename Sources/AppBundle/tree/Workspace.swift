@@ -90,6 +90,11 @@ func nextSidebarDraftWorkspaceName() -> String {
     return "\(sidebarDraftWorkspacePrefix)\(nextIndex)"
 }
 
+@MainActor
+func nextSidebarCreatedWorkspaceName() -> String {
+    nextAutomaticWorkspaceName()
+}
+
 func isSidebarDraftWorkspaceName(_ name: String) -> Bool {
     name.hasPrefix(sidebarDraftWorkspacePrefix)
 }
@@ -146,7 +151,7 @@ func isUserFacingWorkspace(_ workspace: Workspace, focusedWorkspace: Workspace? 
         (
             workspaceHasSidebarVisibleWindows(workspace) ||
                 (workspace.isVisible && !workspace.isEffectivelyEmpty) ||
-                workspace.shouldRetainEmptyWorkspace(focusedWorkspace: focusedWorkspace)
+                workspace.shouldPersistWhenEmpty(focusedWorkspace: focusedWorkspace)
         )
 }
 
@@ -273,7 +278,7 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
             $0.isVisible &&
                 !workspaceHasLifecycleWindows($0) &&
                 !$0.isSystemStub &&
-                !$0.shouldRetainEmptyWorkspace(focusedWorkspace: focusedWorkspaceBeforeGc)
+                !$0.shouldPersistWhenEmpty(focusedWorkspace: focusedWorkspaceBeforeGc)
         }
         var focusedReplacement: Workspace? = nil
         for workspace in visibleEmptyWorkspacesToReplace {
@@ -293,7 +298,7 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
         workspaceNameToWorkspace = workspaceNameToWorkspace.filter { (_, workspace: Workspace) in
             let shouldKeep =
                 workspaceHasLifecycleWindows(workspace) ||
-                workspace.shouldRetainEmptyWorkspace(focusedWorkspace: focus.workspace) ||
+                workspace.shouldPersistWhenEmpty(focusedWorkspace: focus.workspace) ||
                 (workspace.isSystemStub && workspace.isVisible)
             if !shouldKeep {
                 clearSidebarDraftWorkspaceLabelIfNeeded(workspace.name)
@@ -354,6 +359,16 @@ extension Workspace {
     @MainActor
     func shouldRetainEmptyWorkspace(focusedWorkspace: Workspace?) -> Bool {
         focusedWorkspace == self && retainsFocusedEmptyWorkspace
+    }
+
+    @MainActor
+    var isConfiguredPersistent: Bool {
+        config.persistentWorkspaces.contains(name)
+    }
+
+    @MainActor
+    func shouldPersistWhenEmpty(focusedWorkspace: Workspace?) -> Bool {
+        isConfiguredPersistent || shouldRetainEmptyWorkspace(focusedWorkspace: focusedWorkspace)
     }
 
     var usesAutomaticDisplayName: Bool {

@@ -16,9 +16,17 @@ final class MacWindow: Window {
 
     @MainActor
     @discardableResult
-    static func getOrRegister(windowId: UInt32, macApp: MacApp) async throws -> MacWindow {
-        if let existing = allWindowsMap[windowId] { return existing }
+    static func getOrRegister(windowId: UInt32, macApp: MacApp) async throws -> MacWindow? {
+        if let existing = allWindowsMap[windowId] {
+            let rect = try await existing.getAxRect()
+            if shouldManageWindow(rect) {
+                return existing
+            }
+            existing.garbageCollect(skipClosedWindowsCache: true)
+            return nil
+        }
         let rect = try await macApp.getAxRect(windowId)
+        guard shouldManageWindow(rect) else { return nil }
         let data = try await unbindAndGetBindingDataForNewWindow(
             windowId,
             macApp,
@@ -213,6 +221,12 @@ final class MacWindow: Window {
     override func getAxRect() async throws -> Rect? {
         try await macApp.getAxRect(windowId)
     }
+}
+
+@MainActor
+private func shouldManageWindow(_ rect: Rect?) -> Bool {
+    guard let center = rect?.center else { return true }
+    return shouldAeroSpaceManageWindow(at: center)
 }
 
 @MainActor

@@ -3,6 +3,144 @@ import Common
 import SwiftUI
 
 private let exposePanelId = "AeroSpace.expose"
+private let exposeExpandedGroupHoverCoordinateSpace = "AeroSpace.expose.expandedGroupHover"
+private let exposeCardTitleHeight: CGFloat = 20
+private let exposeExpandedGroupSpacing: CGFloat = 16
+private let exposeExpandedGroupHoverPadding: CGFloat = 60
+private let exposeExpandedGroupViewportMargin = CGSize(width: 96, height: 96)
+
+struct ExposeHoverTargetFrame: Equatable {
+    let itemId: UInt32
+    let frame: CGRect
+}
+
+struct ExposeHoverTargetPreferenceKey: PreferenceKey {
+    static let defaultValue: [ExposeHoverTargetFrame] = []
+
+    static func reduce(value: inout [ExposeHoverTargetFrame], nextValue: () -> [ExposeHoverTargetFrame]) {
+        value.append(contentsOf: nextValue())
+    }
+}
+
+func hoveredExposeItemId(at location: CGPoint, within frames: [ExposeHoverTargetFrame]) -> UInt32? {
+    frames.last(where: { $0.frame.contains(location) })?.itemId
+}
+
+struct ExposeExpandedGroupLayout: Equatable {
+    let columns: Int
+    let rowCount: Int
+    let mainCardWidth: CGFloat
+    let mainCardHeight: CGFloat
+    let secondaryCardWidth: CGFloat
+    let secondaryCardHeight: CGFloat
+    let totalSize: CGSize
+}
+
+private func exposeExpandedGroupSecondaryScale(for othersCount: Int) -> CGFloat {
+    switch othersCount {
+        case 0: 0
+        case 1: 0.86
+        case 2...4: 0.76
+        case 5...6: 0.68
+        default: 0.62
+    }
+}
+
+private func exposeCardWidth(cardHeight: CGFloat, aspectRatio: CGFloat) -> CGFloat {
+    max(1, (cardHeight - exposeCardTitleHeight) * aspectRatio)
+}
+
+func bestExposeExpandedGroupLayout(
+    itemCount: Int,
+    aspectRatio: CGFloat,
+    viewportSize: CGSize,
+    minimumMainCardHeight: CGFloat,
+) -> ExposeExpandedGroupLayout {
+    let safeItemCount = max(itemCount, 1)
+    let othersCount = max(0, safeItemCount - 1)
+    let safeAspectRatio = max(aspectRatio, 0.2)
+    let availableWidth = max(200, viewportSize.width - exposeExpandedGroupViewportMargin.width)
+    let availableHeight = max(minimumMainCardHeight, viewportSize.height - exposeExpandedGroupViewportMargin.height)
+    let minimumMainHeight = min(max(exposeCardTitleHeight + 1, minimumMainCardHeight), availableHeight)
+
+    func makeLayout(mainCardHeight: CGFloat, columns: Int, rowCount: Int, secondaryScale: CGFloat) -> ExposeExpandedGroupLayout {
+        let secondaryCardHeight = othersCount > 0 ? mainCardHeight * secondaryScale : 0
+        let mainCardWidth = exposeCardWidth(cardHeight: mainCardHeight, aspectRatio: safeAspectRatio)
+        let secondaryCardWidth = othersCount > 0
+            ? exposeCardWidth(cardHeight: secondaryCardHeight, aspectRatio: safeAspectRatio)
+            : 0
+        let gridWidth = othersCount > 0
+            ? CGFloat(columns) * secondaryCardWidth + CGFloat(columns - 1) * exposeExpandedGroupSpacing
+            : 0
+        let gridHeight = othersCount > 0
+            ? CGFloat(rowCount) * secondaryCardHeight + CGFloat(rowCount - 1) * exposeExpandedGroupSpacing
+            : 0
+        let totalHeight = mainCardHeight + (othersCount > 0 ? exposeExpandedGroupSpacing + gridHeight : 0)
+        return ExposeExpandedGroupLayout(
+            columns: columns,
+            rowCount: rowCount,
+            mainCardWidth: mainCardWidth,
+            mainCardHeight: mainCardHeight,
+            secondaryCardWidth: secondaryCardWidth,
+            secondaryCardHeight: secondaryCardHeight,
+            totalSize: CGSize(width: max(mainCardWidth, gridWidth), height: totalHeight),
+        )
+    }
+
+    if othersCount == 0 {
+        let maxMainHeightForWidth = availableWidth / safeAspectRatio + exposeCardTitleHeight
+        let mainCardHeight = max(minimumMainHeight, floor(min(availableHeight, maxMainHeightForWidth)))
+        return makeLayout(mainCardHeight: mainCardHeight, columns: 1, rowCount: 0, secondaryScale: 0)
+    }
+
+    let secondaryScale = exposeExpandedGroupSecondaryScale(for: othersCount)
+    let maxColumns = max(1, othersCount)
+    var bestLayout: ExposeExpandedGroupLayout? = nil
+    var bestArea: CGFloat = -.greatestFiniteMagnitude
+
+    for columns in 1...maxColumns {
+        let rowCount = Int(ceil(Double(othersCount) / Double(columns)))
+        let widthForCells = availableWidth - CGFloat(columns - 1) * exposeExpandedGroupSpacing
+        guard widthForCells > 0 else { continue }
+
+        let maxMainHeightForWidth = availableWidth / safeAspectRatio + exposeCardTitleHeight
+        let maxMainHeightForGridWidth =
+            (widthForCells / CGFloat(columns) / safeAspectRatio + exposeCardTitleHeight) / secondaryScale
+        let maxMainHeightForHeight =
+            (availableHeight - CGFloat(rowCount) * exposeExpandedGroupSpacing) /
+                (1 + CGFloat(rowCount) * secondaryScale)
+
+        let mainCardHeight = floor(min(
+            maxMainHeightForWidth,
+            maxMainHeightForGridWidth,
+            maxMainHeightForHeight,
+        ))
+        guard mainCardHeight >= minimumMainHeight else { continue }
+
+        let candidate = makeLayout(
+            mainCardHeight: mainCardHeight,
+            columns: columns,
+            rowCount: rowCount,
+            secondaryScale: secondaryScale,
+        )
+        let candidateArea = candidate.totalSize.width * candidate.totalSize.height
+        if candidateArea > bestArea {
+            bestArea = candidateArea
+            bestLayout = candidate
+        }
+    }
+
+    if let bestLayout {
+        return bestLayout
+    }
+
+    return makeLayout(
+        mainCardHeight: minimumMainHeight,
+        columns: min(othersCount, 4),
+        rowCount: Int(ceil(Double(othersCount) / Double(min(othersCount, 4)))),
+        secondaryScale: secondaryScale,
+    )
+}
 
 // MARK: - Data
 
@@ -194,7 +332,7 @@ private struct ExposeView: View {
                     ForEach(Array(gridRows.enumerated()), id: \.offset) { _, row in
                         HStack(spacing: spacing) {
                             ForEach(row) { s in
-                                viewFor(s, cw: cw, ch: ch)
+                                viewFor(s, cw: cw, ch: ch, viewportSize: geo.size)
                                     .zIndex(s.isExpandedGroup ? 1 : 0)
                             }
                         }
@@ -277,25 +415,25 @@ private struct ExposeView: View {
     // -- Card dispatch --
 
     @ViewBuilder
-    private func viewFor(_ s: Slot, cw: CGFloat, ch: CGFloat) -> some View {
+    private func viewFor(_ s: Slot, cw: CGFloat, ch: CGFloat, viewportSize: CGSize) -> some View {
         switch s {
             case .single(let w):
-                let scaledCw = cw * max(0.4, min(1.0, w.widthRatio))
-                WinCard(item: w, cw: scaledCw, ch: ch)
+                let cardCw = (ch - 20) * w.aspectRatio
+                WinCard(item: w, cw: cardCw, ch: ch)
                     .onTapGesture { onSelect(w.id) }
 
             case .stack(let g):
-                let scaledCw = cw * max(0.4, min(1.0, g.widthRatio))
-                StackCard(group: g, cw: scaledCw, ch: ch, onExpand: {
+                let cardCw = (ch - 24) * g.aspectRatio
+                StackCard(group: g, cw: cardCw, ch: ch, onExpand: {
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) { expandedGroupId = g.id }
                 })
 
             case .expandedGroup(let g):
-                let scaledCw = cw * max(0.4, min(1.0, g.widthRatio))
-                ExpandedGroupCard(group: g, cw: scaledCw, ch: ch, onSelect: onSelect, onCollapse: {
+                let cardCw = (ch - 24) * g.aspectRatio
+                ExpandedGroupCard(group: g, ch: ch, viewportSize: viewportSize, onSelect: onSelect, onCollapse: {
                     withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) { expandedGroupId = nil }
                 })
-                .frame(width: cw, height: ch) // lock frame to a single cell to overlay cleanly
+                .frame(width: cardCw + 30, height: ch) // lock frame footprint so identical to StackCard footprint
         }
     }
 }
@@ -326,12 +464,15 @@ private struct WinCard: View {
     let cw: CGFloat
     let ch: CGFloat
     var badge: Bool = false
-    @State private var hov = false
+    var hoverOverride: Bool? = nil
+    @State private var localHover = false
+
+    private var isHovered: Bool { hoverOverride ?? localHover }
 
     var body: some View {
         VStack(spacing: 4) {
             ZStack(alignment: .topTrailing) {
-                cardThumb(item, w: cw, h: ch - 20, hov: hov)
+                cardThumb(item, w: cw, h: ch - 20, hov: isHovered)
                 if badge {
                     Image(systemName: "square.stack.fill")
                         .font(.system(size: 9))
@@ -343,14 +484,18 @@ private struct WinCard: View {
             }
             Text(item.title)
                 .font(.system(size: 11, weight: item.isFocused ? .semibold : .regular))
-                .foregroundStyle(.white.opacity(hov ? 0.95 : 0.6))
+                .foregroundStyle(.white.opacity(isHovered ? 0.95 : 0.6))
                 .lineLimit(1)
                 .frame(maxWidth: cw)
         }
         .frame(width: cw, height: ch)
-        .onHover { hov = $0 }
-        .scaleEffect(hov ? 1.02 : 1)
-        .animation(.easeOut(duration: 0.12), value: hov)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            guard hoverOverride == nil else { return }
+            localHover = hovering
+        }
+        .scaleEffect(isHovered ? 1.02 : 1)
+        .animation(.easeOut(duration: 0.12), value: isHovered)
     }
 }
 
@@ -420,43 +565,151 @@ private struct StackCard: View {
             hov = hovering
             if hovering { onExpand() }
         }
-        .scaleEffect(hov ? 1.02 : 1)
         .animation(.easeOut(duration: 0.12), value: hov)
     }
 }
 
 private struct ExpandedGroupCard: View {
     let group: ExposeTabGroup
-    let cw: CGFloat
     let ch: CGFloat
+    let viewportSize: CGSize
     let onSelect: (UInt32) -> Void
     let onCollapse: () -> Void
 
-    @State private var hoveredInZone = true
+    @State private var hoveredItemId: UInt32? = nil
+    @State private var hoverFrames: [ExposeHoverTargetFrame] = []
 
     var body: some View {
-        HStack(spacing: 10) {
-            ForEach(group.items) { item in
-                WinCard(item: item, cw: cw, ch: ch, badge: true)
-                    .onTapGesture { onSelect(item.id) }
+        let activeIndex = group.items.firstIndex(where: \.isFocused) ?? 0
+        let activeItem = group.items[activeIndex]
+
+        let others = group.items.enumerated().filter { $0.offset != activeIndex }.map { $0.element }
+        let count = others.count
+        let layout = bestExposeExpandedGroupLayout(
+            itemCount: group.items.count,
+            aspectRatio: group.aspectRatio,
+            viewportSize: viewportSize,
+            minimumMainCardHeight: ch,
+        )
+        let spacing = exposeExpandedGroupSpacing
+
+        let rowCount = layout.rowCount
+
+        let rows: [[ExposeWindowItem]] = (0..<rowCount).map { r in
+            let start = r * layout.columns
+            let end = min(start + layout.columns, count)
+            return Array(others[start..<end])
+        }
+        let totalW = layout.totalSize.width
+        let totalH = layout.totalSize.height
+
+        ZStack {
+            Color.clear
+                .frame(
+                    width: totalW + (exposeExpandedGroupHoverPadding * 2),
+                    height: totalH + (exposeExpandedGroupHoverPadding * 2),
+                )
+
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color(nsColor: .windowBackgroundColor))
+                .shadow(color: .black.opacity(0.4), radius: 24, y: 12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
+                )
+                .frame(width: totalW + 40, height: totalH + 40)
+
+            VStack(spacing: spacing) {
+                let isMainHovered = hoveredItemId == activeItem.id
+                WinCard(
+                    item: activeItem,
+                    cw: layout.mainCardWidth,
+                    ch: layout.mainCardHeight,
+                    badge: false,
+                    hoverOverride: isMainHovered,
+                )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .strokeBorder(Color.accentColor, lineWidth: (hoveredItemId == nil || isMainHovered) ? 3 : 0)
+                            .opacity((hoveredItemId == nil || isMainHovered) ? 1.0 : 0.0)
+                    )
+                    .opacity(isMainHovered ? 1.0 : (hoveredItemId == nil ? 1.0 : 0.4))
+                    .background {
+                        GeometryReader { geometry in
+                            Color.clear.preference(
+                                key: ExposeHoverTargetPreferenceKey.self,
+                                value: [ExposeHoverTargetFrame(
+                                    itemId: activeItem.id,
+                                    frame: geometry.frame(in: .named(exposeExpandedGroupHoverCoordinateSpace)),
+                                )],
+                            )
+                        }
+                    }
+                    .onTapGesture { onSelect(activeItem.id) }
+
+                if count > 0 {
+                    VStack(spacing: spacing) {
+                        ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                            HStack(spacing: spacing) {
+                                ForEach(row) { item in
+                                    let isItemHovered = hoveredItemId == item.id
+
+                                    WinCard(
+                                        item: item,
+                                        cw: layout.secondaryCardWidth,
+                                        ch: layout.secondaryCardHeight,
+                                        badge: false,
+                                        hoverOverride: isItemHovered,
+                                    )
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                                .strokeBorder(Color.accentColor, lineWidth: isItemHovered ? 3 : 0)
+                                                .opacity(isItemHovered ? 1.0 : 0.0)
+                                        )
+                                        .opacity(isItemHovered ? 1.0 : (hoveredItemId == nil ? 1.0 : 0.4))
+                                        .background {
+                                            GeometryReader { geometry in
+                                                Color.clear.preference(
+                                                    key: ExposeHoverTargetPreferenceKey.self,
+                                                    value: [ExposeHoverTargetFrame(
+                                                        itemId: item.id,
+                                                        frame: geometry.frame(in: .named(exposeExpandedGroupHoverCoordinateSpace)),
+                                                    )],
+                                                )
+                                            }
+                                        }
+                                        .onTapGesture { onSelect(item.id) }
+                                }
+                                if row.count < layout.columns {
+                                    ForEach(0..<(layout.columns - row.count), id: \.self) { _ in
+                                        Color.clear.frame(
+                                            width: layout.secondaryCardWidth,
+                                            height: layout.secondaryCardHeight,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .animation(.easeOut(duration: 0.1), value: hoveredItemId)
+        }
+        .contentShape(Rectangle())
+        .coordinateSpace(name: exposeExpandedGroupHoverCoordinateSpace)
+        .onPreferenceChange(ExposeHoverTargetPreferenceKey.self) { hoverFrames in
+            self.hoverFrames = hoverFrames
+        }
+        .onContinuousHover(coordinateSpace: .named(exposeExpandedGroupHoverCoordinateSpace)) { phase in
+            switch phase {
+                case .active(let location):
+                    hoveredItemId = hoveredExposeItemId(at: location, within: hoverFrames)
+                case .ended:
+                    hoveredItemId = nil
+                    onCollapse()
             }
         }
-        .padding(16) // add extra inner padding to create a larger hit zone
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(nsColor: .windowBackgroundColor).opacity(0.4))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(Color.accentColor.opacity(0.15), lineWidth: 1)
-                )
-        )
-        // A generous invisible background extends the drop-off zone
-        .background(Color.clear.padding(-40))
-        .contentShape(Rectangle())
-        .onHover { inZone in
-            hoveredInZone = inZone
-            if !inZone { onCollapse() }
-        }
+        .offset(y: count > 0 ? ((layout.secondaryCardHeight * CGFloat(rowCount)) + (CGFloat(max(rowCount - 1, 0)) * spacing) + spacing) / 2.0 : 0)
     }
 }
 
@@ -464,31 +717,25 @@ private struct ExpandedGroupCard: View {
 
 @ViewBuilder
 private func cardThumb(_ item: ExposeWindowItem, w: CGFloat, h: CGFloat, hov: Bool) -> some View {
-    ZStack {
-        RoundedRectangle(cornerRadius: 6, style: .continuous)
-            .fill(Color(nsColor: .windowBackgroundColor).opacity(0.08))
+    Group {
         if let img = item.thumbnail {
             Image(nsImage: img)
                 .resizable()
-                .aspectRatio(contentMode: .fit)
-                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-                .padding(2)
+                .scaledToFill()
+                .frame(width: w, height: h)
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         } else {
-            Image(systemName: "macwindow")
-                .font(.system(size: 24, weight: .ultraLight))
-                .foregroundStyle(.white.opacity(0.1))
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color(nsColor: .windowBackgroundColor).opacity(0.1))
+                .overlay(
+                    Image(systemName: "macwindow")
+                        .font(.system(size: 24, weight: .ultraLight))
+                        .foregroundStyle(.white.opacity(0.1))
+                )
         }
     }
     .frame(width: w, height: h)
-    .overlay(
-        RoundedRectangle(cornerRadius: 6, style: .continuous)
-            .strokeBorder(
-                hov && item.isFocused ? Color.accentColor.opacity(0.7) :
-                    (hov ? .white.opacity(0.2) : .white.opacity(0.03)),
-                lineWidth: hov && item.isFocused ? 1.5 : 0.5
-            )
-    )
-    .shadow(color: .black.opacity(hov ? 0.12 : 0.03), radius: hov ? 4 : 1, y: 1)
+    .shadow(color: .black.opacity(hov ? 0.35 : 0.15), radius: hov ? 12 : 6, y: hov ? 6 : 2)
 }
 
 // MARK: - Safe subscript

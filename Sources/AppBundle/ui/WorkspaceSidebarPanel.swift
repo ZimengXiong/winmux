@@ -494,7 +494,7 @@ private func sidebarWorkspaceTargetMonitor(fallbackWindow: Window? = nil) -> Mon
 @MainActor
 private func createWorkspaceFromSidebarButton() {
     guard let token: RunSessionGuard = .isServerEnabled else { return }
-    let workspaceName = nextSidebarDraftWorkspaceName()
+    let workspaceName = nextSidebarCreatedWorkspaceName()
     Task { @MainActor in
         do {
             try await runLightSession(.menuBarButton, token) {
@@ -511,7 +511,7 @@ private func createWorkspaceFromSidebarButton() {
 
 @MainActor
 func createWorkspaceFromSidebarDrag(sourceNode: TreeNode, sourceWindow: Window) -> Bool {
-    let workspaceName = nextSidebarDraftWorkspaceName()
+    let workspaceName = nextSidebarCreatedWorkspaceName()
     let workspace = Workspace.get(byName: workspaceName)
     workspace.markAsSidebarManaged()
     workspace.seedMonitorIfNeeded(sidebarWorkspaceTargetMonitor(fallbackWindow: sourceWindow))

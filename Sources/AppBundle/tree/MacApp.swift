@@ -100,15 +100,26 @@ final class MacApp: AbstractApp {
         }
     }
 
-    // todo merge together with detectNewWindows
-    func getFocusedWindow() async throws -> Window? {
-        let windowId = try await thread?.runInLoop { [nsApp, axApp, windows] job in
+    private func focusedWindowId() async throws -> UInt32? {
+        try await thread?.runInLoop { [nsApp, axApp, windows] job in
             try axApp.threadGuarded.get(Ax.focusedWindowAttr)
                 .flatMap { try windows.threadGuarded.getOrRegisterAxWindow(windowId: $0.windowId, $0.ax.cast, nsApp, job) }?
                 .windowId
         }
+    }
+
+    // todo merge together with detectNewWindows
+    func getFocusedWindow() async throws -> Window? {
+        let windowId = try await focusedWindowId()
         guard let windowId else { return nil }
         return try await MacWindow.getOrRegister(windowId: windowId, macApp: self)
+    }
+
+    @MainActor
+    func hasFocusedWindowOnUnmanagedMonitor() async throws -> Bool {
+        guard let windowId = try await focusedWindowId() else { return false }
+        guard let center = try await getAxRect(windowId)?.center else { return false }
+        return !shouldAeroSpaceManageWindow(at: center)
     }
 
     @MainActor func nativeFocus(_ windowId: UInt32) {

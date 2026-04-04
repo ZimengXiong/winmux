@@ -342,6 +342,24 @@ final class WindowTabsTest: XCTestCase {
     }
 
     @MainActor
+    func testWindowSplitZonesWrapCenteredSwapZoneWithoutTouchingTabDropZone() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let window = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+        window.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 360, height: 240)
+
+        let tabInteractionZone = window.tabDropInteractionRect.orDie()
+        let topSplitZone = window.stackSplitDropZoneRect(position: .above).orDie()
+        let swapDropZone = window.swapDropZoneRect.orDie()
+        let bottomSplitZone = window.stackSplitDropZoneRect(position: .below).orDie()
+
+        XCTAssertGreaterThan(topSplitZone.minY, tabInteractionZone.maxY)
+        XCTAssertEqual(topSplitZone.maxY, swapDropZone.minY)
+        XCTAssertEqual(bottomSplitZone.minY, swapDropZone.maxY)
+        XCTAssertTrue(swapDropZone.contains(swapDropZone.center))
+    }
+
+    @MainActor
     func testTabDetachKeepRectsDifferentiateWindowAndTabStripDrags() {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
@@ -356,8 +374,8 @@ final class WindowTabsTest: XCTestCase {
 
         XCTAssertGreaterThan(windowKeepRect.height, stripKeepRect.height)
         XCTAssertLessThan(stripKeepRect.maxY, windowKeepRect.maxY)
-        XCTAssertEqual(windowKeepRect.minX, window.lastAppliedLayoutPhysicalRect.orDie().minX)
-        XCTAssertEqual(windowKeepRect.maxX, window.lastAppliedLayoutPhysicalRect.orDie().maxX)
+        XCTAssertLessThanOrEqual(windowKeepRect.minX, window.lastAppliedLayoutPhysicalRect.orDie().minX)
+        XCTAssertGreaterThanOrEqual(windowKeepRect.maxX, window.lastAppliedLayoutPhysicalRect.orDie().maxX)
         XCTAssertLessThanOrEqual(windowKeepRect.topLeftY, window.lastAppliedLayoutPhysicalRect.orDie().topLeftY)
     }
 
@@ -522,6 +540,63 @@ final class WindowTabsTest: XCTestCase {
     }
 
     @MainActor
+    func testApplyWindowStackSplitDragIntentWrapsTargetAndPlacesDraggedWindowAbove() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        _ = TestWindow.new(id: 0, parent: root)
+        let source = TestWindow.new(id: 1, parent: root)
+        let target = TestWindow.new(id: 2, parent: root)
+
+        XCTAssertTrue(target.focusWindow())
+        XCTAssertTrue(applyWindowStackSplitDragIntent(
+            sourceWindow: source,
+            sourceSubject: .window,
+            targetWindow: target,
+            position: .above,
+        ))
+
+        assertEquals(root.layoutDescription, .h_tiles([
+            .window(0),
+            .v_tiles([
+                .window(1),
+                .window(2),
+            ]),
+        ]))
+        XCTAssertEqual(focus.windowOrNil, source)
+    }
+
+    @MainActor
+    func testApplyWindowStackSplitDragIntentUsesExistingVerticalParentWhenPossible() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        _ = TestWindow.new(id: 0, parent: root)
+        let stack = TilingContainer.newVTiles(parent: root, adaptiveWeight: WEIGHT_AUTO)
+        let target = TestWindow.new(id: 2, parent: stack)
+        _ = TestWindow.new(id: 3, parent: stack)
+        let source = TestWindow.new(id: 1, parent: root)
+
+        XCTAssertTrue(applyWindowStackSplitDragIntent(
+            sourceWindow: source,
+            sourceSubject: .window,
+            targetWindow: target,
+            position: .below,
+        ))
+
+        XCTAssertTrue(root.children[1] === stack)
+        assertEquals(root.layoutDescription, .h_tiles([
+            .window(0),
+            .v_tiles([
+                .window(2),
+                .window(1),
+                .window(3),
+            ]),
+        ]))
+        XCTAssertEqual(focus.windowOrNil, source)
+    }
+
+    @MainActor
     func testWorkspaceMoveBindingDataWrapsRootAccordionInsteadOfTargetingWorkspace() {
         setUpWorkspacesForTests()
         let targetWorkspace = Workspace.get(byName: "target")
@@ -595,6 +670,7 @@ final class WindowTabsTest: XCTestCase {
 
     func testStickyWindowDragIntentEnabledForTabInsertAndSwapPreviews() {
         XCTAssertTrue(shouldUseStickyWindowDragIntent(previewStyle: .tabInsert))
+        XCTAssertTrue(shouldUseStickyWindowDragIntent(previewStyle: .stackSplit))
         XCTAssertTrue(shouldUseStickyWindowDragIntent(previewStyle: .swap))
         XCTAssertFalse(shouldUseStickyWindowDragIntent(previewStyle: .workspaceMove))
         XCTAssertFalse(shouldUseStickyWindowDragIntent(previewStyle: .sidebarWorkspaceMove))

@@ -18,6 +18,17 @@ final class RefreshFocusSyncTest: XCTestCase {
     }
 
     @MainActor
+    func testShouldNotSyncFocusBackWhenNativeFocusIsOnUnmanagedMonitor() {
+        XCTAssertFalse(
+            shouldSyncFocusBackToMacOs(
+                nativeFocused: nil,
+                frontmostActivationPolicy: .regular,
+                nativeFocusIsOnUnmanagedMonitor: true,
+            )
+        )
+    }
+
+    @MainActor
     func testShouldSyncFocusBackToRegularWorkspaceWindow() {
         setUpWorkspacesForTests()
 

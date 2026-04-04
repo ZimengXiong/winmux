@@ -96,13 +96,13 @@ final class TreeNodeTest: XCTestCase {
         XCTAssertFalse(Workspace.all.contains(workspace))
     }
 
-    func testGarbageCollectUnusedWorkspacesRemovesPersistentEmptyWorkspace() {
+    func testGarbageCollectUnusedWorkspacesKeepsPersistentEmptyWorkspace() {
         config.persistentWorkspaces = ["keep"]
         let workspace = Workspace.get(byName: "keep")
 
         Workspace.garbageCollectUnusedWorkspaces()
 
-        XCTAssertFalse(Workspace.all.contains(workspace))
+        XCTAssertTrue(Workspace.all.contains(workspace))
     }
 
     func testGarbageCollectUnusedWorkspacesKeepsFreshFocusedEmptyWorkspace() {
@@ -214,11 +214,11 @@ final class TreeNodeTest: XCTestCase {
         XCTAssertEqual(workspaceDisplayName("__sidebar_draft_workspace_4"), "Workspace 4")
     }
 
-    func testShouldShowWorkspaceInSidebarExcludesPersistentEmptyWorkspace() {
+    func testShouldShowWorkspaceInSidebarIncludesPersistentEmptyWorkspace() {
         config.persistentWorkspaces = ["persistent"]
         let persistentWorkspace = Workspace.get(byName: "persistent")
 
-        XCTAssertFalse(
+        XCTAssertTrue(
             shouldShowWorkspaceInSidebar(
                 persistentWorkspace,
                 currentFocus: focus,
@@ -253,6 +253,20 @@ final class TreeNodeTest: XCTestCase {
         )
 
         XCTAssertEqual(result, [focusedWorkspace, occupiedWorkspace])
+    }
+
+    func testUserFacingWorkspacesIncludePersistentEmptyWorkspace() {
+        config.persistentWorkspaces = ["persistent"]
+        let persistentWorkspace = Workspace.get(byName: "persistent")
+        let occupiedWorkspace = Workspace.get(byName: "occupied")
+        _ = TestWindow.new(id: 203, parent: occupiedWorkspace.rootTilingContainer)
+
+        let result = userFacingWorkspaces(
+            [persistentWorkspace, occupiedWorkspace],
+            focusedWorkspace: focus.workspace,
+        )
+
+        XCTAssertEqual(result, [persistentWorkspace, occupiedWorkspace])
     }
 
     func testMaterializeWorkspaceForUserWindowReplacesInternalStub() {

@@ -45,6 +45,10 @@ let focus_help_generated = """
        OR: focus [-h|--help] [--ignore-floating] [--wrap-around]
                  [--boundaries <boundary>] [--boundaries-action <action>]
                  (dfs-next|dfs-prev)
+       OR: focus [-h|--help] [--ignore-floating] [--wrap-around]
+                 [--boundaries <boundary>] [--boundaries-action <action>]
+                 (tab-next|tab-prev)
+       OR: focus [-h|--help] --tab-index <tab-index>
        OR: focus [-h|--help] --window-id <window-id>
        OR: focus [-h|--help] --dfs-index <dfs-index>
     """

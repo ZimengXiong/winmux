@@ -15,9 +15,29 @@ private struct PendingWindowDragIntent {
     let isGroup: Bool
 }
 
+enum WindowStackSplitPosition: Equatable {
+    case above
+    case below
+
+    var title: String {
+        switch self {
+            case .above: "Stack Above"
+            case .below: "Stack Below"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+            case .above: "Drop to split this tile and place the dragged item above"
+            case .below: "Drop to split this tile and place the dragged item below"
+        }
+    }
+}
+
 enum WindowDragIntentKind: Equatable {
     case tabStack(targetWindowId: UInt32)
     case detachTab(windowId: UInt32)
+    case stackSplit(targetWindowId: UInt32, position: WindowStackSplitPosition)
     case swap(targetWindowId: UInt32)
     case moveToWorkspace(workspaceName: String)
     case createWorkspace
@@ -29,14 +49,14 @@ func isWindowDragIntentKindEnabled(_ kind: WindowDragIntentKind) -> Bool {
     switch kind {
         case .tabStack:
             return config.windowTabs.enabled
-        case .detachTab, .swap, .moveToWorkspace, .createWorkspace, .sidebarHover:
+        case .detachTab, .stackSplit, .swap, .moveToWorkspace, .createWorkspace, .sidebarHover:
             return true
     }
 }
 
 func shouldUseStickyWindowDragIntent(previewStyle: WindowTabDropPreviewStyle) -> Bool {
     switch previewStyle {
-        case .tabInsert, .swap:
+        case .tabInsert, .stackSplit, .swap:
             return true
         case .detach, .workspaceMove, .sidebarWorkspaceMove:
             return false
@@ -149,8 +169,7 @@ private func updateSidebarDragFeedback(sourceWindow: Window, subject: WindowDrag
     let sourceLabel = sidebarDragSourceTitle(for: sourceWindow, subject: subject)
     let targetWorkspaceName: String? = switch destination.kind {
         case .moveToWorkspace(let workspaceName): workspaceName
-        case .createWorkspace: nil
-        case .sidebarHover, .tabStack, .detachTab, .swap: nil
+        case .createWorkspace, .sidebarHover, .tabStack, .detachTab, .stackSplit, .swap: nil
     }
     if case .moveToWorkspace = destination.kind {
         setWorkspaceSidebarDropPreviewIfChanged(WorkspaceSidebarDropPreviewViewModel(
@@ -258,6 +277,38 @@ private func swapDestination(
         title: isTabGroup ? "Swap With Tab Group" : "Swap Positions",
         subtitle: isTabGroup ? "Drop in the body to move around the whole group" : "Drop in the body to swap these windows",
         previewStyle: .swap,
+        isGroup: subject == .group,
+    )
+}
+
+@MainActor
+private func stackSplitDestination(
+    sourceWindow: Window,
+    targetWindow: Window,
+    mouseLocation: CGPoint? = nil,
+    subject: WindowDragSubject,
+    position: WindowStackSplitPosition,
+) -> WindowDragIntentDestination? {
+    if shouldSuppressSwapDestination(sourceWindow: sourceWindow, subject: subject) {
+        return nil
+    }
+    let sourceNode = dragSubjectNode(for: sourceWindow, subject: subject)
+    let targetNode = targetWindow.moveNode
+    guard sourceNode != targetNode,
+          !sourceNode.parentsWithSelf.contains(targetNode),
+          !targetNode.parentsWithSelf.contains(sourceNode),
+          let previewRect = targetNode.stackSplitPreviewRect(position: position),
+          let interactionRect = targetNode.stackSplitDropZoneRect(position: position)?
+          .expanded(left: subject == .group ? 4 : 10, right: subject == .group ? 4 : 10, top: 0, bottom: 0)
+    else { return nil }
+    guard mouseLocation.map(interactionRect.contains) ?? true else { return nil }
+    return WindowDragIntentDestination(
+        kind: .stackSplit(targetWindowId: targetWindow.windowId, position: position),
+        previewRect: previewRect,
+        interactionRect: interactionRect,
+        title: position.title,
+        subtitle: position.subtitle,
+        previewStyle: .stackSplit,
         isGroup: subject == .group,
     )
 }
@@ -439,10 +490,19 @@ private func currentStickyWindowDragIntentDestination(
                   !shouldSuppressSameAccordionTabDestination(
                       sourceWindow: sourceWindow,
                       targetWindow: targetWindow,
-                      detachOrigin: detachOrigin
+                      detachOrigin: detachOrigin,
                   )
             else { return nil }
             return tabStackDestination(targetWindow: targetWindow, mouseLocation: mouseLocation)
+        case .stackSplit(let targetWindowId, let position):
+            guard let targetWindow = Window.get(byId: targetWindowId) else { return nil }
+            return stackSplitDestination(
+                sourceWindow: sourceWindow,
+                targetWindow: targetWindow,
+                mouseLocation: mouseLocation,
+                subject: subject,
+                position: position,
+            )
         case .swap(let targetWindowId):
             guard let targetWindow = Window.get(byId: targetWindowId) else { return nil }
             return swapDestination(
@@ -494,7 +554,7 @@ func updatePendingWindowDragIntent(
         sourceWindow: sourceWindow,
         mouseLocation: mouseLocation,
         subject: subject,
-        detachOrigin: detachOrigin
+        detachOrigin: detachOrigin,
     ) else {
         updateSidebarDragFeedback(sourceWindow: sourceWindow, subject: subject, destination: nil)
         clearPendingWindowDragIntent()
@@ -592,6 +652,16 @@ func applyPendingWindowDragIntentIfPossible() -> Bool {
             guard sourceWindow.windowId == windowId else { return false }
             syncClosedWindowsCacheToCurrentWorld()
             return removeWindowFromTabStack(sourceWindow)
+        case .stackSplit(let targetWindowId, let position):
+            guard let targetWindow = Window.get(byId: targetWindowId)
+            else { return false }
+            syncClosedWindowsCacheToCurrentWorld()
+            return applyWindowStackSplitDragIntent(
+                sourceWindow: sourceWindow,
+                sourceSubject: pendingWindowDragIntent.sourceSubject,
+                targetWindow: targetWindow,
+                position: position,
+            )
         case .swap(let targetWindowId):
             guard let targetWindow = Window.get(byId: targetWindowId)
             else { return false }
@@ -616,6 +686,55 @@ func applyPendingWindowDragIntentIfPossible() -> Bool {
         case .sidebarHover:
             return false
     }
+}
+
+@MainActor
+func applyWindowStackSplitDragIntent(
+    sourceWindow: Window,
+    sourceSubject: WindowDragSubject,
+    targetWindow: Window,
+    position: WindowStackSplitPosition,
+) -> Bool {
+    let sourceNode = dragSubjectNode(for: sourceWindow, subject: sourceSubject)
+    let targetNode = targetWindow.moveNode
+    guard sourceNode != targetNode,
+          !sourceNode.parentsWithSelf.contains(targetNode),
+          !targetNode.parentsWithSelf.contains(sourceNode)
+    else { return false }
+
+    sourceNode.unbindFromParent()
+    guard let targetParent = targetNode.parent as? TilingContainer else { return false }
+
+    if targetParent.layout == .tiles, targetParent.orientation == .v {
+        let targetBinding = targetNode.unbindFromParent()
+        let splitWeight = targetBinding.adaptiveWeight / 2
+        switch position {
+            case .above:
+                sourceNode.bind(to: targetParent, adaptiveWeight: splitWeight, index: targetBinding.index)
+                targetNode.bind(to: targetParent, adaptiveWeight: splitWeight, index: targetBinding.index + 1)
+            case .below:
+                targetNode.bind(to: targetParent, adaptiveWeight: splitWeight, index: targetBinding.index)
+                sourceNode.bind(to: targetParent, adaptiveWeight: splitWeight, index: targetBinding.index + 1)
+        }
+    } else {
+        let targetBinding = targetNode.unbindFromParent()
+        let newParent = TilingContainer(
+            parent: targetBinding.parent,
+            adaptiveWeight: targetBinding.adaptiveWeight,
+            .v,
+            .tiles,
+            index: targetBinding.index,
+        )
+        switch position {
+            case .above:
+                sourceNode.bind(to: newParent, adaptiveWeight: WEIGHT_AUTO, index: 0)
+                targetNode.bind(to: newParent, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+            case .below:
+                targetNode.bind(to: newParent, adaptiveWeight: WEIGHT_AUTO, index: 0)
+                sourceNode.bind(to: newParent, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+        }
+    }
+    return sourceWindow.focusWindow()
 }
 
 @MainActor
@@ -769,7 +888,8 @@ private func currentWindowDragIntentDestination(
     }
 
     if subject == .window,
-       let detachDestination = currentTabDetachDestination(sourceWindow: sourceWindow, mouseLocation: mouseLocation, origin: detachOrigin) {
+       let detachDestination = currentTabDetachDestination(sourceWindow: sourceWindow, mouseLocation: mouseLocation, origin: detachOrigin)
+    {
         return detachDestination
     }
 
@@ -795,6 +915,24 @@ private func currentWindowDragIntentDestination(
 private func currentSwapDestination(sourceWindow: Window, mouseLocation: CGPoint, subject: WindowDragSubject) -> WindowDragIntentDestination? {
     let targetWorkspace = mouseLocation.monitorApproximation.activeWorkspace
     guard let targetWindow = mouseLocation.findIn(tree: targetWorkspace.rootTilingContainer, virtual: false) else { return nil }
+    if let splitDestination = stackSplitDestination(
+        sourceWindow: sourceWindow,
+        targetWindow: targetWindow,
+        mouseLocation: mouseLocation,
+        subject: subject,
+        position: .above,
+    ) {
+        return splitDestination
+    }
+    if let splitDestination = stackSplitDestination(
+        sourceWindow: sourceWindow,
+        targetWindow: targetWindow,
+        mouseLocation: mouseLocation,
+        subject: subject,
+        position: .below,
+    ) {
+        return splitDestination
+    }
     return swapDestination(
         sourceWindow: sourceWindow,
         targetWindow: targetWindow,
@@ -907,8 +1045,8 @@ private func workspaceSiblingInsertionRoot(_ workspace: Workspace) -> TilingCont
     return workspace.rootTilingContainer
 }
 
-private extension Rect {
-    func insetBy(left: CGFloat, right: CGFloat, top: CGFloat, bottom: CGFloat) -> Rect {
+extension Rect {
+    fileprivate func insetBy(left: CGFloat, right: CGFloat, top: CGFloat, bottom: CGFloat) -> Rect {
         Rect(
             topLeftX: topLeftX + left,
             topLeftY: topLeftY + top,
@@ -917,15 +1055,15 @@ private extension Rect {
         )
     }
 
-    func expanded(left: CGFloat, right: CGFloat, top: CGFloat, bottom: CGFloat) -> Rect {
+    fileprivate func expanded(left: CGFloat, right: CGFloat, top: CGFloat, bottom: CGFloat) -> Rect {
         insetBy(left: -left, right: -right, top: -top, bottom: -bottom)
     }
 
-    func expanded(by amount: CGFloat) -> Rect {
+    fileprivate func expanded(by amount: CGFloat) -> Rect {
         Rect(topLeftX: topLeftX - amount, topLeftY: topLeftY - amount, width: width + 2 * amount, height: height + 2 * amount)
     }
 
-    func isEqual(to other: Rect) -> Bool {
+    fileprivate func isEqual(to other: Rect) -> Bool {
         topLeftX == other.topLeftX && topLeftY == other.topLeftY && width == other.width && height == other.height
     }
 }
@@ -946,10 +1084,8 @@ extension TilingContainer {
 
 extension TreeNode {
     @MainActor
-    var swapDropZoneRect: Rect? {
+    private var bodyDropZoneRect: Rect? {
         guard let rect = lastAppliedLayoutPhysicalRect else { return nil }
-        // Exclude the top region where the tab insert interaction zone lives,
-        // so dragging over the top ~20% triggers the tab group hint instead.
         let topExclusion: CGFloat = switch self {
             case let window as Window:
                 (window.tabDropInteractionRect?.height ?? rect.height * 0.2) + 4
@@ -958,19 +1094,74 @@ extension TreeNode {
             default:
                 max(rect.height * 0.2, 40)
         }
-        let swapRect = rect.insetBy(
+        let bodyRect = rect.insetBy(
             left: 2,
             right: 2,
-            top: min(topExclusion, rect.height * 0.4),
+            top: min(topExclusion, rect.height * 0.45),
             bottom: 2,
+        )
+        guard bodyRect.width > 0, bodyRect.height > 0 else { return nil }
+        return bodyRect
+    }
+
+    @MainActor
+    func stackSplitDropZoneRect(position: WindowStackSplitPosition) -> Rect? {
+        guard let bodyRect = bodyDropZoneRect,
+              let swapRect = swapDropZoneRect
+        else { return nil }
+        return switch position {
+            case .above:
+                (swapRect.minY > bodyRect.minY)
+                    ? Rect(
+                        topLeftX: bodyRect.topLeftX,
+                        topLeftY: bodyRect.topLeftY,
+                        width: bodyRect.width,
+                        height: swapRect.minY - bodyRect.minY,
+                    )
+                    : nil
+            case .below:
+                (bodyRect.maxY > swapRect.maxY)
+                    ? Rect(
+                        topLeftX: bodyRect.topLeftX,
+                        topLeftY: swapRect.maxY,
+                        width: bodyRect.width,
+                        height: bodyRect.maxY - swapRect.maxY,
+                    )
+                    : nil
+        }
+    }
+
+    @MainActor
+    func stackSplitPreviewRect(position: WindowStackSplitPosition) -> Rect? {
+        guard let rect = lastAppliedLayoutPhysicalRect else { return nil }
+        let rawRect = switch position {
+            case .above:
+                Rect(topLeftX: rect.topLeftX, topLeftY: rect.topLeftY, width: rect.width, height: rect.height / 2)
+            case .below:
+                Rect(topLeftX: rect.topLeftX, topLeftY: rect.topLeftY + rect.height / 2, width: rect.width, height: rect.height / 2)
+        }
+        let previewRect = rawRect.insetBy(left: 2, right: 2, top: 2, bottom: 2)
+        guard previewRect.width > 0, previewRect.height > 0 else { return nil }
+        return previewRect
+    }
+
+    @MainActor
+    var swapDropZoneRect: Rect? {
+        guard let bodyRect = bodyDropZoneRect else { return nil }
+        let swapHeight = min(bodyRect.height, max(bodyRect.height * 0.2, 28))
+        let swapRect = Rect(
+            topLeftX: bodyRect.topLeftX,
+            topLeftY: bodyRect.topLeftY + (bodyRect.height - swapHeight) / 2,
+            width: bodyRect.width,
+            height: swapHeight,
         )
         guard swapRect.width > 0, swapRect.height > 0 else { return nil }
         return swapRect
     }
 }
 
-private extension Rect {
-    func tabInsertPreviewRect(barHeight: CGFloat) -> Rect {
+extension Rect {
+    fileprivate func tabInsertPreviewRect(barHeight: CGFloat) -> Rect {
         // Show the border at the full width of the window, cropped to
         // the tab bar region height so it outlines the top strip area.
         let effectiveHeight = min(max(barHeight + 8, 36), max(height, 0))
@@ -982,7 +1173,7 @@ private extension Rect {
         )
     }
 
-    func tabInsertInteractionRect(barHeight: CGFloat) -> Rect {
+    fileprivate func tabInsertInteractionRect(barHeight: CGFloat) -> Rect {
         tabInsertPreviewRect(barHeight: barHeight).expanded(left: 20, right: 20, top: 10, bottom: 12)
     }
 }

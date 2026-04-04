@@ -25,9 +25,13 @@ final class FocusCommandTest: XCTestCase {
 
     func testParse() {
         XCTAssertTrue(parseCommand("focus --boundaries left").errorOrNil?.contains("Possible values") == true)
-        var expected = FocusCmdArgs(rawArgs: [], cardinalOrDfsDirection: .direction(.left))
+        var expected = FocusCmdArgs(rawArgs: [], targetArg: .direction(.left))
         expected.rawBoundaries = .workspace
         testParseCommandSucc("focus --boundaries workspace left", expected)
+
+        expected = FocusCmdArgs(rawArgs: [], targetArg: .tabRelative(.tabNext))
+        testParseCommandSucc("focus tab-next", expected)
+        testParseCommandSucc("focus --tab-index 2", FocusCmdArgs(rawArgs: [], tabIndex: 2))
 
         assertEquals(
             parseCommand("focus --boundaries workspace --boundaries workspace left").errorOrNil,
@@ -39,12 +43,20 @@ final class FocusCommandTest: XCTestCase {
         )
         assertEquals(
             parseCommand("focus --boundaries all-monitors-outer-frame dfs-next").errorOrNil,
-            "(dfs-next|dfs-prev) only supports --boundaries workspace",
+            "(dfs-next|dfs-prev|tab-next|tab-prev) only supports --boundaries workspace",
+        )
+        assertEquals(
+            parseCommand("focus --boundaries all-monitors-outer-frame tab-next").errorOrNil,
+            "(dfs-next|dfs-prev|tab-next|tab-prev) only supports --boundaries workspace",
         )
 
         assertEquals(
             parseCommand("focus --window-id 42 --wrap-around").errorOrNil,
             "--window-id is incompatible with other options",
+        )
+        assertEquals(
+            parseCommand("focus --tab-index 2 --wrap-around").errorOrNil,
+            "--tab-index is incompatible with other options",
         )
         assertEquals(
             parseCommand("focus left --boundaries-action wrap-around-the-workspace --wrap-around").errorOrNil,
@@ -118,7 +130,7 @@ final class FocusCommandTest: XCTestCase {
         }
 
         assertEquals(focus.windowOrNil?.windowId, 1)
-        var args = FocusCmdArgs(rawArgs: [], cardinalOrDfsDirection: .direction(.left))
+        var args = FocusCmdArgs(rawArgs: [], targetArg: .direction(.left))
         args.rawBoundaries = .workspace
         args.rawBoundariesAction = .wrapAroundTheWorkspace
         try await FocusCommand(args: args).run(.defaultEnv, .emptyStdin)
@@ -220,7 +232,7 @@ final class FocusCommandTest: XCTestCase {
 
         assertEquals(focus.windowOrNil?.windowId, 1)
 
-        var args = FocusCmdArgs(rawArgs: [], cardinalOrDfsDirection: .dfsRelative(.dfsPrev))
+        var args = FocusCmdArgs(rawArgs: [], targetArg: .dfsRelative(.dfsPrev))
 
         args.rawBoundariesAction = .stop
         assertEquals(try await FocusCommand(args: args).run(.defaultEnv, .emptyStdin).exitCode, 0)
@@ -234,7 +246,7 @@ final class FocusCommandTest: XCTestCase {
         assertEquals(try await FocusCommand(args: args).run(.defaultEnv, .emptyStdin).exitCode, 0)
         assertEquals(focus.windowOrNil?.windowId, 2)
 
-        args.cardinalOrDfsDirection = .dfsRelative(.dfsNext)
+        args.targetArg = .dfsRelative(.dfsNext)
 
         args.rawBoundariesAction = .stop
         assertEquals(try await FocusCommand(args: args).run(.defaultEnv, .emptyStdin).exitCode, 0)
@@ -247,14 +259,94 @@ final class FocusCommandTest: XCTestCase {
         args.rawBoundariesAction = .wrapAroundTheWorkspace
         assertEquals(try await FocusCommand(args: args).run(.defaultEnv, .emptyStdin).exitCode, 0)
         assertEquals(focus.windowOrNil?.windowId, 1)
+    }
+
+    func testFocusTabRelativeStaysInsideCurrentTabGroup() async throws {
+        let workspace = Workspace.get(byName: name)
+        let root = workspace.rootTilingContainer
+        var middleTab: Window!
+        var lastTab: Window!
+        root.apply {
+            TestWindow.new(id: 1, parent: $0)
+            TilingContainer(parent: $0, adaptiveWeight: 1, .v, .accordion, index: INDEX_BIND_LAST).apply {
+                TestWindow.new(id: 2, parent: $0)
+                middleTab = TestWindow.new(id: 3, parent: $0)
+                lastTab = TestWindow.new(id: 4, parent: $0)
+            }
+            TestWindow.new(id: 5, parent: $0)
+        }
+
+        XCTAssertTrue(middleTab.focusWindow())
+
+        try await FocusCommand.new(tabRelative: .tabNext).run(.defaultEnv, .emptyStdin)
+        XCTAssertEqual(focus.windowOrNil?.windowId, lastTab.windowId)
+    }
+
+    func testFocusTabRelativeWrapsInsideCurrentTabGroup() async throws {
+        let workspace = Workspace.get(byName: name)
+        let root = workspace.rootTilingContainer
+        var firstTab: Window!
+        var lastTab: Window!
+        root.apply {
+            TilingContainer(parent: $0, adaptiveWeight: 1, .v, .accordion, index: INDEX_BIND_LAST).apply {
+                firstTab = TestWindow.new(id: 1, parent: $0)
+                TestWindow.new(id: 2, parent: $0)
+                lastTab = TestWindow.new(id: 3, parent: $0)
+            }
+        }
+
+        XCTAssertTrue(lastTab.focusWindow())
+
+        var args = FocusCmdArgs(rawArgs: [], targetArg: .tabRelative(.tabNext))
+        args.rawBoundariesAction = .wrapAroundTheWorkspace
+        let exitCode = try await FocusCommand(args: args).run(.defaultEnv, .emptyStdin).exitCode
+        XCTAssertEqual(exitCode, 0)
+        XCTAssertEqual(focus.windowOrNil?.windowId, firstTab.windowId)
+    }
+
+    func testFocusTabRelativeFailsOutsideTabGroupWhenRequested() async throws {
+        Workspace.get(byName: name).rootTilingContainer.apply {
+            XCTAssertTrue(TestWindow.new(id: 1, parent: $0).focusWindow())
+            TestWindow.new(id: 2, parent: $0)
+        }
+
+        var args = FocusCmdArgs(rawArgs: [], targetArg: .tabRelative(.tabNext))
+        args.rawBoundariesAction = .fail
+
+        let exitCode = try await FocusCommand(args: args).run(.defaultEnv, .emptyStdin).exitCode
+        XCTAssertEqual(exitCode, 1)
+        XCTAssertEqual(focus.windowOrNil?.windowId, 1)
+    }
+
+    func testFocusTabIndexTargetsSpecificTabInsideCurrentGroup() async throws {
+        let workspace = Workspace.get(byName: name)
+        let root = workspace.rootTilingContainer
+        var firstTab: Window!
+        var secondTab: Window!
+        root.apply {
+            TilingContainer(parent: $0, adaptiveWeight: 1, .v, .accordion, index: INDEX_BIND_LAST).apply {
+                firstTab = TestWindow.new(id: 1, parent: $0)
+                secondTab = TestWindow.new(id: 2, parent: $0)
+                _ = TestWindow.new(id: 3, parent: $0)
+            }
+        }
+
+        XCTAssertTrue(firstTab.focusWindow())
+
+        let exitCode = try await FocusCommand(args: FocusCmdArgs(rawArgs: [], tabIndex: 2)).run(.defaultEnv, .emptyStdin).exitCode
+        XCTAssertEqual(exitCode, 0)
+        XCTAssertEqual(focus.windowOrNil?.windowId, secondTab.windowId)
     }
 }
 
 extension FocusCommand {
     static func new(direction: CardinalDirection) -> FocusCommand {
-        FocusCommand(args: FocusCmdArgs(rawArgs: [], cardinalOrDfsDirection: .direction(direction)))
+        FocusCommand(args: FocusCmdArgs(rawArgs: [], targetArg: .direction(direction)))
     }
     static func new(dfsRelative: DfsNextPrev) -> FocusCommand {
-        FocusCommand(args: FocusCmdArgs(rawArgs: [], cardinalOrDfsDirection: .dfsRelative(dfsRelative)))
+        FocusCommand(args: FocusCmdArgs(rawArgs: [], targetArg: .dfsRelative(dfsRelative)))
+    }
+    static func new(tabRelative: TabNextPrev) -> FocusCommand {
+        FocusCommand(args: FocusCmdArgs(rawArgs: [], targetArg: .tabRelative(tabRelative)))
     }
 }

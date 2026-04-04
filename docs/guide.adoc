@@ -280,6 +280,7 @@ Just like in a `tiles` layout, you can use the xref:commands.adoc#focus[focus] c
 
 You can navigate the windows in an `h_accordion` by using the `focus (left|right)` command.
 While in a `v_accordion`, you can navigate the windows using the `focus (up|down)` command.
+If you want a layout-orientation-independent binding for browser-style tab strips, use `focus (tab-next|tab-prev)`.
 
 Accordion padding is configurable via `accordion-padding` option.
 

@@ -15,6 +15,10 @@ aerospace focus [-h|--help] [--ignore-floating] [--wrap-around]
 aerospace focus [-h|--help] [--ignore-floating] [--wrap-around]
                 [--boundaries <boundary>] [--boundaries-action <action>]
                 (dfs-next|dfs-prev)
+aerospace focus [-h|--help] [--ignore-floating] [--wrap-around]
+                [--boundaries <boundary>] [--boundaries-action <action>]
+                (tab-next|tab-prev)
+aerospace focus [-h|--help] --tab-index <tab-index>
 aerospace focus [-h|--help] --window-id <window-id>
 aerospace focus [-h|--help] --dfs-index <dfs-index>
 
@@ -61,6 +65,9 @@ Focus the window with specified `<window-id>`
 Focus window by its index, based on a depth-first search (DFS) of the window within the workspace tree.
 Index is 0-based.
 
+--tab-index <tab-index>::
+Focus tab by its 1-based index inside the current accordion tab group.
+
 --ignore-floating::
 Don't perceive floating windows as part of the tree.
 It may be useful for more reliable scripting.
@@ -74,6 +81,11 @@ Set focus to the nearest window in the given direction.
 (dfs-next|dfs-prev)::
 Set focus to the window before or after the current window in the depth-first order (top-to-bottom and left-to-right) of windows in the current workspace tree.
 In this mode, `--boundaries` must be `workspace` (the default) and `--boundaries-action` can be set to one of `(stop|fail|wrap-around-the-workspace)`.
+
+(tab-next|tab-prev)::
+Set focus to the next or previous tab inside the current accordion tab group.
+In this mode, `--boundaries` must be `workspace` (the default) and `--boundaries-action` can be set to one of `(stop|fail|wrap-around-the-workspace)`.
+At tab-group boundaries, `wrap-around-the-workspace` wraps within the current tab group.
 
 // end::body[]
 

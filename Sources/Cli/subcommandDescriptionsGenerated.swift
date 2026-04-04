@@ -32,6 +32,7 @@ let subcommandDescriptions = [
     ["  reload-config", "Reload currently active config"],
     ["  resize", "Resize the focused window"],
     ["  split", "Split focused window"],
+    ["  stack-with", "Put the focused window into the same accordion tab group as the nearest window in the specified direction."],
     ["  subscribe", "Subscribe to AeroSpace events and receive notifications via socket"],
     ["  summon-workspace", "Move the requested workspace to the focused monitor."],
     ["  swap", "Swaps the focused window with another window."],

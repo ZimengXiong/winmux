@@ -70,4 +70,16 @@ final class WorkspaceNamingTest: XCTestCase {
         XCTAssertEqual(workspaceDisplayName(first.name), "Workspace 1")
         XCTAssertEqual(workspaceDisplayName(second.name), "Workspace 2")
     }
+
+    func testSidebarWorkspaceCreationUsesAutomaticWorkspaceName() {
+        let first = Workspace.get(byName: "1")
+        first.markAsAutomaticallyNamed()
+        let window = TestWindow.new(id: 5, parent: first.rootTilingContainer)
+        _ = first.focusWorkspace()
+
+        XCTAssertTrue(createWorkspaceFromSidebarDrag(sourceNode: window, sourceWindow: window))
+        XCTAssertNotNil(Workspace.existing(byName: "2"))
+        XCTAssertNil(Workspace.existing(byName: "__sidebar_draft_workspace_1"))
+        XCTAssertEqual(focus.workspace.name, "2")
+    }
 }

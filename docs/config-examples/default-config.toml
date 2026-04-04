@@ -50,7 +50,8 @@ on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
 automatically-unhide-macos-hidden-apps = false
 
 # List of workspaces that should stay alive even when they contain no windows,
-# even when they are invisible.
+# even when they are invisible. Persistent workspaces remain user-facing in
+# workspace lists and the sidebar even while empty after they have been created.
 # This config option is only available since 'config-version = 2'
 # Fallback value (if you omit the key): persistent-workspaces = []
 persistent-workspaces = []

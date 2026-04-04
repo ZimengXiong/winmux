@@ -208,7 +208,7 @@ private struct WindowDragCursorProxyView: View {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .strokeBorder(Color.primary.opacity(0.12), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
                 }
-                .shadow(color: Color.black.opacity(0.1), radius: 4, y: 2)
+                .shadow(color: Color.black.opacity(0.1), radius: 4, y: 2),
         )
     }
 }
@@ -238,6 +238,7 @@ struct WindowTabDropPreviewViewModel: Equatable {
 enum WindowTabDropPreviewStyle: Equatable {
     case tabInsert
     case detach
+    case stackSplit
     case swap
     case workspaceMove
     case sidebarWorkspaceMove
@@ -407,19 +408,19 @@ private struct WindowTabStripView: View {
                         tab: tab,
                         width: tabWidth,
                         height: itemHeight,
-                        isDragSource: draggingTabId == tab.windowId
+                        isDragSource: draggingTabId == tab.windowId,
                     )
                     .offset(x: tabVisualOffset(
                         for: tab,
                         draggingIndex: draggingIndex,
                         targetIndex: targetIndex,
-                        effectiveTabWidth: effectiveTabWidth
+                        effectiveTabWidth: effectiveTabWidth,
                     ))
                     .zIndex(draggingTabId == tab.windowId ? 1 : 0)
                     .shadow(
                         color: draggingTabId == tab.windowId ? Color.black.opacity(0.12) : Color.clear,
                         radius: draggingTabId == tab.windowId ? 6 : 0,
-                        y: draggingTabId == tab.windowId ? 2 : 0
+                        y: draggingTabId == tab.windowId ? 2 : 0,
                     )
                     .animation(.interactiveSpring(response: 0.2, dampingFraction: 0.8), value: targetIndex)
                     .highPriorityGesture(
@@ -471,7 +472,7 @@ private struct WindowTabStripView: View {
                     RoundedRectangle(cornerRadius: windowTabStripCornerRadius, style: .continuous)
                         .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
                 }
-                .shadow(color: Color.black.opacity(0.05), radius: 4, y: 2)
+                .shadow(color: Color.black.opacity(0.05), radius: 4, y: 2),
         )
         .simultaneousGesture(
             DragGesture(minimumDistance: 10)
@@ -490,7 +491,7 @@ private struct WindowTabStripView: View {
         for tab: WindowTabItemViewModel,
         draggingIndex: Int?,
         targetIndex: Int?,
-        effectiveTabWidth: CGFloat
+        effectiveTabWidth: CGFloat,
     ) -> CGFloat {
         guard let draggingIndex, let targetIndex else {
             // Dragged tab follows cursor 1:1
@@ -555,7 +556,7 @@ private struct WindowTabItemView: View {
         .shadow(
             color: isDragSource ? Color.black.opacity(0.15) : Color.clear,
             radius: isDragSource ? 8 : 0,
-            y: isDragSource ? 3 : 0
+            y: isDragSource ? 3 : 0,
         )
         .animation(.spring(response: 0.2, dampingFraction: 0.75), value: isDragSource)
         .animation(.easeOut(duration: 0.15), value: isHovered)
@@ -608,7 +609,7 @@ private struct WindowTabDropPreviewView: View {
                 RoundedRectangle(cornerRadius: windowTabPreviewCornerRadius, style: .continuous)
                     .strokeBorder(
                         cfg.color.opacity(isPresented ? (glowPhase ? cfg.borderOpacity : cfg.borderOpacity * 0.6) : 0.05),
-                        style: cfg.strokeStyle
+                        style: cfg.strokeStyle,
                     )
             }
             .overlay {
@@ -616,7 +617,7 @@ private struct WindowTabDropPreviewView: View {
                 RoundedRectangle(cornerRadius: windowTabPreviewCornerRadius + 2, style: .continuous)
                     .strokeBorder(
                         cfg.color.opacity(isPresented ? (glowPhase ? 0.12 : 0.04) : 0),
-                        lineWidth: 3
+                        lineWidth: 3,
                     )
                     .blur(radius: 4)
             }
@@ -648,6 +649,8 @@ private struct WindowTabDropPreviewView: View {
                 return BorderConfig(color: .accentColor, fillOpacity: 0.06, borderOpacity: 0.6, strokeStyle: StrokeStyle(lineWidth: 2))
             case .detach:
                 return BorderConfig(color: .orange, fillOpacity: 0.04, borderOpacity: 0.5, strokeStyle: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+            case .stackSplit:
+                return BorderConfig(color: .accentColor, fillOpacity: 0.05, borderOpacity: 0.55, strokeStyle: StrokeStyle(lineWidth: 1.75))
             case .swap:
                 return BorderConfig(color: .accentColor, fillOpacity: 0.04, borderOpacity: 0.45, strokeStyle: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
             case .workspaceMove:

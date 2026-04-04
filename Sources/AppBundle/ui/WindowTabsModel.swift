@@ -65,7 +65,7 @@ extension TreeNode {
 extension TilingContainer {
     @MainActor
     var usesWindowTabBehavior: Bool {
-        layout == .accordion && config.windowTabs.enabled && children.count > 1
+        isWindowTabGroup && config.windowTabs.enabled
     }
 
     @MainActor
