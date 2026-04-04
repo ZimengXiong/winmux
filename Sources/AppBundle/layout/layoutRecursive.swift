@@ -53,6 +53,9 @@ extension TreeNode {
             case .tilingContainer(let container):
                 lastAppliedLayoutPhysicalRect = physicalRect
                 lastAppliedLayoutVirtualRect = virtual
+                if container.usesWindowTabBehavior {
+                    debugFocusLog("layoutRecursive tabContainer=\(ObjectIdentifier(container)) physicalRect=\(physicalRect) virtualRect=\(virtual)")
+                }
                 switch container.layout {
                     case .tiles:
                         try await container.layoutTiles(point, width: width, height: height, virtual: virtual, context)

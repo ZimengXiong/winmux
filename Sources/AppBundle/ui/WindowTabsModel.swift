@@ -5,6 +5,7 @@ func updateWindowTabModel() async {
     guard TrayMenuModel.shared.isEnabled, config.windowTabs.enabled else {
         TrayMenuModel.shared.windowTabStrips = []
         WindowTabStripPanelController.shared.refresh()
+        debugFocusLog("updateWindowTabModel disabled -> cleared")
         return
     }
 
@@ -15,6 +16,9 @@ func updateWindowTabModel() async {
         }
         for container in workspace.rootTilingContainer.allTabbedContainersRecursive {
             guard let tabBarRect = container.windowTabBarRect else { continue }
+            debugFocusLog(
+                "updateWindowTabModel container=\(ObjectIdentifier(container)) workspace=\(workspace.name) containerRect=\(String(describing: container.lastAppliedLayoutPhysicalRect)) tabBarRect=\(tabBarRect)"
+            )
 
             let activeWindowId = container.tabActiveWindow?.windowId
             let tabs: [WindowTabItemViewModel] = await container.children.asyncCompactMap { child in
@@ -43,8 +47,11 @@ func updateWindowTabModel() async {
     }
 
     if TrayMenuModel.shared.windowTabStrips != strips {
+        debugFocusLog("updateWindowTabModel apply strips old=\(TrayMenuModel.shared.windowTabStrips.map(\.frame)) new=\(strips.map(\.frame))")
         TrayMenuModel.shared.windowTabStrips = strips
         WindowTabStripPanelController.shared.refresh()
+    } else {
+        debugFocusLog("updateWindowTabModel unchanged strips=\(strips.map(\.frame))")
     }
 }
 

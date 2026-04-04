@@ -8,16 +8,11 @@ private let workspaceSidebarSectionInnerHorizontalInset: CGFloat = 4
 private let workspaceSidebarBadgeWidth: CGFloat = 22
 private let workspaceSidebarHeaderSpacing: CGFloat = 8
 private let workspaceSidebarRowsRevealProgress: CGFloat = 0.58
-private let workspaceSidebarSectionCornerRadius: CGFloat = 10
+private let workspaceSidebarSectionCornerRadius: CGFloat = 8
 private let workspaceSidebarHoverCueWidthDelta: CGFloat = 12
 private let workspaceSidebarHoverOpenThresholdFraction: CGFloat = 0.5
 @MainActor
 private var workspaceSidebarDropTargets: [WorkspaceSidebarDropTarget] = []
-
-enum WorkspaceSidebarEditorEndEditingAction: Equatable {
-    case commit
-    case cancel
-}
 
 @MainActor
 private func workspaceSidebarCompactSectionWidth() -> CGFloat {
@@ -70,16 +65,6 @@ struct WorkspaceSidebarDropTarget {
 struct WorkspaceSidebarDropTargetFrame: Equatable {
     let kind: WorkspaceSidebarDropTargetKind
     let frame: CGRect
-}
-
-private struct WorkspaceSidebarRenameKeyEvent {
-    let modifierFlags: NSEvent.ModifierFlags
-    let characters: String?
-
-    init(_ event: NSEvent) {
-        modifierFlags = event.modifierFlags
-        characters = event.characters
-    }
 }
 
 struct WorkspaceSidebarDropTargetPreferenceKey: PreferenceKey {
@@ -152,42 +137,6 @@ func nextWorkspaceSidebarHoveredWindowId(
     return currentHoveredWindowId == windowId ? nil : currentHoveredWindowId
 }
 
-struct WorkspaceSidebarBeginEditingPlan: Equatable {
-    let workspaceToCommit: String?
-    let nextEditingWorkspaceName: String
-    let nextEditingText: String
-}
-
-func planWorkspaceSidebarBeginEditing(
-    currentEditingWorkspaceName: String?,
-    currentEditingText: String,
-    targetWorkspaceName: String,
-    targetInitialText: String?,
-    targetPersistedLabel: String?,
-) -> WorkspaceSidebarBeginEditingPlan {
-    if currentEditingWorkspaceName == targetWorkspaceName {
-        return WorkspaceSidebarBeginEditingPlan(
-            workspaceToCommit: nil,
-            nextEditingWorkspaceName: targetWorkspaceName,
-            nextEditingText: currentEditingText,
-        )
-    }
-    return WorkspaceSidebarBeginEditingPlan(
-        workspaceToCommit: currentEditingWorkspaceName,
-        nextEditingWorkspaceName: targetWorkspaceName,
-        nextEditingText: targetInitialText ?? targetPersistedLabel ?? "",
-    )
-}
-
-func nextWorkspaceSidebarEditingText(
-    currentEditingWorkspaceName: String?,
-    fieldWorkspaceName: String,
-    currentEditingText: String,
-    newText: String,
-) -> String {
-    currentEditingWorkspaceName == fieldWorkspaceName ? newText : currentEditingText
-}
-
 func workspaceSidebarHoverCueWidth(collapsedWidth: CGFloat, expandedWidth: CGFloat) -> CGFloat {
     collapsedWidth + min(max(expandedWidth - collapsedWidth, 0), workspaceSidebarHoverCueWidthDelta)
 }
@@ -223,58 +172,11 @@ func shouldDelayWorkspaceSidebarExpansion(
     !isExpanded && !isExpansionLocked && !isMouseWindowDragInProgress
 }
 
-func workspaceSidebarEditorEndEditingAction(textMovement: Int?) -> WorkspaceSidebarEditorEndEditingAction {
-    textMovement == NSTextMovement.cancel.rawValue ? .cancel : .commit
-}
-
-@MainActor
-func normalizedWorkspaceSidebarCommittedLabel(workspaceName: String, editingText: String) -> String? {
-    let normalized = editingText.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !normalized.isEmpty else { return nil }
-    return normalized == workspaceDefaultDisplayName(workspaceName) ? nil : normalized
-}
-
-@MainActor
-func dispatchWorkspaceSidebarEditorEndEditingAction(
-    textMovement: Int?,
-    onCommit: @escaping @MainActor () -> Void,
-    onCancel: @escaping @MainActor () -> Void,
-) {
-    let action = workspaceSidebarEditorEndEditingAction(textMovement: textMovement)
-    Task { @MainActor in
-        switch action {
-            case .commit:
-                onCommit()
-            case .cancel:
-                onCancel()
-        }
-    }
-}
-
-func canStartWorkspaceSidebarTypingRename(
-    isAppEnabled: Bool,
-    isSidebarEnabled: Bool,
-    isSidebarVisible: Bool,
-    isSidebarExpanded: Bool,
-    isPanelKeyWindow: Bool,
-    editingWorkspaceName: String?,
-    hoveredWorkspaceName: String?,
-) -> Bool {
-    isAppEnabled &&
-        isSidebarEnabled &&
-        isSidebarVisible &&
-        isSidebarExpanded &&
-        isPanelKeyWindow &&
-        editingWorkspaceName == nil &&
-        hoveredWorkspaceName != nil
-}
-
 @MainActor
 final class WorkspaceSidebarPanel: NSPanelHud {
     static let shared = WorkspaceSidebarPanel()
 
     private let hostingView = NSHostingView(rootView: WorkspaceSidebarView(viewModel: TrayMenuModel.shared))
-    private var localRenameKeyMonitor: Any?
     private var pendingExpand: DispatchWorkItem?
     private var pendingCollapse: DispatchWorkItem?
     private var pendingCollapseFinalize: DispatchWorkItem?
@@ -303,30 +205,10 @@ final class WorkspaceSidebarPanel: NSPanelHud {
         standardWindowButton(.closeButton)?.isHidden = true
         standardWindowButton(.miniaturizeButton)?.isHidden = true
         standardWindowButton(.zoomButton)?.isHidden = true
-        installRenameKeyMonitoring()
     }
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
-
-    func prepareForTextInput() {
-        orderFrontRegardless()
-        if !NSApp.isActive {
-            NSApp.setActivationPolicy(.accessory)
-            NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps])
-            NSApp.activate(ignoringOtherApps: true)
-        }
-        if !isKeyWindow {
-            makeKeyAndOrderFront(nil)
-        }
-    }
-
-    override func keyDown(with event: NSEvent) {
-        if handleWorkspaceRenameKeyDown(event) {
-            return
-        }
-        super.keyDown(with: event)
-    }
 
     func refresh() {
         guard TrayMenuModel.shared.isEnabled,
@@ -412,8 +294,6 @@ final class WorkspaceSidebarPanel: NSPanelHud {
         workspaceSidebarDropTargets = []
         TrayMenuModel.shared.workspaceSidebarDropPreview = nil
         TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName = nil
-        TrayMenuModel.shared.workspaceSidebarEditingWorkspaceName = nil
-        TrayMenuModel.shared.workspaceSidebarEditingText = ""
         TrayMenuModel.shared.workspaceSidebarVisibleWidth = 0
         orderOut(nil)
     }
@@ -423,24 +303,12 @@ final class WorkspaceSidebarPanel: NSPanelHud {
         setHovering(isMouseInsideHoverRegion())
     }
 
-    private func installRenameKeyMonitoring() {
-        guard localRenameKeyMonitor == nil else { return }
-        localRenameKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard event.window === self || self.isKeyWindow else { return event }
-            let snapshot = WorkspaceSidebarRenameKeyEvent(event)
-            let handled = MainActor.assumeIsolated {
-                handleWorkspaceRenameTypingEvent(snapshot)
-            }
-            return handled ? nil : event
-        }
-    }
-
     private func shouldLockExpansionForSidebarDrag() -> Bool {
         shouldLockWorkspaceSidebarExpansion(
             hasDropPreview: TrayMenuModel.shared.workspaceSidebarDropPreview != nil,
             hasPinnedDraggedWindow: hasPinnedDraggedWindow(),
             isSidebarDragInProgress: getCurrentMouseManipulationKind() == .move && getCurrentMouseDragStartedInSidebar(),
-            hasActiveEditor: TrayMenuModel.shared.workspaceSidebarEditingWorkspaceName != nil,
+            hasActiveEditor: false,
         ) || isMouseWindowDragInProgress()
     }
 
@@ -602,148 +470,11 @@ final class WorkspaceSidebarPanel: NSPanelHud {
 }
 
 @MainActor
-private func normalizedWorkspaceRenameSeed(from event: NSEvent) -> String? {
-    normalizedWorkspaceRenameSeed(
-        modifierFlags: event.modifierFlags,
-        characters: event.characters,
-    )
-}
-
-private func normalizedWorkspaceRenameSeed(
-    modifierFlags: NSEvent.ModifierFlags,
-    characters: String?,
-) -> String? {
-    let disallowedModifiers: NSEvent.ModifierFlags = [.command, .control, .option, .function]
-    guard modifierFlags.intersection(disallowedModifiers).isEmpty else { return nil }
-    guard let characters = characters?.trimmingCharacters(in: .controlCharacters),
-          !characters.isEmpty
-    else { return nil }
-    return characters
-}
-
-@MainActor
-private func hoveredWorkspaceReadyForTypingRename() -> String? {
-    guard canStartWorkspaceSidebarTypingRename(
-        isAppEnabled: TrayMenuModel.shared.isEnabled,
-        isSidebarEnabled: config.workspaceSidebar.enabled,
-        isSidebarVisible: WorkspaceSidebarPanel.shared.isVisible,
-        isSidebarExpanded: TrayMenuModel.shared.isWorkspaceSidebarExpanded,
-        isPanelKeyWindow: WorkspaceSidebarPanel.shared.isKeyWindow,
-        editingWorkspaceName: TrayMenuModel.shared.workspaceSidebarEditingWorkspaceName,
-        hoveredWorkspaceName: TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName,
-    ),
-    let hoveredWorkspaceName = TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName
-    else {
-        return nil
-    }
-    return hoveredWorkspaceName
-}
-
-@MainActor
-private func workspaceSidebarEditorHasKeyboardFocus() -> Bool {
-    guard WorkspaceSidebarPanel.shared.isKeyWindow else { return false }
-    let firstResponder = WorkspaceSidebarPanel.shared.firstResponder
-    return firstResponder is NSText || firstResponder is NSTextField
-}
-
-@MainActor
-private func handleWorkspaceRenameTypingEvent(_ event: WorkspaceSidebarRenameKeyEvent) -> Bool {
-    guard let seed = normalizedWorkspaceRenameSeed(
-        modifierFlags: event.modifierFlags,
-        characters: event.characters,
-    ) else {
-        return false
-    }
-    if TrayMenuModel.shared.workspaceSidebarEditingWorkspaceName != nil {
-        guard !workspaceSidebarEditorHasKeyboardFocus() else { return false }
-        guard WorkspaceSidebarPanel.shared.isVisible,
-              TrayMenuModel.shared.isWorkspaceSidebarExpanded,
-              WorkspaceSidebarPanel.shared.isKeyWindow
-        else {
-            return false
-        }
-        TrayMenuModel.shared.workspaceSidebarEditingText += seed
-        return true
-    }
-    guard let hoveredWorkspaceName = hoveredWorkspaceReadyForTypingRename() else { return false }
-    beginWorkspaceSidebarEditing(workspaceName: hoveredWorkspaceName, initialText: seed)
-    return true
-}
-
-@MainActor
-private func handleWorkspaceRenameKeyDown(_ event: NSEvent) -> Bool {
-    if event.keyCode == 53, let editing = TrayMenuModel.shared.workspaceSidebarEditingWorkspaceName {
-        cancelWorkspaceSidebarEditing(workspaceName: editing)
-        return true
-    }
-    if event.keyCode == 36, let editing = TrayMenuModel.shared.workspaceSidebarEditingWorkspaceName {
-        commitWorkspaceSidebarEditing(workspaceName: editing)
-        return true
-    }
-    return handleWorkspaceRenameTypingEvent(WorkspaceSidebarRenameKeyEvent(event))
-}
-
-@MainActor
 private func focusWorkspaceFromSidebar(_ workspaceName: String) {
     guard let token: RunSessionGuard = .isServerEnabled else { return }
     Task {
         try await runLightSession(.menuBarButton, token) {
             _ = Workspace.existing(byName: workspaceName)?.focusWorkspace()
-        }
-    }
-}
-
-@MainActor
-private func beginWorkspaceSidebarEditing(workspaceName: String, initialText: String? = nil) {
-    let plan = planWorkspaceSidebarBeginEditing(
-        currentEditingWorkspaceName: TrayMenuModel.shared.workspaceSidebarEditingWorkspaceName,
-        currentEditingText: TrayMenuModel.shared.workspaceSidebarEditingText,
-        targetWorkspaceName: workspaceName,
-        targetInitialText: initialText,
-        targetPersistedLabel: config.workspaceSidebar.workspaceLabels[workspaceName],
-    )
-    if let workspaceToCommit = plan.workspaceToCommit {
-        commitWorkspaceSidebarEditing(workspaceName: workspaceToCommit)
-    }
-    TrayMenuModel.shared.workspaceSidebarEditingWorkspaceName = plan.nextEditingWorkspaceName
-    TrayMenuModel.shared.workspaceSidebarEditingText = plan.nextEditingText
-}
-
-@MainActor
-private func cancelWorkspaceSidebarEditing(workspaceName: String) {
-    guard TrayMenuModel.shared.workspaceSidebarEditingWorkspaceName == workspaceName else { return }
-    TrayMenuModel.shared.workspaceSidebarEditingWorkspaceName = nil
-    TrayMenuModel.shared.workspaceSidebarEditingText = ""
-}
-
-@MainActor
-private func commitWorkspaceSidebarEditing(workspaceName: String) {
-    guard TrayMenuModel.shared.workspaceSidebarEditingWorkspaceName == workspaceName else { return }
-    let normalized = normalizedWorkspaceSidebarCommittedLabel(
-        workspaceName: workspaceName,
-        editingText: TrayMenuModel.shared.workspaceSidebarEditingText,
-    )
-    TrayMenuModel.shared.workspaceSidebarEditingWorkspaceName = nil
-    TrayMenuModel.shared.workspaceSidebarEditingText = ""
-    applyWorkspaceLabelFromSidebar(workspaceName: workspaceName, label: normalized)
-}
-
-@MainActor
-private func applyWorkspaceLabelFromSidebar(workspaceName: String, label: String?) {
-    Task { @MainActor in
-        do {
-            try persistWorkspaceSidebarLabel(workspaceName: workspaceName, label: label)
-            config.workspaceSidebar.workspaceLabels[workspaceName] = label
-            if label == nil {
-                _ = config.workspaceSidebar.workspaceLabels.removeValue(forKey: workspaceName)
-            }
-            updateTrayText()
-            await updateWorkspaceSidebarModel()
-        } catch {
-            MessageModel.shared.message = Message(
-                description: "Workspace Label Update Failed",
-                body: error.localizedDescription,
-            )
         }
     }
 }
@@ -840,7 +571,6 @@ private func finishSidebarWindowDrag() {
 
 struct WorkspaceSidebarView: View {
     @ObservedObject var viewModel: TrayMenuModel
-    @FocusState private var focusedWorkspaceEditor: String?
 
     var body: some View {
         let collapsedWidth = CGFloat(config.workspaceSidebar.collapsedWidth)
@@ -869,19 +599,7 @@ struct WorkspaceSidebarView: View {
                     WorkspaceSidebarWorkspaceSection(
                         workspace: workspace,
                         dragPreview: viewModel.workspaceSidebarDropPreview,
-                        expansionProgress: expansionProgress,
-                        isEditing: viewModel.workspaceSidebarEditingWorkspaceName == workspace.name,
-                        editingText: editingBinding(for: workspace.name),
-                        focusedWorkspaceEditor: $focusedWorkspaceEditor,
-                        onBeginEditing: {
-                            beginWorkspaceSidebarEditing(workspaceName: workspace.name)
-                        },
-                        onCommitEditing: {
-                            commitWorkspaceSidebarEditing(workspaceName: workspace.name)
-                        },
-                        onCancelEditing: {
-                            cancelWorkspaceSidebarEditing(workspaceName: workspace.name)
-                        }
+                        expansionProgress: expansionProgress
                     )
                 }
                 WorkspaceSidebarCreateWorkspaceSection(
@@ -905,35 +623,11 @@ struct WorkspaceSidebarView: View {
                 .fill(Color(nsColor: .separatorColor).opacity(0.5))
                 .frame(width: 1)
         }
-        .onAppear {
-            focusedWorkspaceEditor = viewModel.workspaceSidebarEditingWorkspaceName
-        }
-        .onChange(of: viewModel.workspaceSidebarEditingWorkspaceName) { workspaceName in
-            focusedWorkspaceEditor = workspaceName
-        }
     }
 
     private var sidebarSurface: some View {
         VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
             .ignoresSafeArea()
-    }
-
-    private func editingBinding(for workspaceName: String) -> Binding<String> {
-        Binding(
-            get: {
-                viewModel.workspaceSidebarEditingWorkspaceName == workspaceName
-                    ? viewModel.workspaceSidebarEditingText
-                    : ""
-            },
-            set: { newValue in
-                viewModel.workspaceSidebarEditingText = nextWorkspaceSidebarEditingText(
-                    currentEditingWorkspaceName: viewModel.workspaceSidebarEditingWorkspaceName,
-                    fieldWorkspaceName: workspaceName,
-                    currentEditingText: viewModel.workspaceSidebarEditingText,
-                    newText: newValue,
-                )
-            },
-        )
     }
 }
 
@@ -955,123 +649,10 @@ struct VisualEffectView: NSViewRepresentable {
     }
 }
 
-private struct WorkspaceSidebarEditorField: NSViewRepresentable {
-    @Binding var text: String
-    let isFocused: Bool
-    let onCommit: () -> Void
-    let onCancel: () -> Void
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text, onCommit: onCommit, onCancel: onCancel)
-    }
-
-    func makeNSView(context: Context) -> WorkspaceSidebarEditorNSTextField {
-        let view = WorkspaceSidebarEditorNSTextField()
-        view.delegate = context.coordinator
-        view.isEditable = true
-        view.isSelectable = true
-        view.isEnabled = true
-        view.drawsBackground = false
-        view.isBordered = false
-        view.isBezeled = false
-        view.focusRingType = .none
-        view.font = .systemFont(ofSize: 12, weight: .semibold)
-        view.textColor = .labelColor
-        view.lineBreakMode = .byTruncatingTail
-        view.usesSingleLineMode = true
-        view.maximumNumberOfLines = 1
-        view.target = context.coordinator
-        view.action = #selector(Coordinator.commitFromAction)
-        view.onCancel = onCancel
-        view.onCommit = onCommit
-        return view
-    }
-
-    func updateNSView(_ nsView: WorkspaceSidebarEditorNSTextField, context: Context) {
-        context.coordinator.text = $text
-        context.coordinator.onCommit = onCommit
-        context.coordinator.onCancel = onCancel
-        nsView.onCommit = onCommit
-        nsView.onCancel = onCancel
-        if nsView.stringValue != text {
-            nsView.stringValue = text
-        }
-        if isFocused {
-            DispatchQueue.main.async {
-                guard let window = nsView.window else { return }
-                let currentEditor = nsView.currentEditor()
-                let isAlreadyEditingThisField =
-                    window.firstResponder === nsView ||
-                    (currentEditor != nil && window.firstResponder === currentEditor)
-                guard !isAlreadyEditingThisField else { return }
-                WorkspaceSidebarPanel.shared.prepareForTextInput()
-                guard window.makeFirstResponder(nsView) else { return }
-                let insertionPoint = nsView.stringValue.count
-                let editor = nsView.currentEditor() ?? window.fieldEditor(true, for: nsView)
-                editor?.selectedRange = NSRange(location: insertionPoint, length: 0)
-            }
-        }
-    }
-
-    final class Coordinator: NSObject, NSTextFieldDelegate {
-        var text: Binding<String>
-        var onCommit: () -> Void
-        var onCancel: () -> Void
-
-        init(text: Binding<String>, onCommit: @escaping () -> Void, onCancel: @escaping () -> Void) {
-            self.text = text
-            self.onCommit = onCommit
-            self.onCancel = onCancel
-        }
-
-        func controlTextDidChange(_ obj: Notification) {
-            guard let field = obj.object as? NSTextField else { return }
-            text.wrappedValue = field.stringValue
-        }
-
-        @objc func commitFromAction() {
-            onCommit()
-        }
-    }
-}
-
-private final class WorkspaceSidebarEditorNSTextField: NSTextField {
-    var onCommit: (() -> Void)?
-    var onCancel: (() -> Void)?
-
-    override func textDidEndEditing(_ notification: Notification) {
-        super.textDidEndEditing(notification)
-        let onCommit = onCommit
-        let onCancel = onCancel
-        dispatchWorkspaceSidebarEditorEndEditingAction(
-            textMovement: notification.userInfo?["NSTextMovement"] as? Int,
-            onCommit: { onCommit?() },
-            onCancel: { onCancel?() },
-        )
-    }
-
-    override func keyDown(with event: NSEvent) {
-        switch event.keyCode {
-            case 36:
-                onCommit?()
-            case 53:
-                onCancel?()
-            default:
-                super.keyDown(with: event)
-        }
-    }
-}
-
 struct WorkspaceSidebarWorkspaceSection: View {
     let workspace: WorkspaceSidebarWorkspaceViewModel
     let dragPreview: WorkspaceSidebarDropPreviewViewModel?
     let expansionProgress: CGFloat
-    let isEditing: Bool
-    let editingText: Binding<String>
-    let focusedWorkspaceEditor: FocusState<String?>.Binding
-    let onBeginEditing: () -> Void
-    let onCommitEditing: () -> Void
-    let onCancelEditing: () -> Void
 
     @State private var isHovered = false
     @State private var hoveredWindowId: UInt32? = nil
@@ -1105,27 +686,10 @@ struct WorkspaceSidebarWorkspaceSection: View {
                     isHovering: hover,
                 )
             }
-            .gesture(TapGesture().onEnded {
-                if shouldHandleWorkspaceSidebarActivation(
-                    editingWorkspaceName: TrayMenuModel.shared.workspaceSidebarEditingWorkspaceName,
-                    isSidebarDragInProgress: isWorkspaceSidebarDragInProgress(),
-                ) {
-                    focusWorkspaceFromSidebar(workspace.name)
-                }
-            }, including: .gesture)
             .zIndex(isDropTarget ? 1 : 0)
-            .animation(.spring(response: 0.22, dampingFraction: 0.86), value: dragPreview)
-            .animation(.spring(response: 0.22, dampingFraction: 0.86), value: expansionProgress)
-            .contextMenu {
-                Button("Rename Workspace…") {
-                    onBeginEditing()
-                }
-                if !workspace.sidebarLabel.isEmpty {
-                    Button("Remove Workspace Label") {
-                        applyWorkspaceLabelFromSidebar(workspaceName: workspace.name, label: nil)
-                    }
-                }
-            }
+            .animation(.spring(response: 0.2, dampingFraction: 0.82), value: dragPreview)
+            .animation(.spring(response: 0.2, dampingFraction: 0.82), value: expansionProgress)
+            .animation(.easeOut(duration: 0.15), value: isHovered)
             .background(sectionBackground)
             .background {
                 GeometryReader { geometry in
@@ -1140,14 +704,29 @@ struct WorkspaceSidebarWorkspaceSection: View {
             }
     }
 
+    private func handleSectionClick() {
+        if shouldHandleWorkspaceSidebarActivation(isEditing: false, isSidebarDragInProgress: isWorkspaceSidebarDragInProgress()) {
+            focusWorkspaceFromSidebar(workspace.name)
+        }
+    }
+
     private var sectionContent: some View {
         VStack(alignment: .leading, spacing: 3) {
-            header
+            headerButton
                 .frame(height: headerHeight)
                 .frame(maxWidth: .infinity, alignment: isCompact ? .center : .leading)
             windowRows
             dropPreviewRow
         }
+    }
+
+    private var headerButton: some View {
+        Button(action: handleSectionClick) {
+            header
+                .frame(maxWidth: .infinity, alignment: isCompact ? .center : .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
@@ -1189,10 +768,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
 
     private func workspaceWindowButton(_ window: WorkspaceSidebarWindowViewModel, allowsDrag: Bool, subject: WindowDragSubject = .window) -> some View {
         Button {
-            guard shouldHandleWorkspaceSidebarActivation(
-                editingWorkspaceName: TrayMenuModel.shared.workspaceSidebarEditingWorkspaceName,
-                isSidebarDragInProgress: isWorkspaceSidebarDragInProgress(),
-            ) else { return }
+            guard shouldHandleWorkspaceSidebarActivation(isEditing: false, isSidebarDragInProgress: isWorkspaceSidebarDragInProgress()) else { return }
             focusWindowFromSidebar(window.windowId, fallbackWorkspace: window.workspaceName)
         } label: {
             WorkspaceSidebarWindowRow(
@@ -1220,17 +796,16 @@ struct WorkspaceSidebarWorkspaceSection: View {
                 isHovering: hover,
             )
         }
-        .opacity(activeSidebarDragSourceWindowId == window.windowId ? 0.3 : 1)
-        .scaleEffect(activeSidebarDragSourceWindowId == window.windowId ? 0.96 : 1)
+        .opacity(activeSidebarDragSourceWindowId == window.windowId ? 0.25 : 1)
+        .scaleEffect(activeSidebarDragSourceWindowId == window.windowId ? 0.94 : 1)
+        .animation(.spring(response: 0.2, dampingFraction: 0.78), value: activeSidebarDragSourceWindowId == window.windowId)
     }
 
     private func workspaceTabGroupView(_ group: WorkspaceSidebarTabGroupViewModel) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
+        let isDragging = activeSidebarDragSourceWindowId == group.representativeWindowId
+        return VStack(alignment: .leading, spacing: 1) {
             Button {
-                guard shouldHandleWorkspaceSidebarActivation(
-                    editingWorkspaceName: TrayMenuModel.shared.workspaceSidebarEditingWorkspaceName,
-                    isSidebarDragInProgress: isWorkspaceSidebarDragInProgress(),
-                ) else { return }
+                guard shouldHandleWorkspaceSidebarActivation(isEditing: false, isSidebarDragInProgress: isWorkspaceSidebarDragInProgress()) else { return }
                 focusWindowFromSidebar(group.representativeWindowId, fallbackWorkspace: group.workspaceName)
             } label: {
                 WorkspaceSidebarTabGroupRow(
@@ -1250,16 +825,24 @@ struct WorkspaceSidebarWorkspaceSection: View {
                     finishSidebarWindowDrag()
                 },
             ))
-            .opacity(activeSidebarDragSourceWindowId == group.representativeWindowId ? 0.3 : 1)
-            .scaleEffect(activeSidebarDragSourceWindowId == group.representativeWindowId ? 0.96 : 1)
+            .opacity(isDragging ? 0.25 : 1)
+            .scaleEffect(isDragging ? 0.94 : 1)
 
             VStack(alignment: .leading, spacing: 1) {
                 ForEach(group.tabs) { tab in
                     workspaceWindowButton(tab, allowsDrag: true, subject: .window)
-                        .padding(.leading, 10)
+                        .padding(.leading, 16)
                 }
             }
+            .opacity(isDragging ? 0.4 : 1)
         }
+        .padding(.vertical, 2)
+        .padding(.horizontal, 2)
+        .background(
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(Color.primary.opacity(0.03))
+        )
+        .animation(.spring(response: 0.2, dampingFraction: 0.78), value: isDragging)
     }
 
     // MARK: - Section Background
@@ -1286,22 +869,11 @@ struct WorkspaceSidebarWorkspaceSection: View {
                     workspaceBadge
                         .frame(width: workspaceSidebarBadgeWidth, height: workspaceSidebarBadgeWidth, alignment: .center)
                     VStack(alignment: .leading, spacing: 0) {
-                        if isEditing {
-                            WorkspaceSidebarEditorField(
-                                text: editingText,
-                                isFocused: focusedWorkspaceEditor.wrappedValue == workspace.name,
-                                onCommit: onCommitEditing,
-                                onCancel: onCancelEditing
-                            )
-                            .frame(height: 18)
-                            .focused(focusedWorkspaceEditor, equals: workspace.name)
-                        } else {
-                            Text(workspace.displayName)
-                                .font(.system(size: 12, weight: workspace.isFocused ? .semibold : .medium))
-                                .foregroundStyle(workspace.isFocused ? Color.primary : Color.secondary)
-                                .lineLimit(1)
-                        }
-                        if let monitorName = workspace.monitorName, !isEditing, showsWindowRows {
+                        Text(workspace.displayName)
+                            .font(.system(size: 12, weight: workspace.isFocused ? .semibold : .medium))
+                            .foregroundStyle(workspace.isFocused ? Color.primary : Color.secondary)
+                            .lineLimit(1)
+                        if let monitorName = workspace.monitorName, showsWindowRows {
                             Text(monitorName)
                                 .font(.system(size: 9, weight: .regular))
                                 .foregroundStyle(Color.secondary.opacity(0.6))
@@ -1309,22 +881,6 @@ struct WorkspaceSidebarWorkspaceSection: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    if isEditing {
-                        HStack(spacing: 4) {
-                            Button(action: onCommitEditing) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 12))
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(Color.accentColor)
-                            Button(action: onCancelEditing) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(.system(size: 12))
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(Color.secondary)
-                        }
-                    }
                 }
             }
         }
@@ -1332,46 +888,46 @@ struct WorkspaceSidebarWorkspaceSection: View {
 
     private var sectionBackgroundFill: Color {
         if isDropTarget {
-            return Color.accentColor.opacity(0.15)
-        } else if isHovered {
-            return Color(nsColor: .controlBackgroundColor).opacity(0.5)
+            return Color.accentColor.opacity(0.12)
         } else if workspace.isFocused {
-            return Color(nsColor: .controlBackgroundColor).opacity(0.6)
+            return Color(nsColor: .controlBackgroundColor).opacity(0.45)
+        } else if isHovered {
+            return Color(nsColor: .controlBackgroundColor).opacity(0.3)
         } else if workspace.isVisible && expansionProgress > 0.5 {
-            return Color(nsColor: .controlBackgroundColor).opacity(0.28)
+            return Color(nsColor: .controlBackgroundColor).opacity(0.2)
         }
-        return Color(nsColor: .controlBackgroundColor).opacity(0.12)
+        return Color(nsColor: .controlBackgroundColor).opacity(0.08)
     }
 
     private var sectionBorderColor: Color {
         if isDropTarget {
-            return Color.accentColor.opacity(0.6)
+            return Color.accentColor.opacity(0.5)
         }
         if workspace.isFocused {
-            return Color.accentColor.opacity(0.12)
+            return Color.accentColor.opacity(0.10)
         }
-        return Color.primary.opacity(0.04)
+        return Color.primary.opacity(0.03)
     }
 
     private var workspaceBadge: some View {
         Group {
             if workspace.isGeneratedName, workspace.sidebarLabel.isEmpty {
                 Image(systemName: "plus")
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: 9, weight: .semibold))
             } else if workspace.isGeneratedName, let initial = workspace.displayName.first {
                 Text(String(initial).uppercased())
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
             } else {
                 Text(workspace.name)
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
             }
         }
-        .foregroundStyle(workspace.isFocused ? Color.white : Color.primary)
+        .foregroundStyle(workspace.isFocused ? Color.white : Color.primary.opacity(0.8))
         .lineLimit(1)
         .frame(width: workspaceSidebarBadgeWidth, height: workspaceSidebarBadgeWidth, alignment: .center)
         .background(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(workspace.isFocused ? Color.accentColor : Color(nsColor: .controlBackgroundColor).opacity(0.8))
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(workspace.isFocused ? Color.accentColor : Color(nsColor: .controlBackgroundColor).opacity(0.6))
         )
     }
 }
@@ -1395,10 +951,7 @@ struct WorkspaceSidebarCreateWorkspaceSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Button {
-                guard shouldHandleWorkspaceSidebarActivation(
-                    editingWorkspaceName: TrayMenuModel.shared.workspaceSidebarEditingWorkspaceName,
-                    isSidebarDragInProgress: isWorkspaceSidebarDragInProgress(),
-                ) else { return }
+                guard shouldHandleWorkspaceSidebarActivation(isEditing: false, isSidebarDragInProgress: isWorkspaceSidebarDragInProgress()) else { return }
                 onCreateWorkspace()
             } label: {
                 Group {
@@ -1481,23 +1034,20 @@ struct WorkspaceSidebarWindowRow: View {
     let expandedContentWidth: CGFloat
 
     var body: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(window.isFocused ? Color.accentColor : Color.secondary.opacity(0.3))
-                .frame(width: 5, height: 5)
+        HStack(spacing: 5) {
             Text(window.title ?? window.appName)
                 .font(.system(size: 11, weight: window.isFocused ? .medium : .regular))
-                .foregroundStyle(window.isFocused ? Color.primary : Color.secondary)
+                .foregroundStyle(window.isFocused ? Color.primary : Color.secondary.opacity(0.85))
                 .lineLimit(1)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 6)
-        .padding(.vertical, 2)
+        .padding(.vertical, 1.5)
         .frame(height: rowHeight)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(isHovered ? Color(nsColor: .controlBackgroundColor).opacity(0.4) : Color.clear)
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(isHovered ? Color.primary.opacity(0.04) : Color.clear)
         )
         .contentShape(Rectangle())
     }
@@ -1512,36 +1062,29 @@ struct WorkspaceSidebarTabGroupRow: View {
     let expandedContentWidth: CGFloat
 
     var body: some View {
-        HStack(spacing: 6) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(group.isFocused ? Color.accentColor.opacity(0.35) : Color.secondary.opacity(0.2))
-                    .frame(width: 9, height: 6)
-                    .offset(x: -1.5, y: -1.5)
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(group.isFocused ? Color.accentColor.opacity(0.7) : Color.secondary.opacity(0.35))
-                    .frame(width: 9, height: 6)
-                    .offset(x: 1.5, y: 1.5)
-            }
-            .frame(width: 16, height: 16)
+        HStack(spacing: 5) {
+            Image(systemName: "square.stack")
+                .font(.system(size: 10, weight: .regular))
+                .foregroundStyle(group.isFocused ? Color.accentColor : Color.secondary.opacity(0.5))
+                .frame(width: 14, height: 14)
 
             Text(group.title.isEmpty ? "Tab Group" : group.title)
                 .font(.system(size: 11, weight: group.isFocused ? .medium : .regular))
-                .foregroundStyle(group.isFocused ? Color.primary : Color.secondary)
+                .foregroundStyle(group.isFocused ? Color.primary : Color.secondary.opacity(0.85))
                 .lineLimit(1)
             Spacer(minLength: 0)
             Text("\(group.windowCount)")
                 .font(.system(size: 9, weight: .medium, design: .rounded))
-                .foregroundStyle(Color.secondary.opacity(0.5))
+                .foregroundStyle(Color.secondary.opacity(0.4))
                 .opacity(expansionProgress)
         }
         .padding(.horizontal, 6)
-        .padding(.vertical, 2)
+        .padding(.vertical, 1.5)
         .frame(height: rowHeight + 2)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(group.isFocused ? Color.accentColor.opacity(0.06) : Color.clear)
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(group.isFocused ? Color.accentColor.opacity(0.05) : Color.clear)
         )
         .contentShape(Rectangle())
     }
@@ -1556,26 +1099,26 @@ struct WorkspaceSidebarPreviewRow: View {
     let expandedContentWidth: CGFloat
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 5) {
             Image(systemName: preview.isTabGroup ? "square.stack" : "macwindow")
-                .font(.system(size: 9, weight: .medium))
-                .foregroundStyle(Color.accentColor.opacity(0.6))
-                .frame(width: 16, height: 16)
+                .font(.system(size: 9, weight: .regular))
+                .foregroundStyle(Color.accentColor.opacity(0.5))
+                .frame(width: 14, height: 14)
             Text(preview.label)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Color.primary.opacity(0.6))
+                .foregroundStyle(Color.primary.opacity(0.5))
                 .lineLimit(1)
                 .opacity(expansionProgress)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 6)
-        .padding(.vertical, 2)
+        .padding(.vertical, 1.5)
         .frame(height: rowHeight + 2)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 5, style: .continuous)
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
                 .strokeBorder(
-                    Color.accentColor.opacity(0.25),
+                    Color.accentColor.opacity(0.2),
                     style: StrokeStyle(lineWidth: 1, dash: [4, 3])
                 )
         )

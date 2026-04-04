@@ -221,6 +221,31 @@ final class WindowTabsTest: XCTestCase {
         XCTAssertEqual(replacementFocus?.windowOrNil, expectedTab)
     }
 
+    @MainActor
+    func testFocusAfterWindowClosurePrefersSnapshotCloseFallbackOverProvisionalSameAppFocus() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let expectedTab = TestWindow.new(id: 1, parent: root)
+        let provisionalSameAppFocus = TestWindow.new(id: 2, parent: root)
+        let closingWindow = TestWindow.new(id: 3, parent: workspace)
+
+        let replacementFocus = focusAfterWindowClosure(
+            closingWindow: closingWindow,
+            deadWindowWorkspace: workspace,
+            currentFocus: provisionalSameAppFocus.toLiveFocusOrNil().orDie(),
+            previousFocus: nil,
+            previousPreviousFocus: expectedTab.toLiveFocusOrNil(),
+            refreshSnapshotCloseFallback: expectedTab.toLiveFocusOrNil(),
+            refreshSnapshotPreviousFocus: provisionalSameAppFocus.toLiveFocusOrNil(),
+            refreshSnapshotPreviousPreviousFocus: expectedTab.toLiveFocusOrNil(),
+            previousFocusedWorkspace: workspace,
+            previousFocusedWorkspaceDate: .now,
+        )
+
+        XCTAssertEqual(replacementFocus?.windowOrNil, expectedTab)
+    }
+
     func testNativeFocusShortcutIsDisabledForTabbedLogicalWindows() {
         XCTAssertFalse(shouldUseActivationOnlyForNativeFocus(
             targetWindowId: 4,

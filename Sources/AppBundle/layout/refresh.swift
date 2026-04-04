@@ -43,21 +43,27 @@ func runRefreshSessionBlocking(
             try await $_refreshSessionFocusSnapshot.withValue(focusSnapshot) {
                 let frontmostActivationPolicy = NSWorkspace.shared.frontmostApplication?.activationPolicy
                 let nativeFocused = try await getNativeFocusedWindow()
+                try checkCancellation()
                 if let nativeFocused { try await debugWindowsIfRecording(nativeFocused) }
                 updateFocusCache(nativeFocused)
+                try checkCancellation()
 
                 if shouldLayoutWorkspaces && optimisticallyPreLayoutWorkspaces { try await layoutWorkspaces() }
+                try checkCancellation()
 
                 refreshModel()
                 try await refresh()
+                try checkCancellation()
                 gcMonitors()
 
                 updateTrayText()
                 await updateWorkspaceSidebarModel()
                 SecureInputPanel.shared.refresh()
                 try await normalizeLayoutReason()
+                try checkCancellation()
                 if shouldLayoutWorkspaces {
                     try await layoutWorkspaces()
+                    try checkCancellation()
                     if shouldSyncFocusBackToMacOs(nativeFocused: nativeFocused, frontmostActivationPolicy: frontmostActivationPolicy) {
                         focus.windowOrNil?.nativeFocus()
                     }
@@ -85,12 +91,15 @@ func runLightSession<T>(
         try await $_isStartup.withValue(event.isStartup) {
             try await $_refreshSessionFocusSnapshot.withValue(focusSnapshot) {
                 let nativeFocused = try await getNativeFocusedWindow()
+                try checkCancellation()
                 if let nativeFocused { try await debugWindowsIfRecording(nativeFocused) }
                 updateFocusCache(nativeFocused)
+                try checkCancellation()
                 let focusBefore = focus.windowOrNil
 
                 refreshModel()
                 let result = try await body()
+                try checkCancellation()
                 refreshModel()
 
                 let focusAfter = focus.windowOrNil
@@ -99,6 +108,7 @@ func runLightSession<T>(
                 await updateWorkspaceSidebarModel()
                 SecureInputPanel.shared.refresh()
                 try await layoutWorkspaces()
+                try checkCancellation()
                 await updateWindowTabModel()
                 if focusBefore != focusAfter {
                     focusAfter?.nativeFocus() // syncFocusToMacOs

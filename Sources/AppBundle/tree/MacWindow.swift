@@ -88,9 +88,7 @@ final class MacWindow: Window {
         let previousFocus = prevFocus
         let previousPreviousFocus = prevPrevFocus
         let refreshSnapshot = refreshSessionFocusSnapshot
-        let refreshSnapshotCloseFallback = refreshSnapshot?.focus.windowId == windowId
-            ? refreshSnapshot?.fallbackWhenFocusedWindowCloses?.liveOrNil
-            : nil
+        let refreshSnapshotCloseFallback = refreshSnapshot?.fallbackWhenFocusedWindowCloses?.liveOrNil
         let refreshSnapshotPreviousFocus = refreshSessionFocusSnapshot?.prevFocus?.liveOrNil
         let refreshSnapshotPreviousPreviousFocus = refreshSessionFocusSnapshot?.prevPrevFocus?.liveOrNil
         debugFocusLog(
@@ -243,6 +241,19 @@ func focusAfterWindowClosure(
         candidate?.windowOrNil != closingWindow &&
             candidate?.workspace == deadWindowWorkspace &&
             candidate?.windowOrNil?.participatesInWorkspaceFocus != false
+    }
+
+    let shouldPreferSnapshotCloseFallback =
+        isValidReplacement(refreshSnapshotCloseFallback) &&
+        refreshSnapshotCloseFallback?.windowOrNil != currentFocus.windowOrNil &&
+        currentFocus.windowOrNil?.app.pid == closingWindow.app.pid &&
+        refreshSnapshotPreviousFocus?.windowOrNil != closingWindow
+
+    if shouldPreferSnapshotCloseFallback {
+        debugFocusLog(
+            "focusAfterWindowClosure closing=\(closingWindow.windowId) preferSnapshotCloseFallback=\(debugDescribe(refreshSnapshotCloseFallback)) current=\(debugDescribe(currentFocus)) snapshotPrev=\(debugDescribe(refreshSnapshotPreviousFocus))"
+        )
+        return refreshSnapshotCloseFallback
     }
 
     let fallbackHistory: [LiveFocus?] = [

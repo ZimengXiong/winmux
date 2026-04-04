@@ -70,6 +70,7 @@ private final class WindowTabStripPanel: NSPanelHud {
             hostingView.rootView = AnyView(WindowTabStripView(strip: strip))
             currentContent = nextContent
         }
+        debugFocusLog("WindowTabStripPanel.update id=\(String(describing: identifier?.rawValue)) frame=\(strip.frame)")
         setFrame(strip.frame, display: true, animate: false)
         ignoresMouseEvents = currentlyManipulatedWithMouseWindowId != nil
         orderFrontRegardless()
@@ -369,8 +370,8 @@ private func finishMoveFromTabStrip() {
 
 // MARK: - Constants
 
-private let windowTabStripCornerRadius: CGFloat = 14
-private let windowTabItemCornerRadius: CGFloat = 10
+private let windowTabStripCornerRadius: CGFloat = 10
+private let windowTabItemCornerRadius: CGFloat = 6
 private let windowTabPreviewCornerRadius: CGFloat = 6
 
 // MARK: - Tab Strip View (manages reorder drag state for all tabs)
@@ -413,7 +414,12 @@ private struct WindowTabStripView: View {
                         effectiveTabWidth: effectiveTabWidth
                     ))
                     .zIndex(draggingTabId == tab.windowId ? 1 : 0)
-                    .animation(.interactiveSpring(response: 0.25, dampingFraction: 0.82), value: targetIndex)
+                    .shadow(
+                        color: draggingTabId == tab.windowId ? Color.black.opacity(0.12) : Color.clear,
+                        radius: draggingTabId == tab.windowId ? 6 : 0,
+                        y: draggingTabId == tab.windowId ? 2 : 0
+                    )
+                    .animation(.interactiveSpring(response: 0.2, dampingFraction: 0.8), value: targetIndex)
                     .highPriorityGesture(
                         DragGesture(minimumDistance: 8)
                             .onChanged { value in
@@ -458,12 +464,12 @@ private struct WindowTabStripView: View {
         .clipped()
         .background(
             RoundedRectangle(cornerRadius: windowTabStripCornerRadius, style: .continuous)
-                .fill(Color(nsColor: .windowBackgroundColor).opacity(0.94))
+                .fill(Color(nsColor: .windowBackgroundColor).opacity(0.92))
                 .overlay {
                     RoundedRectangle(cornerRadius: windowTabStripCornerRadius, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.5)
+                        .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
                 }
-                .shadow(color: Color.black.opacity(0.08), radius: 8, y: 3)
+                .shadow(color: Color.black.opacity(0.05), radius: 4, y: 2)
         )
         .simultaneousGesture(
             DragGesture(minimumDistance: 10)
@@ -516,7 +522,7 @@ private struct WindowTabStripView: View {
     }
 }
 
-// MARK: - Tab Item View (hover animations)
+// MARK: - Tab Item View
 
 private struct WindowTabItemView: View {
     let tab: WindowTabItemViewModel
@@ -532,24 +538,27 @@ private struct WindowTabItemView: View {
             focusWindowFromTabStrip(tab.windowId, fallbackWorkspace: tab.workspaceName)
         } label: {
             Text(tab.title)
-                .font(.system(size: 11, weight: tab.isActive ? .medium : .regular))
+                .font(.system(size: 11, weight: tab.isActive ? .semibold : .regular))
                 .lineLimit(1)
                 .foregroundStyle(foregroundColor)
                 .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
+                .padding(.horizontal, 6)
                 .frame(width: width, height: height)
                 .background(background)
         }
         .contentShape(RoundedRectangle(cornerRadius: windowTabItemCornerRadius, style: .continuous))
         .buttonStyle(.plain)
-        .scaleEffect(isDragSource ? 1.04 : 1.0)
-        .opacity(isDragSource ? 0.85 : 1.0)
-        .animation(.easeInOut(duration: 0.12), value: isDragSource)
+        .scaleEffect(isDragSource ? 1.05 : (isHovered ? 1.01 : 1.0))
+        .opacity(isDragSource ? 0.75 : 1.0)
+        .shadow(
+            color: isDragSource ? Color.black.opacity(0.15) : Color.clear,
+            radius: isDragSource ? 8 : 0,
+            y: isDragSource ? 3 : 0
+        )
+        .animation(.spring(response: 0.2, dampingFraction: 0.75), value: isDragSource)
+        .animation(.easeOut(duration: 0.15), value: isHovered)
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.12)) {
-                isHovered = hovering
-            }
+            isHovered = hovering
         }
         .contextMenu {
             Button("Remove Tab From Stack") {
@@ -559,22 +568,21 @@ private struct WindowTabItemView: View {
     }
 
     private var foregroundColor: Color {
-        if tab.isActive {
-            return Color.primary
-        }
-        return isHovered ? Color.primary.opacity(0.8) : Color.secondary.opacity(0.65)
+        if tab.isActive { return Color.primary }
+        if isDragSource { return Color.primary }
+        return isHovered ? Color.primary.opacity(0.8) : Color.secondary.opacity(0.6)
     }
 
     @ViewBuilder
     private var background: some View {
-        if tab.isActive || isDragSource {
+        if isDragSource {
             RoundedRectangle(cornerRadius: windowTabItemCornerRadius, style: .continuous)
-                .fill(Color.primary.opacity(isDragSource ? 0.10 : 0.07))
+                .fill(Color.primary.opacity(0.09))
                 .overlay {
                     RoundedRectangle(cornerRadius: windowTabItemCornerRadius, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(isDragSource ? 0.08 : 0.05), lineWidth: 0.5)
+                        .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
                 }
-        } else if isHovered {
+        } else if isHovered, !tab.isActive {
             RoundedRectangle(cornerRadius: windowTabItemCornerRadius, style: .continuous)
                 .fill(Color.primary.opacity(0.04))
         }
@@ -587,6 +595,7 @@ private struct WindowTabDropPreviewView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let model: WindowTabDropPreviewViewModel
     @State private var isPresented = false
+    @State private var glowPhase = false
 
     var body: some View {
         let cfg = borderConfig(for: model.style)
@@ -596,16 +605,30 @@ private struct WindowTabDropPreviewView: View {
             .overlay {
                 RoundedRectangle(cornerRadius: windowTabPreviewCornerRadius, style: .continuous)
                     .strokeBorder(
-                        cfg.color.opacity(isPresented ? cfg.borderOpacity : 0.1),
+                        cfg.color.opacity(isPresented ? (glowPhase ? cfg.borderOpacity : cfg.borderOpacity * 0.6) : 0.05),
                         style: cfg.strokeStyle
                     )
             }
-            .scaleEffect(reduceMotion ? 1 : (isPresented ? 1 : 0.996))
+            .overlay {
+                // Outer glow
+                RoundedRectangle(cornerRadius: windowTabPreviewCornerRadius + 2, style: .continuous)
+                    .strokeBorder(
+                        cfg.color.opacity(isPresented ? (glowPhase ? 0.12 : 0.04) : 0),
+                        lineWidth: 3
+                    )
+                    .blur(radius: 4)
+            }
+            .scaleEffect(reduceMotion ? 1 : (isPresented ? 1 : 0.994))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.clear)
             .onAppear {
-                withAnimation(reduceMotion ? .easeOut(duration: 0.1) : .spring(response: 0.18, dampingFraction: 0.82)) {
+                withAnimation(reduceMotion ? .easeOut(duration: 0.1) : .spring(response: 0.2, dampingFraction: 0.78)) {
                     isPresented = true
+                }
+                if !reduceMotion {
+                    withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                        glowPhase = true
+                    }
                 }
             }
     }
@@ -620,20 +643,15 @@ private struct WindowTabDropPreviewView: View {
     private func borderConfig(for style: WindowTabDropPreviewStyle) -> BorderConfig {
         switch style {
             case .tabInsert:
-                // Solid accent, visible fill — "join this tab group"
-                return BorderConfig(color: .accentColor, fillOpacity: 0.08, borderOpacity: 0.7, strokeStyle: StrokeStyle(lineWidth: 2.5))
-            case .detach:
-                // Orange dashed, light fill — "pulling out of group"
-                return BorderConfig(color: .orange, fillOpacity: 0.06, borderOpacity: 0.6, strokeStyle: StrokeStyle(lineWidth: 2, dash: [7, 5]))
-            case .swap:
-                // Accent dashed, visible fill — "swap positions"
-                return BorderConfig(color: .accentColor, fillOpacity: 0.06, borderOpacity: 0.55, strokeStyle: StrokeStyle(lineWidth: 2, dash: [7, 5]))
-            case .workspaceMove:
-                // Green, visible fill — "move to workspace"
-                return BorderConfig(color: .green, fillOpacity: 0.07, borderOpacity: 0.6, strokeStyle: StrokeStyle(lineWidth: 2, dash: [7, 5]))
-            case .sidebarWorkspaceMove:
-                // Accent solid — sidebar drop target
                 return BorderConfig(color: .accentColor, fillOpacity: 0.06, borderOpacity: 0.6, strokeStyle: StrokeStyle(lineWidth: 2))
+            case .detach:
+                return BorderConfig(color: .orange, fillOpacity: 0.04, borderOpacity: 0.5, strokeStyle: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+            case .swap:
+                return BorderConfig(color: .accentColor, fillOpacity: 0.04, borderOpacity: 0.45, strokeStyle: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+            case .workspaceMove:
+                return BorderConfig(color: .green, fillOpacity: 0.05, borderOpacity: 0.5, strokeStyle: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+            case .sidebarWorkspaceMove:
+                return BorderConfig(color: .accentColor, fillOpacity: 0.04, borderOpacity: 0.5, strokeStyle: StrokeStyle(lineWidth: 1.5))
         }
     }
 }

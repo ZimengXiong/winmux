@@ -4,21 +4,26 @@ import Common
 @MainActor private var workspaceNameToWorkspace: [String: Workspace] = [:]
 private let sidebarDraftWorkspacePrefix = "__sidebar_draft_workspace_"
 private let internalStubWorkspacePrefix = "__internal_stub_workspace_"
-@MainActor private var automaticWorkspaceIndexHighWatermark = 0
-@MainActor private var sidebarDraftWorkspaceIndexHighWatermark = 0
+
+enum WorkspaceNamingStyle: String, Codable, Sendable {
+    case explicit
+    case automatic
+}
 
 @MainActor private var screenPointToPrevVisibleWorkspace: [CGPoint: String] = [:]
 @MainActor private var screenPointToVisibleWorkspace: [CGPoint: Workspace] = [:]
 @MainActor private var visibleWorkspaceToScreenPoint: [Workspace: CGPoint] = [:]
 
-@MainActor
-private func noteWorkspaceNameForGenerationState(_ name: String) {
-    if let automaticIndex = Int(name) {
-        automaticWorkspaceIndexHighWatermark = max(automaticWorkspaceIndexHighWatermark, automaticIndex)
+private func automaticWorkspaceIndex(_ name: String) -> Int? {
+    Int(name)
+}
+
+private func lowestUnusedPositiveIndex(_ usedIndices: Set<Int>) -> Int {
+    var candidate = 1
+    while usedIndices.contains(candidate) {
+        candidate += 1
     }
-    if let draftIndex = sidebarDraftWorkspaceIndex(name) {
-        sidebarDraftWorkspaceIndexHighWatermark = max(sidebarDraftWorkspaceIndexHighWatermark, draftIndex)
-    }
+    return candidate
 }
 
 // The returned workspace must be invisible and it must belong to the requested monitor
@@ -59,12 +64,7 @@ private func canReuseWorkspaceAsEmptyMonitorReplacement(_ workspace: Workspace, 
 
 @MainActor
 private func nextAutomaticWorkspaceName() -> String {
-    let nextIndex = max(
-        automaticWorkspaceIndexHighWatermark,
-        workspaceNameToWorkspace.keys.compactMap(Int.init).max() ?? 0,
-    ) + 1
-    automaticWorkspaceIndexHighWatermark = nextIndex
-    return String(nextIndex)
+    String(lowestUnusedPositiveIndex(Set(workspaceNameToWorkspace.keys.compactMap(automaticWorkspaceIndex))))
 }
 
 private func internalStubWorkspaceIndex(_ name: String) -> Int? {
@@ -85,12 +85,8 @@ private func nextInternalStubWorkspaceName() -> String {
 
 @MainActor
 func nextSidebarDraftWorkspaceName() -> String {
-    let nextIndex = max(
-        sidebarDraftWorkspaceIndexHighWatermark,
-        workspaceNameToWorkspace.keys.compactMap(sidebarDraftWorkspaceIndex).max() ?? 0,
-        config.workspaceSidebar.workspaceLabels.keys.compactMap(sidebarDraftWorkspaceIndex).max() ?? 0,
-    ) + 1
-    sidebarDraftWorkspaceIndexHighWatermark = nextIndex
+    clearOrphanedSidebarDraftWorkspaceLabels()
+    let nextIndex = lowestUnusedPositiveIndex(Set(workspaceNameToWorkspace.keys.compactMap(sidebarDraftWorkspaceIndex)))
     return "\(sidebarDraftWorkspacePrefix)\(nextIndex)"
 }
 
@@ -156,6 +152,15 @@ func isUserFacingWorkspace(_ workspace: Workspace, focusedWorkspace: Workspace? 
 
 @MainActor
 func workspaceDefaultDisplayName(_ workspaceName: String) -> String {
+    if let workspace = Workspace.existing(byName: workspaceName) {
+        guard workspace.usesAutomaticDisplayName else { return workspaceName }
+        if let index = automaticWorkspaceDisplayIndex(workspace, focusedWorkspace: focus.workspace)
+            ?? automaticWorkspaceDisplayIndexFallback(workspaceName)
+        {
+            return "Workspace \(index)"
+        }
+        return workspaceName
+    }
     if let index = sidebarDraftWorkspaceIndex(workspaceName) {
         return "Workspace \(index)"
     }
@@ -183,8 +188,19 @@ func shouldShowWorkspaceInSidebar(_ workspace: Workspace, currentFocus: LiveFocu
 
 @MainActor
 func resetWorkspaceNameGenerationStateForTests() {
-    automaticWorkspaceIndexHighWatermark = 0
-    sidebarDraftWorkspaceIndexHighWatermark = 0
+    // Workspace naming is derived from current live workspaces. No allocator state to reset.
+}
+
+@MainActor
+private func automaticWorkspaceDisplayIndex(_ workspace: Workspace, focusedWorkspace: Workspace?) -> Int? {
+    userFacingWorkspaces(Workspace.all, focusedWorkspace: focusedWorkspace)
+        .filter(\.usesAutomaticDisplayName)
+        .firstIndex(of: workspace)
+        .map { $0 + 1 }
+}
+
+private func automaticWorkspaceDisplayIndexFallback(_ workspaceName: String) -> Int? {
+    sidebarDraftWorkspaceIndex(workspaceName) ?? automaticWorkspaceIndex(workspaceName)
 }
 
 final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
@@ -194,6 +210,7 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
     fileprivate var assignedMonitorPoint: CGPoint? = nil
     private var retainsFocusedEmptyWorkspace: Bool = false
     private(set) var isSystemStub: Bool = false
+    private(set) var namingStyle: WorkspaceNamingStyle = .explicit
 
     @MainActor
     private init(_ name: String) {
@@ -212,7 +229,6 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
         } else {
             let workspace = Workspace(name)
             workspaceNameToWorkspace[name] = workspace
-            noteWorkspaceNameForGenerationState(name)
             return workspace
         }
     }
@@ -241,6 +257,7 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
             ("isEffectivelyEmpty", String(isEffectivelyEmpty)),
             ("retainFocusedEmpty", String(retainsFocusedEmptyWorkspace)),
             ("isSystemStub", String(isSystemStub)),
+            ("namingStyle", namingStyle.rawValue),
         ].map { "\($0.0): '\(String(describing: $0.1))'" }.joined(separator: ", ")
         return "Workspace(\(description))"
     }
@@ -306,12 +323,24 @@ extension Workspace {
 
     @MainActor
     func markAsSidebarManaged() {
+        markAsAutomaticallyNamed()
         retainsFocusedEmptyWorkspace = true
+    }
+
+    @MainActor
+    func markAsAutomaticallyNamed() {
+        namingStyle = .automatic
+    }
+
+    @MainActor
+    func restoreNamingStyle(_ namingStyle: WorkspaceNamingStyle) {
+        self.namingStyle = namingStyle
     }
 
     @MainActor
     func markAsSystemStub() {
         isSystemStub = true
+        namingStyle = .explicit
         retainsFocusedEmptyWorkspace = false
     }
 
@@ -325,6 +354,10 @@ extension Workspace {
     @MainActor
     func shouldRetainEmptyWorkspace(focusedWorkspace: Workspace?) -> Bool {
         focusedWorkspace == self && retainsFocusedEmptyWorkspace
+    }
+
+    var usesAutomaticDisplayName: Bool {
+        namingStyle == .automatic && !isSystemStub
     }
 
     @MainActor
@@ -348,6 +381,7 @@ func materializeWorkspaceForUserWindowIfNeeded(_ workspace: Workspace) -> Worksp
     guard workspace.isSystemStub else { return workspace }
 
     let replacement = Workspace.get(byName: nextAutomaticWorkspaceName())
+    replacement.markAsAutomaticallyNamed()
     replacement.seedMonitorIfNeeded(workspace.workspaceMonitor)
     if workspace.isVisible {
         check(

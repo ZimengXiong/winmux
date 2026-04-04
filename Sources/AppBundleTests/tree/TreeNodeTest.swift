@@ -168,26 +168,27 @@ final class TreeNodeTest: XCTestCase {
         )
     }
 
-    func testNextSidebarDraftWorkspaceNameAdvancesPastHighestSeenIndex() {
+    func testNextSidebarDraftWorkspaceNameReusesLowestAvailableGap() {
         _ = Workspace.get(byName: "__sidebar_draft_workspace_1")
         _ = Workspace.get(byName: "__sidebar_draft_workspace_3")
 
-        XCTAssertEqual(nextSidebarDraftWorkspaceName(), "__sidebar_draft_workspace_4")
+        XCTAssertEqual(nextSidebarDraftWorkspaceName(), "__sidebar_draft_workspace_2")
     }
 
-    func testNextSidebarDraftWorkspaceNameDoesNotReuseCollectedDraftName() {
+    func testNextSidebarDraftWorkspaceNameReusesCollectedDraftName() {
         _ = Workspace.get(byName: "__sidebar_draft_workspace_1")
         _ = Workspace.get(byName: "__sidebar_draft_workspace_2")
 
         Workspace.garbageCollectUnusedWorkspaces()
 
-        XCTAssertEqual(nextSidebarDraftWorkspaceName(), "__sidebar_draft_workspace_3")
+        XCTAssertEqual(nextSidebarDraftWorkspaceName(), "__sidebar_draft_workspace_1")
     }
 
-    func testNextSidebarDraftWorkspaceNameSkipsStalePersistedDraftLabel() {
+    func testNextSidebarDraftWorkspaceNameClearsStalePersistedDraftLabelBeforeReuse() {
         config.workspaceSidebar.workspaceLabels["__sidebar_draft_workspace_1"] = "Old Name"
 
-        XCTAssertEqual(nextSidebarDraftWorkspaceName(), "__sidebar_draft_workspace_2")
+        XCTAssertEqual(nextSidebarDraftWorkspaceName(), "__sidebar_draft_workspace_1")
+        XCTAssertNil(config.workspaceSidebar.workspaceLabels["__sidebar_draft_workspace_1"])
     }
 
     func testGarbageCollectUnusedWorkspacesClearsStaleDraftWorkspaceLabel() {
@@ -269,7 +270,7 @@ final class TreeNodeTest: XCTestCase {
         XCTAssertEqual(materializedWorkspace.workspaceMonitor.activeWorkspace, materializedWorkspace)
     }
 
-    func testMaterializedWorkspaceNamesDoNotReuseDeletedAutomaticName() {
+    func testMaterializedWorkspaceNamesReuseDeletedAutomaticName() {
         let firstStub = Workspace.get(byName: "__internal_stub_workspace_1")
         firstStub.markAsSystemStub()
         let firstMaterialized = materializeWorkspaceForUserWindowIfNeeded(firstStub)
@@ -280,7 +281,7 @@ final class TreeNodeTest: XCTestCase {
         let secondStub = Workspace.get(byName: "__internal_stub_workspace_2")
         secondStub.markAsSystemStub()
         let secondMaterialized = materializeWorkspaceForUserWindowIfNeeded(secondStub)
-        XCTAssertEqual(secondMaterialized.name, "2")
+        XCTAssertEqual(secondMaterialized.name, "1")
     }
 
     func testUserFacingWorkspacesExcludeWorkspaceWithOnlyMacosFullscreenWindows() {

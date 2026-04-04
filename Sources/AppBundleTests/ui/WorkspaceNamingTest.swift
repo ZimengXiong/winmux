@@ -1,35 +1,30 @@
 @testable import AppBundle
 import XCTest
 
+@MainActor
 final class WorkspaceNamingTest: XCTestCase {
+    override func setUp() async throws { setUpWorkspacesForTests() }
+
     func testSanitizedWorkspaceSidebarTransientStateClearsDeadWorkspaceReferences() {
         let sanitized = sanitizedWorkspaceSidebarTransientState(
             visibleWorkspaceNames: ["live"],
             state: WorkspaceSidebarTransientState(
                 hoveredWorkspaceName: "dead",
-                editingWorkspaceName: "dead",
-                editingText: "Old Name",
             ),
         )
 
         XCTAssertNil(sanitized.hoveredWorkspaceName)
-        XCTAssertNil(sanitized.editingWorkspaceName)
-        XCTAssertEqual(sanitized.editingText, "")
     }
 
-    func testSanitizedWorkspaceSidebarTransientStateKeepsLiveEditorState() {
+    func testSanitizedWorkspaceSidebarTransientStateKeepsLiveHoverState() {
         let sanitized = sanitizedWorkspaceSidebarTransientState(
             visibleWorkspaceNames: ["live"],
             state: WorkspaceSidebarTransientState(
                 hoveredWorkspaceName: "live",
-                editingWorkspaceName: "live",
-                editingText: "Current Name",
             ),
         )
 
         XCTAssertEqual(sanitized.hoveredWorkspaceName, "live")
-        XCTAssertEqual(sanitized.editingWorkspaceName, "live")
-        XCTAssertEqual(sanitized.editingText, "Current Name")
     }
 
     func testTrayItemDisablesRawWorkspaceIconWhenDisplayNameIsCustom() {
@@ -50,5 +45,29 @@ final class WorkspaceNamingTest: XCTestCase {
 
         XCTAssertNil(renamedWorkspace.systemImageName)
         XCTAssertEqual(plainWorkspace.systemImageName, "1.square.fill")
+    }
+
+    func testAutomaticNumericWorkspaceDisplayNamesCompactLiveWorkspaceSet() {
+        let first = Workspace.get(byName: "3")
+        first.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 1, parent: first.rootTilingContainer)
+        let second = Workspace.get(byName: "7")
+        second.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 2, parent: second.rootTilingContainer)
+
+        XCTAssertEqual(workspaceDisplayName(first.name), "Workspace 1")
+        XCTAssertEqual(workspaceDisplayName(second.name), "Workspace 2")
+    }
+
+    func testAutomaticDraftWorkspaceDisplayNamesCompactLiveWorkspaceSet() {
+        let first = Workspace.get(byName: "__sidebar_draft_workspace_1")
+        first.markAsSidebarManaged()
+        _ = TestWindow.new(id: 3, parent: first.rootTilingContainer)
+        let second = Workspace.get(byName: "__sidebar_draft_workspace_3")
+        second.markAsSidebarManaged()
+        _ = TestWindow.new(id: 4, parent: second.rootTilingContainer)
+
+        XCTAssertEqual(workspaceDisplayName(first.name), "Workspace 1")
+        XCTAssertEqual(workspaceDisplayName(second.name), "Workspace 2")
     }
 }

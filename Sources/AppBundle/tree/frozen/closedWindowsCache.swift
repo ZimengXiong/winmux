@@ -20,13 +20,24 @@ struct FrozenMonitor: Codable, Sendable {
 
 struct FrozenWorkspace: Codable, Sendable {
     let name: String
+    let namingStyle: WorkspaceNamingStyle
     let monitor: FrozenMonitor // todo drop this property, once monitor to workspace assignment migrates to TreeNode
     let rootTilingNode: FrozenContainer
     let floatingWindows: [FrozenWindow]
     let macosUnconventionalWindows: [FrozenWindow]
 
+    private enum CodingKeys: String, CodingKey {
+        case name
+        case namingStyle
+        case monitor
+        case rootTilingNode
+        case floatingWindows
+        case macosUnconventionalWindows
+    }
+
     @MainActor init(_ workspace: Workspace) {
         name = workspace.name
+        namingStyle = workspace.namingStyle
         monitor = FrozenMonitor(workspace.workspaceMonitor)
         rootTilingNode = FrozenContainer(workspace.rootTilingContainer)
         floatingWindows = workspace.floatingWindows.map(FrozenWindow.init)
@@ -34,6 +45,16 @@ struct FrozenWorkspace: Codable, Sendable {
             workspaceOwnedMinimizedWindows(workspace).map(FrozenWindow.init) +
             (workspace.existingMacOsNativeHiddenAppsWindowsContainer?.children.map { FrozenWindow($0 as! Window) } ?? []) +
             (workspace.existingMacOsNativeFullscreenWindowsContainer?.children.map { FrozenWindow($0 as! Window) } ?? [])
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        name = try container.decode(String.self, forKey: .name)
+        namingStyle = try container.decodeIfPresent(WorkspaceNamingStyle.self, forKey: .namingStyle) ?? .explicit
+        monitor = try container.decode(FrozenMonitor.self, forKey: .monitor)
+        rootTilingNode = try container.decode(FrozenContainer.self, forKey: .rootTilingNode)
+        floatingWindows = try container.decode([FrozenWindow].self, forKey: .floatingWindows)
+        macosUnconventionalWindows = try container.decode([FrozenWindow].self, forKey: .macosUnconventionalWindows)
     }
 }
 
@@ -70,6 +91,7 @@ func restoreFrozenWorldIfNeeded(_ frozenWorld: FrozenWorld, newlyDetectedWindow:
 
     for frozenWorkspace in frozenWorld.workspaces {
         let workspace = Workspace.get(byName: frozenWorkspace.name)
+        workspace.restoreNamingStyle(frozenWorkspace.namingStyle)
         let frozenWindowById = collectFrozenWindows(frozenWorkspace)
         _ = topLeftCornerToMonitor[frozenWorkspace.monitor.topLeftCorner]?
             .singleOrNil()?

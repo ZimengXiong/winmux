@@ -81,5 +81,23 @@ enum GlobalObserver {
                 refreshPendingWindowDragIntentFromGlobalMouseDrag()
             }
         }
+
+        // Ctrl+I: Toggle Exposé overview
+        NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
+            if event.modifierFlags.contains(.control), event.keyCode == 34 { // 'i' key
+                Task { @MainActor in
+                    ExposePanel.shared.toggle()
+                }
+            }
+        }
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            if event.modifierFlags.contains(.control), event.keyCode == 34 {
+                Task { @MainActor in
+                    ExposePanel.shared.toggle()
+                }
+                return nil // consume the event
+            }
+            return event
+        }
     }
 }

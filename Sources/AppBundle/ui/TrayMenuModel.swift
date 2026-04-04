@@ -18,8 +18,6 @@ public final class TrayMenuModel: ObservableObject {
     @Published var workspaceSidebarVisibleWidth: CGFloat = 0
     @Published var workspaceSidebarTopPadding: CGFloat = 12
     @Published var workspaceSidebarHoveredWorkspaceName: String? = nil
-    @Published var workspaceSidebarEditingWorkspaceName: String? = nil
-    @Published var workspaceSidebarEditingText: String = ""
     @Published var experimentalUISettings: ExperimentalUISettings = ExperimentalUISettings()
     @Published var sponsorshipMessage: String = sponsorshipPrompts.randomElement().orDie()
 }
