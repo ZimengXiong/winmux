@@ -10,7 +10,7 @@ private let workspaceSidebarHeaderSpacing: CGFloat = 8
 private let workspaceSidebarRowsRevealProgress: CGFloat = 0.58
 private let workspaceSidebarSectionCornerRadius: CGFloat = 8
 private let workspaceSidebarHoverCueWidthDelta: CGFloat = 12
-private let workspaceSidebarHoverOpenThresholdFraction: CGFloat = 0.5
+private let workspaceSidebarHoverOpenThresholdFraction: CGFloat = 0.75
 @MainActor
 private var workspaceSidebarDropTargets: [WorkspaceSidebarDropTarget] = []
 

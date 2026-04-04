@@ -85,6 +85,14 @@ func shouldKeepExpandedGroupVisible(
     return false
 }
 
+func hoveredCollapsedGroupFrame(
+    at location: CGPoint,
+    within frames: [ExposeCollapsedGroupFrame],
+    padding: CGFloat = 0,
+) -> ExposeCollapsedGroupFrame? {
+    frames.last(where: { $0.frame.insetBy(dx: -padding, dy: -padding).contains(location) })
+}
+
 func orderedExposeItemsForExpandedGroup(_ items: [ExposeWindowItem]) -> [ExposeWindowItem] {
     guard let focusedIndex = items.firstIndex(where: \.isFocused) else { return items }
     var ordered = items
@@ -282,20 +290,9 @@ private struct ExposeView: View {
                 .onContinuousHover(coordinateSpace: .named(exposeOverviewCoordinateSpace)) { phase in
                     switch phase {
                         case .active(let location):
-                            guard let expandedGroupId else { return }
-                            if !shouldKeepExpandedGroupVisible(
-                                location: location,
-                                groupId: expandedGroupId,
-                                expandedFrames: expandedGroupFrames,
-                                collapsedOriginFrame: expandedGroupOriginFrame,
-                                padding: exposeExpandedGroupHoverPadding,
-                            ) {
-                                self.expandedGroupId = nil
-                                self.expandedGroupOriginFrame = nil
-                            }
+                            handleHover(at: location)
                         case .ended:
-                            expandedGroupId = nil
-                            expandedGroupOriginFrame = nil
+                            collapseExpandedGroup()
                     }
                 }
             }
@@ -310,12 +307,12 @@ private struct ExposeView: View {
     // -- Slots --
 
     private enum Slot: Identifiable {
-        case single(ExposeWindowItem, expandedGroupId: String?)
+        case single(ExposeWindowItem, expandedGroupId: String?, groupBadgeLabel: String?)
         case stack(ExposeTabGroup)
 
         var id: String {
             switch self {
-                case .single(let w, let expandedGroupId):
+                case .single(let w, let expandedGroupId, _):
                     if let expandedGroupId { return "eg-\(expandedGroupId)-\(w.id)" }
                     return "w-\(w.id)"
                 case .stack(let g): return "g-\(g.id)"
@@ -325,27 +322,66 @@ private struct ExposeView: View {
         var span: Int {
             1
         }
-
-        var expandedGroupId: String? {
-            switch self {
-                case .single(_, let expandedGroupId): expandedGroupId
-                case .stack: nil
-            }
-        }
     }
 
     private func buildSlots() -> [Slot] {
         entries.flatMap { (e: ExposeEntry) -> [Slot] in
             switch e {
-                case .window(let w):
-                    return [Slot.single(w, expandedGroupId: nil)]
-                case .group(let g):
-                    if g.id == expandedGroupId {
-                        return orderedExposeItemsForExpandedGroup(g.items).map { Slot.single($0, expandedGroupId: g.id) }
+                case .window(let window):
+                    return [Slot.single(window, expandedGroupId: nil, groupBadgeLabel: nil)]
+                case .group(let group):
+                    if group.id == expandedGroupId {
+                        let orderedItems = orderedExposeItemsForExpandedGroup(group.items)
+                        return orderedItems.enumerated().map { index, item in
+                            Slot.single(
+                                item,
+                                expandedGroupId: group.id,
+                                groupBadgeLabel: "\(index + 1)/\(orderedItems.count)",
+                            )
+                        }
                     } else {
-                        return [Slot.stack(g)]
+                        return [Slot.stack(group)]
                     }
             }
+        }
+    }
+
+    private func expandGroup(for frame: ExposeCollapsedGroupFrame) {
+        guard expandedGroupId != frame.groupId || expandedGroupOriginFrame != frame.frame else { return }
+        withAnimation(.spring(response: 0.22, dampingFraction: 0.88)) {
+            expandedGroupId = frame.groupId
+            expandedGroupOriginFrame = frame.frame
+        }
+    }
+
+    private func collapseExpandedGroup() {
+        guard expandedGroupId != nil || expandedGroupOriginFrame != nil else { return }
+        withAnimation(.spring(response: 0.18, dampingFraction: 0.92)) {
+            expandedGroupId = nil
+            expandedGroupOriginFrame = nil
+        }
+    }
+
+    private func handleHover(at location: CGPoint) {
+        if let expandedGroupId,
+           shouldKeepExpandedGroupVisible(
+               location: location,
+               groupId: expandedGroupId,
+               expandedFrames: expandedGroupFrames,
+               collapsedOriginFrame: expandedGroupOriginFrame,
+               padding: exposeExpandedGroupHoverPadding,
+           ) {
+            return
+        }
+
+        if let hoveredGroupFrame = hoveredCollapsedGroupFrame(
+            at: location,
+            within: collapsedGroupFrames,
+            padding: 4,
+        ) {
+            expandGroup(for: hoveredGroupFrame)
+        } else {
+            collapseExpandedGroup()
         }
     }
 
@@ -373,6 +409,49 @@ private struct ExposeView: View {
         buildGridRows(slots, cols: cols).count
     }
 
+    @ViewBuilder
+    private func slotView(_ slot: Slot, ch: CGFloat) -> some View {
+        switch slot {
+            case .single(let window, let expandedGroupId, let groupBadgeLabel):
+                let cardCw = (ch - exposeCardTitleHeight) * window.aspectRatio
+                WinCard(
+                    item: window,
+                    cw: cardCw,
+                    ch: ch,
+                    badgeLabel: groupBadgeLabel,
+                )
+                .background {
+                    if let expandedGroupId {
+                        GeometryReader { geometry in
+                            Color.clear.preference(
+                                key: ExposeExpandedGroupFramePreferenceKey.self,
+                                value: [ExposeExpandedGroupFrame(
+                                    groupId: expandedGroupId,
+                                    frame: geometry.frame(in: .named(exposeOverviewCoordinateSpace)),
+                                )],
+                            )
+                        }
+                    }
+                }
+                .onTapGesture { onSelect(window.id) }
+
+            case .stack(let group):
+                let cardCw = (ch - 24) * group.aspectRatio
+                StackCard(group: group, cw: cardCw, ch: ch)
+                    .background {
+                        GeometryReader { geometry in
+                            Color.clear.preference(
+                                key: ExposeCollapsedGroupFramePreferenceKey.self,
+                                value: [ExposeCollapsedGroupFrame(
+                                    groupId: group.id,
+                                    frame: geometry.frame(in: .named(exposeOverviewCoordinateSpace)),
+                                )],
+                            )
+                        }
+                    }
+        }
+    }
+
     private func overviewGrid(in viewportSize: CGSize) -> some View {
         let spacing = exposeExpandedGroupSpacing
         let slots = buildSlots()
@@ -385,46 +464,7 @@ private struct ExposeView: View {
             ForEach(Array(gridRows.enumerated()), id: \.offset) { _, row in
                 HStack(spacing: spacing) {
                     ForEach(row) { slot in
-                        switch slot {
-                            case .single(let window, let expandedGroupId):
-                                let cardCw = (ch - 20) * window.aspectRatio
-                                WinCard(item: window, cw: cardCw, ch: ch)
-                                    .background {
-                                        if let expandedGroupId {
-                                            GeometryReader { geometry in
-                                                Color.clear.preference(
-                                                    key: ExposeExpandedGroupFramePreferenceKey.self,
-                                                    value: [ExposeExpandedGroupFrame(
-                                                        groupId: expandedGroupId,
-                                                        frame: geometry.frame(in: .named(exposeOverviewCoordinateSpace)),
-                                                    )],
-                                                )
-                                            }
-                                        }
-                                    }
-                                    .onTapGesture { onSelect(window.id) }
-
-                            case .stack(let group):
-                                let cardCw = (ch - 24) * group.aspectRatio
-                                StackCard(group: group, cw: cardCw, ch: ch, onExpand: {
-                                    let originFrame = collapsedGroupFrames.last(where: { $0.groupId == group.id })?.frame
-                                    withAnimation(.spring(response: 0.22, dampingFraction: 0.88)) {
-                                        self.expandedGroupId = group.id
-                                        self.expandedGroupOriginFrame = originFrame
-                                    }
-                                })
-                                .background {
-                                    GeometryReader { geometry in
-                                        Color.clear.preference(
-                                            key: ExposeCollapsedGroupFramePreferenceKey.self,
-                                            value: [ExposeCollapsedGroupFrame(
-                                                groupId: group.id,
-                                                frame: geometry.frame(in: .named(exposeOverviewCoordinateSpace)),
-                                            )],
-                                        )
-                                    }
-                                }
-                        }
+                        slotView(slot, ch: ch)
                     }
                 }
             }
@@ -457,7 +497,7 @@ private struct WinCard: View {
     let item: ExposeWindowItem
     let cw: CGFloat
     let ch: CGFloat
-    var badge: Bool = false
+    var badgeLabel: String? = nil
     var hoverOverride: Bool? = nil
     @State private var localHover = false
 
@@ -467,13 +507,18 @@ private struct WinCard: View {
         VStack(spacing: 4) {
             ZStack(alignment: .topTrailing) {
                 cardThumb(item, w: cw, h: ch - 20, hov: isHovered)
-                if badge {
-                    Image(systemName: "square.stack.fill")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.white)
-                        .padding(4)
-                        .background(Circle().fill(Color.accentColor))
-                        .padding(5)
+                if let badgeLabel {
+                    HStack(spacing: 4) {
+                        Image(systemName: "square.stack.3d.up.fill")
+                            .font(.system(size: 8, weight: .bold))
+                        Text(badgeLabel)
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(Capsule().fill(Color.accentColor))
+                    .padding(6)
                 }
             }
             Text(item.title)
@@ -499,7 +544,6 @@ private struct StackCard: View {
     let group: ExposeTabGroup
     let cw: CGFloat
     let ch: CGFloat
-    let onExpand: () -> Void
     @State private var hov = false
 
     /// Which item in the group is the focused/active one
@@ -557,7 +601,6 @@ private struct StackCard: View {
         .contentShape(Rectangle())
         .onHover { hovering in
             hov = hovering
-            if hovering { onExpand() }
         }
         .animation(.easeOut(duration: 0.12), value: hov)
     }

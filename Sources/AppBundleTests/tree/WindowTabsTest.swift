@@ -355,32 +355,131 @@ final class WindowTabsTest: XCTestCase {
         let swapDropZone = window.swapDropZoneRect.orDie()
         let bottomSplitZone = window.stackSplitDropZoneRect(position: .below).orDie()
 
-        XCTAssertGreaterThan(topSplitZone.minY, tabInteractionZone.maxY)
+        XCTAssertGreaterThanOrEqual(topSplitZone.minY, tabInteractionZone.maxY)
         XCTAssertEqual(topSplitZone.maxY, swapDropZone.minY)
         XCTAssertEqual(bottomSplitZone.minY, swapDropZone.maxY)
         XCTAssertEqual(leftSplitZone.maxX, swapDropZone.minX)
         XCTAssertEqual(rightSplitZone.minX, swapDropZone.maxX)
-        XCTAssertEqual(leftSplitZone.minY, swapDropZone.minY)
-        XCTAssertEqual(leftSplitZone.maxY, swapDropZone.maxY)
-        XCTAssertEqual(rightSplitZone.minY, swapDropZone.minY)
-        XCTAssertEqual(rightSplitZone.maxY, swapDropZone.maxY)
+        XCTAssertEqual(topSplitZone.minX, swapDropZone.minX)
+        XCTAssertEqual(topSplitZone.maxX, swapDropZone.maxX)
+        XCTAssertEqual(bottomSplitZone.minX, swapDropZone.minX)
+        XCTAssertEqual(bottomSplitZone.maxX, swapDropZone.maxX)
+        XCTAssertLessThan(leftSplitZone.minY, swapDropZone.minY)
+        XCTAssertGreaterThan(leftSplitZone.maxY, swapDropZone.maxY)
+        XCTAssertLessThan(rightSplitZone.minY, swapDropZone.minY)
+        XCTAssertGreaterThan(rightSplitZone.maxY, swapDropZone.maxY)
         XCTAssertTrue(swapDropZone.contains(swapDropZone.center))
     }
 
     @MainActor
-    func testVerticalStackSuppressesVerticalSplitBandsButKeepsHorizontalBands() {
+    func testWindowBodyIntentUsesFullHeightSideBandsAndCenteredVerticalBands() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let window = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+        window.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 360, height: 240)
+
+        let swapRect = window.swapDropZoneRect.orDie()
+
+        XCTAssertEqual(window.bodyDragIntent(at: CGPoint(x: 24, y: 90)), .stackSplit(.left))
+        XCTAssertEqual(window.bodyDragIntent(at: CGPoint(x: 24, y: 210)), .stackSplit(.left))
+        XCTAssertEqual(window.bodyDragIntent(at: CGPoint(x: 336, y: 90)), .stackSplit(.right))
+        XCTAssertEqual(window.bodyDragIntent(at: CGPoint(x: 336, y: 210)), .stackSplit(.right))
+        XCTAssertEqual(window.bodyDragIntent(at: CGPoint(x: swapRect.center.x, y: swapRect.minY - 10)), .stackSplit(.above))
+        XCTAssertEqual(window.bodyDragIntent(at: CGPoint(x: swapRect.center.x, y: swapRect.center.y)), .swap)
+        XCTAssertEqual(window.bodyDragIntent(at: CGPoint(x: swapRect.center.x, y: swapRect.maxY + 10)), .stackSplit(.below))
+    }
+
+    @MainActor
+    func testSplitPreviewRectsStayFlushWithTheInternalSplitSeam() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let window = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+        window.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 10, topLeftY: 20, width: 360, height: 240)
+
+        let fullRect = window.lastAppliedLayoutPhysicalRect.orDie()
+        let leftPreview = window.stackSplitPreviewRect(position: .left).orDie()
+        let rightPreview = window.stackSplitPreviewRect(position: .right).orDie()
+        let topPreview = window.stackSplitPreviewRect(position: .above).orDie()
+        let bottomPreview = window.stackSplitPreviewRect(position: .below).orDie()
+
+        XCTAssertEqual(leftPreview.minX, fullRect.minX + 1)
+        XCTAssertEqual(leftPreview.maxX, fullRect.minX + fullRect.width / 2)
+        XCTAssertEqual(rightPreview.minX, fullRect.minX + fullRect.width / 2)
+        XCTAssertEqual(rightPreview.maxX, fullRect.maxX - 1)
+        XCTAssertEqual(topPreview.minY, fullRect.minY + 1)
+        XCTAssertEqual(topPreview.maxY, fullRect.minY + fullRect.height / 2)
+        XCTAssertEqual(bottomPreview.minY, fullRect.minY + fullRect.height / 2)
+        XCTAssertEqual(bottomPreview.maxY, fullRect.maxY - 1)
+    }
+
+    @MainActor
+    func testTabInsertPreviewRectStaysFlushWithBottomEdgeOfTabBand() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let window = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+        window.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 10, topLeftY: 20, width: 360, height: 240)
+
+        let fullRect = window.lastAppliedLayoutPhysicalRect.orDie()
+        let tabPreview = window.tabDropZoneRect.orDie()
+        let expectedTabBandHeight = min(max(CGFloat(config.windowTabs.height) + 8, 36), fullRect.height)
+
+        XCTAssertEqual(tabPreview.minX, fullRect.minX + 1)
+        XCTAssertEqual(tabPreview.maxX, fullRect.maxX - 1)
+        XCTAssertEqual(tabPreview.minY, fullRect.minY + 1)
+        XCTAssertEqual(tabPreview.maxY, fullRect.minY + expectedTabBandHeight)
+    }
+
+    @MainActor
+    func testWindowStackSplitAvailabilityAlwaysOffersAllFourBodyDirections() {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
         let root = workspace.rootTilingContainer
         root.changeOrientation(.v)
         let target = TestWindow.new(id: 1, parent: root)
-        _ = TestWindow.new(id: 2, parent: root)
-        target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 360, height: 120)
+        let source = TestWindow.new(id: 2, parent: root)
 
-        XCTAssertNil(target.stackSplitDropZoneRect(position: .above))
-        XCTAssertNil(target.stackSplitDropZoneRect(position: .below))
-        XCTAssertNotNil(target.stackSplitDropZoneRect(position: .left))
-        XCTAssertNotNil(target.stackSplitDropZoneRect(position: .right))
+        XCTAssertTrue(canOfferWindowStackSplit(
+            sourceNode: source,
+            targetNode: target,
+            position: .above,
+        ))
+        XCTAssertTrue(canOfferWindowStackSplit(
+            sourceNode: source,
+            targetNode: target,
+            position: .below,
+        ))
+        XCTAssertTrue(canOfferWindowStackSplit(
+            sourceNode: source,
+            targetNode: target,
+            position: .left,
+        ))
+        XCTAssertTrue(canOfferWindowStackSplit(
+            sourceNode: source,
+            targetNode: target,
+            position: .right,
+        ))
+    }
+
+    @MainActor
+    func testWindowStackSplitAvailabilityAllowsMiddleColumnFromDifferentBranch() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let leftStack = TilingContainer.newVTiles(parent: root, adaptiveWeight: WEIGHT_AUTO)
+        _ = TestWindow.new(id: 1, parent: leftStack)
+        let source = TestWindow.new(id: 2, parent: leftStack)
+        let target = TestWindow.new(id: 3, parent: root)
+
+        XCTAssertTrue(canOfferWindowStackSplit(
+            sourceNode: source,
+            targetNode: target,
+            position: .left,
+        ))
+        XCTAssertTrue(canOfferWindowStackSplit(
+            sourceNode: source,
+            targetNode: target,
+            position: .right,
+        ))
     }
 
     @MainActor
@@ -619,7 +718,61 @@ final class WindowTabsTest: XCTestCase {
     }
 
     @MainActor
-    func testApplyWindowStackSplitDragIntentRejectsSameOrientationMultiChildParent() {
+    func testApplyWindowStackSplitDragIntentUsesExistingHorizontalParentToCreateMiddleColumn() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let leftStack = TilingContainer.newVTiles(parent: root, adaptiveWeight: WEIGHT_AUTO)
+        _ = TestWindow.new(id: 1, parent: leftStack)
+        let source = TestWindow.new(id: 2, parent: leftStack)
+        let target = TestWindow.new(id: 3, parent: root)
+
+        XCTAssertTrue(applyWindowStackSplitDragIntent(
+            sourceWindow: source,
+            sourceSubject: .window,
+            targetWindow: target,
+            position: .left,
+        ))
+
+        assertEquals(root.layoutDescription, .h_tiles([
+            .v_tiles([
+                .window(1),
+            ]),
+            .window(2),
+            .window(3),
+        ]))
+        XCTAssertEqual(focus.windowOrNil, source)
+    }
+
+    @MainActor
+    func testApplyWindowStackSplitDragIntentUsesExistingHorizontalAncestorForNestedTargetBranch() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let leftStack = TilingContainer.newVTiles(parent: root, adaptiveWeight: WEIGHT_AUTO)
+        let target = TestWindow.new(id: 1, parent: leftStack)
+        let source = TestWindow.new(id: 2, parent: leftStack)
+        _ = TestWindow.new(id: 3, parent: root)
+
+        XCTAssertTrue(applyWindowStackSplitDragIntent(
+            sourceWindow: source,
+            sourceSubject: .window,
+            targetWindow: target,
+            position: .left,
+        ))
+
+        assertEquals(root.layoutDescription, .h_tiles([
+            .window(2),
+            .v_tiles([
+                .window(1),
+            ]),
+            .window(3),
+        ]))
+        XCTAssertEqual(focus.windowOrNil, source)
+    }
+
+    @MainActor
+    func testApplyWindowStackSplitDragIntentReordersWithinExistingSameAxisParentWhenNeeded() {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
         let root = workspace.rootTilingContainer
@@ -628,7 +781,7 @@ final class WindowTabsTest: XCTestCase {
         let sibling = TestWindow.new(id: 3, parent: root)
         let source = TestWindow.new(id: 1, parent: root)
 
-        XCTAssertFalse(applyWindowStackSplitDragIntent(
+        XCTAssertTrue(applyWindowStackSplitDragIntent(
             sourceWindow: source,
             sourceSubject: .window,
             targetWindow: target,
@@ -636,11 +789,11 @@ final class WindowTabsTest: XCTestCase {
         ))
 
         assertEquals(root.layoutDescription, .v_tiles([
+            .window(1),
             .window(2),
             .window(3),
-            .window(1),
         ]))
-        XCTAssertTrue(root.children[1] === sibling)
+        XCTAssertTrue(root.children[2] === sibling)
     }
 
     @MainActor

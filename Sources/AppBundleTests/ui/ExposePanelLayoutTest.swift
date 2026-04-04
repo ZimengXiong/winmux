@@ -80,6 +80,23 @@ final class ExposePanelLayoutTest: XCTestCase {
             ),
         )
     }
+
+    func testHoveredCollapsedGroupFrameUsesPadding() {
+        let frames = [
+            ExposeCollapsedGroupFrame(groupId: "a", frame: CGRect(x: 100, y: 100, width: 40, height: 40)),
+            ExposeCollapsedGroupFrame(groupId: "b", frame: CGRect(x: 200, y: 100, width: 40, height: 40)),
+        ]
+
+        XCTAssertEqual(
+            hoveredCollapsedGroupFrame(
+                at: CGPoint(x: 96, y: 120),
+                within: frames,
+                padding: 6,
+            )?.groupId,
+            "a",
+        )
+    }
+
 }
 
 private func exposeTestItem(id: UInt32, focused: Bool) -> ExposeWindowItem {

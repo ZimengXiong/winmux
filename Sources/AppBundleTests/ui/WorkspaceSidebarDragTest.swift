@@ -54,10 +54,17 @@ final class WorkspaceSidebarDragTest: XCTestCase {
         )
     }
 
-    func testWorkspaceSidebarHoverExpansionRequiresAtLeastHalfDepth() {
+    func testWorkspaceSidebarHoverExpansionRequiresAtLeastThreeQuarterDepth() {
         XCTAssertFalse(
             isWorkspaceSidebarHoverDeepEnoughToExpand(
-                mouseX: 15,
+                mouseX: 8,
+                sidebarMinX: 0,
+                collapsedWidth: 28,
+            ),
+        )
+        XCTAssertTrue(
+            isWorkspaceSidebarHoverDeepEnoughToExpand(
+                mouseX: 7,
                 sidebarMinX: 0,
                 collapsedWidth: 28,
             ),
@@ -65,13 +72,6 @@ final class WorkspaceSidebarDragTest: XCTestCase {
         XCTAssertTrue(
             isWorkspaceSidebarHoverDeepEnoughToExpand(
                 mouseX: 14,
-                sidebarMinX: 0,
-                collapsedWidth: 28,
-            ),
-        )
-        XCTAssertTrue(
-            isWorkspaceSidebarHoverDeepEnoughToExpand(
-                mouseX: 10,
                 sidebarMinX: 8,
                 collapsedWidth: 28,
             ),

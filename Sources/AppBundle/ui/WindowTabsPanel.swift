@@ -117,7 +117,7 @@ final class WindowTabDropPreviewPanel: NSPanelHud {
             hostingView.rootView = AnyView(WindowTabDropPreviewView(model: preview))
             currentContent = nextContent
         }
-        setFrame(preview.frame, display: true, animate: false)
+        setFrame(preview.frame.alignedToBackingPixels(), display: true, animate: false)
         orderFrontRegardless()
     }
 
@@ -217,12 +217,14 @@ private struct WindowTabDropPreviewContent: Equatable {
     let title: String
     let subtitle: String
     let style: WindowTabDropPreviewStyle
+    let geometry: WindowTabDropPreviewGeometry
     let isGroup: Bool
 
     init(model: WindowTabDropPreviewViewModel) {
         title = model.title
         subtitle = model.subtitle
         style = model.style
+        geometry = model.geometry
         isGroup = model.isGroup
     }
 }
@@ -232,6 +234,7 @@ struct WindowTabDropPreviewViewModel: Equatable {
     let title: String
     let subtitle: String
     let style: WindowTabDropPreviewStyle
+    let geometry: WindowTabDropPreviewGeometry
     let isGroup: Bool
 }
 
@@ -242,6 +245,32 @@ enum WindowTabDropPreviewStyle: Equatable {
     case swap
     case workspaceMove
     case sidebarWorkspaceMove
+}
+
+enum WindowTabDropPreviewGeometry: Equatable {
+    case rounded
+    case tabStrip
+    case splitLeft
+    case splitRight
+    case splitAbove
+    case splitBelow
+
+    fileprivate func cornerRadii(radius: CGFloat) -> PreviewCornerRadii {
+        switch self {
+            case .rounded:
+                PreviewCornerRadii.uniform(radius)
+            case .tabStrip:
+                PreviewCornerRadii(topLeft: radius, topRight: radius, bottomRight: 0, bottomLeft: 0)
+            case .splitLeft:
+                PreviewCornerRadii(topLeft: radius, topRight: 0, bottomRight: 0, bottomLeft: radius)
+            case .splitRight:
+                PreviewCornerRadii(topLeft: 0, topRight: radius, bottomRight: radius, bottomLeft: 0)
+            case .splitAbove:
+                PreviewCornerRadii(topLeft: radius, topRight: radius, bottomRight: 0, bottomLeft: 0)
+            case .splitBelow:
+                PreviewCornerRadii(topLeft: 0, topRight: 0, bottomRight: radius, bottomLeft: radius)
+        }
+    }
 }
 
 @MainActor
@@ -375,7 +404,7 @@ private func finishMoveFromTabStrip() {
 
 private let windowTabStripCornerRadius: CGFloat = 10
 private let windowTabItemCornerRadius: CGFloat = 6
-private let windowTabPreviewCornerRadius: CGFloat = 6
+private let windowTabPreviewCornerRadius: CGFloat = 8
 
 // MARK: - Tab Strip View (manages reorder drag state for all tabs)
 
@@ -598,65 +627,227 @@ private struct WindowTabDropPreviewView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let model: WindowTabDropPreviewViewModel
     @State private var isPresented = false
-    @State private var glowPhase = false
 
     var body: some View {
         let cfg = borderConfig(for: model.style)
+        let shape = WindowTabDropOutlineShape(cornerRadii: model.geometry.cornerRadii(radius: cfg.cornerRadius))
 
-        RoundedRectangle(cornerRadius: windowTabPreviewCornerRadius, style: .continuous)
-            .fill(cfg.color.opacity(isPresented ? cfg.fillOpacity : 0))
+        shape
+            .fill(
+                LinearGradient(
+                    colors: [
+                        cfg.color.opacity(isPresented ? cfg.fillOpacity * 1.18 : 0),
+                        cfg.color.opacity(isPresented ? cfg.fillOpacity * 0.9 : 0),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom,
+                ),
+            )
             .overlay {
-                RoundedRectangle(cornerRadius: windowTabPreviewCornerRadius, style: .continuous)
+                shape
                     .strokeBorder(
-                        cfg.color.opacity(isPresented ? (glowPhase ? cfg.borderOpacity : cfg.borderOpacity * 0.6) : 0.05),
+                        cfg.color.opacity(isPresented ? cfg.borderOpacity : 0.08),
                         style: cfg.strokeStyle,
                     )
             }
             .overlay {
-                // Outer glow
-                RoundedRectangle(cornerRadius: windowTabPreviewCornerRadius + 2, style: .continuous)
+                shape
+                    .inset(by: cfg.strokeStyle.lineWidth + 1)
                     .strokeBorder(
-                        cfg.color.opacity(isPresented ? (glowPhase ? 0.12 : 0.04) : 0),
-                        lineWidth: 3,
+                        Color.white.opacity(isPresented ? cfg.highlightOpacity : 0),
+                        lineWidth: 1,
                     )
-                    .blur(radius: 4)
             }
-            .scaleEffect(reduceMotion ? 1 : (isPresented ? 1 : 0.994))
+            .overlay {
+                shape
+                    .strokeBorder(
+                        Color.black.opacity(isPresented ? cfg.edgeShadowOpacity : 0),
+                        lineWidth: 0.5,
+                    )
+            }
+            .opacity(isPresented ? 1 : 0.82)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color.clear)
+            .compositingGroup()
             .onAppear {
-                withAnimation(reduceMotion ? .easeOut(duration: 0.1) : .spring(response: 0.2, dampingFraction: 0.78)) {
+                withAnimation(reduceMotion ? .easeOut(duration: 0.08) : .easeOut(duration: 0.12)) {
                     isPresented = true
-                }
-                if !reduceMotion {
-                    withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
-                        glowPhase = true
-                    }
                 }
             }
     }
 
     private struct BorderConfig {
         let color: Color
+        let cornerRadius: CGFloat
         let fillOpacity: Double
         let borderOpacity: Double
+        let highlightOpacity: Double
+        let edgeShadowOpacity: Double
         let strokeStyle: StrokeStyle
     }
 
     private func borderConfig(for style: WindowTabDropPreviewStyle) -> BorderConfig {
         switch style {
             case .tabInsert:
-                return BorderConfig(color: .accentColor, fillOpacity: 0.06, borderOpacity: 0.6, strokeStyle: StrokeStyle(lineWidth: 2))
+                return BorderConfig(
+                    color: .accentColor,
+                    cornerRadius: windowTabPreviewCornerRadius,
+                    fillOpacity: 0.22,
+                    borderOpacity: 1,
+                    highlightOpacity: 0.4,
+                    edgeShadowOpacity: 0.2,
+                    strokeStyle: StrokeStyle(lineWidth: 2.75),
+                )
             case .detach:
-                return BorderConfig(color: .orange, fillOpacity: 0.04, borderOpacity: 0.5, strokeStyle: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                return BorderConfig(
+                    color: .orange,
+                    cornerRadius: windowTabPreviewCornerRadius,
+                    fillOpacity: 0.12,
+                    borderOpacity: 0.92,
+                    highlightOpacity: 0.24,
+                    edgeShadowOpacity: 0.16,
+                    strokeStyle: StrokeStyle(lineWidth: 2, dash: [7, 4]),
+                )
             case .stackSplit:
-                return BorderConfig(color: .accentColor, fillOpacity: 0.05, borderOpacity: 0.55, strokeStyle: StrokeStyle(lineWidth: 1.75))
+                return BorderConfig(
+                    color: .accentColor,
+                    cornerRadius: windowTabPreviewCornerRadius,
+                    fillOpacity: 0.19,
+                    borderOpacity: 1,
+                    highlightOpacity: 0.34,
+                    edgeShadowOpacity: 0.18,
+                    strokeStyle: StrokeStyle(lineWidth: 2.5),
+                )
             case .swap:
-                return BorderConfig(color: .accentColor, fillOpacity: 0.04, borderOpacity: 0.45, strokeStyle: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                return BorderConfig(
+                    color: .accentColor,
+                    cornerRadius: windowTabPreviewCornerRadius,
+                    fillOpacity: 0.13,
+                    borderOpacity: 0.92,
+                    highlightOpacity: 0.28,
+                    edgeShadowOpacity: 0.15,
+                    strokeStyle: StrokeStyle(lineWidth: 2.25, dash: [8, 4]),
+                )
             case .workspaceMove:
-                return BorderConfig(color: .green, fillOpacity: 0.05, borderOpacity: 0.5, strokeStyle: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                return BorderConfig(
+                    color: .green,
+                    cornerRadius: windowTabPreviewCornerRadius,
+                    fillOpacity: 0.14,
+                    borderOpacity: 0.9,
+                    highlightOpacity: 0.24,
+                    edgeShadowOpacity: 0.14,
+                    strokeStyle: StrokeStyle(lineWidth: 2.25, dash: [8, 4]),
+                )
             case .sidebarWorkspaceMove:
-                return BorderConfig(color: .accentColor, fillOpacity: 0.04, borderOpacity: 0.5, strokeStyle: StrokeStyle(lineWidth: 1.5))
+                return BorderConfig(
+                    color: .accentColor,
+                    cornerRadius: windowTabPreviewCornerRadius,
+                    fillOpacity: 0.14,
+                    borderOpacity: 0.9,
+                    highlightOpacity: 0.28,
+                    edgeShadowOpacity: 0.15,
+                    strokeStyle: StrokeStyle(lineWidth: 2.25),
+                )
         }
+    }
+}
+
+private struct PreviewCornerRadii {
+    let topLeft: CGFloat
+    let topRight: CGFloat
+    let bottomRight: CGFloat
+    let bottomLeft: CGFloat
+
+    static func uniform(_ radius: CGFloat) -> PreviewCornerRadii {
+        PreviewCornerRadii(topLeft: radius, topRight: radius, bottomRight: radius, bottomLeft: radius)
+    }
+}
+
+private struct WindowTabDropOutlineShape: InsettableShape {
+    let cornerRadii: PreviewCornerRadii
+    var insetAmount: CGFloat = 0
+
+    func path(in rect: CGRect) -> Path {
+        let insetRect = rect.insetBy(dx: insetAmount, dy: insetAmount)
+        guard !insetRect.isNull, insetRect.width > 0, insetRect.height > 0 else { return Path() }
+
+        let maxRadius = min(insetRect.width, insetRect.height) / 2
+        let tl = min(cornerRadii.topLeft, maxRadius)
+        let tr = min(cornerRadii.topRight, maxRadius)
+        let br = min(cornerRadii.bottomRight, maxRadius)
+        let bl = min(cornerRadii.bottomLeft, maxRadius)
+
+        var path = Path()
+        path.move(to: CGPoint(x: insetRect.minX + tl, y: insetRect.minY))
+        path.addLine(to: CGPoint(x: insetRect.maxX - tr, y: insetRect.minY))
+        if tr > 0 {
+            path.addArc(
+                center: CGPoint(x: insetRect.maxX - tr, y: insetRect.minY + tr),
+                radius: tr,
+                startAngle: .degrees(-90),
+                endAngle: .degrees(0),
+                clockwise: false,
+            )
+        }
+        path.addLine(to: CGPoint(x: insetRect.maxX, y: insetRect.maxY - br))
+        if br > 0 {
+            path.addArc(
+                center: CGPoint(x: insetRect.maxX - br, y: insetRect.maxY - br),
+                radius: br,
+                startAngle: .degrees(0),
+                endAngle: .degrees(90),
+                clockwise: false,
+            )
+        }
+        path.addLine(to: CGPoint(x: insetRect.minX + bl, y: insetRect.maxY))
+        if bl > 0 {
+            path.addArc(
+                center: CGPoint(x: insetRect.minX + bl, y: insetRect.maxY - bl),
+                radius: bl,
+                startAngle: .degrees(90),
+                endAngle: .degrees(180),
+                clockwise: false,
+            )
+        }
+        path.addLine(to: CGPoint(x: insetRect.minX, y: insetRect.minY + tl))
+        if tl > 0 {
+            path.addArc(
+                center: CGPoint(x: insetRect.minX + tl, y: insetRect.minY + tl),
+                radius: tl,
+                startAngle: .degrees(180),
+                endAngle: .degrees(270),
+                clockwise: false,
+            )
+        }
+        path.closeSubpath()
+        return path
+    }
+
+    func inset(by amount: CGFloat) -> WindowTabDropOutlineShape {
+        var copy = self
+        copy.insetAmount += amount
+        return copy
+    }
+}
+
+extension CGRect {
+    fileprivate func alignedToBackingPixels() -> CGRect {
+        let scale = (NSScreen.screens
+            .max(by: { $0.frame.intersection(self).area < $1.frame.intersection(self).area })?
+            .backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2)
+        let alignedMinX = (minX * scale).rounded() / scale
+        let alignedMinY = (minY * scale).rounded() / scale
+        let alignedMaxX = (maxX * scale).rounded() / scale
+        let alignedMaxY = (maxY * scale).rounded() / scale
+        return CGRect(
+            x: alignedMinX,
+            y: alignedMinY,
+            width: max(alignedMaxX - alignedMinX, 0),
+            height: max(alignedMaxY - alignedMinY, 0),
+        )
+    }
+
+    fileprivate var area: CGFloat {
+        isNull ? 0 : width * height
     }
 }
