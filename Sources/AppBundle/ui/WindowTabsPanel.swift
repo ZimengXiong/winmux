@@ -79,10 +79,12 @@ private final class WindowTabStripPanel: NSPanelHud {
 
 private struct WindowTabStripContent: Equatable {
     let workspaceName: String
+    let frame: CGRect
     let tabs: [WindowTabItemViewModel]
 
     init(strip: WindowTabStripViewModel) {
         workspaceName = strip.workspaceName
+        frame = strip.frame
         tabs = strip.tabs
     }
 }

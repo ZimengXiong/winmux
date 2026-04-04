@@ -213,8 +213,7 @@ final class WorkspaceSidebarPanel: NSPanelHud {
     func refresh() {
         guard TrayMenuModel.shared.isEnabled,
               config.workspaceSidebar.enabled,
-              let monitor = config.workspaceSidebar.resolvedMonitor(sortedMonitors: sortedMonitors),
-              let screen = NSScreen.screens.getOrNil(atIndex: monitor.monitorAppKitNsScreenScreensId - 1)
+              let screen = NSScreen.screens.getOrNil(atIndex: mainMonitor.monitorAppKitNsScreenScreensId - 1) ?? NSScreen.screens.first
         else {
             stopHoverMonitoring()
             resetHiddenSidebarState()
@@ -489,9 +488,7 @@ private func showWorkspaceSidebarError(_ body: String) {
 
 @MainActor
 private func sidebarWorkspaceTargetMonitor(fallbackWindow: Window? = nil) -> Monitor {
-    config.workspaceSidebar.resolvedMonitor(sortedMonitors: sortedMonitors)
-        ?? fallbackWindow?.nodeMonitor
-        ?? focus.workspace.workspaceMonitor
+    fallbackWindow?.nodeMonitor ?? focus.workspace.workspaceMonitor
 }
 
 @MainActor

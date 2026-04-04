@@ -1,7 +1,5 @@
 import AppKit
 
-@MainActor var sidebarWindowTitleCache: [UInt32: String] = [:]
-
 struct WorkspaceSidebarTransientState: Equatable {
     let hoveredWorkspaceName: String?
 }
@@ -32,26 +30,18 @@ func updateWorkspaceSidebarModel() async {
     let currentFocus = focus
     let workspaceLabels = config.workspaceSidebar.workspaceLabels
     let previousTopPadding = TrayMenuModel.shared.workspaceSidebarTopPadding
+    pruneCachedWindowTitles()
 
-    if let sidebarMonitor = config.workspaceSidebar.resolvedMonitor(sortedMonitors: sortedMonitors) {
-        let gaps = ResolvedGaps(gaps: config.gaps, monitor: sidebarMonitor)
-        TrayMenuModel.shared.workspaceSidebarTopPadding = CGFloat(gaps.outer.top)
-    } else {
-        TrayMenuModel.shared.workspaceSidebarTopPadding = 12
-    }
+    let gaps = ResolvedGaps(gaps: config.gaps, monitor: mainMonitor)
+    TrayMenuModel.shared.workspaceSidebarTopPadding = CGFloat(gaps.outer.top)
     let didTopPaddingChange = TrayMenuModel.shared.workspaceSidebarTopPadding != previousTopPadding
 
     var sidebarWorkspaces: [WorkspaceSidebarWorkspaceViewModel] = []
-    var aliveWindowIds: Set<UInt32> = []
     for workspace in Workspace.all {
         if !shouldShowWorkspaceInSidebar(workspace, currentFocus: currentFocus, isEditingWorkspace: false) {
             continue
         }
-        let sidebarItems = await buildWorkspaceSidebarItems(
-            for: workspace,
-            currentFocus: currentFocus,
-            aliveWindowIds: &aliveWindowIds,
-        )
+        let sidebarItems = await buildWorkspaceSidebarItems(for: workspace, currentFocus: currentFocus)
 
         let sidebarLabel = workspaceLabels[workspace.name] ?? ""
         let isGeneratedName = isSidebarDraftWorkspaceName(workspace.name)
@@ -63,7 +53,7 @@ func updateWorkspaceSidebarModel() async {
                 displayName: displayName,
                 sidebarLabel: sidebarLabel,
                 isGeneratedName: isGeneratedName,
-                monitorName: workspace.isVisible ? workspace.workspaceMonitor.name : nil,
+                monitorName: nil,
                 isFocused: currentFocus.workspace == workspace,
                 isVisible: workspace.isVisible,
                 items: sidebarItems,
@@ -71,7 +61,6 @@ func updateWorkspaceSidebarModel() async {
         )
     }
 
-    sidebarWindowTitleCache = sidebarWindowTitleCache.filter { aliveWindowIds.contains($0.key) }
     let sanitizedTransientState = sanitizedWorkspaceSidebarTransientState(
         visibleWorkspaceNames: Set(sidebarWorkspaces.map(\.name)),
         state: WorkspaceSidebarTransientState(
@@ -93,39 +82,29 @@ func updateWorkspaceSidebarModel() async {
 @MainActor
 func sidebarDisplayLabel(for window: Window) -> String {
     let appName = window.app.name ?? window.app.rawAppBundleId ?? "Unknown App"
-    return sidebarWindowTitleCache[window.windowId]?.takeIf { !$0.isEmpty } ?? appName
+    return cachedWindowTitle(for: window)?.takeIf { $0 != appName } ?? appName
 }
 
 @MainActor
 private func getSidebarWindowTitle(_ window: Window, appName: String) async -> String? {
-    let cached = sidebarWindowTitleCache[window.windowId]
-    let rawTitle = try? await window.title
-    let normalized = rawTitle?.trimmingCharacters(in: .whitespacesAndNewlines).takeIf { !$0.isEmpty }
-    if let normalized {
-        sidebarWindowTitleCache[window.windowId] = normalized
-        return normalized != appName ? normalized : nil
-    }
-    return cached?.takeIf { !$0.isEmpty && $0 != appName }
+    await getCachedWindowTitle(window)?.takeIf { $0 != appName }
 }
 
 @MainActor
 private func buildWorkspaceSidebarItems(
     for workspace: Workspace,
     currentFocus: LiveFocus,
-    aliveWindowIds: inout Set<UInt32>,
 ) async -> [WorkspaceSidebarItemViewModel] {
     var items = await buildWorkspaceSidebarItems(
         from: workspace.rootTilingContainer,
         workspaceName: workspace.name,
         currentFocus: currentFocus,
-        aliveWindowIds: &aliveWindowIds,
     )
     for floatingWindow in workspace.floatingWindows where floatingWindow.isBound {
         items.append(.init(kind: .window(await makeWorkspaceSidebarWindowViewModel(
             for: floatingWindow,
             workspaceName: workspace.name,
             currentFocus: currentFocus,
-            aliveWindowIds: &aliveWindowIds,
         ))))
     }
     return items
@@ -136,7 +115,6 @@ private func buildWorkspaceSidebarItems(
     from node: TreeNode,
     workspaceName: String,
     currentFocus: LiveFocus,
-    aliveWindowIds: inout Set<UInt32>,
 ) async -> [WorkspaceSidebarItemViewModel] {
     switch node.nodeCases {
         case .window(let window):
@@ -145,7 +123,6 @@ private func buildWorkspaceSidebarItems(
                 for: window,
                 workspaceName: workspaceName,
                 currentFocus: currentFocus,
-                aliveWindowIds: &aliveWindowIds,
             )))]
         case .tilingContainer(let container):
             if container.layout == .accordion, container.children.count > 1 {
@@ -153,7 +130,6 @@ private func buildWorkspaceSidebarItems(
                     for: container,
                     workspaceName: workspaceName,
                     currentFocus: currentFocus,
-                    aliveWindowIds: &aliveWindowIds,
                 )
                 return group.map { [.init(kind: .tabGroup($0))] } ?? []
             }
@@ -163,7 +139,6 @@ private func buildWorkspaceSidebarItems(
                     from: child,
                     workspaceName: workspaceName,
                     currentFocus: currentFocus,
-                    aliveWindowIds: &aliveWindowIds,
                 ))
             }
             return items
@@ -172,7 +147,6 @@ private func buildWorkspaceSidebarItems(
                 from: workspace.rootTilingContainer,
                 workspaceName: workspaceName,
                 currentFocus: currentFocus,
-                aliveWindowIds: &aliveWindowIds,
             )
         case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer,
              .macosPopupWindowsContainer, .macosHiddenAppsWindowsContainer:
@@ -185,7 +159,6 @@ private func makeWorkspaceSidebarTabGroupViewModel(
     for container: TilingContainer,
     workspaceName: String,
     currentFocus: LiveFocus,
-    aliveWindowIds: inout Set<UInt32>,
 ) async -> WorkspaceSidebarTabGroupViewModel? {
     let representativeWindow = container.tabActiveWindow ?? container.mostRecentWindowRecursive ?? container.anyLeafWindowRecursive
     guard let representativeWindow else { return nil }
@@ -198,7 +171,6 @@ private func makeWorkspaceSidebarTabGroupViewModel(
             for: representative,
             workspaceName: workspaceName,
             currentFocus: currentFocus,
-            aliveWindowIds: &aliveWindowIds,
         ))
     }
     guard !tabs.isEmpty else { return nil }
@@ -217,9 +189,7 @@ private func makeWorkspaceSidebarWindowViewModel(
     for window: Window,
     workspaceName: String,
     currentFocus: LiveFocus,
-    aliveWindowIds: inout Set<UInt32>,
 ) async -> WorkspaceSidebarWindowViewModel {
-    aliveWindowIds.insert(window.windowId)
     let appName = window.app.name ?? window.app.rawAppBundleId ?? "Unknown App"
     let title = await getSidebarWindowTitle(window, appName: appName)
     return WorkspaceSidebarWindowViewModel(

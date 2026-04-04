@@ -47,11 +47,5 @@ extension Workspace {
         existingMacOsNativeHiddenAppsWindowsContainer ?? MacosHiddenAppsWindowsContainer(parent: self)
     }
 
-    @MainActor var forceAssignedMonitor: Monitor? {
-        guard let monitorDescriptions = config.workspaceToMonitorForceAssignment[name] else { return nil }
-        let sortedMonitors = sortedMonitors
-        return monitorDescriptions.lazy
-            .compactMap { $0.resolveMonitor(sortedMonitors: sortedMonitors) }
-            .first
-    }
+    @MainActor var forceAssignedMonitor: Monitor? { nil }
 }

@@ -24,10 +24,12 @@ import Foundation
                 """,
             )
         }
+        UnsupportedMonitorGuard.shared.prepareForStartup()
 
         checkAccessibilityPermissions()
         startUnixSocketServer()
         GlobalObserver.initObserver()
+        UnsupportedMonitorGuard.shared.startObserving()
         Workspace.garbageCollectUnusedWorkspaces() // init workspaces
         _ = Workspace.all.first?.focusWorkspace()
         let didLoadPersistedFrozenWorld = loadPersistedFrozenWorldForStartupIfPresent()

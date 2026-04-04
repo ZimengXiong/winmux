@@ -229,7 +229,10 @@ private func layoutWorkspaces() async throws {
     for workspace in Workspace.all where !workspace.isVisible {
         let corner = monitorToOptimalHideCorner[workspace.workspaceMonitor.rect.topLeftCorner] ?? .bottomRightCorner
         for window in workspace.allLeafWindowsRecursive {
-            try await (window as! MacWindow).hideInCorner(corner) // todo as!
+            let macWindow = window as! MacWindow
+            macWindow.lastAppliedLayoutPhysicalRect = nil
+            macWindow.lastAppliedLayoutVirtualRect = nil
+            try await macWindow.hideInCorner(corner) // todo as!
         }
     }
 }

@@ -23,23 +23,19 @@ public final class TrayMenuModel: ObservableObject {
 }
 
 @MainActor func updateTrayText() {
-    let sortedMonitors = sortedMonitors
     let focus = focus
+    let activeWorkspace = focus.workspace.workspaceMonitor.activeWorkspace
+    let activeWorkspaceName = activeWorkspace.isSystemStub ? "-" : workspaceDisplayName(activeWorkspace.name)
+    let formattedActiveWorkspaceName = activeWorkspace.allLeafWindowsRecursive.contains { $0.isFullscreen }
+        ? "[\(activeWorkspaceName)]"
+        : activeWorkspaceName
     TrayMenuModel.shared.trayText = (activeMode?.takeIf { $0 != mainModeId }?.first.map { "(\($0.uppercased())) " } ?? "") +
-        sortedMonitors
-        .map {
-            let hasFullscreenWindows = $0.activeWorkspace.allLeafWindowsRecursive.contains { $0.isFullscreen }
-            let activeWorkspaceName = $0.activeWorkspace.isSystemStub ? "-" : workspaceDisplayName($0.activeWorkspace.name)
-            let formattedActiveWorkspaceName = hasFullscreenWindows ? "[\(activeWorkspaceName)]" : activeWorkspaceName
-            return ($0.activeWorkspace == focus.workspace && sortedMonitors.count > 1 ? "*" : "") + formattedActiveWorkspaceName
-        }
-        .joined(separator: " │ ")
+        formattedActiveWorkspaceName
     TrayMenuModel.shared.workspaces = userFacingWorkspaces(Workspace.all, focusedWorkspace: focus.workspace).map {
         let apps = $0.allLeafWindowsRecursive.map { $0.app.name?.takeIf { !$0.isEmpty } }.filterNotNil().toSet()
         let dash = " - "
         let suffix = switch true {
             case !apps.isEmpty: dash + apps.sorted().joinTruncating(separator: ", ", length: 25)
-            case $0.isVisible: dash + $0.workspaceMonitor.name
             default: ""
         }
         let hasFullscreenWindows = $0.allLeafWindowsRecursive.contains { $0.isFullscreen }
@@ -53,16 +49,13 @@ public final class TrayMenuModel: ObservableObject {
             hasFullscreenWindows: hasFullscreenWindows,
         )
     }
-    var items = sortedMonitors.map {
-        let hasFullscreenWindows = $0.activeWorkspace.allLeafWindowsRecursive.contains { $0.isFullscreen }
-        return TrayItem(
-            type: .workspace,
-            name: $0.activeWorkspace.isSystemStub ? "-" : $0.activeWorkspace.name,
-            displayName: $0.activeWorkspace.isSystemStub ? "-" : workspaceDisplayName($0.activeWorkspace.name),
-            isActive: $0.activeWorkspace == focus.workspace,
-            hasFullscreenWindows: hasFullscreenWindows,
-        )
-    }
+    var items = [TrayItem(
+        type: .workspace,
+        name: activeWorkspace.isSystemStub ? "-" : activeWorkspace.name,
+        displayName: activeWorkspace.isSystemStub ? "-" : workspaceDisplayName(activeWorkspace.name),
+        isActive: true,
+        hasFullscreenWindows: activeWorkspace.allLeafWindowsRecursive.contains { $0.isFullscreen },
+    )]
     let mode = activeMode?.takeIf { $0 != mainModeId }?.first.map {
         TrayItem(type: .mode, name: $0.uppercased(), isActive: true, hasFullscreenWindows: false)
     }

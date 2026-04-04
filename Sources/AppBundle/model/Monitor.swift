@@ -1,5 +1,6 @@
 import AppKit
 import Common
+import CoreGraphics
 
 private struct MonitorImpl {
     let monitorAppKitNsScreenScreensId: Int
@@ -59,6 +60,10 @@ final class LazyMonitor: Monitor {
 // 2. It's inaccurate because NSScreen.main doesn't work correctly from NSWorkspace.didActivateApplicationNotification &
 //    kAXFocusedWindowChangedNotification callbacks.
 extension NSScreen {
+    var displayId: CGDirectDisplayID? {
+        (deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber).map { CGDirectDisplayID(truncating: $0) }
+    }
+
     fileprivate func toMonitor(monitorAppKitNsScreenScreensId: Int) -> Monitor {
         MonitorImpl(
             monitorAppKitNsScreenScreensId: monitorAppKitNsScreenScreensId,
@@ -70,7 +75,7 @@ extension NSScreen {
     }
 
     fileprivate var isMainScreen: Bool {
-        frame.minX == 0 && frame.minY == 0
+        displayId == CGMainDisplayID()
     }
 
     /// The property is a replacement for Apple's crazy ``frame``
@@ -105,11 +110,9 @@ var mainMonitor: Monitor {
 }
 
 var monitors: [Monitor] {
-    isUnitTest
-        ? [testMonitor]
-        : NSScreen.screens.enumerated().map { $0.element.toMonitor(monitorAppKitNsScreenScreensId: $0.offset + 1) }
+    [mainMonitor]
 }
 
 var sortedMonitors: [Monitor] {
-    monitors.sortedBy([\.rect.minX, \.rect.minY])
+    [mainMonitor]
 }

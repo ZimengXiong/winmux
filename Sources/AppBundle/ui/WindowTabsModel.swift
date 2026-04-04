@@ -8,6 +8,7 @@ func updateWindowTabModel() async {
         debugFocusLog("updateWindowTabModel disabled -> cleared")
         return
     }
+    pruneCachedWindowTitles()
 
     var strips: [WindowTabStripViewModel] = []
     for workspace in Workspace.all where workspace.isVisible {
@@ -24,8 +25,7 @@ func updateWindowTabModel() async {
             let tabs: [WindowTabItemViewModel] = await container.children.asyncCompactMap { child in
                 guard let window = child.tabRepresentativeWindow else { return nil }
                 let appName = window.app.name ?? window.app.rawAppBundleId ?? "Window"
-                let rawTitle = try? await window.title
-                let title = rawTitle?.takeIf { !$0.isEmpty } ?? appName
+                let title = await getCachedWindowTitle(window) ?? appName
                 return WindowTabItemViewModel(
                     windowId: window.windowId,
                     workspaceName: workspace.name,

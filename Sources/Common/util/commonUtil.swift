@@ -85,6 +85,16 @@ public enum RefreshSessionEvent: Sendable, CustomStringConvertible {
         if case .startup = self { return true } else { return false }
     }
 
+    public var canReuseLastAppliedWindowFrames: Bool {
+        switch self {
+            case .hotkeyBinding, .menuBarButton, .socketServer, .onModeChanged:
+                true
+            case .configAutoReload, .globalObserver, .globalObserverLeftMouseUp, .startup,
+                 .resetManipulatedWithMouse, .ax, .onFocusedMonitorChanged, .onFocusChanged:
+                false
+        }
+    }
+
     public var description: String {
         switch self {
             case .ax(let str): "ax(\(str))"

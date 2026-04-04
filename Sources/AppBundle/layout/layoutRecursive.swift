@@ -1,4 +1,5 @@
 import AppKit
+import Common
 
 extension Workspace {
     @MainActor
@@ -40,6 +41,7 @@ extension TreeNode {
                 }
             case .window(let window):
                 if window.windowId != currentlyManipulatedWithMouseWindowId || isPinnedDraggedWindow(window.windowId) {
+                    let previousPhysicalRect = lastAppliedLayoutPhysicalRect
                     lastAppliedLayoutVirtualRect = virtual
                     if window.isFullscreen && window == context.workspace.rootTilingContainer.mostRecentWindowRecursive {
                         lastAppliedLayoutPhysicalRect = nil
@@ -47,7 +49,9 @@ extension TreeNode {
                     } else {
                         lastAppliedLayoutPhysicalRect = physicalRect
                         window.isFullscreen = false
-                        window.setAxFrame(point, CGSize(width: width, height: height))
+                        if !canReuseLastAppliedWindowFrame(previousPhysicalRect: previousPhysicalRect, nextPhysicalRect: physicalRect) {
+                            window.setAxFrame(point, CGSize(width: width, height: height))
+                        }
                     }
                 }
             case .tilingContainer(let container):
@@ -67,6 +71,15 @@ extension TreeNode {
                 return // Nothing to do for weirdos
         }
     }
+}
+
+private func canReuseLastAppliedWindowFrame(previousPhysicalRect: Rect?, nextPhysicalRect: Rect) -> Bool {
+    guard refreshSessionEvent?.canReuseLastAppliedWindowFrames == true else { return false }
+    guard let previousPhysicalRect else { return false }
+    return previousPhysicalRect.topLeftX == nextPhysicalRect.topLeftX &&
+        previousPhysicalRect.topLeftY == nextPhysicalRect.topLeftY &&
+        previousPhysicalRect.width == nextPhysicalRect.width &&
+        previousPhysicalRect.height == nextPhysicalRect.height
 }
 
 private struct LayoutContext {
