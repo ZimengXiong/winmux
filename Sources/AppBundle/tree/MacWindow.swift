@@ -243,6 +243,30 @@ func focusAfterWindowClosure(
             candidate?.windowOrNil?.participatesInWorkspaceFocus != false
     }
 
+    func nearestAccordionTabContainer(_ candidate: LiveFocus?) -> TilingContainer? {
+        candidate?.windowOrNil?.parentsWithSelf
+            .lazy
+            .compactMap { $0 as? TilingContainer }
+            .first(where: { $0.layout == .accordion && $0.children.count > 1 })
+    }
+
+    let snapshotCloseFallbackTabGroup = nearestAccordionTabContainer(refreshSnapshotCloseFallback)
+    let snapshotPreviousFocusTabGroup = nearestAccordionTabContainer(refreshSnapshotPreviousFocus)
+
+    let shouldPreferSnapshotPreviousFocusWithinSameTabGroup =
+        isValidReplacement(refreshSnapshotCloseFallback) &&
+        isValidReplacement(refreshSnapshotPreviousFocus) &&
+        refreshSnapshotCloseFallback?.windowOrNil != refreshSnapshotPreviousFocus?.windowOrNil &&
+        snapshotCloseFallbackTabGroup != nil &&
+        snapshotCloseFallbackTabGroup === snapshotPreviousFocusTabGroup
+
+    if shouldPreferSnapshotPreviousFocusWithinSameTabGroup {
+        debugFocusLog(
+            "focusAfterWindowClosure closing=\(closingWindow.windowId) preferSnapshotPreviousFocusWithinSameTabGroup=\(debugDescribe(refreshSnapshotPreviousFocus)) snapshotCloseFallback=\(debugDescribe(refreshSnapshotCloseFallback)) current=\(debugDescribe(currentFocus))"
+        )
+        return refreshSnapshotPreviousFocus
+    }
+
     let shouldPreferSnapshotCloseFallback =
         isValidReplacement(refreshSnapshotCloseFallback) &&
         refreshSnapshotCloseFallback?.windowOrNil != currentFocus.windowOrNil &&

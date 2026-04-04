@@ -9,6 +9,10 @@ protocol Command: AeroAny, Equatable, Sendable {
 
     /// We should refresh closedWindowsCache when the command can change the tree or visible workspace assignment
     var shouldResetClosedWindowsCache: Bool { get }
+
+    /// Some commands fully update the in-memory model and only need the light-session layout/UI pass.
+    /// Native macOS state transitions or arbitrary side effects should keep the follow-up full refresh.
+    var canSkipPostCommandRefresh: Bool { get }
 }
 
 extension Command {
@@ -26,6 +30,44 @@ extension Command {
 }
 
 extension Command {
+    var canSkipPostCommandRefresh: Bool {
+        switch self {
+            case is BalanceSizesCommand,
+                 is ConfigCommand,
+                 is DebugWindowsCommand,
+                 is FlattenWorkspaceTreeCommand,
+                 is FocusBackAndForthCommand,
+                 is FocusCommand,
+                 is FocusMonitorCommand,
+                 is FullscreenCommand,
+                 is JoinWithCommand,
+                 is LayoutCommand,
+                 is ListAppsCommand,
+                 is ListExecEnvVarsCommand,
+                 is ListModesCommand,
+                 is ListMonitorsCommand,
+                 is ListWindowsCommand,
+                 is ListWorkspacesCommand,
+                 is ModeCommand,
+                 is MoveCommand,
+                 is MoveMouseCommand,
+                 is MoveNodeToMonitorCommand,
+                 is MoveNodeToWorkspaceCommand,
+                 is MoveWorkspaceToMonitorCommand,
+                 is ResizeCommand,
+                 is SplitCommand,
+                 is StackWithCommand,
+                 is SummonWorkspaceCommand,
+                 is SwapCommand,
+                 is VolumeCommand,
+                 is WorkspaceBackAndForthCommand,
+                 is WorkspaceCommand:
+                true
+            default:
+                false
+        }
+    }
+
     @MainActor
     @discardableResult
     func run(_ env: CmdEnv, _ stdin: consuming CmdStdin) async throws -> CmdResult {
@@ -41,6 +83,10 @@ extension Command {
 // 3. on-window-detected callback
 // 4. Tray icon buttons
 extension [Command] {
+    var canSkipPostCommandRefresh: Bool {
+        allSatisfy(\.canSkipPostCommandRefresh)
+    }
+
     @MainActor
     func runCmdSeq(_ env: CmdEnv, _ io: sending CmdIo) async throws -> Bool {
         var isSucc = true

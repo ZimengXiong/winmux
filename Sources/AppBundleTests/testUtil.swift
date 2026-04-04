@@ -38,6 +38,9 @@ func setUpWorkspacesForTests() {
     check(focus.workspace === Workspace.all.singleOrNil(), Workspace.all.map(\.description).joined(separator: ", "))
     check(mainMonitor.setActiveWorkspace(focus.workspace))
 
+    resetFocusCacheForTests()
+    setScheduledRefreshOverrideForTests(nil)
+    setBlockingRefreshOverridesForTests()
     TestApp.shared.focusedWindow = nil
     TestApp.shared.windows = []
 }

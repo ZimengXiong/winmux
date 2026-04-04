@@ -95,6 +95,23 @@ public enum RefreshSessionEvent: Sendable, CustomStringConvertible {
         }
     }
 
+    public var requiresWindowRefreshBarrier: Bool {
+        switch self {
+            case .ax(let notif):
+                notif != kAXFocusedWindowChangedNotification as String
+            case .globalObserver(let notif):
+                notif != NSWorkspace.didActivateApplicationNotification.rawValue
+            case .configAutoReload, .globalObserverLeftMouseUp, .menuBarButton, .hotkeyBinding,
+                 .startup, .socketServer, .resetManipulatedWithMouse, .onFocusedMonitorChanged,
+                 .onFocusChanged, .onModeChanged:
+                true
+        }
+    }
+
+    public var requiresLayoutReasonNormalization: Bool {
+        requiresWindowRefreshBarrier
+    }
+
     public var description: String {
         switch self {
             case .ax(let str): "ax(\(str))"

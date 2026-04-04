@@ -5,6 +5,15 @@ import Common
 private var activeRefreshTask: Task<(), any Error>? = nil
 
 @MainActor
+private var scheduledRefreshOverrideForTests: (@MainActor @Sendable (RefreshSessionEvent, Bool) async throws -> Void)? = nil
+
+@MainActor
+private var refreshOverrideForTests: (@MainActor @Sendable () async throws -> Void)? = nil
+
+@MainActor
+private var normalizeLayoutReasonOverrideForTests: (@MainActor @Sendable () async throws -> Void)? = nil
+
+@MainActor
 func shouldSyncFocusBackToMacOs(nativeFocused: Window?, frontmostActivationPolicy: NSApplication.ActivationPolicy?) -> Bool {
     if nativeFocused?.participatesInWorkspaceFocus == false {
         return false
@@ -21,9 +30,14 @@ func scheduleRefreshSession(
     optimisticallyPreLayoutWorkspaces: Bool = false,
 ) {
     activeRefreshTask?.cancel()
+    let override = scheduledRefreshOverrideForTests
     activeRefreshTask = Task { @MainActor in
         try checkCancellation()
-        try await runRefreshSessionBlocking(event, optimisticallyPreLayoutWorkspaces: optimisticallyPreLayoutWorkspaces)
+        if let override {
+            try await override(event, optimisticallyPreLayoutWorkspaces)
+        } else {
+            try await runRefreshSessionBlocking(event, optimisticallyPreLayoutWorkspaces: optimisticallyPreLayoutWorkspaces)
+        }
     }
 }
 
@@ -52,15 +66,27 @@ func runRefreshSessionBlocking(
                 try checkCancellation()
 
                 refreshModel()
-                try await refresh()
-                try checkCancellation()
-                gcMonitors()
+                if event.requiresWindowRefreshBarrier {
+                    if let refreshOverrideForTests {
+                        try await refreshOverrideForTests()
+                    } else {
+                        try await refresh()
+                    }
+                    try checkCancellation()
+                    gcMonitors()
+                }
 
                 updateTrayText()
                 await updateWorkspaceSidebarModel()
                 SecureInputPanel.shared.refresh()
-                try await normalizeLayoutReason()
-                try checkCancellation()
+                if event.requiresLayoutReasonNormalization {
+                    if let normalizeLayoutReasonOverrideForTests {
+                        try await normalizeLayoutReasonOverrideForTests()
+                    } else {
+                        try await normalizeLayoutReason()
+                    }
+                    try checkCancellation()
+                }
                 if shouldLayoutWorkspaces {
                     try await layoutWorkspaces()
                     try checkCancellation()
@@ -79,6 +105,7 @@ func runRefreshSessionBlocking(
 func runLightSession<T>(
     _ event: RefreshSessionEvent,
     _: RunSessionGuard,
+    shouldSchedulePostRefresh: Bool = true,
     body: @MainActor () async throws -> T,
 ) async throws -> T {
     let state = signposter.beginInterval(#function, "event: \(event) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
@@ -113,12 +140,40 @@ func runLightSession<T>(
                 if focusBefore != focusAfter {
                     focusAfter?.nativeFocus() // syncFocusToMacOs
                 }
-                scheduleRefreshSession(event)
+                if shouldSchedulePostRefresh {
+                    scheduleRefreshSession(event)
+                }
                 debugFocusLog("runLightSession end event=\(event) nativeFocused=\(nativeFocused?.windowId.description ?? "nil") focusBefore=\(focusBefore?.windowId.description ?? "nil") focusAfter=\(focusAfter?.windowId.description ?? "nil") logicalFocus=\(debugDescribe(focus))")
                 return result
             }
         }
     }
+}
+
+@MainActor
+func setScheduledRefreshOverrideForTests(
+    _ override: (@MainActor @Sendable (RefreshSessionEvent, Bool) async throws -> Void)?
+) {
+    activeRefreshTask?.cancel()
+    activeRefreshTask = nil
+    scheduledRefreshOverrideForTests = override
+}
+
+@MainActor
+func setBlockingRefreshOverridesForTests(
+    refresh: (@MainActor @Sendable () async throws -> Void)? = nil,
+    normalizeLayoutReason: (@MainActor @Sendable () async throws -> Void)? = nil,
+) {
+    activeRefreshTask?.cancel()
+    activeRefreshTask = nil
+    refreshOverrideForTests = refresh
+    normalizeLayoutReasonOverrideForTests = normalizeLayoutReason
+}
+
+@MainActor
+func waitForScheduledRefreshForTests() async throws {
+    defer { activeRefreshTask = nil }
+    try await activeRefreshTask?.value
 }
 
 struct RunSessionGuard: Sendable {
@@ -189,7 +244,7 @@ enum OptimalHideCorner {
 private func layoutWorkspaces() async throws {
     if !TrayMenuModel.shared.isEnabled {
         for workspace in Workspace.all {
-            workspace.allLeafWindowsRecursive.forEach { ($0 as! MacWindow).unhideFromCorner() } // todo as!
+            workspace.allLeafWindowsRecursive.forEach { ($0 as? MacWindow)?.unhideFromCorner() }
             try await workspace.layoutWorkspace() // Unhide tiling windows from corner
         }
         return
@@ -223,16 +278,16 @@ private func layoutWorkspaces() async throws {
     // to reduce flicker, first unhide visible workspaces, then hide invisible ones
     for monitor in monitors {
         let workspace = monitor.activeWorkspace
-        workspace.allLeafWindowsRecursive.forEach { ($0 as! MacWindow).unhideFromCorner() } // todo as!
+        workspace.allLeafWindowsRecursive.forEach { ($0 as? MacWindow)?.unhideFromCorner() }
         try await workspace.layoutWorkspace()
     }
     for workspace in Workspace.all where !workspace.isVisible {
         let corner = monitorToOptimalHideCorner[workspace.workspaceMonitor.rect.topLeftCorner] ?? .bottomRightCorner
         for window in workspace.allLeafWindowsRecursive {
-            let macWindow = window as! MacWindow
+            guard let macWindow = window as? MacWindow else { continue }
             macWindow.lastAppliedLayoutPhysicalRect = nil
             macWindow.lastAppliedLayoutVirtualRect = nil
-            try await macWindow.hideInCorner(corner) // todo as!
+            try await macWindow.hideInCorner(corner)
         }
     }
 }

@@ -246,6 +246,33 @@ final class WindowTabsTest: XCTestCase {
         XCTAssertEqual(replacementFocus?.windowOrNil, expectedTab)
     }
 
+    @MainActor
+    func testFocusAfterWindowClosurePrefersSnapshotPreviousFocusOverFallbackTabInSameGroup() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let staleFallbackTab = TestWindow.new(id: 1, parent: accordion)
+        _ = TestWindow.new(id: 2, parent: accordion)
+        let expectedTab = TestWindow.new(id: 3, parent: accordion)
+        let closingWindow = TestWindow.new(id: 9, parent: workspace)
+
+        let replacementFocus = focusAfterWindowClosure(
+            closingWindow: closingWindow,
+            deadWindowWorkspace: workspace,
+            currentFocus: staleFallbackTab.toLiveFocusOrNil().orDie(),
+            previousFocus: nil,
+            previousPreviousFocus: nil,
+            refreshSnapshotCloseFallback: staleFallbackTab.toLiveFocusOrNil(),
+            refreshSnapshotPreviousFocus: expectedTab.toLiveFocusOrNil(),
+            refreshSnapshotPreviousPreviousFocus: nil,
+            previousFocusedWorkspace: workspace,
+            previousFocusedWorkspaceDate: .now,
+        )
+
+        XCTAssertEqual(replacementFocus?.windowOrNil, expectedTab)
+    }
+
     func testNativeFocusShortcutIsDisabledForTabbedLogicalWindows() {
         XCTAssertFalse(shouldUseActivationOnlyForNativeFocus(
             targetWindowId: 4,

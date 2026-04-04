@@ -37,9 +37,13 @@ extension HotKey {
                         mode: activeMode,
                         binding: binding.descriptionWithKeyNotation,
                     ))
-                    try await runLightSession(.hotkeyBinding, .checkServerIsEnabledOrDie()) { () throws in
-                        _ = try await config.modes[activeMode]?.bindings[binding.descriptionWithKeyCode]?.commands
-                            .runCmdSeq(.defaultEnv, .emptyStdin)
+                    let commands = config.modes[activeMode]?.bindings[binding.descriptionWithKeyCode]?.commands ?? []
+                    try await runLightSession(
+                        .hotkeyBinding,
+                        .checkServerIsEnabledOrDie(),
+                        shouldSchedulePostRefresh: !commands.canSkipPostCommandRefresh
+                    ) { () throws in
+                        _ = try await commands.runCmdSeq(.defaultEnv, .emptyStdin)
                     }
                 }
             }
