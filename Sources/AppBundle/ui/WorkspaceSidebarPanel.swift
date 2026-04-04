@@ -590,29 +590,41 @@ struct WorkspaceSidebarView: View {
     }
 
     private func sidebarContent(expansionProgress: CGFloat) -> some View {
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(viewModel.workspaceSidebarWorkspaces) { workspace in
-                    WorkspaceSidebarWorkspaceSection(
-                        workspace: workspace,
+        return VStack(alignment: .leading, spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(viewModel.workspaceSidebarWorkspaces) { workspace in
+                        WorkspaceSidebarWorkspaceSection(
+                            workspace: workspace,
+                            dragPreview: viewModel.workspaceSidebarDropPreview,
+                            expansionProgress: expansionProgress
+                        )
+                    }
+                    WorkspaceSidebarCreateWorkspaceSection(
                         dragPreview: viewModel.workspaceSidebarDropPreview,
-                        expansionProgress: expansionProgress
+                        expansionProgress: expansionProgress,
+                        onCreateWorkspace: createWorkspaceFromSidebarButton
                     )
                 }
-                WorkspaceSidebarCreateWorkspaceSection(
-                    dragPreview: viewModel.workspaceSidebarDropPreview,
-                    expansionProgress: expansionProgress,
-                    onCreateWorkspace: createWorkspaceFromSidebarButton
-                )
+                .padding(.leading, workspaceSidebarContentLeadingInset)
+                .padding(.trailing, workspaceSidebarContentTrailingInset)
+                .padding(.top, viewModel.workspaceSidebarTopPadding)
+                .padding(.bottom, 12)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .coordinateSpace(name: "workspaceSidebarContent")
+            .onPreferenceChange(WorkspaceSidebarDropTargetPreferenceKey.self) { frames in
+                WorkspaceSidebarPanel.shared.updateDropTargets(frames)
+            }
+
+            WorkspaceSidebarStatusView(
+                sectionWidth: workspaceSidebarSectionWidth(expansionProgress),
+                isCompact: expansionProgress < workspaceSidebarRowsRevealProgress,
+            )
             .padding(.leading, workspaceSidebarContentLeadingInset)
             .padding(.trailing, workspaceSidebarContentTrailingInset)
-            .padding(.top, viewModel.workspaceSidebarTopPadding)
+            .padding(.top, 10)
             .padding(.bottom, 12)
-        }
-        .coordinateSpace(name: "workspaceSidebarContent")
-        .onPreferenceChange(WorkspaceSidebarDropTargetPreferenceKey.self) { frames in
-            WorkspaceSidebarPanel.shared.updateDropTargets(frames)
         }
         .background(sidebarSurface)
         .overlay(alignment: .trailing) {

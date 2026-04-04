@@ -349,6 +349,8 @@ final class WindowTabsTest: XCTestCase {
         window.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 360, height: 240)
 
         let tabInteractionZone = window.tabDropInteractionRect.orDie()
+        let leftSplitZone = window.stackSplitDropZoneRect(position: .left).orDie()
+        let rightSplitZone = window.stackSplitDropZoneRect(position: .right).orDie()
         let topSplitZone = window.stackSplitDropZoneRect(position: .above).orDie()
         let swapDropZone = window.swapDropZoneRect.orDie()
         let bottomSplitZone = window.stackSplitDropZoneRect(position: .below).orDie()
@@ -356,7 +358,29 @@ final class WindowTabsTest: XCTestCase {
         XCTAssertGreaterThan(topSplitZone.minY, tabInteractionZone.maxY)
         XCTAssertEqual(topSplitZone.maxY, swapDropZone.minY)
         XCTAssertEqual(bottomSplitZone.minY, swapDropZone.maxY)
+        XCTAssertEqual(leftSplitZone.maxX, swapDropZone.minX)
+        XCTAssertEqual(rightSplitZone.minX, swapDropZone.maxX)
+        XCTAssertEqual(leftSplitZone.minY, swapDropZone.minY)
+        XCTAssertEqual(leftSplitZone.maxY, swapDropZone.maxY)
+        XCTAssertEqual(rightSplitZone.minY, swapDropZone.minY)
+        XCTAssertEqual(rightSplitZone.maxY, swapDropZone.maxY)
         XCTAssertTrue(swapDropZone.contains(swapDropZone.center))
+    }
+
+    @MainActor
+    func testVerticalStackSuppressesVerticalSplitBandsButKeepsHorizontalBands() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        root.changeOrientation(.v)
+        let target = TestWindow.new(id: 1, parent: root)
+        _ = TestWindow.new(id: 2, parent: root)
+        target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 360, height: 120)
+
+        XCTAssertNil(target.stackSplitDropZoneRect(position: .above))
+        XCTAssertNil(target.stackSplitDropZoneRect(position: .below))
+        XCTAssertNotNil(target.stackSplitDropZoneRect(position: .left))
+        XCTAssertNotNil(target.stackSplitDropZoneRect(position: .right))
     }
 
     @MainActor
@@ -574,7 +598,6 @@ final class WindowTabsTest: XCTestCase {
         _ = TestWindow.new(id: 0, parent: root)
         let stack = TilingContainer.newVTiles(parent: root, adaptiveWeight: WEIGHT_AUTO)
         let target = TestWindow.new(id: 2, parent: stack)
-        _ = TestWindow.new(id: 3, parent: stack)
         let source = TestWindow.new(id: 1, parent: root)
 
         XCTAssertTrue(applyWindowStackSplitDragIntent(
@@ -590,7 +613,56 @@ final class WindowTabsTest: XCTestCase {
             .v_tiles([
                 .window(2),
                 .window(1),
-                .window(3),
+            ]),
+        ]))
+        XCTAssertEqual(focus.windowOrNil, source)
+    }
+
+    @MainActor
+    func testApplyWindowStackSplitDragIntentRejectsSameOrientationMultiChildParent() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        root.changeOrientation(.v)
+        let target = TestWindow.new(id: 2, parent: root)
+        let sibling = TestWindow.new(id: 3, parent: root)
+        let source = TestWindow.new(id: 1, parent: root)
+
+        XCTAssertFalse(applyWindowStackSplitDragIntent(
+            sourceWindow: source,
+            sourceSubject: .window,
+            targetWindow: target,
+            position: .above,
+        ))
+
+        assertEquals(root.layoutDescription, .v_tiles([
+            .window(2),
+            .window(3),
+            .window(1),
+        ]))
+        XCTAssertTrue(root.children[1] === sibling)
+    }
+
+    @MainActor
+    func testApplyWindowStackSplitDragIntentWrapsTargetAndPlacesDraggedWindowLeft() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        root.changeOrientation(.v)
+        let source = TestWindow.new(id: 1, parent: root)
+        let target = TestWindow.new(id: 2, parent: root)
+
+        XCTAssertTrue(applyWindowStackSplitDragIntent(
+            sourceWindow: source,
+            sourceSubject: .window,
+            targetWindow: target,
+            position: .left,
+        ))
+
+        assertEquals(root.layoutDescription, .v_tiles([
+            .h_tiles([
+                .window(1),
+                .window(2),
             ]),
         ]))
         XCTAssertEqual(focus.windowOrNil, source)

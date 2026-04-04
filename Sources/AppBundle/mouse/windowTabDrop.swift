@@ -1,4 +1,5 @@
 import AppKit
+import Common
 
 @MainActor
 private var pendingWindowDragIntent: PendingWindowDragIntent? = nil
@@ -16,11 +17,29 @@ private struct PendingWindowDragIntent {
 }
 
 enum WindowStackSplitPosition: Equatable {
+    case left
+    case right
     case above
     case below
 
+    var orientation: Orientation {
+        switch self {
+            case .left, .right: .h
+            case .above, .below: .v
+        }
+    }
+
+    var isPositive: Bool {
+        switch self {
+            case .right, .below: true
+            case .left, .above: false
+        }
+    }
+
     var title: String {
         switch self {
+            case .left: "Stack Left"
+            case .right: "Stack Right"
             case .above: "Stack Above"
             case .below: "Stack Below"
         }
@@ -28,6 +47,8 @@ enum WindowStackSplitPosition: Equatable {
 
     var subtitle: String {
         switch self {
+            case .left: "Drop to split this tile and place the dragged item on the left"
+            case .right: "Drop to split this tile and place the dragged item on the right"
             case .above: "Drop to split this tile and place the dragged item above"
             case .below: "Drop to split this tile and place the dragged item below"
         }
@@ -697,41 +718,40 @@ func applyWindowStackSplitDragIntent(
 ) -> Bool {
     let sourceNode = dragSubjectNode(for: sourceWindow, subject: sourceSubject)
     let targetNode = targetWindow.moveNode
+    let splitOrientation = position.orientation
     guard sourceNode != targetNode,
           !sourceNode.parentsWithSelf.contains(targetNode),
-          !targetNode.parentsWithSelf.contains(sourceNode)
+          !targetNode.parentsWithSelf.contains(sourceNode),
+          targetNode.isStackSplitPossible(position: position),
+          let targetParent = targetNode.parent as? TilingContainer
     else { return false }
 
     sourceNode.unbindFromParent()
-    guard let targetParent = targetNode.parent as? TilingContainer else { return false }
-
-    if targetParent.layout == .tiles, targetParent.orientation == .v {
+    if targetParent.layout == .tiles, targetParent.orientation == splitOrientation {
         let targetBinding = targetNode.unbindFromParent()
         let splitWeight = targetBinding.adaptiveWeight / 2
-        switch position {
-            case .above:
-                sourceNode.bind(to: targetParent, adaptiveWeight: splitWeight, index: targetBinding.index)
-                targetNode.bind(to: targetParent, adaptiveWeight: splitWeight, index: targetBinding.index + 1)
-            case .below:
-                targetNode.bind(to: targetParent, adaptiveWeight: splitWeight, index: targetBinding.index)
-                sourceNode.bind(to: targetParent, adaptiveWeight: splitWeight, index: targetBinding.index + 1)
+        if position.isPositive {
+            targetNode.bind(to: targetParent, adaptiveWeight: splitWeight, index: targetBinding.index)
+            sourceNode.bind(to: targetParent, adaptiveWeight: splitWeight, index: targetBinding.index + 1)
+        } else {
+            sourceNode.bind(to: targetParent, adaptiveWeight: splitWeight, index: targetBinding.index)
+            targetNode.bind(to: targetParent, adaptiveWeight: splitWeight, index: targetBinding.index + 1)
         }
     } else {
         let targetBinding = targetNode.unbindFromParent()
         let newParent = TilingContainer(
             parent: targetBinding.parent,
             adaptiveWeight: targetBinding.adaptiveWeight,
-            .v,
+            splitOrientation,
             .tiles,
             index: targetBinding.index,
         )
-        switch position {
-            case .above:
-                sourceNode.bind(to: newParent, adaptiveWeight: WEIGHT_AUTO, index: 0)
-                targetNode.bind(to: newParent, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
-            case .below:
-                targetNode.bind(to: newParent, adaptiveWeight: WEIGHT_AUTO, index: 0)
-                sourceNode.bind(to: newParent, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+        if position.isPositive {
+            targetNode.bind(to: newParent, adaptiveWeight: WEIGHT_AUTO, index: 0)
+            sourceNode.bind(to: newParent, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+        } else {
+            sourceNode.bind(to: newParent, adaptiveWeight: WEIGHT_AUTO, index: 0)
+            targetNode.bind(to: newParent, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
         }
     }
     return sourceWindow.focusWindow()
@@ -920,6 +940,24 @@ private func currentSwapDestination(sourceWindow: Window, mouseLocation: CGPoint
         targetWindow: targetWindow,
         mouseLocation: mouseLocation,
         subject: subject,
+        position: .left,
+    ) {
+        return splitDestination
+    }
+    if let splitDestination = stackSplitDestination(
+        sourceWindow: sourceWindow,
+        targetWindow: targetWindow,
+        mouseLocation: mouseLocation,
+        subject: subject,
+        position: .right,
+    ) {
+        return splitDestination
+    }
+    if let splitDestination = stackSplitDestination(
+        sourceWindow: sourceWindow,
+        targetWindow: targetWindow,
+        mouseLocation: mouseLocation,
+        subject: subject,
         position: .above,
     ) {
         return splitDestination
@@ -1084,6 +1122,13 @@ extension TilingContainer {
 
 extension TreeNode {
     @MainActor
+    fileprivate func isStackSplitPossible(position: WindowStackSplitPosition) -> Bool {
+        guard let parent = parent as? TilingContainer else { return false }
+        guard parent.layout == .tiles else { return true }
+        return parent.orientation != position.orientation || parent.children.count == 1
+    }
+
+    @MainActor
     private var bodyDropZoneRect: Rect? {
         guard let rect = lastAppliedLayoutPhysicalRect else { return nil }
         let topExclusion: CGFloat = switch self {
@@ -1107,9 +1152,28 @@ extension TreeNode {
     @MainActor
     func stackSplitDropZoneRect(position: WindowStackSplitPosition) -> Rect? {
         guard let bodyRect = bodyDropZoneRect,
-              let swapRect = swapDropZoneRect
+              let swapRect = swapDropZoneRect,
+              isStackSplitPossible(position: position)
         else { return nil }
         return switch position {
+            case .left:
+                (swapRect.minX > bodyRect.minX)
+                    ? Rect(
+                        topLeftX: bodyRect.topLeftX,
+                        topLeftY: swapRect.topLeftY,
+                        width: swapRect.minX - bodyRect.minX,
+                        height: swapRect.height,
+                    )
+                    : nil
+            case .right:
+                (bodyRect.maxX > swapRect.maxX)
+                    ? Rect(
+                        topLeftX: swapRect.maxX,
+                        topLeftY: swapRect.topLeftY,
+                        width: bodyRect.maxX - swapRect.maxX,
+                        height: swapRect.height,
+                    )
+                    : nil
             case .above:
                 (swapRect.minY > bodyRect.minY)
                     ? Rect(
@@ -1133,8 +1197,14 @@ extension TreeNode {
 
     @MainActor
     func stackSplitPreviewRect(position: WindowStackSplitPosition) -> Rect? {
-        guard let rect = lastAppliedLayoutPhysicalRect else { return nil }
+        guard let rect = lastAppliedLayoutPhysicalRect,
+              isStackSplitPossible(position: position)
+        else { return nil }
         let rawRect = switch position {
+            case .left:
+                Rect(topLeftX: rect.topLeftX, topLeftY: rect.topLeftY, width: rect.width / 2, height: rect.height)
+            case .right:
+                Rect(topLeftX: rect.topLeftX + rect.width / 2, topLeftY: rect.topLeftY, width: rect.width / 2, height: rect.height)
             case .above:
                 Rect(topLeftX: rect.topLeftX, topLeftY: rect.topLeftY, width: rect.width, height: rect.height / 2)
             case .below:
@@ -1148,11 +1218,12 @@ extension TreeNode {
     @MainActor
     var swapDropZoneRect: Rect? {
         guard let bodyRect = bodyDropZoneRect else { return nil }
+        let swapWidth = min(bodyRect.width, max(bodyRect.width * 0.2, 28))
         let swapHeight = min(bodyRect.height, max(bodyRect.height * 0.2, 28))
         let swapRect = Rect(
-            topLeftX: bodyRect.topLeftX,
+            topLeftX: bodyRect.topLeftX + (bodyRect.width - swapWidth) / 2,
             topLeftY: bodyRect.topLeftY + (bodyRect.height - swapHeight) / 2,
-            width: bodyRect.width,
+            width: swapWidth,
             height: swapHeight,
         )
         guard swapRect.width > 0, swapRect.height > 0 else { return nil }

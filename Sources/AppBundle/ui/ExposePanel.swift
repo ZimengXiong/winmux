@@ -3,11 +3,10 @@ import Common
 import SwiftUI
 
 private let exposePanelId = "AeroSpace.expose"
-private let exposeExpandedGroupHoverCoordinateSpace = "AeroSpace.expose.expandedGroupHover"
+private let exposeOverviewCoordinateSpace = "AeroSpace.expose.overview"
 private let exposeCardTitleHeight: CGFloat = 20
 private let exposeExpandedGroupSpacing: CGFloat = 16
-private let exposeExpandedGroupHoverPadding: CGFloat = 60
-private let exposeExpandedGroupViewportMargin = CGSize(width: 96, height: 96)
+private let exposeExpandedGroupHoverPadding: CGFloat = 26
 
 struct ExposeHoverTargetFrame: Equatable {
     let itemId: UInt32
@@ -26,120 +25,72 @@ func hoveredExposeItemId(at location: CGPoint, within frames: [ExposeHoverTarget
     frames.last(where: { $0.frame.contains(location) })?.itemId
 }
 
-struct ExposeExpandedGroupLayout: Equatable {
-    let columns: Int
-    let rowCount: Int
-    let mainCardWidth: CGFloat
-    let mainCardHeight: CGFloat
-    let secondaryCardWidth: CGFloat
-    let secondaryCardHeight: CGFloat
-    let totalSize: CGSize
+struct ExposeExpandedGroupFrame: Equatable {
+    let groupId: String
+    let frame: CGRect
 }
 
-private func exposeExpandedGroupSecondaryScale(for othersCount: Int) -> CGFloat {
-    switch othersCount {
-        case 0: 0
-        case 1: 0.86
-        case 2...4: 0.76
-        case 5...6: 0.68
-        default: 0.62
+struct ExposeCollapsedGroupFrame: Equatable {
+    let groupId: String
+    let frame: CGRect
+}
+
+struct ExposeExpandedGroupFramePreferenceKey: PreferenceKey {
+    static let defaultValue: [ExposeExpandedGroupFrame] = []
+
+    static func reduce(value: inout [ExposeExpandedGroupFrame], nextValue: () -> [ExposeExpandedGroupFrame]) {
+        value.append(contentsOf: nextValue())
     }
 }
 
-private func exposeCardWidth(cardHeight: CGFloat, aspectRatio: CGFloat) -> CGFloat {
-    max(1, (cardHeight - exposeCardTitleHeight) * aspectRatio)
+struct ExposeCollapsedGroupFramePreferenceKey: PreferenceKey {
+    static let defaultValue: [ExposeCollapsedGroupFrame] = []
+
+    static func reduce(value: inout [ExposeCollapsedGroupFrame], nextValue: () -> [ExposeCollapsedGroupFrame]) {
+        value.append(contentsOf: nextValue())
+    }
 }
 
-func bestExposeExpandedGroupLayout(
-    itemCount: Int,
-    aspectRatio: CGFloat,
-    viewportSize: CGSize,
-    minimumMainCardHeight: CGFloat,
-) -> ExposeExpandedGroupLayout {
-    let safeItemCount = max(itemCount, 1)
-    let othersCount = max(0, safeItemCount - 1)
-    let safeAspectRatio = max(aspectRatio, 0.2)
-    let availableWidth = max(200, viewportSize.width - exposeExpandedGroupViewportMargin.width)
-    let availableHeight = max(minimumMainCardHeight, viewportSize.height - exposeExpandedGroupViewportMargin.height)
-    let minimumMainHeight = min(max(exposeCardTitleHeight + 1, minimumMainCardHeight), availableHeight)
+func exposeExpandedGroupHoverRect(
+    groupId: String,
+    within frames: [ExposeExpandedGroupFrame],
+    padding: CGFloat,
+) -> CGRect? {
+    let groupFrames = frames
+        .filter { $0.groupId == groupId }
+        .map(\.frame)
+    guard let first = groupFrames.first else { return nil }
+    let union = groupFrames.dropFirst().reduce(first) { $0.union($1) }
+    return union.insetBy(dx: -padding, dy: -padding)
+}
 
-    func makeLayout(mainCardHeight: CGFloat, columns: Int, rowCount: Int, secondaryScale: CGFloat) -> ExposeExpandedGroupLayout {
-        let secondaryCardHeight = othersCount > 0 ? mainCardHeight * secondaryScale : 0
-        let mainCardWidth = exposeCardWidth(cardHeight: mainCardHeight, aspectRatio: safeAspectRatio)
-        let secondaryCardWidth = othersCount > 0
-            ? exposeCardWidth(cardHeight: secondaryCardHeight, aspectRatio: safeAspectRatio)
-            : 0
-        let gridWidth = othersCount > 0
-            ? CGFloat(columns) * secondaryCardWidth + CGFloat(columns - 1) * exposeExpandedGroupSpacing
-            : 0
-        let gridHeight = othersCount > 0
-            ? CGFloat(rowCount) * secondaryCardHeight + CGFloat(rowCount - 1) * exposeExpandedGroupSpacing
-            : 0
-        let totalHeight = mainCardHeight + (othersCount > 0 ? exposeExpandedGroupSpacing + gridHeight : 0)
-        return ExposeExpandedGroupLayout(
-            columns: columns,
-            rowCount: rowCount,
-            mainCardWidth: mainCardWidth,
-            mainCardHeight: mainCardHeight,
-            secondaryCardWidth: secondaryCardWidth,
-            secondaryCardHeight: secondaryCardHeight,
-            totalSize: CGSize(width: max(mainCardWidth, gridWidth), height: totalHeight),
-        )
+func shouldKeepExpandedGroupVisible(
+    location: CGPoint,
+    groupId: String,
+    expandedFrames: [ExposeExpandedGroupFrame],
+    collapsedOriginFrame: CGRect?,
+    padding: CGFloat,
+) -> Bool {
+    if let collapsedOriginFrame,
+       collapsedOriginFrame.insetBy(dx: -padding, dy: -padding).contains(location) {
+        return true
     }
-
-    if othersCount == 0 {
-        let maxMainHeightForWidth = availableWidth / safeAspectRatio + exposeCardTitleHeight
-        let mainCardHeight = max(minimumMainHeight, floor(min(availableHeight, maxMainHeightForWidth)))
-        return makeLayout(mainCardHeight: mainCardHeight, columns: 1, rowCount: 0, secondaryScale: 0)
+    if let expandedRect = exposeExpandedGroupHoverRect(
+        groupId: groupId,
+        within: expandedFrames,
+        padding: padding,
+    ) {
+        return expandedRect.contains(location)
     }
+    return false
+}
 
-    let secondaryScale = exposeExpandedGroupSecondaryScale(for: othersCount)
-    let maxColumns = max(1, othersCount)
-    var bestLayout: ExposeExpandedGroupLayout? = nil
-    var bestArea: CGFloat = -.greatestFiniteMagnitude
-
-    for columns in 1...maxColumns {
-        let rowCount = Int(ceil(Double(othersCount) / Double(columns)))
-        let widthForCells = availableWidth - CGFloat(columns - 1) * exposeExpandedGroupSpacing
-        guard widthForCells > 0 else { continue }
-
-        let maxMainHeightForWidth = availableWidth / safeAspectRatio + exposeCardTitleHeight
-        let maxMainHeightForGridWidth =
-            (widthForCells / CGFloat(columns) / safeAspectRatio + exposeCardTitleHeight) / secondaryScale
-        let maxMainHeightForHeight =
-            (availableHeight - CGFloat(rowCount) * exposeExpandedGroupSpacing) /
-                (1 + CGFloat(rowCount) * secondaryScale)
-
-        let mainCardHeight = floor(min(
-            maxMainHeightForWidth,
-            maxMainHeightForGridWidth,
-            maxMainHeightForHeight,
-        ))
-        guard mainCardHeight >= minimumMainHeight else { continue }
-
-        let candidate = makeLayout(
-            mainCardHeight: mainCardHeight,
-            columns: columns,
-            rowCount: rowCount,
-            secondaryScale: secondaryScale,
-        )
-        let candidateArea = candidate.totalSize.width * candidate.totalSize.height
-        if candidateArea > bestArea {
-            bestArea = candidateArea
-            bestLayout = candidate
-        }
-    }
-
-    if let bestLayout {
-        return bestLayout
-    }
-
-    return makeLayout(
-        mainCardHeight: minimumMainHeight,
-        columns: min(othersCount, 4),
-        rowCount: Int(ceil(Double(othersCount) / Double(min(othersCount, 4)))),
-        secondaryScale: secondaryScale,
-    )
+func orderedExposeItemsForExpandedGroup(_ items: [ExposeWindowItem]) -> [ExposeWindowItem] {
+    guard let focusedIndex = items.firstIndex(where: \.isFocused) else { return items }
+    var ordered = items
+    let focusedItem = ordered.remove(at: focusedIndex)
+    ordered.insert(focusedItem, at: 0)
+    return ordered
 }
 
 // MARK: - Data
@@ -301,10 +252,12 @@ private struct ExposeView: View {
 
     @State private var appeared = false
     @State private var expandedGroupId: String? = nil
+    @State private var expandedGroupFrames: [ExposeExpandedGroupFrame] = []
+    @State private var collapsedGroupFrames: [ExposeCollapsedGroupFrame] = []
+    @State private var expandedGroupOriginFrame: CGRect? = nil
 
     var body: some View {
         ZStack {
-            // Frosted backdrop
             VisualEffectBlur(material: .hudWindow, blendingMode: .behindWindow)
                 .opacity(appeared ? 1 : 0)
                 .ignoresSafeArea()
@@ -312,33 +265,39 @@ private struct ExposeView: View {
             Color.black.opacity(appeared ? 0.35 : 0)
                 .ignoresSafeArea()
                 .onTapGesture {
-                    if expandedGroupId != nil {
-                        withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) { expandedGroupId = nil }
-                    } else { onDismiss() }
+                    onDismiss()
                 }
 
             GeometryReader { geo in
-                let spacing: CGFloat = 16
-                let slots = buildSlots()
-                let n = slotWidth(slots)
-                let cols = gridCols(n, sw: geo.size.width, sh: geo.size.height)
-                let rows = gridRows(slots, cols: cols)
-                let baseCw = min(400, (geo.size.width - 80 - spacing * CGFloat(cols - 1)) / CGFloat(cols))
-                let cw = baseCw
-                let ch = min(280, (geo.size.height - 80 - spacing * CGFloat(rows - 1)) / CGFloat(rows))
-
-                VStack(spacing: spacing) {
-                    let gridRows = buildGridRows(slots, cols: cols)
-                    ForEach(Array(gridRows.enumerated()), id: \.offset) { _, row in
-                        HStack(spacing: spacing) {
-                            ForEach(row) { s in
-                                viewFor(s, cw: cw, ch: ch, viewportSize: geo.size)
-                                    .zIndex(s.isExpandedGroup ? 1 : 0)
+                overviewGrid(in: geo.size)
+                .frame(width: geo.size.width, height: geo.size.height)
+                .contentShape(Rectangle())
+                .coordinateSpace(name: exposeOverviewCoordinateSpace)
+                .onPreferenceChange(ExposeExpandedGroupFramePreferenceKey.self) { frames in
+                    expandedGroupFrames = frames
+                }
+                .onPreferenceChange(ExposeCollapsedGroupFramePreferenceKey.self) { frames in
+                    collapsedGroupFrames = frames
+                }
+                .onContinuousHover(coordinateSpace: .named(exposeOverviewCoordinateSpace)) { phase in
+                    switch phase {
+                        case .active(let location):
+                            guard let expandedGroupId else { return }
+                            if !shouldKeepExpandedGroupVisible(
+                                location: location,
+                                groupId: expandedGroupId,
+                                expandedFrames: expandedGroupFrames,
+                                collapsedOriginFrame: expandedGroupOriginFrame,
+                                padding: exposeExpandedGroupHoverPadding,
+                            ) {
+                                self.expandedGroupId = nil
+                                self.expandedGroupOriginFrame = nil
                             }
-                        }
+                        case .ended:
+                            expandedGroupId = nil
+                            expandedGroupOriginFrame = nil
                     }
                 }
-                .frame(width: geo.size.width, height: geo.size.height)
             }
             .scaleEffect(appeared ? 1 : 0.95)
             .opacity(appeared ? 1 : 0)
@@ -351,41 +310,43 @@ private struct ExposeView: View {
     // -- Slots --
 
     private enum Slot: Identifiable {
-        case single(ExposeWindowItem)
+        case single(ExposeWindowItem, expandedGroupId: String?)
         case stack(ExposeTabGroup)
-        case expandedGroup(ExposeTabGroup)
 
         var id: String {
             switch self {
-                case .single(let w): "w-\(w.id)"
-                case .stack(let g): "g-\(g.id)"
-                case .expandedGroup(let g): "eg-\(g.id)"
+                case .single(let w, let expandedGroupId):
+                    if let expandedGroupId { return "eg-\(expandedGroupId)-\(w.id)" }
+                    return "w-\(w.id)"
+                case .stack(let g): return "g-\(g.id)"
             }
         }
 
-        // How many grid columns this slot takes
         var span: Int {
-            return 1 // Never reflow the grid on expand
+            1
         }
 
-        var isExpandedGroup: Bool {
-            if case .expandedGroup = self { return true }
-            return false
+        var expandedGroupId: String? {
+            switch self {
+                case .single(_, let expandedGroupId): expandedGroupId
+                case .stack: nil
+            }
         }
     }
 
     private func buildSlots() -> [Slot] {
-        entries.map { e in
+        entries.flatMap { (e: ExposeEntry) -> [Slot] in
             switch e {
-                case .window(let w): .single(w)
-                case .group(let g): g.id == expandedGroupId ? .expandedGroup(g) : .stack(g)
+                case .window(let w):
+                    return [Slot.single(w, expandedGroupId: nil)]
+                case .group(let g):
+                    if g.id == expandedGroupId {
+                        return orderedExposeItemsForExpandedGroup(g.items).map { Slot.single($0, expandedGroupId: g.id) }
+                    } else {
+                        return [Slot.stack(g)]
+                    }
             }
         }
-    }
-
-    // Total "width units" across all slots
-    private func slotWidth(_ slots: [Slot]) -> Int {
-        slots.reduce(0) { $0 + $1.span }
     }
 
     private func gridCols(_ totalSpan: Int, sw: CGFloat, sh: CGFloat) -> Int {
@@ -412,28 +373,61 @@ private struct ExposeView: View {
         buildGridRows(slots, cols: cols).count
     }
 
-    // -- Card dispatch --
+    private func overviewGrid(in viewportSize: CGSize) -> some View {
+        let spacing = exposeExpandedGroupSpacing
+        let slots = buildSlots()
+        let cols = gridCols(max(slots.count, 1), sw: viewportSize.width, sh: viewportSize.height)
+        let rows = gridRows(slots, cols: cols)
+        let ch = min(280, (viewportSize.height - 80 - spacing * CGFloat(rows - 1)) / CGFloat(rows))
 
-    @ViewBuilder
-    private func viewFor(_ s: Slot, cw: CGFloat, ch: CGFloat, viewportSize: CGSize) -> some View {
-        switch s {
-            case .single(let w):
-                let cardCw = (ch - 20) * w.aspectRatio
-                WinCard(item: w, cw: cardCw, ch: ch)
-                    .onTapGesture { onSelect(w.id) }
+        return VStack(spacing: spacing) {
+            let gridRows = buildGridRows(slots, cols: cols)
+            ForEach(Array(gridRows.enumerated()), id: \.offset) { _, row in
+                HStack(spacing: spacing) {
+                    ForEach(row) { slot in
+                        switch slot {
+                            case .single(let window, let expandedGroupId):
+                                let cardCw = (ch - 20) * window.aspectRatio
+                                WinCard(item: window, cw: cardCw, ch: ch)
+                                    .background {
+                                        if let expandedGroupId {
+                                            GeometryReader { geometry in
+                                                Color.clear.preference(
+                                                    key: ExposeExpandedGroupFramePreferenceKey.self,
+                                                    value: [ExposeExpandedGroupFrame(
+                                                        groupId: expandedGroupId,
+                                                        frame: geometry.frame(in: .named(exposeOverviewCoordinateSpace)),
+                                                    )],
+                                                )
+                                            }
+                                        }
+                                    }
+                                    .onTapGesture { onSelect(window.id) }
 
-            case .stack(let g):
-                let cardCw = (ch - 24) * g.aspectRatio
-                StackCard(group: g, cw: cardCw, ch: ch, onExpand: {
-                    withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) { expandedGroupId = g.id }
-                })
-
-            case .expandedGroup(let g):
-                let cardCw = (ch - 24) * g.aspectRatio
-                ExpandedGroupCard(group: g, ch: ch, viewportSize: viewportSize, onSelect: onSelect, onCollapse: {
-                    withAnimation(.spring(response: 0.25, dampingFraction: 0.85)) { expandedGroupId = nil }
-                })
-                .frame(width: cardCw + 30, height: ch) // lock frame footprint so identical to StackCard footprint
+                            case .stack(let group):
+                                let cardCw = (ch - 24) * group.aspectRatio
+                                StackCard(group: group, cw: cardCw, ch: ch, onExpand: {
+                                    let originFrame = collapsedGroupFrames.last(where: { $0.groupId == group.id })?.frame
+                                    withAnimation(.spring(response: 0.22, dampingFraction: 0.88)) {
+                                        self.expandedGroupId = group.id
+                                        self.expandedGroupOriginFrame = originFrame
+                                    }
+                                })
+                                .background {
+                                    GeometryReader { geometry in
+                                        Color.clear.preference(
+                                            key: ExposeCollapsedGroupFramePreferenceKey.self,
+                                            value: [ExposeCollapsedGroupFrame(
+                                                groupId: group.id,
+                                                frame: geometry.frame(in: .named(exposeOverviewCoordinateSpace)),
+                                            )],
+                                        )
+                                    }
+                                }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -566,150 +560,6 @@ private struct StackCard: View {
             if hovering { onExpand() }
         }
         .animation(.easeOut(duration: 0.12), value: hov)
-    }
-}
-
-private struct ExpandedGroupCard: View {
-    let group: ExposeTabGroup
-    let ch: CGFloat
-    let viewportSize: CGSize
-    let onSelect: (UInt32) -> Void
-    let onCollapse: () -> Void
-
-    @State private var hoveredItemId: UInt32? = nil
-    @State private var hoverFrames: [ExposeHoverTargetFrame] = []
-
-    var body: some View {
-        let activeIndex = group.items.firstIndex(where: \.isFocused) ?? 0
-        let activeItem = group.items[activeIndex]
-
-        let others = group.items.enumerated().filter { $0.offset != activeIndex }.map { $0.element }
-        let count = others.count
-        let layout = bestExposeExpandedGroupLayout(
-            itemCount: group.items.count,
-            aspectRatio: group.aspectRatio,
-            viewportSize: viewportSize,
-            minimumMainCardHeight: ch,
-        )
-        let spacing = exposeExpandedGroupSpacing
-
-        let rowCount = layout.rowCount
-
-        let rows: [[ExposeWindowItem]] = (0..<rowCount).map { r in
-            let start = r * layout.columns
-            let end = min(start + layout.columns, count)
-            return Array(others[start..<end])
-        }
-        let totalW = layout.totalSize.width
-        let totalH = layout.totalSize.height
-
-        ZStack {
-            Color.clear
-                .frame(
-                    width: totalW + (exposeExpandedGroupHoverPadding * 2),
-                    height: totalH + (exposeExpandedGroupHoverPadding * 2),
-                )
-
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color(nsColor: .windowBackgroundColor))
-                .shadow(color: .black.opacity(0.4), radius: 24, y: 12)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
-                )
-                .frame(width: totalW + 40, height: totalH + 40)
-
-            VStack(spacing: spacing) {
-                let isMainHovered = hoveredItemId == activeItem.id
-                WinCard(
-                    item: activeItem,
-                    cw: layout.mainCardWidth,
-                    ch: layout.mainCardHeight,
-                    badge: false,
-                    hoverOverride: isMainHovered,
-                )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .strokeBorder(Color.accentColor, lineWidth: (hoveredItemId == nil || isMainHovered) ? 3 : 0)
-                            .opacity((hoveredItemId == nil || isMainHovered) ? 1.0 : 0.0)
-                    )
-                    .opacity(isMainHovered ? 1.0 : (hoveredItemId == nil ? 1.0 : 0.4))
-                    .background {
-                        GeometryReader { geometry in
-                            Color.clear.preference(
-                                key: ExposeHoverTargetPreferenceKey.self,
-                                value: [ExposeHoverTargetFrame(
-                                    itemId: activeItem.id,
-                                    frame: geometry.frame(in: .named(exposeExpandedGroupHoverCoordinateSpace)),
-                                )],
-                            )
-                        }
-                    }
-                    .onTapGesture { onSelect(activeItem.id) }
-
-                if count > 0 {
-                    VStack(spacing: spacing) {
-                        ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                            HStack(spacing: spacing) {
-                                ForEach(row) { item in
-                                    let isItemHovered = hoveredItemId == item.id
-
-                                    WinCard(
-                                        item: item,
-                                        cw: layout.secondaryCardWidth,
-                                        ch: layout.secondaryCardHeight,
-                                        badge: false,
-                                        hoverOverride: isItemHovered,
-                                    )
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                                .strokeBorder(Color.accentColor, lineWidth: isItemHovered ? 3 : 0)
-                                                .opacity(isItemHovered ? 1.0 : 0.0)
-                                        )
-                                        .opacity(isItemHovered ? 1.0 : (hoveredItemId == nil ? 1.0 : 0.4))
-                                        .background {
-                                            GeometryReader { geometry in
-                                                Color.clear.preference(
-                                                    key: ExposeHoverTargetPreferenceKey.self,
-                                                    value: [ExposeHoverTargetFrame(
-                                                        itemId: item.id,
-                                                        frame: geometry.frame(in: .named(exposeExpandedGroupHoverCoordinateSpace)),
-                                                    )],
-                                                )
-                                            }
-                                        }
-                                        .onTapGesture { onSelect(item.id) }
-                                }
-                                if row.count < layout.columns {
-                                    ForEach(0..<(layout.columns - row.count), id: \.self) { _ in
-                                        Color.clear.frame(
-                                            width: layout.secondaryCardWidth,
-                                            height: layout.secondaryCardHeight,
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            .animation(.easeOut(duration: 0.1), value: hoveredItemId)
-        }
-        .contentShape(Rectangle())
-        .coordinateSpace(name: exposeExpandedGroupHoverCoordinateSpace)
-        .onPreferenceChange(ExposeHoverTargetPreferenceKey.self) { hoverFrames in
-            self.hoverFrames = hoverFrames
-        }
-        .onContinuousHover(coordinateSpace: .named(exposeExpandedGroupHoverCoordinateSpace)) { phase in
-            switch phase {
-                case .active(let location):
-                    hoveredItemId = hoveredExposeItemId(at: location, within: hoverFrames)
-                case .ended:
-                    hoveredItemId = nil
-                    onCollapse()
-            }
-        }
-        .offset(y: count > 0 ? ((layout.secondaryCardHeight * CGFloat(rowCount)) + (CGFloat(max(rowCount - 1, 0)) * spacing) + spacing) / 2.0 : 0)
     }
 }
 
