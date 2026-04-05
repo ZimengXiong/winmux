@@ -7,6 +7,7 @@ private let windowDragCursorProxyPanelId = "AeroSpace.windowTabs.cursorProxy"
 private let windowPreviewCornerAlphaThreshold: CGFloat = 0.3
 private let windowPreviewCornerScanLimit = 48
 private let windowTabDropPreviewTransitionDuration: TimeInterval = 0.12
+private let windowDragCursorProxyFollowInterval: TimeInterval = 1.0 / 60.0
 
 @MainActor
 var windowPreviewCornerRadiusCache: [UInt32: CGFloat] = [:]
@@ -227,7 +228,9 @@ final class WindowDragCursorProxyPanel: NSPanelHud {
     static let shared = WindowDragCursorProxyPanel()
 
     private let hostingView = NSHostingView(rootView: AnyView(EmptyView()))
-    private var currentLabel: String? = nil
+    private var currentContent: WindowDragCursorProxyContent? = nil
+    private var followMouseTimer: Timer? = nil
+    private var proxySize: CGSize = .zero
 
     override private init() {
         super.init()
@@ -245,36 +248,82 @@ final class WindowDragCursorProxyPanel: NSPanelHud {
     }
 
     func show(label: String, isGroup: Bool, mouseScreenPoint: CGPoint) {
-        if currentLabel != label {
+        let nextContent = WindowDragCursorProxyContent(label: label, isGroup: isGroup)
+        if currentContent != nextContent {
             hostingView.rootView = AnyView(WindowDragCursorProxyView(label: label, isGroup: isGroup))
-            currentLabel = label
+            currentContent = nextContent
         }
-        let proxyWidth: CGFloat = min(max(CGFloat(label.count) * 7 + 36, 80), 200)
-        let proxyHeight: CGFloat = 28
-        let screenFrame = NSScreen.main?.visibleFrame ?? .zero
-
-        // Default: right and below cursor
-        var x = mouseScreenPoint.x + 14
-        var y = mouseScreenPoint.y - proxyHeight - 6
-
-        // Flip left if clipping right edge
-        if x + proxyWidth > screenFrame.maxX {
-            x = mouseScreenPoint.x - proxyWidth - 14
-        }
-        // Push up if clipping bottom edge
-        if y < screenFrame.minY {
-            y = mouseScreenPoint.y + 6
-        }
-
-        let frame = CGRect(x: x, y: y, width: proxyWidth, height: proxyHeight)
-        setFrame(frame, display: true, animate: false)
+        proxySize = CGSize(
+            width: min(max(CGFloat(label.count) * 7 + 36, 80), 200),
+            height: 28,
+        )
+        updateFrame(mouseScreenPoint: mouseScreenPoint)
+        startFollowingMouseIfNeeded()
         orderFrontRegardless()
     }
 
     func hide() {
-        currentLabel = nil
+        stopFollowingMouse()
+        currentContent = nil
         orderOut(nil)
     }
+
+    private func startFollowingMouseIfNeeded() {
+        guard followMouseTimer == nil else { return }
+        let timer = Timer(timeInterval: windowDragCursorProxyFollowInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.updateFrame(mouseScreenPoint: NSEvent.mouseLocation)
+            }
+        }
+        followMouseTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func stopFollowingMouse() {
+        followMouseTimer?.invalidate()
+        followMouseTimer = nil
+    }
+
+    private func updateFrame(mouseScreenPoint: CGPoint) {
+        guard proxySize.width > 0, proxySize.height > 0 else { return }
+        let targetFrame = windowDragCursorProxyFrame(
+            mouseScreenPoint: mouseScreenPoint,
+            proxySize: proxySize,
+        )
+        if frame.size == targetFrame.size {
+            setFrameOrigin(targetFrame.origin)
+        } else {
+            setFrame(targetFrame, display: false, animate: false)
+        }
+    }
+}
+
+private struct WindowDragCursorProxyContent: Equatable {
+    let label: String
+    let isGroup: Bool
+}
+
+private func windowDragCursorProxyFrame(mouseScreenPoint: CGPoint, proxySize: CGSize) -> CGRect {
+    let screenFrame = NSScreen.screens
+        .first(where: { $0.frame.contains(mouseScreenPoint) })?
+        .visibleFrame ?? NSScreen.main?.visibleFrame ?? .zero
+
+    var x = mouseScreenPoint.x + 14
+    var y = mouseScreenPoint.y - proxySize.height - 6
+
+    if x + proxySize.width > screenFrame.maxX {
+        x = mouseScreenPoint.x - proxySize.width - 14
+    }
+    if y < screenFrame.minY {
+        y = mouseScreenPoint.y + 6
+    }
+
+    return CGRect(
+        x: x,
+        y: y,
+        width: proxySize.width,
+        height: proxySize.height,
+    )
 }
 
 private struct WindowDragCursorProxyView: View {

@@ -1048,23 +1048,7 @@ func updatePendingWindowDragIntent(
     subject: WindowDragSubject,
     detachOrigin: TabDetachOrigin,
 ) -> Bool {
-    // Show cursor drag proxy during sidebar-originated drags
-    // or tab-strip-originated drags when hovering over the sidebar
-    let showCursorProxy =
-        getCurrentMouseDragStartedInSidebar() ||
-        detachOrigin == .tabStrip ||
-        subject == .group
-    if showCursorProxy {
-        let label = sidebarDragSourceTitle(for: sourceWindow, subject: subject)
-        let isGroup = subject == .group || dragSubjectNode(for: sourceWindow, subject: subject) is TilingContainer
-        WindowDragCursorProxyPanel.shared.show(
-            label: label,
-            isGroup: isGroup,
-            mouseScreenPoint: NSEvent.mouseLocation,
-        )
-    } else if detachOrigin == .tabStrip || subject == .group {
-        WindowDragCursorProxyPanel.shared.hide()
-    }
+    WindowDragCursorProxyPanel.shared.hide()
 
     guard let destination = currentWindowDragIntentDestination(
         sourceWindow: sourceWindow,
@@ -1142,7 +1126,11 @@ private func setPendingWindowDragIntent(sourceWindowId: UInt32, sourceSubject: W
         signature: signature,
         "windowDragIntent.update mouse=\(debugDescribe(mouseLocation)) source=\(debugDescribe(Window.get(byId: sourceWindowId))) subject=\(debugDescribe(sourceSubject)) prevKind=\(previousIntent.map { debugDescribe($0.kind) } ?? "nil") prevPreview=\(debugDescribe(previousIntent?.previewRect)) newKind=\(debugDescribe(destination.kind)) newPreview=\(debugDescribe(destination.previewRect)) newInteraction=\(debugDescribe(destination.interactionRect)) style=\(destination.previewStyle) geometry=\(destination.previewGeometry)"
     )
-    WindowTabDropPreviewPanel.shared.show(destination.preview(sourceWindowId: sourceWindowId))
+    if destination.previewStyle == .sidebarWorkspaceMove {
+        WindowTabDropPreviewPanel.shared.hide()
+    } else {
+        WindowTabDropPreviewPanel.shared.show(destination.preview(sourceWindowId: sourceWindowId))
+    }
     return true
 }
 

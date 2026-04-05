@@ -700,6 +700,10 @@ struct WorkspaceSidebarWorkspaceSection: View {
             .animation(.spring(response: 0.2, dampingFraction: 0.82), value: expansionProgress)
             .animation(.easeOut(duration: 0.15), value: isHovered)
             .background(sectionBackground)
+            .shadow(
+                color: isDropTarget ? Color.accentColor.opacity(0.18) : .clear,
+                radius: isDropTarget ? 12 : 0
+            )
             .background {
                 GeometryReader { geometry in
                     Color.clear.preference(
@@ -897,7 +901,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
 
     private var sectionBackgroundFill: Color {
         if isDropTarget {
-            return Color.accentColor.opacity(0.12)
+            return Color.white.opacity(0.04)
         } else if workspace.isFocused {
             return Color(nsColor: .controlBackgroundColor).opacity(0.45)
         } else if isHovered {
@@ -910,7 +914,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
 
     private var sectionBorderColor: Color {
         if isDropTarget {
-            return Color.accentColor.opacity(0.5)
+            return Color.accentColor.opacity(0.45)
         }
         if workspace.isFocused {
             return Color.accentColor.opacity(0.10)
@@ -989,13 +993,20 @@ struct WorkspaceSidebarCreateWorkspaceSection: View {
                 .frame(maxWidth: .infinity, alignment: isCompact ? .center : .leading)
                 .background(
                     sectionShape
-                        .fill(Color(nsColor: .controlBackgroundColor).opacity(isDropTarget ? 0.3 : (isHovered ? 0.3 : 0.12)))
+                        .fill(
+                            isDropTarget
+                                ? Color.white.opacity(0.04)
+                                : Color(nsColor: .controlBackgroundColor).opacity(isHovered ? 0.3 : 0.12)
+                        )
                         .overlay {
                             sectionShape
-                                .strokeBorder(Color.accentColor.opacity(isDropTarget ? 0.45 : 0.08), lineWidth: isDropTarget ? 1.5 : 0.5)
+                                .strokeBorder(
+                                    isDropTarget ? Color.accentColor.opacity(0.45) : Color.accentColor.opacity(0.08),
+                                    lineWidth: isDropTarget ? 1.5 : 0.5
+                                )
                         }
                 )
-            }
+                }
             .buttonStyle(.plain)
             .contentShape(sectionShape)
             .onHover { hover in
@@ -1018,6 +1029,10 @@ struct WorkspaceSidebarCreateWorkspaceSection: View {
         .frame(maxWidth: .infinity, alignment: isCompact ? .center : .leading)
         .clipped()
         .zIndex(isDropTarget ? 1 : 0)
+        .shadow(
+            color: isDropTarget ? Color.accentColor.opacity(0.18) : .clear,
+            radius: isDropTarget ? 12 : 0
+        )
         .animation(.spring(response: 0.22, dampingFraction: 0.84), value: dragPreview)
         .background {
             GeometryReader { geometry in
