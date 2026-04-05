@@ -278,23 +278,26 @@ private struct ExposeView: View {
 
             GeometryReader { geo in
                 overviewGrid(in: geo.size)
-                .frame(width: geo.size.width, height: geo.size.height)
-                .contentShape(Rectangle())
-                .coordinateSpace(name: exposeOverviewCoordinateSpace)
-                .onPreferenceChange(ExposeExpandedGroupFramePreferenceKey.self) { frames in
-                    expandedGroupFrames = frames
-                }
-                .onPreferenceChange(ExposeCollapsedGroupFramePreferenceKey.self) { frames in
-                    collapsedGroupFrames = frames
-                }
-                .onContinuousHover(coordinateSpace: .named(exposeOverviewCoordinateSpace)) { phase in
-                    switch phase {
-                        case .active(let location):
-                            handleHover(at: location)
-                        case .ended:
-                            collapseExpandedGroup()
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .contentShape(Rectangle())
+                    .coordinateSpace(name: exposeOverviewCoordinateSpace)
+                    .onTapGesture {
+                        onDismiss()
                     }
-                }
+                    .onPreferenceChange(ExposeExpandedGroupFramePreferenceKey.self) { frames in
+                        expandedGroupFrames = frames
+                    }
+                    .onPreferenceChange(ExposeCollapsedGroupFramePreferenceKey.self) { frames in
+                        collapsedGroupFrames = frames
+                    }
+                    .onContinuousHover(coordinateSpace: .named(exposeOverviewCoordinateSpace)) { phase in
+                        switch phase {
+                            case .active(let location):
+                                handleHover(at: location)
+                            case .ended:
+                                collapseExpandedGroup()
+                        }
+                    }
             }
             .scaleEffect(appeared ? 1 : 0.95)
             .opacity(appeared ? 1 : 0)

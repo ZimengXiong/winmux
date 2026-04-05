@@ -4,6 +4,84 @@ import SwiftUI
 private let windowTabStripPanelPrefix = "AeroSpace.windowTabs.strip."
 private let windowTabDropPreviewPanelId = "AeroSpace.windowTabs.dropPreview"
 private let windowDragCursorProxyPanelId = "AeroSpace.windowTabs.cursorProxy"
+private let windowPreviewCornerAlphaThreshold: CGFloat = 0.3
+private let windowPreviewCornerScanLimit = 48
+private let windowTabDropPreviewTransitionDuration: TimeInterval = 0.12
+
+@MainActor
+var windowPreviewCornerRadiusCache: [UInt32: CGFloat] = [:]
+
+@MainActor
+func estimatedWindowPreviewCornerRadius(for windowId: UInt32) -> CGFloat {
+    if let cached = windowPreviewCornerRadiusCache[windowId] {
+        return cached
+    }
+    let resolvedRadius = estimateWindowPreviewCornerRadiusFromImage(windowId: windowId) ?? windowTabPreviewCornerRadius
+    windowPreviewCornerRadiusCache[windowId] = resolvedRadius
+    return resolvedRadius
+}
+
+private func estimateWindowPreviewCornerRadiusFromImage(windowId: UInt32) -> CGFloat? {
+    guard let cgImage = CGWindowListCreateImage(
+        .null,
+        .optionIncludingWindow,
+        CGWindowID(windowId),
+        [.boundsIgnoreFraming, .nominalResolution],
+    ) else {
+        return nil
+    }
+    return estimateTopCornerRadius(in: cgImage)
+}
+
+private func estimateTopCornerRadius(in image: CGImage) -> CGFloat? {
+    let bitmap = NSBitmapImageRep(cgImage: image)
+    let width = bitmap.pixelsWide
+    let height = bitmap.pixelsHigh
+    let maxScan = min(windowPreviewCornerScanLimit, width / 2, height / 2)
+    guard maxScan > 0 else { return nil }
+
+    func alphaAt(x: Int, yFromTop: Int) -> CGFloat {
+        let bitmapY = height - 1 - yFromTop
+        guard bitmapY >= 0,
+              bitmapY < height,
+              x >= 0,
+              x < width
+        else {
+            return 0
+        }
+        return bitmap.colorAt(x: x, y: bitmapY)?.alphaComponent ?? 0
+    }
+
+    func leadingOpaqueInset(yFromTop: Int, leftToRight: Bool) -> Int? {
+        for step in 0 ..< maxScan {
+            let x = leftToRight ? step : width - 1 - step
+            if alphaAt(x: x, yFromTop: yFromTop) > windowPreviewCornerAlphaThreshold {
+                return step
+            }
+        }
+        return nil
+    }
+
+    func trailingOpaqueInset(xFromEdge: Int, topToBottom: Bool) -> Int? {
+        let x = topToBottom ? xFromEdge : width - 1 - xFromEdge
+        for step in 0 ..< maxScan {
+            if alphaAt(x: x, yFromTop: step) > windowPreviewCornerAlphaThreshold {
+                return step
+            }
+        }
+        return nil
+    }
+
+    let samples = [
+        leadingOpaqueInset(yFromTop: 0, leftToRight: true),
+        leadingOpaqueInset(yFromTop: 0, leftToRight: false),
+        trailingOpaqueInset(xFromEdge: 0, topToBottom: true),
+        trailingOpaqueInset(xFromEdge: 0, topToBottom: false),
+    ].compactMap { $0 }
+
+    guard !samples.isEmpty else { return nil }
+    return CGFloat(samples.max() ?? 0)
+}
 
 @MainActor
 final class WindowTabStripPanelController {
@@ -98,6 +176,7 @@ final class WindowTabDropPreviewPanel: NSPanelHud {
 
     private let hostingView = NSHostingView(rootView: AnyView(EmptyView()))
     private var currentContent: WindowTabDropPreviewContent? = nil
+    private var hasShownPreview = false
 
     override private init() {
         super.init()
@@ -120,12 +199,23 @@ final class WindowTabDropPreviewPanel: NSPanelHud {
             hostingView.rootView = AnyView(WindowTabDropPreviewView(model: preview))
             currentContent = nextContent
         }
-        setFrame(preview.frame.alignedToBackingPixels(), display: true, animate: false)
+        let targetFrame = preview.frame.alignedToBackingPixels()
+        if hasShownPreview {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = windowTabDropPreviewTransitionDuration
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                animator().setFrame(targetFrame, display: true)
+            }
+        } else {
+            setFrame(targetFrame, display: true, animate: false)
+            hasShownPreview = true
+        }
         orderFrontRegardless()
     }
 
     func hide() {
         currentContent = nil
+        hasShownPreview = false
         orderOut(nil)
     }
 }
@@ -239,6 +329,7 @@ struct WindowTabDropPreviewViewModel: Equatable {
     let style: WindowTabDropPreviewStyle
     let geometry: WindowTabDropPreviewGeometry
     let isGroup: Bool
+    let referenceWindowId: UInt32?
 }
 
 enum WindowTabDropPreviewStyle: Equatable {
@@ -428,6 +519,7 @@ private struct WindowTabStripView: View {
         let tabWidth = max(120, min(220, (stripWidth - 12) / CGFloat(count)))
         let itemHeight = max(strip.frame.height - 6, 22)
         let effectiveTabWidth = tabWidth + 2 // include HStack spacing
+        let stripCornerRadius = activeWindowTabStripCornerRadius
 
         let draggingIndex = draggingTabId.flatMap { id in strip.tabs.firstIndex(where: { $0.windowId == id }) }
         let targetIndex: Int? = draggingIndex.map { srcIdx in
@@ -500,10 +592,10 @@ private struct WindowTabStripView: View {
         .frame(width: stripWidth, height: strip.frame.height)
         .clipped()
         .background(
-            RoundedRectangle(cornerRadius: windowTabStripCornerRadius, style: .continuous)
+            RoundedRectangle(cornerRadius: stripCornerRadius, style: .continuous)
                 .fill(Color(nsColor: .windowBackgroundColor).opacity(0.92))
                 .overlay {
-                    RoundedRectangle(cornerRadius: windowTabStripCornerRadius, style: .continuous)
+                    RoundedRectangle(cornerRadius: stripCornerRadius, style: .continuous)
                         .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
                 }
                 .shadow(color: Color.black.opacity(0.05), radius: 4, y: 2),
@@ -519,6 +611,12 @@ private struct WindowTabStripView: View {
                     finishMoveFromTabStrip()
                 },
         )
+    }
+
+    @MainActor
+    private var activeWindowTabStripCornerRadius: CGFloat {
+        let activeWindowId = strip.tabs.first(where: \.isActive)?.windowId ?? strip.tabs.first?.windowId
+        return activeWindowId.map(estimatedWindowPreviewCornerRadius) ?? windowTabStripCornerRadius
     }
 
     private func tabVisualOffset(
@@ -635,39 +733,18 @@ private struct WindowTabDropPreviewView: View {
 
     var body: some View {
         let cfg = borderConfig(for: model.style)
-        let shape = WindowTabDropOutlineShape(cornerRadii: model.geometry.cornerRadii(radius: cfg.cornerRadius))
+        let cornerRadius = model.referenceWindowId.map(estimatedWindowPreviewCornerRadius) ?? cfg.cornerRadius
+        let shape = WindowTabDropOutlineShape(cornerRadii: model.geometry.cornerRadii(radius: cornerRadius))
 
         shape
             .fill(
-                LinearGradient(
-                    colors: [
-                        cfg.color.opacity(isPresented ? cfg.fillOpacity * 1.18 : 0),
-                        cfg.color.opacity(isPresented ? cfg.fillOpacity * 0.9 : 0),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom,
-                ),
+                cfg.color.opacity(isPresented ? cfg.fillOpacity : 0),
             )
             .overlay {
                 shape
                     .strokeBorder(
                         cfg.color.opacity(isPresented ? cfg.borderOpacity : 0.08),
                         style: cfg.strokeStyle,
-                    )
-            }
-            .overlay {
-                shape
-                    .inset(by: cfg.strokeStyle.lineWidth + 1)
-                    .strokeBorder(
-                        Color.white.opacity(isPresented ? cfg.highlightOpacity : 0),
-                        lineWidth: 1,
-                    )
-            }
-            .overlay {
-                shape
-                    .strokeBorder(
-                        Color.black.opacity(isPresented ? cfg.edgeShadowOpacity : 0),
-                        lineWidth: 0.5,
                     )
             }
             .opacity(isPresented ? 1 : 0.82)
@@ -686,8 +763,6 @@ private struct WindowTabDropPreviewView: View {
         let cornerRadius: CGFloat
         let fillOpacity: Double
         let borderOpacity: Double
-        let highlightOpacity: Double
-        let edgeShadowOpacity: Double
         let strokeStyle: StrokeStyle
     }
 
@@ -697,61 +772,49 @@ private struct WindowTabDropPreviewView: View {
                 return BorderConfig(
                     color: .accentColor,
                     cornerRadius: windowTabPreviewCornerRadius,
-                    fillOpacity: 0.22,
+                    fillOpacity: 0.08,
                     borderOpacity: 1,
-                    highlightOpacity: 0.4,
-                    edgeShadowOpacity: 0.2,
-                    strokeStyle: StrokeStyle(lineWidth: 2.75),
+                    strokeStyle: StrokeStyle(lineWidth: 3),
                 )
             case .detach:
                 return BorderConfig(
-                    color: .orange,
+                    color: .accentColor,
                     cornerRadius: windowTabPreviewCornerRadius,
-                    fillOpacity: 0.12,
-                    borderOpacity: 0.92,
-                    highlightOpacity: 0.24,
-                    edgeShadowOpacity: 0.16,
-                    strokeStyle: StrokeStyle(lineWidth: 2, dash: [7, 4]),
+                    fillOpacity: 0.08,
+                    borderOpacity: 1,
+                    strokeStyle: StrokeStyle(lineWidth: 3),
                 )
             case .stackSplit:
                 return BorderConfig(
                     color: .accentColor,
                     cornerRadius: windowTabPreviewCornerRadius,
-                    fillOpacity: 0.19,
+                    fillOpacity: 0.08,
                     borderOpacity: 1,
-                    highlightOpacity: 0.34,
-                    edgeShadowOpacity: 0.18,
-                    strokeStyle: StrokeStyle(lineWidth: 2.5),
+                    strokeStyle: StrokeStyle(lineWidth: 3),
                 )
             case .swap:
                 return BorderConfig(
                     color: .accentColor,
                     cornerRadius: windowTabPreviewCornerRadius,
-                    fillOpacity: 0.13,
-                    borderOpacity: 0.92,
-                    highlightOpacity: 0.28,
-                    edgeShadowOpacity: 0.15,
-                    strokeStyle: StrokeStyle(lineWidth: 2.25, dash: [8, 4]),
+                    fillOpacity: 0.08,
+                    borderOpacity: 1,
+                    strokeStyle: StrokeStyle(lineWidth: 3, dash: [8, 4]),
                 )
             case .workspaceMove:
                 return BorderConfig(
-                    color: .green,
+                    color: .accentColor,
                     cornerRadius: windowTabPreviewCornerRadius,
-                    fillOpacity: 0.14,
-                    borderOpacity: 0.9,
-                    highlightOpacity: 0.24,
-                    edgeShadowOpacity: 0.14,
-                    strokeStyle: StrokeStyle(lineWidth: 2.25, dash: [8, 4]),
+                    fillOpacity: 0.08,
+                    borderOpacity: 1,
+                    strokeStyle: StrokeStyle(lineWidth: 3),
                 )
             case .sidebarWorkspaceMove:
                 return BorderConfig(
                     color: .accentColor,
                     cornerRadius: windowTabPreviewCornerRadius,
-                    fillOpacity: 0.14,
-                    borderOpacity: 0.9,
-                    highlightOpacity: 0.28,
-                    edgeShadowOpacity: 0.15,
-                    strokeStyle: StrokeStyle(lineWidth: 2.25),
+                    fillOpacity: 0.08,
+                    borderOpacity: 1,
+                    strokeStyle: StrokeStyle(lineWidth: 3),
                 )
         }
     }

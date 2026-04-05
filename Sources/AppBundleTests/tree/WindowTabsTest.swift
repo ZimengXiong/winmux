@@ -273,6 +273,32 @@ final class WindowTabsTest: XCTestCase {
         XCTAssertEqual(replacementFocus?.windowOrNil, expectedTab)
     }
 
+    @MainActor
+    func testFocusAfterWindowClosurePrefersSnapshotPreviousPreviousFocusOverFallbackTabWhenClosingTransientWindow() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let staleFallbackTab = TestWindow.new(id: 1, parent: accordion)
+        let expectedTab = TestWindow.new(id: 2, parent: accordion)
+        let closingWindow = TestWindow.new(id: 9, parent: workspace)
+
+        let replacementFocus = focusAfterWindowClosure(
+            closingWindow: closingWindow,
+            deadWindowWorkspace: workspace,
+            currentFocus: staleFallbackTab.toLiveFocusOrNil().orDie(),
+            previousFocus: nil,
+            previousPreviousFocus: nil,
+            refreshSnapshotCloseFallback: staleFallbackTab.toLiveFocusOrNil(),
+            refreshSnapshotPreviousFocus: closingWindow.toLiveFocusOrNil(),
+            refreshSnapshotPreviousPreviousFocus: expectedTab.toLiveFocusOrNil(),
+            previousFocusedWorkspace: workspace,
+            previousFocusedWorkspaceDate: .now,
+        )
+
+        XCTAssertEqual(replacementFocus?.windowOrNil, expectedTab)
+    }
+
     func testNativeFocusShortcutIsDisabledForTabbedLogicalWindows() {
         XCTAssertFalse(shouldUseActivationOnlyForNativeFocus(
             targetWindowId: 4,
@@ -899,6 +925,37 @@ final class WindowTabsTest: XCTestCase {
             .h_tiles([
                 .window(1),
                 .window(2),
+            ]),
+        ]))
+        XCTAssertEqual(focus.windowOrNil, source)
+    }
+
+    @MainActor
+    func testApplyWindowStackSplitDragIntentSupportsRootAccordionSelfTarget() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        root.layout = .accordion
+        root.changeOrientation(.v)
+        let source = TestWindow.new(id: 1, parent: root)
+        let target = TestWindow.new(id: 2, parent: root)
+        _ = TestWindow.new(id: 3, parent: root)
+        let previousDetachOrigin = getCurrentMouseTabDetachOrigin()
+        setCurrentMouseTabDetachOrigin(.tabStrip)
+        defer { setCurrentMouseTabDetachOrigin(previousDetachOrigin) }
+
+        XCTAssertTrue(applyWindowStackSplitDragIntent(
+            sourceWindow: source,
+            sourceSubject: .window,
+            targetWindow: target,
+            position: .left,
+        ))
+
+        assertEquals(workspace.rootTilingContainer.layoutDescription, .h_tiles([
+            .window(1),
+            .v_accordion([
+                .window(2),
+                .window(3),
             ]),
         ]))
         XCTAssertEqual(focus.windowOrNil, source)

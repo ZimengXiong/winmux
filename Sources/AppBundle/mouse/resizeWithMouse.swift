@@ -26,8 +26,19 @@ func resizedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutabl
 @MainActor
 func resetManipulatedWithMouseIfPossible() async throws {
     let didApplyPendingDragIntent = applyPendingWindowDragIntentIfPossible()
+    let shouldDetachTabOnRelease =
+        !didApplyPendingDragIntent &&
+        getCurrentMouseManipulationKind() == .move &&
+        getCurrentMouseDragSubject() == .window &&
+        getCurrentMouseTabDetachOrigin() == .tabStrip &&
+        currentlyManipulatedWithMouseWindowId.flatMap(Window.get(byId:)) != nil
+    if shouldDetachTabOnRelease,
+       let sourceWindow = currentlyManipulatedWithMouseWindowId.flatMap(Window.get(byId:))
+    {
+        _ = removeWindowFromTabStack(sourceWindow)
+    }
     clearPendingWindowDragIntent()
-    if currentlyManipulatedWithMouseWindowId != nil || didApplyPendingDragIntent {
+    if currentlyManipulatedWithMouseWindowId != nil || didApplyPendingDragIntent || shouldDetachTabOnRelease {
         cancelManipulatedWithMouseState()
         scheduleRefreshSession(.resetManipulatedWithMouse, optimisticallyPreLayoutWorkspaces: true)
     }

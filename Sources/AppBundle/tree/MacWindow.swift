@@ -272,6 +272,7 @@ func focusAfterWindowClosure(
 
     let snapshotCloseFallbackTabGroup = nearestAccordionTabContainer(refreshSnapshotCloseFallback)
     let snapshotPreviousFocusTabGroup = nearestAccordionTabContainer(refreshSnapshotPreviousFocus)
+    let snapshotPreviousPreviousFocusTabGroup = nearestAccordionTabContainer(refreshSnapshotPreviousPreviousFocus)
 
     let shouldPreferSnapshotPreviousFocusWithinSameTabGroup =
         isValidReplacement(refreshSnapshotCloseFallback) &&
@@ -285,6 +286,21 @@ func focusAfterWindowClosure(
             "focusAfterWindowClosure closing=\(closingWindow.windowId) preferSnapshotPreviousFocusWithinSameTabGroup=\(debugDescribe(refreshSnapshotPreviousFocus)) snapshotCloseFallback=\(debugDescribe(refreshSnapshotCloseFallback)) current=\(debugDescribe(currentFocus))"
         )
         return refreshSnapshotPreviousFocus
+    }
+
+    let shouldPreferSnapshotPreviousPreviousFocusWithinSameTabGroup =
+        refreshSnapshotPreviousFocus?.windowOrNil == closingWindow &&
+        isValidReplacement(refreshSnapshotCloseFallback) &&
+        isValidReplacement(refreshSnapshotPreviousPreviousFocus) &&
+        refreshSnapshotCloseFallback?.windowOrNil != refreshSnapshotPreviousPreviousFocus?.windowOrNil &&
+        snapshotCloseFallbackTabGroup != nil &&
+        snapshotCloseFallbackTabGroup === snapshotPreviousPreviousFocusTabGroup
+
+    if shouldPreferSnapshotPreviousPreviousFocusWithinSameTabGroup {
+        debugFocusLog(
+            "focusAfterWindowClosure closing=\(closingWindow.windowId) preferSnapshotPreviousPreviousFocusWithinSameTabGroup=\(debugDescribe(refreshSnapshotPreviousPreviousFocus)) snapshotCloseFallback=\(debugDescribe(refreshSnapshotCloseFallback)) snapshotPrev=\(debugDescribe(refreshSnapshotPreviousFocus)) current=\(debugDescribe(currentFocus))"
+        )
+        return refreshSnapshotPreviousPreviousFocus
     }
 
     let shouldPreferSnapshotCloseFallback =
