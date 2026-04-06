@@ -25,9 +25,25 @@ final class ConfigBootstrapTest: XCTestCase {
         XCTAssertNil(bindingMap["alt-comma"])
         XCTAssertTrue(parsedConfig.windowTabs.enabled)
         XCTAssertEqual(parsedConfig.windowTabs.height, 34)
-        XCTAssertFalse(parsedConfig.workspaceSidebar.enabled)
+        XCTAssertTrue(parsedConfig.workspaceSidebar.enabled)
         XCTAssertEqual(parsedConfig.workspaceSidebar.width, 240)
         XCTAssertTrue(parsedConfig.enableWindowManagement)
+        XCTAssertTrue(parsedConfig.autoReloadConfig)
+        if case .constant(let horizontalGap) = parsedConfig.gaps.inner.horizontal {
+            XCTAssertEqual(horizontalGap, 8)
+        } else {
+            XCTFail("Expected constant horizontal gap")
+        }
+        if case .constant(let verticalGap) = parsedConfig.gaps.inner.vertical {
+            XCTAssertEqual(verticalGap, 8)
+        } else {
+            XCTFail("Expected constant vertical gap")
+        }
+        if case .constant(let outerLeftGap) = parsedConfig.gaps.outer.left {
+            XCTAssertEqual(outerLeftGap, 8)
+        } else {
+            XCTFail("Expected constant outer left gap")
+        }
         XCTAssertEqual(parsedConfig.configVersion, 2)
     }
 

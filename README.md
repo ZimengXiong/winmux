@@ -125,6 +125,27 @@ As WinMux is not signed, you will need to bypass gatekeeper:
 xattr -dr com.apple.quarantine /Applications/WinMux.app/
 ```
 
+## Migrating
+### From AeroSpace
+If you are coming from AeroSpace, WinMux now bootstraps a fuller opinionated config instead of a bindings-only stub. A fresh `~/.config/winmux/winmux.toml` includes:
+
+- `window-tabs.enabled = true`
+- `[workspace-sidebar] enabled = true`
+- `auto-reload-config = true`
+- `8px` inner and outer gaps
+- the starter movement, layout, workspace, and move-to-workspace keybindings
+
+That means a new install should show the sidebar immediately, keep tab groups enabled, and give you visible spacing without extra setup.
+
+Useful WinMux-specific options to tweak after migrating:
+
+- `[workspace-sidebar]` to choose width, collapsed width, monitor, and whether date/status pills show
+- `[gaps]` to tune the default spacing between windows and screen edges
+- `window-tabs.height` to make the tab strip denser or roomier
+- `enable-window-management` if you want to temporarily run in unmanaged mode
+
+If you already have an older generated config, WinMux will not overwrite it automatically. Delete or edit `~/.config/winmux/winmux.toml` if you want the newer defaults.
+
 ## Release Build
 Release builds use XcodeGen/Xcode
 
