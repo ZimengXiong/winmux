@@ -60,7 +60,7 @@ You do not need to open up a config file to change shortcuts for basic actions. 
 #### Exposé
 ![](expose.png)
 
-WinMux comes with it's own mission-control-expose that shows you all the windows and tab groups in the current workspace. Trigger it with `⌘+i`
+WinMux comes with it's own mission-control-expose that shows you all the windows and tab groups in the current workspace. Trigger it with `⌃+i`
 
 #### Displays
 Only one display is supported at this time (I only use one display, so I don't have much experience/time to put in to figure out how multi displays should work, feel free to contribute). additional displays will still work, but will not be managed.
