@@ -2,7 +2,11 @@
 
 WinMux is a intuitive, batteries-included WM for macOS built on Aerospace ([for now](#on-aerospace))
 
-[Watch the demo video](demo.mp4)
+
+
+https://github.com/user-attachments/assets/69d8872a-d6f0-460e-95ad-d55013c3216e
+
+
 
 ## Managed (Tiling) Mode
 <a href="intentzones.mp4">
