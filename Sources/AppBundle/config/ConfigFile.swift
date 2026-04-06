@@ -4,6 +4,9 @@ import Foundation
 let legacyConfigDotfileName = ".winmux.toml"
 let generatedConfigDirectoryName = "winmux"
 let generatedConfigFileName = "winmux.toml"
+let aerospaceLegacyConfigDotfileName = ".aerospace.toml"
+let aerospaceConfigDirectoryName = "aerospace"
+let aerospaceConfigFileName = "aerospace.toml"
 
 func xdgConfigHomeUrl() -> URL {
     ProcessInfo.processInfo.environment["XDG_CONFIG_HOME"].map { URL(filePath: $0) }
@@ -25,6 +28,17 @@ func legacyConfigCandidateUrls() -> [URL] {
 
 func preferredLegacyConfigImportUrl() -> URL? {
     legacyConfigCandidateUrls().first { FileManager.default.fileExists(atPath: $0.path) }
+}
+
+func aerospaceConfigCandidateUrls() -> [URL] {
+    [
+        xdgConfigHomeUrl().appending(path: aerospaceConfigDirectoryName).appending(path: aerospaceConfigFileName),
+        FileManager.default.homeDirectoryForCurrentUser.appending(path: aerospaceLegacyConfigDotfileName),
+    ]
+}
+
+func preferredAerospaceConfigImportUrl() -> URL? {
+    aerospaceConfigCandidateUrls().first { FileManager.default.fileExists(atPath: $0.path) }
 }
 
 @MainActor
@@ -95,14 +109,23 @@ func ensureBootstrapConfigExistsIfNeeded() throws -> URL? {
     guard serverArgs.configLocation == nil else { return nil }
     let targetUrl = generatedConfigUrl()
     let existingLegacyUrls = preferredLegacyConfigImportUrl().map { [$0] } ?? []
-    if try materializeBootstrapConfigIfNeeded(targetUrl: targetUrl, existingLegacyUrls: existingLegacyUrls) {
+    let aerospaceImportUrl = preferredAerospaceConfigImportUrl()
+    if try materializeBootstrapConfigIfNeeded(
+        targetUrl: targetUrl,
+        existingLegacyUrls: existingLegacyUrls,
+        aerospaceImportUrl: aerospaceImportUrl,
+    ) {
         return targetUrl
     } else {
         return nil
     }
 }
 
-func materializeBootstrapConfigIfNeeded(targetUrl: URL, existingLegacyUrls: [URL]) throws -> Bool {
+func materializeBootstrapConfigIfNeeded(
+    targetUrl: URL,
+    existingLegacyUrls: [URL],
+    aerospaceImportUrl: URL? = nil,
+) throws -> Bool {
     guard !FileManager.default.fileExists(atPath: targetUrl.path) else { return false }
     let parentUrl = targetUrl.deletingLastPathComponent()
     if parentUrl.path != targetUrl.path {
@@ -110,6 +133,8 @@ func materializeBootstrapConfigIfNeeded(targetUrl: URL, existingLegacyUrls: [URL
     }
     if let legacyUrl = existingLegacyUrls.first {
         try FileManager.default.copyItem(at: legacyUrl, to: targetUrl)
+    } else if let aerospaceImportUrl {
+        try FileManager.default.copyItem(at: aerospaceImportUrl, to: targetUrl)
     } else {
         try starterConfigText().write(to: targetUrl, atomically: true, encoding: .utf8)
     }

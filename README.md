@@ -127,24 +127,30 @@ xattr -dr com.apple.quarantine /Applications/WinMux.app/
 
 ## Migrating
 ### From AeroSpace
-If you are coming from AeroSpace, WinMux now bootstraps a fuller opinionated config instead of a bindings-only stub. A fresh `~/.config/winmux/winmux.toml` includes:
+If `~/.config/winmux/winmux.toml` already exists, WinMux uses it as-is.
 
-- `window-tabs.enabled = true`
-- `[workspace-sidebar] enabled = true`
-- `auto-reload-config = true`
-- `8px` inner and outer gaps
-- the starter movement, layout, workspace, and move-to-workspace keybindings
+If it does not exist and an AeroSpace config exists, WinMux imports that config into `~/.config/winmux/winmux.toml` and uses it.
 
-That means a new install should show the sidebar immediately, keep tab groups enabled, and give you visible spacing without extra setup.
+If neither exists, WinMux creates a new opinionated WinMux config with the bundled defaults.
 
-Useful WinMux-specific options to tweak after migrating:
+After importing an AeroSpace config, add the WinMux-specific features you want with a block like this:
 
-- `[workspace-sidebar]` to choose width, collapsed width, monitor, and whether date/status pills show
-- `[gaps]` to tune the default spacing between windows and screen edges
-- `window-tabs.height` to make the tab strip denser or roomier
-- `enable-window-management` if you want to temporarily run in unmanaged mode
+```toml
+auto-reload-config = true
 
-If you already have an older generated config, WinMux will not overwrite it automatically. Delete or edit `~/.config/winmux/winmux.toml` if you want the newer defaults.
+window-tabs.enabled = true
+window-tabs.height = 34
+
+[workspace-sidebar]
+    enabled = true
+    collapsed-width = 44
+    width = 240
+    monitor = 'main'
+    show-status-pills = true
+    show-date = true
+```
+
+That block only covers WinMux-specific options. It leaves your existing AeroSpace-style layout and gap configuration alone.
 
 ## Release Build
 Release builds use XcodeGen/Xcode

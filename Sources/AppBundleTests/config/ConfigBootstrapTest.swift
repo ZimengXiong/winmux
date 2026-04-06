@@ -73,6 +73,34 @@ final class ConfigBootstrapTest: XCTestCase {
         XCTAssertEqual(copiedText, legacyText)
     }
 
+    func testEnsureBootstrapConfigImportsAerospaceConfigWhenNoWinMuxConfigExists() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appending(path: "WinMuxTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let aerospaceUrl = tempDir.appending(path: "aerospace.toml")
+        let targetUrl = tempDir.appending(path: "winmux.toml")
+        let aerospaceText = """
+            start-at-login = false
+
+            [mode.main.binding]
+            alt-h = 'focus left'
+            alt-l = 'focus right'
+            """
+        try aerospaceText.write(to: aerospaceUrl, atomically: true, encoding: .utf8)
+
+        let didMaterialize = try materializeBootstrapConfigIfNeeded(
+            targetUrl: targetUrl,
+            existingLegacyUrls: [],
+            aerospaceImportUrl: aerospaceUrl,
+        )
+
+        XCTAssertTrue(didMaterialize)
+        let copiedText = try String(contentsOf: targetUrl, encoding: .utf8)
+        XCTAssertEqual(copiedText, aerospaceText)
+    }
+
     func testEnsureBootstrapConfigPrefersFirstLegacyConfigWithoutFailing() throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appending(path: "WinMuxTests-\(UUID().uuidString)", directoryHint: .isDirectory)
