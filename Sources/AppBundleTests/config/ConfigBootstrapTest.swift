@@ -23,6 +23,12 @@ final class ConfigBootstrapTest: XCTestCase {
         XCTAssertEqual(bindingMap["alt-shift-m"], "fullscreen")
         XCTAssertNil(bindingMap["alt-slash"])
         XCTAssertNil(bindingMap["alt-comma"])
+        XCTAssertTrue(parsedConfig.windowTabs.enabled)
+        XCTAssertEqual(parsedConfig.windowTabs.height, 34)
+        XCTAssertFalse(parsedConfig.workspaceSidebar.enabled)
+        XCTAssertEqual(parsedConfig.workspaceSidebar.width, 240)
+        XCTAssertTrue(parsedConfig.enableWindowManagement)
+        XCTAssertEqual(parsedConfig.configVersion, 2)
     }
 
     func testEnsureBootstrapConfigCopiesLegacyConfig() throws {

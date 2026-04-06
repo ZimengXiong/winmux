@@ -39,7 +39,7 @@ func preferredEditableConfigUrl() -> URL {
 }
 
 func starterConfigText() -> String {
-    let starterBindings: [(String, String)] = [
+    let starterBindings: [String: String] = [
         ("alt-space", "layout horizontal vertical"),
         ("alt-h", "focus left"),
         ("alt-j", "focus down"),
@@ -73,16 +73,21 @@ func starterConfigText() -> String {
         ("alt-shift-7", "move-node-to-workspace 7"),
         ("alt-shift-8", "move-node-to-workspace 8"),
         ("alt-shift-9", "move-node-to-workspace 9"),
-    ]
-    let bindingLines = starterBindings.map { key, command in
-        "\(key) = '\(command)'"
-    }.joined(separator: "\n")
-    return """
+    ].reduce(into: [:]) { result, pair in
+        result[pair.0] = pair.1
+    }
+    let defaultText = (try? String(contentsOf: defaultConfigUrl, encoding: .utf8)) ?? """
         config-version = 2
 
         [mode.main.binding]
-        \(bindingLines)
         """
+    return updateModeBindingConfig(
+        in: defaultText,
+        modeName: mainModeId,
+        tableKey: "binding",
+        managedCommands: [],
+        assignments: starterBindings,
+    )
 }
 
 @MainActor
