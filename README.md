@@ -52,7 +52,7 @@ You can drag windows in and out of the sidebar from and to the current workspace
 The sidebar can be configured (as shown) to display the current date, time, battery, sound, and network interface (things that I used to have in sketchybar).
 
 ### Settings
-![](settings.png)
+![](settings.gif)
 
 You do not need to open up a config file to change shortcuts for basic actions. More advanced actions still require editing of the config file (`~/.config/winmux/winmux.toml`). You can also edit, validate and reload the config file from within the settings!
 
