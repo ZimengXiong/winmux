@@ -83,7 +83,7 @@ private let serverHelp = """
     OPTIONS:
       -h, --help              Print help
       -v, --version           Print AeroSpace.app version
-      --config-path <path>    Config path. It will take priority over ~/.config/winmux/winbox.toml,
+      --config-path <path>    Config path. It will take priority over ~/.config/winmux/winmux.toml,
                               ~/.aerospace.toml and ${XDG_CONFIG_HOME}/aerospace/aerospace.toml
       --read-only             Disable window management.
                               Useful if you want to use only debug-windows or other query commands.

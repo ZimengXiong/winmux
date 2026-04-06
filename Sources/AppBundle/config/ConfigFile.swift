@@ -3,7 +3,7 @@ import Foundation
 
 let legacyConfigDotfileName = ".aerospace.toml"
 let generatedConfigDirectoryName = "winmux"
-let generatedConfigFileName = "winbox.toml"
+let generatedConfigFileName = "winmux.toml"
 
 func xdgConfigHomeUrl() -> URL {
     ProcessInfo.processInfo.environment["XDG_CONFIG_HOME"].map { URL(filePath: $0) }
@@ -14,6 +14,17 @@ func generatedConfigUrl() -> URL {
     xdgConfigHomeUrl()
         .appending(path: generatedConfigDirectoryName)
         .appending(path: generatedConfigFileName)
+}
+
+func legacyConfigCandidateUrls() -> [URL] {
+    [
+        xdgConfigHomeUrl().appending(path: "aerospace").appending(path: "aerospace.toml"),
+        FileManager.default.homeDirectoryForCurrentUser.appending(path: legacyConfigDotfileName),
+    ]
+}
+
+func preferredLegacyConfigImportUrl() -> URL? {
+    legacyConfigCandidateUrls().first { FileManager.default.fileExists(atPath: $0.path) }
 }
 
 @MainActor
@@ -77,25 +88,34 @@ func starterConfigText() -> String {
 @MainActor
 func ensureBootstrapConfigExistsIfNeeded() throws -> URL? {
     guard serverArgs.configLocation == nil else { return nil }
-    guard case .noCustomConfigExists = findCustomConfigUrl() else { return nil }
     let targetUrl = generatedConfigUrl()
+    let existingLegacyUrls = preferredLegacyConfigImportUrl().map { [$0] } ?? []
+    if try materializeBootstrapConfigIfNeeded(targetUrl: targetUrl, existingLegacyUrls: existingLegacyUrls) {
+        return targetUrl
+    } else {
+        return nil
+    }
+}
+
+func materializeBootstrapConfigIfNeeded(targetUrl: URL, existingLegacyUrls: [URL]) throws -> Bool {
+    guard !FileManager.default.fileExists(atPath: targetUrl.path) else { return false }
     let parentUrl = targetUrl.deletingLastPathComponent()
     if parentUrl.path != targetUrl.path {
         try FileManager.default.createDirectory(at: parentUrl, withIntermediateDirectories: true)
     }
-    try starterConfigText().write(to: targetUrl, atomically: true, encoding: .utf8)
-    return targetUrl
+    if let legacyUrl = existingLegacyUrls.first {
+        try FileManager.default.copyItem(at: legacyUrl, to: targetUrl)
+    } else {
+        try starterConfigText().write(to: targetUrl, atomically: true, encoding: .utf8)
+    }
+    return true
 }
 
 func findCustomConfigUrl() -> ConfigFile {
     let candidates: [URL] = if let configLocation = serverArgs.configLocation {
         [URL(filePath: configLocation)]
     } else {
-        [
-            generatedConfigUrl(),
-            FileManager.default.homeDirectoryForCurrentUser.appending(path: legacyConfigDotfileName),
-            xdgConfigHomeUrl().appending(path: "aerospace").appending(path: "aerospace.toml"),
-        ]
+        [generatedConfigUrl()]
     }
     let existingCandidates: [URL] = candidates.filter { (candidate: URL) in FileManager.default.fileExists(atPath: candidate.path) }
     let count = existingCandidates.count

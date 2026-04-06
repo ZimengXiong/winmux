@@ -412,6 +412,13 @@ extension [UInt32: AxWindow] {
 }
 
 private func setFrame(_ window: AXUIElement, _ topLeft: CGPoint?, _ size: CGSize?, _ job: RunLoopJob) throws {
+    let currentTopLeft: CGPoint? = topLeft == nil ? nil : window.get(Ax.topLeftCornerAttr)
+    let currentSize: CGSize? = size == nil ? nil : window.get(Ax.sizeAttr)
+    let positionMatches = topLeft == nil || currentTopLeft == topLeft
+    let sizeMatches = size == nil || currentSize == size
+    if positionMatches && sizeMatches {
+        return
+    }
     // Set size and then the position. The order is important https://github.com/nikitabobko/AeroSpace/issues/143
     //                                                        https://github.com/nikitabobko/AeroSpace/issues/335
     if let size { window.set(Ax.sizeAttr, size) }

@@ -1,4 +1,5 @@
 @testable import AppBundle
+import Foundation
 import XCTest
 
 @MainActor
@@ -22,5 +23,65 @@ final class ConfigBootstrapTest: XCTestCase {
         XCTAssertEqual(bindingMap["alt-shift-m"], "fullscreen")
         XCTAssertNil(bindingMap["alt-slash"])
         XCTAssertNil(bindingMap["alt-comma"])
+    }
+
+    func testEnsureBootstrapConfigCopiesLegacyConfig() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appending(path: "AeroSpaceTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let legacyUrl = tempDir.appending(path: "legacy.toml")
+        let targetUrl = tempDir.appending(path: "winmux.toml")
+        let legacyText = """
+            config-version = 2
+
+            [mode.main.binding]
+            alt-h = 'focus left'
+            """
+        try legacyText.write(to: legacyUrl, atomically: true, encoding: .utf8)
+
+        let didMaterialize = try materializeBootstrapConfigIfNeeded(
+            targetUrl: targetUrl,
+            existingLegacyUrls: [legacyUrl],
+        )
+
+        XCTAssertTrue(didMaterialize)
+        let copiedText = try String(contentsOf: targetUrl, encoding: .utf8)
+        XCTAssertEqual(copiedText, legacyText)
+    }
+
+    func testEnsureBootstrapConfigPrefersFirstLegacyConfigWithoutFailing() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appending(path: "AeroSpaceTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let preferredLegacyUrl = tempDir.appending(path: "preferred.toml")
+        let secondaryLegacyUrl = tempDir.appending(path: "secondary.toml")
+        let targetUrl = tempDir.appending(path: "winmux.toml")
+        let preferredText = """
+            config-version = 2
+
+            [mode.main.binding]
+            alt-h = 'focus left'
+            """
+        let secondaryText = """
+            config-version = 2
+
+            [mode.main.binding]
+            alt-l = 'focus right'
+            """
+        try preferredText.write(to: preferredLegacyUrl, atomically: true, encoding: .utf8)
+        try secondaryText.write(to: secondaryLegacyUrl, atomically: true, encoding: .utf8)
+
+        let didMaterialize = try materializeBootstrapConfigIfNeeded(
+            targetUrl: targetUrl,
+            existingLegacyUrls: [preferredLegacyUrl, secondaryLegacyUrl],
+        )
+
+        XCTAssertTrue(didMaterialize)
+        let copiedText = try String(contentsOf: targetUrl, encoding: .utf8)
+        XCTAssertEqual(copiedText, preferredText)
     }
 }

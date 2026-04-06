@@ -669,7 +669,7 @@ struct ShortcutGeneralView: View {
                             Button("Reload Config") { reloadConfigAction() }
                         }
                         
-                        Text("Shortcuts are edited here. Advanced configuration remains in `aerospace.toml`.")
+                        Text("Shortcuts are edited here. Advanced configuration remains in `winmux.toml`.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
