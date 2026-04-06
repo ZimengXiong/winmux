@@ -127,17 +127,15 @@ xattr -dr com.apple.quarantine /Applications/WinMux.app/
 
 ## Migrating
 ### From AeroSpace
-If `~/.config/winmux/winmux.toml` already exists, WinMux uses it as-is.
+If `~/.config/winmux/winmux.toml` already exists, WinMux uses it as-is. It is a standard Aerospace config.
 
 If it does not exist and an AeroSpace config exists, WinMux imports that config into `~/.config/winmux/winmux.toml` and uses it.
 
-If neither exists, WinMux creates a new opinionated WinMux config with the bundled defaults.
+If neither exists, WinMux creates a new WinMux config with the bundled defaults.
 
 After importing an AeroSpace config, add the WinMux-specific features you want with a block like this:
 
 ```toml
-auto-reload-config = true
-
 window-tabs.enabled = true
 window-tabs.height = 34
 
@@ -149,9 +147,6 @@ window-tabs.height = 34
     show-status-pills = true
     show-date = true
 ```
-
-That block only covers WinMux-specific options. It leaves your existing AeroSpace-style layout and gap configuration alone.
-
 ## Release Build
 Release builds use XcodeGen/Xcode
 

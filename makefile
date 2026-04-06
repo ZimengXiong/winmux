@@ -5,9 +5,10 @@ RELEASE_DIR ?= .release
 RELEASE_TAG ?= v$(VERSION)
 RELEASE_NOTES ?= auto
 PUBLISH ?= 1
+APP_INSTALL_DIR ?= /Applications
 ARGS ?=
 
-.PHONY: generate xcodeproj build build-clean run run-clean cli release clean
+.PHONY: generate xcodeproj build build-clean run run-clean cli release install installed clean
 
 generate:
 	/bin/bash -lc 'cd "$(CURDIR)" && \
@@ -116,6 +117,25 @@ release:
 	else \
 	    echo "warning: gh is not installed; built $$zip_path but did not publish a GitHub release" >&2; \
 	fi'
+
+install:
+	$(MAKE) release VERSION="$(VERSION)" CODESIGN_IDENTITY="$(CODESIGN_IDENTITY)" DEVELOPMENT_TEAM="$(DEVELOPMENT_TEAM)" PUBLISH=0
+	/bin/bash -lc 'cd "$(CURDIR)" && \
+	set -euo pipefail && \
+	app_name="WinMux"; \
+	release_dir="$(RELEASE_DIR)"; \
+	app_path="$$release_dir/$$app_name-$(VERSION).xcarchive/Products/Applications/$$app_name.app"; \
+	install_dir="$(APP_INSTALL_DIR)"; \
+	install_path="$$install_dir/$$app_name.app"; \
+	test -d "$$app_path"; \
+	mkdir -p "$$install_dir"; \
+	osascript -e "tell application \"$$app_name\" to quit" >/dev/null 2>&1 || true; \
+	rm -rf "$$install_path"; \
+	ditto "$$app_path" "$$install_path"; \
+	xattr -dr com.apple.quarantine "$$install_path" >/dev/null 2>&1 || true; \
+	open "$$install_path"'
+
+installed: install
 
 clean:
 	/bin/bash -lc 'cd "$(CURDIR)" && rm -rf .build .debug .deps .derived "$(RELEASE_DIR)" WinMux.xcodeproj'
