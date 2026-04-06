@@ -93,6 +93,7 @@ If no custom config is found, AeroSpace will load the default config.
 If the key is omitted in the custom config, it falls back to the value in the default config, unless it's stated otherwise for the specific keys. Namely:
 
 * `mode.*.binding`. It falls back to the empty TOML table. Your config is the source of truth for keyboard bindings. You must explicitly mention all the keyboard bindings and <<binding-modes,binding modes>> in your config.
+* `mode.*.binding-tap`. It falls back to the empty TOML table. Use it for side-specific modifier keys tapped alone (for example `left-alt` or `right-cmd`).
 * `on-focused-monitor-changed`. It falls back to the empty TOML array.
 * `exec` TOML table. See: <<exec-env-vars>> (It's so boring and verbose, I don't even want to mention it in the `default-config.toml`)
 
@@ -134,6 +135,15 @@ Working with binding modes consists of two parts:
 [mode.resize.binding]          # 2. Declare 'resize' binding mode
     minus = 'resize smart -50'
     equal = 'resize smart +50'
+----
+
+You can also bind side-specific modifiers when they are tapped alone:
+
+[source,toml]
+----
+[mode.main.binding-tap]
+    left-alt = 'exec-and-forget open -na "Google Chrome"'
+    right-cmd = 'exec-and-forget open -na "Safari"'
 ----
 
 [#commands]

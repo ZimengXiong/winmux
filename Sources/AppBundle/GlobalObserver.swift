@@ -43,6 +43,24 @@ enum GlobalObserver {
         }
     }
 
+    private static func onKeyDown(_ event: NSEvent) {
+        let modifierFlags = event.modifierFlags
+        let keyCode = event.keyCode
+        Task { @MainActor in
+            noteTapBindingKeyDown()
+            if modifierFlags.contains(.control), keyCode == 34 { // 'i' key
+                ExposePanel.shared.toggle()
+            }
+        }
+    }
+
+    private static func onFlagsChanged(_ event: NSEvent) {
+        let keyCode = event.keyCode
+        Task { @MainActor in
+            noteTapBindingFlagsChanged(keyCode: keyCode)
+        }
+    }
+
     @MainActor
     static func initObserver() {
         let nc = NSWorkspace.shared.notificationCenter
@@ -82,19 +100,16 @@ enum GlobalObserver {
             }
         }
 
-        // Ctrl+I: Toggle Exposé overview
-        NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
-            if event.modifierFlags.contains(.control), event.keyCode == 34 { // 'i' key
-                Task { @MainActor in
-                    ExposePanel.shared.toggle()
-                }
-            }
+        NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged, handler: onFlagsChanged)
+        NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
+            onFlagsChanged(event)
+            return event
         }
+
+        NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: onKeyDown)
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            onKeyDown(event)
             if event.modifierFlags.contains(.control), event.keyCode == 34 {
-                Task { @MainActor in
-                    ExposePanel.shared.toggle()
-                }
                 return nil // consume the event
             }
             return event

@@ -5,6 +5,9 @@ import HotKey
 import TOMLKit
 
 @MainActor private var hotkeys: [String: HotKey] = [:]
+@MainActor private var activeTapBindings: [TapModifierKey: TapBinding] = [:]
+@MainActor private var pendingTapBindings: [TapModifierKey: TapBinding] = [:]
+@MainActor private var pressedTapModifiers: Set<TapModifierKey> = []
 
 @MainActor func resetHotKeys() {
     // Explicitly unregister all hotkeys. We cannot always rely on destruction of the HotKey object to trigger
@@ -13,6 +16,9 @@ import TOMLKit
         key.isEnabled = false
     }
     hotkeys = [:]
+    activeTapBindings = [:]
+    pendingTapBindings = [:]
+    pressedTapModifiers = []
 }
 
 extension HotKey {
@@ -29,23 +35,17 @@ extension HotKey {
 @MainActor var activeMode: String? = mainModeId
 @MainActor func activateMode(_ targetMode: String?) async throws {
     let targetBindings = targetMode.flatMap { config.modes[$0] }?.bindings ?? [:]
+    activeTapBindings = targetMode
+        .flatMap { config.modes[$0] }?
+        .tapBindings
+        .values
+        .reduce(into: [:]) { $0[$1.trigger] = $1 } ?? [:]
+    pendingTapBindings = [:]
+    pressedTapModifiers = []
     for binding in targetBindings.values where !hotkeys.keys.contains(binding.descriptionWithKeyCode) {
         hotkeys[binding.descriptionWithKeyCode] = HotKey(key: binding.keyCode, modifiers: binding.modifiers, keyDownHandler: {
-            Task {
-                if let activeMode {
-                    broadcastEvent(.bindingTriggered(
-                        mode: activeMode,
-                        binding: binding.descriptionWithKeyNotation,
-                    ))
-                    let commands = config.modes[activeMode]?.bindings[binding.descriptionWithKeyCode]?.commands ?? []
-                    try await runLightSession(
-                        .hotkeyBinding,
-                        .checkServerIsEnabledOrDie(),
-                        shouldSchedulePostRefresh: !commands.canSkipPostCommandRefresh
-                    ) { () throws in
-                        _ = try await commands.runCmdSeq(.defaultEnv, .emptyStdin)
-                    }
-                }
+            Task { @MainActor in
+                triggerBinding(binding.descriptionWithKeyNotation, binding.commands)
             }
         })
     }
@@ -66,6 +66,48 @@ extension HotKey {
                 _ = try await config.onModeChanged.runCmdSeq(.defaultEnv, .emptyStdin)
             }
         }
+    }
+}
+
+@MainActor private func triggerBinding(_ binding: String, _ commands: [any Command]) {
+    Task {
+        if let activeMode {
+            broadcastEvent(.bindingTriggered(
+                mode: activeMode,
+                binding: binding,
+            ))
+            try await runLightSession(
+                .hotkeyBinding,
+                .checkServerIsEnabledOrDie(),
+                shouldSchedulePostRefresh: !commands.canSkipPostCommandRefresh
+            ) { () throws in
+                _ = try await commands.runCmdSeq(.defaultEnv, .emptyStdin)
+            }
+        }
+    }
+}
+
+@MainActor func noteTapBindingKeyDown() {
+    pendingTapBindings = [:]
+}
+
+@MainActor func noteTapBindingFlagsChanged(keyCode: UInt16) {
+    if activeTapBindings.isEmpty && pendingTapBindings.isEmpty { return }
+    guard let tapModifier = TapModifierKey(keyCode: keyCode) else { return }
+
+    if pressedTapModifiers.contains(tapModifier) {
+        pressedTapModifiers.remove(tapModifier)
+        if let binding = pendingTapBindings.removeValue(forKey: tapModifier) {
+            triggerBinding(binding.descriptionWithKeyNotation, binding.commands)
+        }
+        return
+    }
+
+    let hadOtherPressedModifiers = !pressedTapModifiers.isEmpty
+    pressedTapModifiers.insert(tapModifier)
+    pendingTapBindings = [:]
+    if !hadOtherPressedModifiers, let binding = activeTapBindings[tapModifier] {
+        pendingTapBindings[tapModifier] = binding
     }
 }
 

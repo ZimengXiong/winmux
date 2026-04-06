@@ -6,7 +6,7 @@ private let windowTabDropPreviewPanelId = "AeroSpace.windowTabs.dropPreview"
 private let windowDragCursorProxyPanelId = "AeroSpace.windowTabs.cursorProxy"
 private let windowPreviewCornerAlphaThreshold: CGFloat = 0.3
 private let windowPreviewCornerScanLimit = 48
-private let windowTabDropPreviewTransitionDuration: TimeInterval = 0.12
+private let windowTabDropPreviewTransitionDuration: TimeInterval = 0.16
 private let windowDragCursorProxyFollowInterval: TimeInterval = 1.0 / 60.0
 
 @MainActor
@@ -176,6 +176,7 @@ final class WindowTabDropPreviewPanel: NSPanelHud {
     static let shared = WindowTabDropPreviewPanel()
 
     private let hostingView = NSHostingView(rootView: AnyView(EmptyView()))
+    private let state = WindowTabDropPreviewState()
     private var currentContent: WindowTabDropPreviewContent? = nil
     private var hasShownPreview = false
 
@@ -190,33 +191,42 @@ final class WindowTabDropPreviewPanel: NSPanelHud {
         backgroundColor = .clear
         level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue + 2)
         contentView = hostingView
+        hostingView.rootView = AnyView(WindowTabDropPreviewView(state: state))
         hostingView.frame = contentView?.bounds ?? .zero
         hostingView.autoresizingMask = [.width, .height]
     }
 
     func show(_ preview: WindowTabDropPreviewViewModel) {
         let nextContent = WindowTabDropPreviewContent(model: preview)
-        if currentContent != nextContent {
-            hostingView.rootView = AnyView(WindowTabDropPreviewView(model: preview))
+        let didChangeContent = currentContent != nextContent
+        if didChangeContent {
             currentContent = nextContent
         }
-        let targetFrame = preview.frame.alignedToBackingPixels()
+        state.model = preview
+        let targetFrame = preview.containerFrame.alignedToBackingPixels()
         if hasShownPreview {
+            if didChangeContent {
+                alphaValue = 0.92
+            }
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = windowTabDropPreviewTransitionDuration
                 context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                 animator().setFrame(targetFrame, display: true)
+                animator().alphaValue = 1
             }
         } else {
             setFrame(targetFrame, display: true, animate: false)
+            alphaValue = 1
             hasShownPreview = true
         }
         orderFrontRegardless()
     }
 
     func hide() {
+        state.model = nil
         currentContent = nil
         hasShownPreview = false
+        alphaValue = 1
         orderOut(nil)
     }
 }
@@ -371,7 +381,13 @@ private struct WindowTabDropPreviewContent: Equatable {
     }
 }
 
+@MainActor
+private final class WindowTabDropPreviewState: ObservableObject {
+    @Published var model: WindowTabDropPreviewViewModel? = nil
+}
+
 struct WindowTabDropPreviewViewModel: Equatable {
+    let containerFrame: CGRect
     let frame: CGRect
     let title: String
     let subtitle: String
@@ -550,6 +566,30 @@ private func finishMoveFromTabStrip() {
 private let windowTabStripCornerRadius: CGFloat = 10
 private let windowTabItemCornerRadius: CGFloat = 6
 private let windowTabPreviewCornerRadius: CGFloat = 8
+private let windowTabStripContentHorizontalPadding: CGFloat = 4
+private let windowTabStripGroupHandleWidth: CGFloat = 24
+
+func windowTabStripContentPadding() -> CGFloat {
+    windowTabStripContentHorizontalPadding
+}
+
+func windowTabStripReservedGroupHandleWidth() -> CGFloat {
+    windowTabStripGroupHandleWidth
+}
+
+func windowTabStripAvailableTabsWidth(stripWidth: CGFloat) -> CGFloat {
+    max(
+        0,
+        stripWidth
+            - (windowTabStripReservedGroupHandleWidth() * 2)
+            - (windowTabStripContentHorizontalPadding * 2),
+    )
+}
+
+func windowTabStripTabWidth(stripWidth: CGFloat, count: Int) -> CGFloat {
+    let effectiveCount = max(count, 1)
+    return max(120, min(220, windowTabStripAvailableTabsWidth(stripWidth: stripWidth) / CGFloat(effectiveCount)))
+}
 
 // MARK: - Tab Strip View (manages reorder drag state for all tabs)
 
@@ -565,10 +605,11 @@ private struct WindowTabStripView: View {
     var body: some View {
         let count = max(strip.tabs.count, 1)
         let stripWidth = strip.frame.width
-        let tabWidth = max(120, min(220, (stripWidth - 12) / CGFloat(count)))
+        let tabWidth = windowTabStripTabWidth(stripWidth: stripWidth, count: count)
         let itemHeight = max(strip.frame.height - 6, 22)
         let effectiveTabWidth = tabWidth + 2 // include HStack spacing
         let stripCornerRadius = activeWindowTabStripCornerRadius
+        let groupDragWindowId = strip.tabs.first(where: \.isActive)?.windowId ?? strip.tabs.first?.windowId
 
         let draggingIndex = draggingTabId.flatMap { id in strip.tabs.firstIndex(where: { $0.windowId == id }) }
         let targetIndex: Int? = draggingIndex.map { srcIdx in
@@ -576,66 +617,73 @@ private struct WindowTabStripView: View {
             return max(0, min(srcIdx + delta, strip.tabs.count - 1))
         }
 
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 2) {
-                ForEach(strip.tabs) { tab in
-                    WindowTabItemView(
-                        tab: tab,
-                        width: tabWidth,
-                        height: itemHeight,
-                        isDragSource: draggingTabId == tab.windowId,
-                    )
-                    .offset(x: tabVisualOffset(
-                        for: tab,
-                        draggingIndex: draggingIndex,
-                        targetIndex: targetIndex,
-                        effectiveTabWidth: effectiveTabWidth,
-                    ))
-                    .zIndex(draggingTabId == tab.windowId ? 1 : 0)
-                    .shadow(
-                        color: draggingTabId == tab.windowId ? Color.black.opacity(0.12) : Color.clear,
-                        radius: draggingTabId == tab.windowId ? 6 : 0,
-                        y: draggingTabId == tab.windowId ? 2 : 0,
-                    )
-                    .animation(.interactiveSpring(response: 0.2, dampingFraction: 0.8), value: targetIndex)
-                    .highPriorityGesture(
-                        DragGesture(minimumDistance: 8)
-                            .onChanged { value in
-                                if hasCommittedToDetach {
-                                    updateDetachedTabFromTabStrip(tab.windowId)
-                                    return
+        HStack(spacing: 0) {
+            windowTabStripGroupHandle(windowId: groupDragWindowId)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 2) {
+                    ForEach(strip.tabs) { tab in
+                        WindowTabItemView(
+                            tab: tab,
+                            width: tabWidth,
+                            height: itemHeight,
+                            isDragSource: draggingTabId == tab.windowId,
+                        )
+                        .offset(x: tabVisualOffset(
+                            for: tab,
+                            draggingIndex: draggingIndex,
+                            targetIndex: targetIndex,
+                            effectiveTabWidth: effectiveTabWidth,
+                        ))
+                        .zIndex(draggingTabId == tab.windowId ? 1 : 0)
+                        .shadow(
+                            color: draggingTabId == tab.windowId ? Color.black.opacity(0.12) : Color.clear,
+                            radius: draggingTabId == tab.windowId ? 6 : 0,
+                            y: draggingTabId == tab.windowId ? 2 : 0,
+                        )
+                        .animation(.interactiveSpring(response: 0.2, dampingFraction: 0.8), value: targetIndex)
+                        .highPriorityGesture(
+                            DragGesture(minimumDistance: 8)
+                                .onChanged { value in
+                                    if hasCommittedToDetach {
+                                        updateDetachedTabFromTabStrip(tab.windowId)
+                                        return
+                                    }
+
+                                    let dy = value.translation.height
+
+                                    // If vertical drag exceeds threshold, commit to detach
+                                    if abs(dy) > tabReorderVerticalEscapeThreshold, strip.tabs.count > 1 {
+                                        hasCommittedToDetach = true
+                                        draggingTabId = nil
+                                        dragTranslationX = 0
+                                        updateDetachedTabFromTabStrip(tab.windowId)
+                                        return
+                                    }
+
+                                    draggingTabId = tab.windowId
+                                    dragTranslationX = value.translation.width
                                 }
-
-                                let dy = value.translation.height
-
-                                // If vertical drag exceeds threshold, commit to detach
-                                if abs(dy) > tabReorderVerticalEscapeThreshold, strip.tabs.count > 1 {
-                                    hasCommittedToDetach = true
+                                .onEnded { _ in
+                                    if hasCommittedToDetach {
+                                        hasCommittedToDetach = false
+                                        Task { @MainActor in
+                                            try? await resetManipulatedWithMouseIfPossible()
+                                        }
+                                    } else if let srcIdx = draggingIndex, let tgtIdx = targetIndex, srcIdx != tgtIdx {
+                                        reorderTabInStrip(tab.windowId, toIndex: tgtIdx)
+                                    }
                                     draggingTabId = nil
                                     dragTranslationX = 0
-                                    updateDetachedTabFromTabStrip(tab.windowId)
-                                    return
-                                }
-
-                                draggingTabId = tab.windowId
-                                dragTranslationX = value.translation.width
-                            }
-                            .onEnded { _ in
-                                if hasCommittedToDetach {
-                                    hasCommittedToDetach = false
-                                    Task { @MainActor in
-                                        try? await resetManipulatedWithMouseIfPossible()
-                                    }
-                                } else if let srcIdx = draggingIndex, let tgtIdx = targetIndex, srcIdx != tgtIdx {
-                                    reorderTabInStrip(tab.windowId, toIndex: tgtIdx)
-                                }
-                                draggingTabId = nil
-                                dragTranslationX = 0
-                            },
-                    )
+                                },
+                        )
+                    }
                 }
+                .padding(.horizontal, windowTabStripContentHorizontalPadding)
             }
-            .padding(.horizontal, 4)
+            .frame(maxWidth: .infinity)
+
+            windowTabStripGroupHandle(windowId: groupDragWindowId)
         }
         .padding(.vertical, 3)
         .frame(width: stripWidth, height: strip.frame.height)
@@ -648,17 +696,6 @@ private struct WindowTabStripView: View {
                         .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
                 }
                 .shadow(color: Color.black.opacity(0.05), radius: 4, y: 2),
-        )
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 10)
-                .onChanged { _ in
-                    if let activeTab = strip.tabs.first(where: \.isActive) ?? strip.tabs.first {
-                        updateMoveFromTabStrip(activeTab.windowId)
-                    }
-                }
-                .onEnded { _ in
-                    finishMoveFromTabStrip()
-                },
         )
     }
 
@@ -703,6 +740,23 @@ private struct WindowTabStripView: View {
         }
 
         return 0
+    }
+
+    @ViewBuilder
+    private func windowTabStripGroupHandle(windowId: UInt32?) -> some View {
+        Color.clear
+            .frame(width: windowTabStripReservedGroupHandleWidth())
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 10)
+                    .onChanged { _ in
+                        guard let windowId else { return }
+                        updateMoveFromTabStrip(windowId)
+                    }
+                    .onEnded { _ in
+                        finishMoveFromTabStrip()
+                    },
+            )
     }
 }
 
@@ -777,34 +831,52 @@ private struct WindowTabItemView: View {
 
 private struct WindowTabDropPreviewView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    let model: WindowTabDropPreviewViewModel
+    @ObservedObject var state: WindowTabDropPreviewState
     @State private var isPresented = false
 
     var body: some View {
-        let cfg = borderConfig(for: model.style)
-        let cornerRadius = model.referenceWindowId.map(estimatedWindowPreviewCornerRadius) ?? cfg.cornerRadius
-        let shape = WindowTabDropOutlineShape(cornerRadii: model.geometry.cornerRadii(radius: cornerRadius))
+        GeometryReader { _ in
+            ZStack(alignment: .topLeading) {
+                if let model = state.model {
+                    let cfg = borderConfig(for: model.style)
+                    let cornerRadius = model.referenceWindowId.map(estimatedWindowPreviewCornerRadius) ?? cfg.cornerRadius
+                    let shape = WindowTabDropOutlineShape(cornerRadii: model.geometry.cornerRadii(radius: cornerRadius))
+                    let localFrame = localPreviewFrame(for: model)
 
-        shape
-            .fill(
-                cfg.color.opacity(isPresented ? cfg.fillOpacity : 0),
-            )
-            .overlay {
-                shape
-                    .strokeBorder(
-                        cfg.color.opacity(isPresented ? cfg.borderOpacity : 0.08),
-                        style: cfg.strokeStyle,
-                    )
-            }
-            .opacity(isPresented ? 1 : 0.82)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.clear)
-            .compositingGroup()
-            .onAppear {
-                withAnimation(reduceMotion ? .easeOut(duration: 0.08) : .easeOut(duration: 0.12)) {
-                    isPresented = true
+                    shape
+                        .fill(
+                            cfg.color.opacity(isPresented ? cfg.fillOpacity : 0),
+                        )
+                        .overlay {
+                            shape
+                                .strokeBorder(
+                                    cfg.color.opacity(isPresented ? cfg.borderOpacity : 0.08),
+                                    style: cfg.strokeStyle,
+                                )
+                        }
+                        .frame(width: localFrame.width, height: localFrame.height)
+                        .offset(x: localFrame.minX, y: localFrame.minY)
+                        .opacity(isPresented ? 1 : 0.82)
                 }
             }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.clear)
+        .compositingGroup()
+        .animation(previewAnimation, value: state.model?.frame)
+        .animation(previewAnimation, value: state.model?.containerFrame)
+        .animation(previewAnimation, value: state.model?.style)
+        .animation(previewAnimation, value: state.model?.geometry)
+        .animation(previewAnimation, value: state.model?.referenceWindowId)
+        .onAppear {
+            withAnimation(reduceMotion ? .easeOut(duration: 0.08) : .easeOut(duration: 0.12)) {
+                isPresented = true
+            }
+        }
+    }
+
+    private var previewAnimation: Animation {
+        reduceMotion ? .easeOut(duration: 0.08) : .easeInOut(duration: windowTabDropPreviewTransitionDuration)
     }
 
     private struct BorderConfig {
@@ -867,6 +939,17 @@ private struct WindowTabDropPreviewView: View {
                 )
         }
     }
+
+    private func localPreviewFrame(for model: WindowTabDropPreviewViewModel) -> CGRect {
+        let localMinX = model.frame.minX - model.containerFrame.minX
+        let localMinY = model.containerFrame.height - (model.frame.maxY - model.containerFrame.minY)
+        return CGRect(
+            x: localMinX,
+            y: localMinY,
+            width: model.frame.width,
+            height: model.frame.height
+        )
+    }
 }
 
 private struct PreviewCornerRadii {
@@ -881,8 +964,25 @@ private struct PreviewCornerRadii {
 }
 
 private struct WindowTabDropOutlineShape: InsettableShape {
-    let cornerRadii: PreviewCornerRadii
+    var cornerRadii: PreviewCornerRadii
     var insetAmount: CGFloat = 0
+
+    var animatableData: AnimatablePair<AnimatablePair<CGFloat, CGFloat>, AnimatablePair<CGFloat, CGFloat>> {
+        get {
+            AnimatablePair(
+                AnimatablePair(cornerRadii.topLeft, cornerRadii.topRight),
+                AnimatablePair(cornerRadii.bottomRight, cornerRadii.bottomLeft)
+            )
+        }
+        set {
+            cornerRadii = PreviewCornerRadii(
+                topLeft: newValue.first.first,
+                topRight: newValue.first.second,
+                bottomRight: newValue.second.first,
+                bottomLeft: newValue.second.second
+            )
+        }
+    }
 
     func path(in rect: CGRect) -> Path {
         let insetRect = rect.insetBy(dx: insetAmount, dy: insetAmount)

@@ -4,8 +4,9 @@ import TOMLKit
 
 struct Mode: ConvenienceCopyable, Equatable, Sendable {
     var bindings: [String: HotkeyBinding]
+    var tapBindings: [String: TapBinding]
 
-    static let zero = Mode(bindings: [:])
+    static let zero = Mode(bindings: [:], tapBindings: [:])
 }
 
 func parseModes(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace, _ errors: inout [TomlParseError], _ mapping: [String: Key]) -> [String: Mode] {
@@ -35,6 +36,8 @@ func parseMode(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace, _ errors
         switch key {
             case "binding":
                 result.bindings = parseBindings(value, backtrace, &errors, mapping)
+            case "binding-tap":
+                result.tapBindings = parseTapBindings(value, backtrace, &errors)
             default:
                 errors += [unknownKeyError(backtrace)]
         }

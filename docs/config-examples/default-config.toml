@@ -116,6 +116,8 @@ on-mode-changed = []
     # - Arrows.         left, down, up, right
 
     # All possible modifiers: cmd, alt, ctrl, shift
+    # Use [mode.<name>.binding-tap] for side-specific modifiers tapped alone:
+    # left-alt, right-alt, left-cmd, right-cmd, left-ctrl, right-ctrl, left-shift, right-shift
 
     # All possible commands: https://nikitabobko.github.io/AeroSpace/commands
 

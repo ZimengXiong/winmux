@@ -530,7 +530,7 @@ final class WindowTabsTest: XCTestCase {
 
         let fullRect = window.lastAppliedLayoutPhysicalRect.orDie()
         let tabPreview = window.tabDropZoneRect.orDie()
-        let expectedTabBandHeight = min(max(CGFloat(config.windowTabs.height) + 8, 36), fullRect.height)
+        let expectedTabBandHeight = min(max(CGFloat(config.windowTabs.height) + 18, 56), fullRect.height)
 
         XCTAssertEqual(tabPreview.minX, fullRect.minX + 1)
         XCTAssertEqual(tabPreview.maxX, fullRect.maxX - 1)
@@ -629,6 +629,44 @@ final class WindowTabsTest: XCTestCase {
             targetWindow: target,
             detachOrigin: .tabStrip,
         ))
+    }
+
+    @MainActor
+    func testSameAccordionTabStripReentryPrioritizesTabTakeBackIntent() {
+        setUpWorkspacesForTests()
+        clearPendingWindowDragIntent()
+        config.windowTabs.enabled = true
+
+        let workspace = Workspace.get(byName: "tabs")
+        XCTAssertTrue(workspace.focusWorkspace())
+        let accordion = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let source = TestWindow.new(id: 1, parent: accordion)
+        let target = TestWindow.new(id: 2, parent: accordion)
+        accordion.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
+        source.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
+        target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
+
+        let mouseLocation = accordion.windowTabDropInteractionRect.orDie().center
+
+        XCTAssertTrue(updatePendingWindowDragIntent(
+            sourceWindow: source,
+            mouseLocation: mouseLocation,
+            subject: .window,
+            detachOrigin: .tabStrip,
+        ))
+
+        let pendingIntent = debugPendingWindowDragIntentSummary().orDie()
+        let expectedPreviewRect = accordion.windowTabDropZoneRect.orDie()
+        let expectedInteractionRect = accordion.windowTabDropInteractionRect.orDie()
+        XCTAssertEqual(pendingIntent.kind, .tabStack(targetWindowId: target.windowId))
+        XCTAssertEqual(pendingIntent.previewRect.topLeftX, expectedPreviewRect.topLeftX)
+        XCTAssertEqual(pendingIntent.previewRect.topLeftY, expectedPreviewRect.topLeftY)
+        XCTAssertEqual(pendingIntent.previewRect.width, expectedPreviewRect.width)
+        XCTAssertEqual(pendingIntent.previewRect.height, expectedPreviewRect.height)
+        XCTAssertEqual(pendingIntent.interactionRect.topLeftX, expectedInteractionRect.topLeftX)
+        XCTAssertEqual(pendingIntent.interactionRect.topLeftY, expectedInteractionRect.topLeftY)
+        XCTAssertEqual(pendingIntent.interactionRect.width, expectedInteractionRect.width)
+        XCTAssertEqual(pendingIntent.interactionRect.height, expectedInteractionRect.height)
     }
 
     @MainActor
@@ -769,6 +807,32 @@ final class WindowTabsTest: XCTestCase {
         ))
 
         XCTAssertEqual(focus.windowOrNil, source)
+    }
+
+    @MainActor
+    func testApplyWindowSwapDragIntentRejectsSelfAccordionTabStripDrags() {
+        setUpWorkspacesForTests()
+        let previousDetachOrigin = getCurrentMouseTabDetachOrigin()
+        setCurrentMouseTabDetachOrigin(.tabStrip)
+        defer { setCurrentMouseTabDetachOrigin(previousDetachOrigin) }
+
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let source = TestWindow.new(id: 1, parent: accordion)
+        let target = TestWindow.new(id: 2, parent: accordion)
+
+        XCTAssertFalse(applyWindowSwapDragIntent(
+            sourceWindow: source,
+            sourceSubject: .window,
+            targetWindow: target,
+        ))
+        assertEquals(root.layoutDescription, .h_tiles([
+            .v_accordion([
+                .window(1),
+                .window(2),
+            ]),
+        ]))
     }
 
     @MainActor
@@ -1280,6 +1344,17 @@ final class WindowTabsTest: XCTestCase {
             detachOrigin: .window,
             startedInSidebar: false,
         ))
+    }
+
+    func testWindowTabStripLayoutReservesGroupDragHandleGutters() {
+        let stripWidth: CGFloat = 360
+        let expectedTabsWidth = stripWidth
+            - (windowTabStripReservedGroupHandleWidth() * 2)
+            - (windowTabStripContentPadding() * 2)
+
+        XCTAssertEqual(windowTabStripAvailableTabsWidth(stripWidth: stripWidth), expectedTabsWidth)
+        XCTAssertEqual(windowTabStripTabWidth(stripWidth: stripWidth, count: 1), 220)
+        XCTAssertLessThan(windowTabStripAvailableTabsWidth(stripWidth: stripWidth), stripWidth)
     }
 
     func testWindowTabStripDragInProgressIgnoresRegularWindowMove() {

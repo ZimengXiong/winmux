@@ -10,10 +10,11 @@ struct ConfigCommand: Command {
             case .getKey(let key):
                 return getKey(io, args: args, key: key)
             case .majorKeys:
+                let modeKeys = config.modes.keys.sorted().flatMap { ["mode.\($0).binding", "mode.\($0).binding-tap"] }
                 let out = """
                     .
                     mode
-                    \(config.modes.keys.map { "mode.\($0).binding" }.joined(separator: "\n"))
+                    \(modeKeys.joined(separator: "\n"))
                     """
                 return io.out(out)
             case .allKeys:
@@ -149,7 +150,15 @@ extension [Command] {
             keyNotationToScript[binding.descriptionWithKeyNotation] =
                 .scalar(.string(binding.commands.prettyDescription))
         }
-        return .map(["binding": .map(keyNotationToScript)])
+        var tapKeyNotationToScript: [String: ConfigMapValue] = [:]
+        for binding in mode.tapBindings.values {
+            tapKeyNotationToScript[binding.descriptionWithKeyNotation] =
+                .scalar(.string(binding.commands.prettyDescription))
+        }
+        return .map([
+            "binding": .map(keyNotationToScript),
+            "binding-tap": .map(tapKeyNotationToScript),
+        ])
     }
     return .map(["mode": .map(mode)])
 }

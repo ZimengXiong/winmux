@@ -87,7 +87,28 @@ final class ConfigTest: XCTestCase {
         let binding = HotkeyBinding(.option, .h, [FocusCommand.new(direction: .left)])
         assertEquals(
             config.modes[mainModeId],
-            Mode(bindings: [binding.descriptionWithKeyCode: binding]),
+            Mode(bindings: [binding.descriptionWithKeyCode: binding], tapBindings: [:]),
+        )
+    }
+
+    func testParseTapBindings() {
+        let (config, errors) = parseConfig(
+            """
+            [mode.main.binding-tap]
+                left-alt = 'focus left'
+                right-cmd = 'workspace 2'
+            """,
+        )
+        assertEquals(errors, [])
+        assertEquals(
+            config.modes[mainModeId],
+            Mode(
+                bindings: [:],
+                tapBindings: [
+                    "left-alt": TapBinding(.leftAlt, [FocusCommand.new(direction: .left)]),
+                    "right-cmd": TapBinding(.rightCmd, [WorkspaceCommand(args: WorkspaceCmdArgs(target: .direct(.parse("2").getOrDie())))]),
+                ],
+            ),
         )
     }
 
@@ -124,8 +145,24 @@ final class ConfigTest: XCTestCase {
         let binding = HotkeyBinding(.option, .k, [FocusCommand.new(direction: .up)])
         assertEquals(
             config.modes[mainModeId],
-            Mode(bindings: [binding.descriptionWithKeyCode: binding]),
+            Mode(bindings: [binding.descriptionWithKeyCode: binding], tapBindings: [:]),
         )
+    }
+
+    func testTapBindingParseError() {
+        let (config, errors) = parseConfig(
+            """
+            [mode.main.binding-tap]
+                unicorn = 'focus left'
+            """,
+        )
+        assertEquals(
+            errors.descriptions,
+            [
+                "mode.main.binding-tap.unicorn: Unsupported tap binding key 'unicorn'. Supported keys: left-alt, right-alt, left-cmd, right-cmd, left-ctrl, right-ctrl, left-shift, right-shift",
+            ],
+        )
+        assertEquals(config.modes[mainModeId], Mode(bindings: [:], tapBindings: [:]))
     }
 
     func testPermanentWorkspaceNames() {

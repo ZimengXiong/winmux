@@ -58,6 +58,13 @@ alt-1
 alt-2
 ...
 ----
+* List all tap bindings for 'main' binding mode:
++
+----
+$ aerospace config --get mode.main.binding-tap --keys
+left-alt
+right-cmd
+----
 * List all key bindings for 'main' binding mode in JSON format:
 +
 ----

@@ -2,6 +2,14 @@ import AppKit
 import Common
 
 private let windowDropPreviewInset: CGFloat = 1
+private let windowTabInsertPreviewExtraHeight: CGFloat = 18
+private let windowTabInsertPreviewMinHeight: CGFloat = 56
+private let windowTabInsertInteractionHorizontalInset: CGFloat = 24
+private let windowTabInsertInteractionTopInset: CGFloat = 12
+private let windowTabInsertInteractionBottomInset: CGFloat = 26
+private let windowTabInsertStickyTrackingHorizontalInset: CGFloat = 24
+private let windowTabInsertStickyTrackingTopInset: CGFloat = 20
+private let windowTabInsertStickyTrackingBottomInset: CGFloat = 36
 
 @MainActor
 private var pendingWindowDragIntent: PendingWindowDragIntent? = nil
@@ -25,6 +33,16 @@ private struct PendingWindowDragIntent {
     let previewStyle: WindowTabDropPreviewStyle
     let previewGeometry: WindowTabDropPreviewGeometry
     let isGroup: Bool
+}
+
+@MainActor
+func debugPendingWindowDragIntentSummary() -> (kind: WindowDragIntentKind, previewRect: Rect, interactionRect: Rect)? {
+    guard let pendingWindowDragIntent else { return nil }
+    return (
+        kind: pendingWindowDragIntent.kind,
+        previewRect: pendingWindowDragIntent.previewRect,
+        interactionRect: pendingWindowDragIntent.interactionRect,
+    )
 }
 
 enum WindowStackSplitPosition: Equatable {
@@ -121,6 +139,7 @@ enum TabDetachOrigin: Equatable {
 
 private struct WindowDragIntentDestination {
     let kind: WindowDragIntentKind
+    let previewContainerRect: Rect
     let previewRect: Rect
     let interactionRect: Rect
     let title: String
@@ -131,6 +150,7 @@ private struct WindowDragIntentDestination {
 
     func preview(sourceWindowId: UInt32) -> WindowTabDropPreviewViewModel {
         WindowTabDropPreviewViewModel(
+            containerFrame: previewContainerRect.toAppKitScreenRect,
             frame: previewRect.toAppKitScreenRect,
             title: title,
             subtitle: subtitle,
@@ -500,10 +520,43 @@ private func tabStackDestination(targetWindow: Window, mouseLocation: CGPoint? =
     else { return nil }
     return WindowDragIntentDestination(
         kind: .tabStack(targetWindowId: targetWindow.windowId),
+        previewContainerRect: targetWindow.windowDragVisibleRect ?? dropRect,
         previewRect: dropRect,
         interactionRect: interactionRect,
         title: "Insert Into Tabs",
         subtitle: "Drop near the top edge to add this window",
+        previewStyle: .tabInsert,
+        previewGeometry: .tabStrip,
+        isGroup: false,
+    )
+}
+
+@MainActor
+private func selfAccordionTabReentryDestination(
+    sourceWindow: Window,
+    targetWindow: Window,
+    mouseLocation: CGPoint,
+    subject: WindowDragSubject,
+    detachOrigin: TabDetachOrigin,
+) -> WindowDragIntentDestination? {
+    guard subject == .window,
+          detachOrigin == .tabStrip,
+          config.windowTabs.enabled,
+          let sourceParent = sourceWindow.parent as? TilingContainer,
+          sourceParent.layout == .accordion,
+          targetWindow.parent === sourceParent,
+          let previewRect = sourceParent.windowTabDropZoneRect,
+          let interactionRect = sourceParent.windowTabDropInteractionRect,
+          interactionRect.contains(mouseLocation)
+    else { return nil }
+
+    return WindowDragIntentDestination(
+        kind: .tabStack(targetWindowId: targetWindow.windowId),
+        previewContainerRect: sourceParent.windowDragVisibleRect ?? previewRect,
+        previewRect: previewRect,
+        interactionRect: interactionRect,
+        title: "Return To Tabs",
+        subtitle: "Drop to cancel the detach and put this tab back in the group",
         previewStyle: .tabInsert,
         previewGeometry: .tabStrip,
         isGroup: false,
@@ -518,6 +571,14 @@ private func swapDestination(
     subject: WindowDragSubject,
     detachOrigin: TabDetachOrigin,
 ) -> WindowDragIntentDestination? {
+    if shouldSuppressSameAccordionSwapDestination(
+        sourceWindow: sourceWindow,
+        targetWindow: targetWindow,
+        subject: subject,
+        detachOrigin: detachOrigin
+    ) {
+        return nil
+    }
     if shouldSuppressSwapDestination(sourceWindow: sourceWindow, subject: subject) {
         return nil
     }
@@ -540,6 +601,7 @@ private func swapDestination(
     let isTabGroup = targetNode is TilingContainer
     return WindowDragIntentDestination(
         kind: .swap(targetWindowId: targetWindow.windowId),
+        previewContainerRect: targetNode.windowDragVisibleRect ?? previewRect,
         previewRect: previewRect,
         interactionRect: interactionRect,
         title: isTabGroup ? "Swap With Tab Group" : "Swap Positions",
@@ -578,6 +640,7 @@ private func stackSplitDestination(
     guard mouseLocation.map(interactionRect.contains) ?? true else { return nil }
     return WindowDragIntentDestination(
         kind: .stackSplit(targetWindowId: targetWindow.windowId, position: position),
+        previewContainerRect: targetNode.windowDragVisibleRect ?? preview.rect,
         previewRect: preview.rect,
         interactionRect: interactionRect,
         title: position.title,
@@ -608,6 +671,15 @@ private func windowSurfaceDestination(
         subject: subject,
         detachOrigin: detachOrigin,
     )
+    if let reentryDestination = selfAccordionTabReentryDestination(
+        sourceWindow: sourceWindow,
+        targetWindow: targetWindow,
+        mouseLocation: mouseLocation,
+        subject: subject,
+        detachOrigin: detachOrigin,
+    ) {
+        return reentryDestination
+    }
     if subject == .window,
        config.windowTabs.enabled,
        let tabDestination = tabStackDestination(targetWindow: targetWindow, mouseLocation: mouseLocation)
@@ -728,7 +800,12 @@ private func stickyTargetWindow(for sticky: PendingWindowDragIntent) -> Window? 
 private func stickyTargetTrackingRect(targetWindow: Window, previewStyle: WindowTabDropPreviewStyle) -> Rect? {
     switch previewStyle {
         case .tabInsert:
-            targetWindow.windowDragVisibleRect?.expanded(by: 16)
+            targetWindow.windowDragVisibleRect?.expanded(
+                left: windowTabInsertStickyTrackingHorizontalInset,
+                right: windowTabInsertStickyTrackingHorizontalInset,
+                top: windowTabInsertStickyTrackingTopInset,
+                bottom: windowTabInsertStickyTrackingBottomInset
+            )
         case .stackSplit, .swap:
             targetWindow.moveNode.windowDragVisibleRect?.expanded(by: 16)
         case .detach, .workspaceMove, .sidebarWorkspaceMove:
@@ -762,6 +839,7 @@ private func currentSidebarWorkspaceDropDestination(sourceWindow: Window, mouseL
             case .workspace(let workspaceName):
                 return WindowDragIntentDestination(
                     kind: .moveToWorkspace(workspaceName: workspaceName),
+                    previewContainerRect: workspaceSidebarCursorPreviewRect(at: mouseLocation),
                     previewRect: workspaceSidebarCursorPreviewRect(at: mouseLocation),
                     interactionRect: target.rect.expanded(left: 14, right: 14, top: 12, bottom: 12),
                     title: sourceLabel,
@@ -773,6 +851,7 @@ private func currentSidebarWorkspaceDropDestination(sourceWindow: Window, mouseL
             case .newWorkspace:
                 return WindowDragIntentDestination(
                     kind: .createWorkspace,
+                    previewContainerRect: workspaceSidebarCursorPreviewRect(at: mouseLocation),
                     previewRect: workspaceSidebarCursorPreviewRect(at: mouseLocation),
                     interactionRect: target.rect.expanded(left: 14, right: 14, top: 12, bottom: 12),
                     title: sourceLabel,
@@ -798,6 +877,7 @@ private func currentTabDetachDestination(sourceWindow: Window, mouseLocation: CG
 
     return WindowDragIntentDestination(
         kind: .detachTab(windowId: sourceWindow.windowId),
+        previewContainerRect: sourceWindow.windowDragVisibleRect ?? previewRect,
         previewRect: previewRect,
         interactionRect: previewRect.expanded(left: 18, right: 18, top: 10, bottom: 18),
         title: "Detach Tab",
@@ -811,6 +891,22 @@ private func currentTabDetachDestination(sourceWindow: Window, mouseLocation: CG
 @MainActor
 func shouldSuppressSameAccordionTabDestination(sourceWindow: Window, targetWindow: Window, detachOrigin _: TabDetachOrigin) -> Bool {
     guard let sourceParent = sourceWindow.parent as? TilingContainer,
+          sourceParent.layout == .accordion,
+          targetWindow.parent === sourceParent
+    else { return false }
+    return true
+}
+
+@MainActor
+private func shouldSuppressSameAccordionSwapDestination(
+    sourceWindow: Window,
+    targetWindow: Window,
+    subject: WindowDragSubject,
+    detachOrigin: TabDetachOrigin,
+) -> Bool {
+    guard subject == .window,
+          detachOrigin == .tabStrip,
+          let sourceParent = sourceWindow.parent as? TilingContainer,
           sourceParent.layout == .accordion,
           targetWindow.parent === sourceParent
     else { return false }
@@ -1320,6 +1416,14 @@ func applyWindowSwapDragIntent(
     sourceSubject: WindowDragSubject,
     targetWindow: Window,
 ) -> Bool {
+    if shouldSuppressSameAccordionSwapDestination(
+        sourceWindow: sourceWindow,
+        targetWindow: targetWindow,
+        subject: sourceSubject,
+        detachOrigin: getCurrentMouseTabDetachOrigin()
+    ) {
+        return false
+    }
     let sourceNode = dragSubjectNode(for: sourceWindow, subject: sourceSubject)
     let targetNode = dragIntentTargetNode(
         sourceWindow: sourceWindow,
@@ -1477,6 +1581,7 @@ private func currentWindowDragIntentDestination(
         let previewRect = targetWorkspace.workspaceMonitor.visibleRectPaddedByOuterGaps
         return WindowDragIntentDestination(
             kind: .moveToWorkspace(workspaceName: targetWorkspace.name),
+            previewContainerRect: previewRect,
             previewRect: previewRect,
             interactionRect: previewRect,
             title: "Move Here",
@@ -1690,7 +1795,7 @@ extension TilingContainer {
 
 extension TreeNode {
     @MainActor
-    private var bodyDropZoneRect: Rect? {
+    private var centeredBodyDropZoneRect: Rect? {
         guard let rect = windowDragVisibleRect else { return nil }
         let topExclusion: CGFloat = switch self {
             case let window as Window:
@@ -1711,11 +1816,16 @@ extension TreeNode {
     }
 
     @MainActor
+    private var sideBodyDropZoneRect: Rect? {
+        guard let rect = windowDragVisibleRect else { return nil }
+        let bodyRect = rect.insetBy(left: 2, right: 2, top: 2, bottom: 2)
+        guard bodyRect.width > 0, bodyRect.height > 0 else { return nil }
+        return bodyRect
+    }
+
+    @MainActor
     func bodyDragIntent(at mouseLocation: CGPoint) -> WindowBodyDragIntent? {
-        guard let bodyRect = bodyDropZoneRect,
-              bodyRect.contains(mouseLocation),
-              let swapRect = swapDropZoneRect
-        else { return nil }
+        guard let swapRect = swapDropZoneRect else { return nil }
         if swapRect.contains(mouseLocation) {
             return .swap
         }
@@ -1729,44 +1839,45 @@ extension TreeNode {
 
     @MainActor
     func stackSplitDropZoneRect(position: WindowStackSplitPosition) -> Rect? {
-        guard let bodyRect = bodyDropZoneRect,
+        guard let centeredBodyRect = centeredBodyDropZoneRect,
+              let sideBodyRect = sideBodyDropZoneRect,
               let swapRect = swapDropZoneRect
         else { return nil }
         return switch position {
             case .left:
-                (swapRect.minX > bodyRect.minX)
+                (swapRect.minX > sideBodyRect.minX)
                     ? Rect(
-                        topLeftX: bodyRect.topLeftX,
-                        topLeftY: bodyRect.topLeftY,
-                        width: swapRect.minX - bodyRect.minX,
-                        height: bodyRect.height,
+                        topLeftX: sideBodyRect.topLeftX,
+                        topLeftY: sideBodyRect.topLeftY,
+                        width: swapRect.minX - sideBodyRect.minX,
+                        height: sideBodyRect.height,
                     )
                     : nil
             case .right:
-                (bodyRect.maxX > swapRect.maxX)
+                (sideBodyRect.maxX > swapRect.maxX)
                     ? Rect(
                         topLeftX: swapRect.maxX,
-                        topLeftY: bodyRect.topLeftY,
-                        width: bodyRect.maxX - swapRect.maxX,
-                        height: bodyRect.height,
+                        topLeftY: sideBodyRect.topLeftY,
+                        width: sideBodyRect.maxX - swapRect.maxX,
+                        height: sideBodyRect.height,
                     )
                     : nil
             case .above:
-                (swapRect.minY > bodyRect.minY)
+                (swapRect.minY > centeredBodyRect.minY)
                     ? Rect(
                         topLeftX: swapRect.topLeftX,
-                        topLeftY: bodyRect.topLeftY,
+                        topLeftY: centeredBodyRect.topLeftY,
                         width: swapRect.width,
-                        height: swapRect.minY - bodyRect.minY,
+                        height: swapRect.minY - centeredBodyRect.minY,
                     )
                     : nil
             case .below:
-                (bodyRect.maxY > swapRect.maxY)
+                (centeredBodyRect.maxY > swapRect.maxY)
                     ? Rect(
                         topLeftX: swapRect.topLeftX,
                         topLeftY: swapRect.maxY,
                         width: swapRect.width,
-                        height: bodyRect.maxY - swapRect.maxY,
+                        height: centeredBodyRect.maxY - swapRect.maxY,
                     )
                     : nil
         }
@@ -1779,7 +1890,7 @@ extension TreeNode {
 
     @MainActor
     var swapDropZoneRect: Rect? {
-        guard let bodyRect = bodyDropZoneRect else { return nil }
+        guard let bodyRect = centeredBodyDropZoneRect else { return nil }
         let swapWidth = min(bodyRect.width, max(bodyRect.width * 0.2, 28))
         let swapHeight = min(bodyRect.height, max(bodyRect.height * 0.2, 28))
         let swapRect = Rect(
@@ -1795,9 +1906,12 @@ extension TreeNode {
 
 extension Rect {
     fileprivate func tabInsertPreviewRect(barHeight: CGFloat) -> Rect {
-        // Show the border at the full width of the window, cropped to
-        // the tab bar region height so it outlines the top strip area.
-        let effectiveHeight = min(max(barHeight + 8, 36), max(height, 0))
+        // Reserve a visibly taller top strip so the tab-insert affordance
+        // wins reliably over body intents, even on angled approaches.
+        let effectiveHeight = min(
+            max(barHeight + windowTabInsertPreviewExtraHeight, windowTabInsertPreviewMinHeight),
+            max(height, 0)
+        )
         return insetBy(
             left: windowDropPreviewInset,
             right: windowDropPreviewInset,
@@ -1807,6 +1921,11 @@ extension Rect {
     }
 
     fileprivate func tabInsertInteractionRect(barHeight: CGFloat) -> Rect {
-        tabInsertPreviewRect(barHeight: barHeight).expanded(left: 20, right: 20, top: 10, bottom: 12)
+        tabInsertPreviewRect(barHeight: barHeight).expanded(
+            left: windowTabInsertInteractionHorizontalInset,
+            right: windowTabInsertInteractionHorizontalInset,
+            top: windowTabInsertInteractionTopInset,
+            bottom: windowTabInsertInteractionBottomInset
+        )
     }
 }
