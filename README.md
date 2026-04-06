@@ -57,7 +57,7 @@ The sidebar can be configured (as shown) to display the current date, time, batt
 You do not need to open up a config file to change shortcuts for basic actions. More advanced actions still require editing of the config file (`~/.config/winmux/winmux.toml`). You can also edit, validate and reload the config file from within the settings!
 
 ### Misc
-#### Expose
+#### Exposé
 ![](expose.png)
 
 WinMux comes with it's own mission-control-expose that shows you all the windows and tab groups in the current workspace. Trigger it with `⌘+i`
