@@ -5,6 +5,14 @@ struct ShortcutRecorderView: NSViewRepresentable {
     @Binding var shortcut: MASShortcut?
     var onChange: (MASShortcut?) -> Void
 
+    final class Coordinator {
+        var isSynchronizingShortcut = false
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
     func makeNSView(context: Context) -> RecordingAwareShortcutView {
         let recorder = RecordingAwareShortcutView(frame: .zero)
         recorder.shortcutValidator = nil
@@ -15,6 +23,7 @@ struct ShortcutRecorderView: NSViewRepresentable {
         }
         recorder.shortcutValueChange = { sender in
             let newValue = sender.shortcutValue
+            guard !context.coordinator.isSynchronizingShortcut else { return }
             shortcut = newValue
             onChange(newValue)
         }
@@ -30,6 +39,8 @@ struct ShortcutRecorderView: NSViewRepresentable {
             shouldUpdate = (shortcut != nil) || (nsView.shortcutValue != nil)
         }
         if shouldUpdate {
+            context.coordinator.isSynchronizingShortcut = true
+            defer { context.coordinator.isSynchronizingShortcut = false }
             nsView.shortcutValue = shortcut
         }
     }
