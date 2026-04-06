@@ -2,10 +2,14 @@
 
 WinMux is a intuitive, batteries-included WM for macOS built on Aerospace ([for now](#on-aerospace))
 
-<video src="demo.mp4" controls width="400"></video>
+<a href="demo.mp4">
+  <img src="demo.gif" width="800" alt="WinMux demo">
+</a>
 
 ## Managed (Tiling) Mode
-<video src="intentzones.mp4" controls width="400"></video>
+<a href="intentzones.mp4">
+  <img src="intentzones.gif" width="800" alt="Managed mode intent zones demo">
+</a>
 
 WinMux has 6 intent (hover-hint) zones that make it easy to move windows without keyboard shortcuts:
 
@@ -14,7 +18,9 @@ WinMux has 6 intent (hover-hint) zones that make it easy to move windows without
 3. Swap positions with window (drag over center)
 
 ## Unmanaged Mode (WIP)
-<video src="cornersnapping.mp4" controls width="400"></video>
+<a href="cornersnapping.mp4">
+  <img src="cornersnapping.gif" width="800" alt="Unmanaged mode corner snapping demo">
+</a>
 
 In unmanaged mode, WinMux does not perform tiling. It still supports tab groups and the sidebar. In lieu of tiling, WinMux supports traditional corner snapping.
 
@@ -22,14 +28,18 @@ Unmanaged mode can be toggled from the menu bar or via settings.
 
 ## Highlights
 ### Tab Groups
-<video src="tabgroups.mp4" controls width="400"></video>
+<a href="tabgroups.mp4">
+  <img src="tabgroups.gif" width="800" alt="Tab groups demo">
+</a>
 
 Tab groups allow you to have many windows occupy the same footprint, similar to Aerospace accordians or Yabai stacks. This is useful when you want to have multiple pieces of reference information next to an editor, multiple tabs in different browser profiles, or, when you simply want multiple fullscreen views without the additional friction and overhead of creating a new workspace.
 
 Unlike accordians or stacks, WinMux tab groups behave more intuitively like you would expect tabs to in browsers, and don't need a keyboard shortcut to activate. You can drag tabs from tab groups into another window's [intent zone](#managed-tiling-mode), or in between workspaces. You can also rearrange tab order within a tab group, and navigate through them with relative and absolute keybindings. 
 
 ### Sidebar
-<video src="sidebar.mp4" controls width="400"></video>
+<a href="sidebar.mp4">
+  <img src="sidebar.gif" width="800" alt="Sidebar demo">
+</a>
 
 The sidebar is more interactively-performant and useful (though less customizable—WIP!) alternative to [Sketchybar](https://github.com/felixkratz/sketchybar) and Aerospace's built in menu bar dropdown for most everyday tasks. It provides better visibility into spaces and spatial awareness on the desktop.
 
