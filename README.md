@@ -1,6 +1,6 @@
 # WinMux *Beta*
 
-WinMux is a intuitive, batteries-included WM for macOS built on Aerospace ([for now](#on-aerospace))
+WinMux is a intuitive, batteries-included WM for macOS built on Aerospace ([for now](#on-aerospace)). 
 
 
 
@@ -43,7 +43,7 @@ Unlike accordians or stacks, WinMux tab groups behave more intuitively like you 
   <img src="sidebar.gif" width="800" alt="Sidebar demo">
 </a>
 
-The sidebar is more interactively-performant and useful (though less customizable—WIP!) alternative to [Sketchybar](https://github.com/felixkratz/sketchybar) and Aerospace's built in menu bar dropdown for most everyday tasks. It provides better visibility into spaces and spatial awareness on the desktop.
+The sidebar is a more interactively-performant and useful (though less customizable—WIP!) alternative to [Sketchybar](https://github.com/felixkratz/sketchybar) and Aerospace's built in menu bar dropdown for most everyday tasks. It provides better visibility into spaces and spatial awareness on the desktop.
 
 You can drag windows in and out of the sidebar from and to the current workspace. You can rearrange windows across all spaces using the sidebar, including tab groups.
 
