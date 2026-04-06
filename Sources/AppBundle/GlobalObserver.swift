@@ -61,6 +61,12 @@ enum GlobalObserver {
         }
     }
 
+    private static func onPointerActivity(_: NSEvent) {
+        Task { @MainActor in
+            noteTapBindingKeyDown()
+        }
+    }
+
     @MainActor
     static func initObserver() {
         let nc = NSWorkspace.shared.notificationCenter
@@ -98,6 +104,17 @@ enum GlobalObserver {
             Task { @MainActor in
                 refreshPendingWindowDragIntentFromGlobalMouseDrag()
             }
+        }
+
+        let pointerActivityMask: NSEvent.EventTypeMask = [
+            .leftMouseDown, .rightMouseDown, .otherMouseDown,
+            .leftMouseDragged, .rightMouseDragged, .otherMouseDragged,
+            .scrollWheel,
+        ]
+        NSEvent.addGlobalMonitorForEvents(matching: pointerActivityMask, handler: onPointerActivity)
+        NSEvent.addLocalMonitorForEvents(matching: pointerActivityMask) { event in
+            onPointerActivity(event)
+            return event
         }
 
         NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged, handler: onFlagsChanged)

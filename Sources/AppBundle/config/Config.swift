@@ -44,6 +44,8 @@ struct Config: ConvenienceCopyable {
     var startAtLogin: Bool = false
     var autoReloadConfig: Bool = false
     var automaticallyUnhideMacosHiddenApps: Bool = false
+    var enableWindowManagement: Bool = true
+    var shortcutsPreset: ShortcutsPreset = .none
     var accordionPadding: Int = 30
     var enableNormalizationOppositeOrientationForNestedContainers: Bool = true
     var persistentWorkspaces: OrderedSet<String> = []
@@ -68,11 +70,18 @@ enum DefaultContainerOrientation: String {
     case horizontal, vertical, auto
 }
 
+enum ShortcutsPreset: String, Equatable, Sendable {
+    case none
+    case rectangle
+}
+
 struct WorkspaceSidebarConfig: ConvenienceCopyable, Equatable, Sendable {
     var enabled: Bool = false
     var collapsedWidth: Int = 44
     var width: Int = 240
     var monitor: [MonitorDescription] = [.main]
+    var showStatusPills: Bool = true
+    var showDate: Bool = true
     var workspaceLabels: [String: String] = [:]
 }
 

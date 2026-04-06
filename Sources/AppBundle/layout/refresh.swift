@@ -5,6 +5,12 @@ import Common
 private var activeRefreshTask: Task<(), any Error>? = nil
 
 @MainActor
+private var activeScheduledRefreshEvent: RefreshSessionEvent? = nil
+
+@MainActor
+private var activeScheduledRefreshGeneration: UInt64 = 0
+
+@MainActor
 private var scheduledRefreshOverrideForTests: (@MainActor @Sendable (RefreshSessionEvent, Bool) async throws -> Void)? = nil
 
 @MainActor
@@ -12,6 +18,22 @@ private var refreshOverrideForTests: (@MainActor @Sendable () async throws -> Vo
 
 @MainActor
 private var normalizeLayoutReasonOverrideForTests: (@MainActor @Sendable () async throws -> Void)? = nil
+
+private func isAxGeometryRefreshEvent(_ event: RefreshSessionEvent) -> Bool {
+    guard case .ax(let notif) = event else { return false }
+    return notif == kAXMovedNotification as String || notif == kAXResizedNotification as String
+}
+
+private func shouldDropScheduledRefresh(_ newEvent: RefreshSessionEvent, activeEvent: RefreshSessionEvent?) -> Bool {
+    guard isAxGeometryRefreshEvent(newEvent), let activeEvent else { return false }
+    if isAxGeometryRefreshEvent(activeEvent) {
+        return true
+    }
+    if case .resetManipulatedWithMouse = activeEvent {
+        return true
+    }
+    return false
+}
 
 @MainActor
 func shouldSyncFocusBackToMacOs(
@@ -36,14 +58,31 @@ func scheduleRefreshSession(
     _ event: RefreshSessionEvent,
     optimisticallyPreLayoutWorkspaces: Bool = false,
 ) {
+    if shouldDropScheduledRefresh(event, activeEvent: activeScheduledRefreshEvent) {
+        debugFocusLog("scheduleRefreshSession dropped event=\(event) active=\(activeScheduledRefreshEvent?.description ?? "nil")")
+        return
+    }
     activeRefreshTask?.cancel()
+    activeScheduledRefreshGeneration += 1
+    let generation = activeScheduledRefreshGeneration
+    activeScheduledRefreshEvent = event
     let override = scheduledRefreshOverrideForTests
     activeRefreshTask = Task { @MainActor in
-        try checkCancellation()
-        if let override {
-            try await override(event, optimisticallyPreLayoutWorkspaces)
-        } else {
-            try await runRefreshSessionBlocking(event, optimisticallyPreLayoutWorkspaces: optimisticallyPreLayoutWorkspaces)
+        defer {
+            if activeScheduledRefreshGeneration == generation {
+                activeRefreshTask = nil
+                activeScheduledRefreshEvent = nil
+            }
+        }
+        do {
+            try checkCancellation()
+            if let override {
+                try await override(event, optimisticallyPreLayoutWorkspaces)
+            } else {
+                try await runRefreshSessionBlocking(event, optimisticallyPreLayoutWorkspaces: optimisticallyPreLayoutWorkspaces)
+            }
+        } catch is CancellationError {
+            return
         }
     }
 }
@@ -108,7 +147,17 @@ func runRefreshSessionBlocking(
                         frontmostActivationPolicy: frontmostActivationPolicy,
                         nativeFocusIsOnUnmanagedMonitor: nativeFocusIsOnUnmanagedMonitor,
                     ) {
-                        focus.windowOrNil?.nativeFocus()
+                        let logicalFocused = focus.windowOrNil
+                        if logicalFocused?.windowId != nativeFocused?.windowId {
+                            debugFocusLog(
+                                "runRefreshSessionBlocking syncFocus event=\(event) nativeFocused=\(nativeFocused?.windowId.description ?? "nil") logicalFocused=\(logicalFocused?.windowId.description ?? "nil")"
+                            )
+                            logicalFocused?.nativeFocus()
+                        } else {
+                            debugFocusLog(
+                                "runRefreshSessionBlocking skipSyncFocus event=\(event) nativeFocused=\(nativeFocused?.windowId.description ?? "nil") logicalFocused=\(logicalFocused?.windowId.description ?? "nil")"
+                            )
+                        }
                     }
                 }
                 await updateWindowTabModel()
@@ -173,6 +222,7 @@ func setScheduledRefreshOverrideForTests(
 ) {
     activeRefreshTask?.cancel()
     activeRefreshTask = nil
+    activeScheduledRefreshEvent = nil
     scheduledRefreshOverrideForTests = override
 }
 
@@ -183,6 +233,7 @@ func setBlockingRefreshOverridesForTests(
 ) {
     activeRefreshTask?.cancel()
     activeRefreshTask = nil
+    activeScheduledRefreshEvent = nil
     refreshOverrideForTests = refresh
     normalizeLayoutReasonOverrideForTests = normalizeLayoutReason
 }

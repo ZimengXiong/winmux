@@ -7,6 +7,8 @@ private let workspaceSidebarParser: [String: any ParserProtocol<WorkspaceSidebar
     "monitor": Parser(\.monitor) { value, backtrace, errors in
         parseMonitorDescriptions(value, backtrace, &errors)
     },
+    "show-status-pills": Parser(\.showStatusPills, parseBool),
+    "show-date": Parser(\.showDate, parseBool),
     "workspace-labels": Parser(\.workspaceLabels, parseWorkspaceSidebarLabels),
 ]
 

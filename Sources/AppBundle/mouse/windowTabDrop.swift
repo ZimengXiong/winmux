@@ -356,7 +356,7 @@ private func workspaceSidebarCursorPreviewRect(at mouseLocation: CGPoint, sideba
 }
 
 @MainActor
-private func dragSubjectNode(for sourceWindow: Window, subject: WindowDragSubject) -> TreeNode {
+func dragSubjectNode(for sourceWindow: Window, subject: WindowDragSubject) -> TreeNode {
     switch subject {
         case .window: sourceWindow
         case .group: sourceWindow.moveNode
@@ -417,6 +417,12 @@ private func isBlockedByDragTargetContainment(sourceNode: TreeNode, targetNode: 
         return true
     }
     return false
+}
+
+@MainActor
+private func isInvalidGroupSelfTarget(sourceNode: TreeNode, targetNode: TreeNode, subject: WindowDragSubject) -> Bool {
+    guard subject == .group else { return false }
+    return targetNode.parentsWithSelf.contains(sourceNode)
 }
 
 @MainActor
@@ -590,6 +596,7 @@ private func swapDestination(
         detachOrigin: detachOrigin,
     )
     guard !isBlockedByDragTargetContainment(sourceNode: sourceNode, targetNode: targetNode),
+          !isInvalidGroupSelfTarget(sourceNode: sourceNode, targetNode: targetNode, subject: subject),
           let previewRect = targetNode.swapDropZoneRect
     else { return nil }
     let interactionRect = if subject == .group {
@@ -632,6 +639,7 @@ private func stackSplitDestination(
         detachOrigin: detachOrigin,
     )
     guard !isBlockedByDragTargetContainment(sourceNode: sourceNode, targetNode: targetNode),
+          !isInvalidGroupSelfTarget(sourceNode: sourceNode, targetNode: targetNode, subject: subject),
           canOfferWindowStackSplit(sourceNode: sourceNode, targetNode: targetNode, position: position),
           let preview = resolvedWindowStackSplitPreview(targetNode: targetNode, position: position),
           let interactionRect = targetNode.stackSplitDropZoneRect(position: position)?
@@ -697,6 +705,10 @@ private func windowSurfaceDestination(
         } else {
             return tabDestination
         }
+    }
+
+    guard config.enableWindowManagement else {
+        return nil
     }
 
     let bodyIntent = targetNode.bodyDragIntent(at: mouseLocation)
@@ -1169,15 +1181,37 @@ func updatePendingDetachedTabIntent(sourceWindow: Window, mouseLocation: CGPoint
 func refreshPendingWindowDragIntentFromGlobalMouseDrag() {
     guard isLeftMouseButtonDown, getCurrentMouseManipulationKind() == .move else {
         clearPendingWindowDragIntent()
+        clearPendingUnmanagedWindowSnap()
         return
     }
     guard let windowId = currentlyManipulatedWithMouseWindowId,
           let sourceWindow = Window.get(byId: windowId)
     else {
         clearPendingWindowDragIntent()
+        clearPendingUnmanagedWindowSnap()
         cancelManipulatedWithMouseState()
         return
     }
+    if !config.enableWindowManagement &&
+        !getCurrentMouseDragStartedInSidebar() &&
+        getCurrentMouseDragSubject() == .window &&
+        getCurrentMouseTabDetachOrigin() == .window
+    {
+        let didUpdateIntent = updatePendingWindowDragIntent(
+            sourceWindow: sourceWindow,
+            mouseLocation: mouseLocation,
+            subject: .window,
+            detachOrigin: .window,
+        )
+        if didUpdateIntent {
+            clearPendingUnmanagedWindowSnap()
+        } else {
+            clearPendingWindowDragIntent()
+            refreshPendingUnmanagedWindowSnap(sourceWindow: sourceWindow, mouseLocation: mouseLocation)
+        }
+        return
+    }
+    clearPendingUnmanagedWindowSnap()
     _ = updatePendingWindowDragIntent(
         sourceWindow: sourceWindow,
         mouseLocation: mouseLocation,
@@ -1262,16 +1296,19 @@ func applyPendingWindowDragIntentIfPossible() -> Bool {
                   sourceWindow != targetWindow
             else { return false }
             syncClosedWindowsCacheToCurrentWorld()
+            suppressPostDragAxObserverEvents(for: [sourceWindow.windowId, targetWindow.windowId])
             createOrAppendWindowTabStack(sourceWindow: sourceWindow, onto: targetWindow)
             return true
         case .detachTab(let windowId):
             guard sourceWindow.windowId == windowId else { return false }
             syncClosedWindowsCacheToCurrentWorld()
+            suppressPostDragAxObserverEvents(for: [sourceWindow.windowId])
             return removeWindowFromTabStack(sourceWindow)
         case .stackSplit(let targetWindowId, let position):
             guard let targetWindow = Window.get(byId: targetWindowId)
             else { return false }
             syncClosedWindowsCacheToCurrentWorld()
+            suppressPostDragAxObserverEvents(for: [sourceWindow.windowId, targetWindow.windowId])
             return applyWindowStackSplitDragIntent(
                 sourceWindow: sourceWindow,
                 sourceSubject: pendingWindowDragIntent.sourceSubject,
@@ -1282,6 +1319,7 @@ func applyPendingWindowDragIntentIfPossible() -> Bool {
             guard let targetWindow = Window.get(byId: targetWindowId)
             else { return false }
             syncClosedWindowsCacheToCurrentWorld()
+            suppressPostDragAxObserverEvents(for: [sourceWindow.windowId, targetWindow.windowId])
             return applyWindowSwapDragIntent(
                 sourceWindow: sourceWindow,
                 sourceSubject: pendingWindowDragIntent.sourceSubject,
@@ -1290,6 +1328,7 @@ func applyPendingWindowDragIntentIfPossible() -> Bool {
         case .moveToWorkspace(let workspaceName):
             guard let targetWorkspace = Workspace.existing(byName: workspaceName) else { return false }
             syncClosedWindowsCacheToCurrentWorld()
+            suppressPostDragAxObserverEvents(for: [sourceWindow.windowId])
             if pendingWindowDragIntent.previewStyle == .sidebarWorkspaceMove {
                 applySidebarWorkspaceMove(sourceNode: sourceNode, sourceWindow: sourceWindow, targetWorkspace: targetWorkspace)
             } else {
@@ -1298,6 +1337,7 @@ func applyPendingWindowDragIntentIfPossible() -> Bool {
             return true
         case .createWorkspace:
             syncClosedWindowsCacheToCurrentWorld()
+            suppressPostDragAxObserverEvents(for: [sourceWindow.windowId])
             return createWorkspaceFromSidebarDrag(sourceNode: sourceNode, sourceWindow: sourceWindow)
         case .sidebarHover:
             return false
@@ -1374,6 +1414,7 @@ func applyWindowStackSplitDragIntent(
     )
     let splitOrientation = position.orientation
     guard !isBlockedByDragTargetContainment(sourceNode: sourceNode, targetNode: targetNode),
+          !isInvalidGroupSelfTarget(sourceNode: sourceNode, targetNode: targetNode, subject: sourceSubject),
           canOfferWindowStackSplit(sourceNode: sourceNode, targetNode: targetNode, position: position),
           let splitContext = windowStackSplitContext(targetNode: targetNode, position: position)
     else { return false }
@@ -1431,18 +1472,72 @@ func applyWindowSwapDragIntent(
         subject: sourceSubject,
         detachOrigin: getCurrentMouseTabDetachOrigin(),
     )
-    guard !isBlockedByDragTargetContainment(sourceNode: sourceNode, targetNode: targetNode)
+    guard !isBlockedByDragTargetContainment(sourceNode: sourceNode, targetNode: targetNode),
+          !isInvalidGroupSelfTarget(sourceNode: sourceNode, targetNode: targetNode, subject: sourceSubject)
     else { return false }
     swapNodes(sourceNode, targetNode)
     return sourceWindow.focusWindow()
 }
 
 @MainActor
+private func expectedTabbedWindowRect(targetWindow: Window, targetRect: Rect) -> Rect {
+    guard config.windowTabs.enabled else { return targetRect }
+    let isAlreadyTabbed = (targetWindow.parent as? TilingContainer)?.layout == .accordion
+    guard !isAlreadyTabbed else { return targetRect }
+
+    let tabBarHeight = min(CGFloat(config.windowTabs.height), targetRect.height)
+    return Rect(
+        topLeftX: targetRect.topLeftX,
+        topLeftY: targetRect.topLeftY + tabBarHeight,
+        width: targetRect.width,
+        height: max(targetRect.height - tabBarHeight, 0),
+    )
+}
+
+@MainActor
+private func resolvedTabStackNormalizedRect(targetWindow: Window) -> Rect? {
+    guard let rawTargetRect =
+        currentWindowDragActualRect(targetWindow) ??
+            targetWindow.lastKnownActualRect ??
+            targetWindow.lastAppliedLayoutPhysicalRect
+    else { return nil }
+    return expectedTabbedWindowRect(targetWindow: targetWindow, targetRect: rawTargetRect)
+}
+
+@MainActor
+private func synchronizeTabbedWindowCache(_ window: Window, rect: Rect) {
+    window.lastFloatingSize = rect.size
+    window.lastKnownActualRect = rect
+    window.lastAppliedLayoutPhysicalRect = rect
+    windowDragActualRectCache[window.windowId] = rect
+}
+
+@MainActor
+private func normalizeTabStackSourceWindowFrame(sourceWindow: Window, targetWindow: Window) -> Rect? {
+    guard let targetRect = resolvedTabStackNormalizedRect(targetWindow: targetWindow) else { return nil }
+    synchronizeTabbedWindowCache(sourceWindow, rect: targetRect)
+    sourceWindow.setAxFrame(targetRect.topLeftCorner, targetRect.size)
+    return targetRect
+}
+
+@MainActor
+private func synchronizeTabGroupCachedFrames(_ container: TilingContainer, rect: Rect, excluding sourceWindowId: UInt32? = nil) {
+    for case let window as Window in container.children where window.windowId != sourceWindowId {
+        synchronizeTabbedWindowCache(window, rect: rect)
+    }
+}
+
+@MainActor
 func createOrAppendWindowTabStack(sourceWindow: Window, onto targetWindow: Window) {
     guard sourceWindow != targetWindow else { return }
+    let targetRect = normalizeTabStackSourceWindowFrame(sourceWindow: sourceWindow, targetWindow: targetWindow)
     if let targetParent = targetWindow.parent as? TilingContainer,
        targetParent.layout == .accordion
     {
+        if let targetRect {
+            synchronizeTabbedWindowCache(targetWindow, rect: targetRect)
+            synchronizeTabGroupCachedFrames(targetParent, rect: targetRect, excluding: sourceWindow.windowId)
+        }
         let targetIndex = targetWindow.ownIndex.orDie()
         let sourceIndex = sourceWindow.ownIndex
         let sourceWasInTargetParent = sourceWindow.parent === targetParent
@@ -1470,6 +1565,10 @@ func createOrAppendWindowTabStack(sourceWindow: Window, onto targetWindow: Windo
     sourceWindow.unbindFromParent()
     targetWindow.bind(to: newParent, adaptiveWeight: WEIGHT_AUTO, index: 0)
     sourceWindow.bind(to: newParent, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+    if let targetRect {
+        synchronizeTabbedWindowCache(targetWindow, rect: targetRect)
+        synchronizeTabGroupCachedFrames(newParent, rect: targetRect)
+    }
     sourceWindow.markAsMostRecentChild()
     _ = sourceWindow.focusWindow()
 }
@@ -1550,7 +1649,14 @@ private func currentWindowDragIntentDestination(
 
     let sourceNode = dragSubjectNode(for: sourceWindow, subject: subject)
     let targetWorkspace = mouseLocation.monitorApproximation.activeWorkspace
+    let isOptionPressed = currentSessionModifierFlags().contains(.maskAlternate)
     if targetWorkspace == sourceNode.nodeWorkspace,
+       shouldAllowSameWorkspaceWindowSurfaceIntent(
+           enableWindowManagement: config.enableWindowManagement,
+           subject: subject,
+           detachOrigin: detachOrigin,
+           isOptionPressed: isOptionPressed,
+       ),
        let surfaceDestination = currentWindowSurfaceDestination(
            sourceWindow: sourceWindow,
            mouseLocation: mouseLocation,

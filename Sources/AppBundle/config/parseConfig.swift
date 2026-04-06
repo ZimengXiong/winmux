@@ -113,6 +113,8 @@ private let configParser: [String: any ParserProtocol<Config>] = [
     "start-at-login": Parser(\.startAtLogin, parseBool),
     "auto-reload-config": Parser(\.autoReloadConfig, parseBool),
     "automatically-unhide-macos-hidden-apps": Parser(\.automaticallyUnhideMacosHiddenApps, parseBool),
+    "enable-window-management": Parser(\.enableWindowManagement, parseBool),
+    "shortcuts-preset": Parser(\.shortcutsPreset, parseShortcutsPreset),
     "accordion-padding": Parser(\.accordionPadding, parseInt),
     persistentWorkspacesKey: Parser(\.persistentWorkspaces, parsePersistentWorkspaces),
     "exec-on-workspace-change": Parser(\.execOnWorkspaceChange, parseArrayOfStrings),
@@ -196,6 +198,11 @@ func parseCommandOrCommands(_ raw: TOMLValueConvertible) -> Parsed<[any Command]
     // Parse modeConfigRootKey after keyMappingConfigRootKey
     if let modes = rawTable[modeConfigRootKey].flatMap({ parseModes($0, .rootKey(modeConfigRootKey), &errors, config.keyMapping.resolve()) }) {
         config.modes = modes
+    }
+    applyShortcutsPreset(&config, mapping: config.keyMapping.resolve(), errors: &errors)
+    let shouldValidateMainMode = rawTable.contains(key: modeConfigRootKey) || config.shortcutsPreset != .none
+    if shouldValidateMainMode && !config.modes.keys.contains(mainModeId) {
+        errors += [.semantic(.rootKey(modeConfigRootKey), "Please specify '\(mainModeId)' mode")]
     }
 
     if config.configVersion <= 1 {
@@ -309,6 +316,53 @@ private func parseStartupRootContainerLayout(_ raw: TOMLValueConvertible, _ back
 private func parseLayout(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace) -> ParsedToml<Layout> {
     parseString(raw, backtrace)
         .flatMap { $0.parseLayout().orFailure(.semantic(backtrace, "Can't parse layout '\($0)'")) }
+}
+
+private func parseShortcutsPreset(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace) -> ParsedToml<ShortcutsPreset> {
+    parseString(raw, backtrace)
+        .flatMap { rawValue in
+            ShortcutsPreset(rawValue: rawValue)
+                .orFailure(.semantic(backtrace, "Can't parse shortcuts preset '\(rawValue)'. Possible values: (none|rectangle)"))
+        }
+}
+
+private let rectangleShortcutsPresetBindings: [(String, SnapCmdArgs.SnapAction)] = [
+    ("ctrl-alt-left", .leftHalf),
+    ("ctrl-alt-right", .rightHalf),
+    ("ctrl-alt-up", .topHalf),
+    ("ctrl-alt-down", .bottomHalf),
+    ("ctrl-alt-u", .topLeft),
+    ("ctrl-alt-i", .topRight),
+    ("ctrl-alt-j", .bottomLeft),
+    ("ctrl-alt-k", .bottomRight),
+    ("ctrl-alt-enter", .maximize),
+    ("ctrl-alt-d", .firstThird),
+    ("ctrl-alt-e", .firstTwoThirds),
+    ("ctrl-alt-f", .centerThird),
+    ("ctrl-alt-t", .lastTwoThirds),
+    ("ctrl-alt-g", .lastThird),
+]
+
+@MainActor
+private func applyShortcutsPreset(_ config: inout Config, mapping: [String: Key], errors: inout [TomlParseError]) {
+    guard config.shortcutsPreset == .rectangle else { return }
+
+    var mainMode = config.modes[mainModeId] ?? .zero
+    for (bindingNotation, action) in rectangleShortcutsPresetBindings {
+        guard let (modifiers, key) = parseBinding(bindingNotation, .rootKey("shortcuts-preset"), mapping)
+            .getOrNil(appendErrorTo: &errors)
+        else { continue }
+        let binding = HotkeyBinding(
+            modifiers,
+            key,
+            [SnapCommand(args: SnapCmdArgs(rawArgs: [], action: action))],
+            descriptionWithKeyNotation: bindingNotation,
+        )
+        if mainMode.bindings[binding.descriptionWithKeyCode] == nil {
+            mainMode.bindings[binding.descriptionWithKeyCode] = binding
+        }
+    }
+    config.modes[mainModeId] = mainMode
 }
 
 private func skipParsing<T: Sendable>(_ value: T) -> @Sendable (_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace) -> ParsedToml<T> {

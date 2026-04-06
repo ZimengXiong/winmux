@@ -18,9 +18,6 @@ func parseModes(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace, _ error
     for (key, value) in rawTable {
         result[key] = parseMode(value, backtrace + .key(key), &errors, mapping)
     }
-    if !result.keys.contains(mainModeId) {
-        errors += [.semantic(backtrace, "Please specify '\(mainModeId)' mode")]
-    }
     return result
 }
 

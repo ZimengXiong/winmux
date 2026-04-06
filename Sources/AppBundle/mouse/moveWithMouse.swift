@@ -8,7 +8,9 @@ func movedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutableR
     let windowId = ax.containingWindowId()
     let notif = notif as String
     Task { @MainActor in
-        if shouldIgnoreMovedObsForCurrentDragSession(windowId: windowId) {
+        if shouldIgnoreMovedObsForCurrentDragSession(windowId: windowId) ||
+            shouldIgnoreAxObserverEventForPostDragSuppression(windowId: windowId, notif: notif)
+        {
             return
         }
         guard let token: RunSessionGuard = .isServerEnabled else { return }
@@ -28,6 +30,37 @@ func movedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutableR
 
 @MainActor
 private func moveWithMouse(_ window: Window) async throws { // todo cover with tests
+    if !config.enableWindowManagement {
+        let subject = resolvedMouseDragSubject(for: window)
+        let nativeAnchorRect = try await window.getAxRect()
+        let anchorRect =
+            resolvedDraggedWindowAnchorRect(for: window, subject: subject) ??
+            nativeAnchorRect ??
+            window.lastKnownActualRect ??
+            window.lastAppliedLayoutPhysicalRect
+        _ = beginWindowMoveWithMouseSessionIfNeeded(
+            windowId: window.windowId,
+            subject: subject,
+            detachOrigin: .window,
+            startedInSidebar: false,
+            anchorRect: anchorRect,
+        )
+        let mouseLocation = mouseLocation
+        let didUpdateIntent = updatePendingWindowDragIntent(
+            sourceWindow: window,
+            mouseLocation: mouseLocation,
+            subject: subject,
+            detachOrigin: .window,
+        )
+        if didUpdateIntent {
+            clearPendingUnmanagedWindowSnap()
+        } else if subject == .window {
+            refreshPendingUnmanagedWindowSnap(sourceWindow: window, mouseLocation: mouseLocation)
+        } else {
+            clearPendingUnmanagedWindowSnap()
+        }
+        return
+    }
     syncClosedWindowsCacheToCurrentWorld()
     guard let parent = window.parent else { return }
     switch parent.cases {
@@ -52,18 +85,24 @@ private func moveFloatingWindow(_ window: Window) async throws {
 
 @MainActor
 private func moveTilingWindow(_ window: Window) {
+    let subject = resolvedMouseDragSubject(for: window)
     let didStartSession = beginWindowMoveWithMouseSessionIfNeeded(
         windowId: window.windowId,
-        subject: .window,
+        subject: subject,
         detachOrigin: .window,
         startedInSidebar: false,
-        anchorRect: window.lastAppliedLayoutPhysicalRect,
+        anchorRect: resolvedDraggedWindowAnchorRect(for: window, subject: subject),
     )
-    if didStartSession {
+    if didStartSession, subject == .window {
         window.lastAppliedLayoutPhysicalRect = nil
     }
     let mouseLocation = mouseLocation
-    _ = updatePendingWindowDragIntent(sourceWindow: window, mouseLocation: mouseLocation)
+    _ = updatePendingWindowDragIntent(
+        sourceWindow: window,
+        mouseLocation: mouseLocation,
+        subject: subject,
+        detachOrigin: .window,
+    )
 }
 
 @MainActor

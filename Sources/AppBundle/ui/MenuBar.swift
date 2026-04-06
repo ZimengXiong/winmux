@@ -11,31 +11,6 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene { // todo should it 
         Button("Copy to clipboard") { identification.copyToClipboard() }
             .keyboardShortcut("C", modifiers: .command)
         Divider()
-        if let token: RunSessionGuard = .isServerEnabled {
-            Text("Workspaces:")
-            ForEach(viewModel.workspaces, id: \.name) { workspace in
-                Button {
-                    Task {
-                        try await runLightSession(.menuBarButton, token) {
-                            _ = Workspace.existing(byName: workspace.name)?.focusWorkspace()
-                        }
-                    }
-                } label: {
-                    Toggle(isOn: .constant(workspace.isFocused)) {
-                        Text(workspace.displayName + workspace.suffix).font(.system(.body, design: .monospaced))
-                    }
-                }
-            }
-            Divider()
-        }
-        Button {
-            NSWorkspace.shared.open(URL(string: "https://github.com/sponsors/nikitabobko").orDie())
-            viewModel.sponsorshipMessage = sponsorshipPrompts.randomElement().orDie()
-        } label: {
-            Text("Sponsor AeroSpace on GitHub")
-            Text(viewModel.sponsorshipMessage)
-        }
-        Divider()
         Button(viewModel.isEnabled ? "Disable" : "Enable") {
             Task {
                 try await runLightSession(.menuBarButton, .forceRun) { () throws in
@@ -44,7 +19,11 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene { // todo should it 
                 }
             }
         }.keyboardShortcut("E", modifiers: .command)
-        getExperimentalUISettingsMenu(viewModel: viewModel)
+        Toggle("Manage Windows", isOn: Binding(
+            get: { config.enableWindowManagement },
+            set: { enabled in setWindowManagementFromMenu(enabled) },
+        ))
+        OpenShortcutSettingsButton()
         openConfigButton()
         reloadConfigButton()
         Button("Quit \(aeroSpaceAppName)") {
@@ -66,17 +45,15 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene { // todo should it 
 
 @MainActor @ViewBuilder
 func openConfigButton(showShortcutGroup: Bool = false) -> some View {
-    let editor = getTextEditorToOpenConfig()
-    let button = Button("Open config in '\(editor.lastPathComponent)'") {
-        let fallbackConfig: URL = FileManager.default.homeDirectoryForCurrentUser.appending(path: configDotfileName)
+    let button = Button("Open config") {
         switch findCustomConfigUrl() {
             case .file(let url):
-                url.open(with: editor)
+                NSWorkspace.shared.open(url)
             case .noCustomConfigExists:
-                _ = try? FileManager.default.copyItem(atPath: defaultConfigUrl.path, toPath: fallbackConfig.path)
-                fallbackConfig.open(with: editor)
+                let createdUrl = try? ensureBootstrapConfigExistsIfNeeded()
+                NSWorkspace.shared.open(createdUrl ?? preferredEditableConfigUrl())
             case .ambiguousConfigError:
-                fallbackConfig.open(with: editor)
+                NSWorkspace.shared.open(preferredEditableConfigUrl())
         }
     }.keyboardShortcut(",", modifiers: .command)
     if showShortcutGroup {
@@ -112,8 +89,19 @@ func shortcutGroup(label: some View, content: some View) -> some View {
     }
 }
 
-func getTextEditorToOpenConfig() -> URL {
-    NSWorkspace.shared.urlForApplication(toOpen: findCustomConfigUrl().urlOrNil ?? defaultConfigUrl)?
-        .takeIf { $0.lastPathComponent != "Xcode.app" } // Blacklist Xcode. It is too heavy to open plain text files
-        ?? URL(filePath: "/System/Applications/TextEdit.app")
+@MainActor
+private func setWindowManagementFromMenu(_ enabled: Bool) {
+    Task { @MainActor in
+        do {
+            try await runLightSession(.menuBarButton, .forceRun) {
+                let targetUrl = try persistWindowManagementPreference(enabled: enabled)
+                _ = try await reloadConfig(forceConfigUrl: targetUrl)
+            }
+        } catch {
+            MessageModel.shared.message = Message(
+                description: "Window Management Toggle Error",
+                body: error.localizedDescription,
+            )
+        }
+    }
 }

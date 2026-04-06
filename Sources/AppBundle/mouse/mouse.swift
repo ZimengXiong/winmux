@@ -6,6 +6,8 @@ enum MouseManipulationKind: Equatable {
     case resize
 }
 
+private let postDragAxObserverSuppressionDuration: Duration = .seconds(2)
+
 @MainActor var currentlyManipulatedWithMouseWindowId: UInt32? = nil
 @MainActor private var pinnedDraggedWindowId: UInt32? = nil
 @MainActor private var currentMouseDragSubject: WindowDragSubject = .window
@@ -13,6 +15,8 @@ enum MouseManipulationKind: Equatable {
 @MainActor private var currentMouseDragStartedInSidebar: Bool = false
 @MainActor private var currentMouseManipulationKind: MouseManipulationKind = .none
 @MainActor private var draggedWindowAnchorRectById: [UInt32: Rect] = [:]
+@MainActor private var suppressedPostDragAxObserverEventsUntil: ContinuousClock.Instant? = nil
+@MainActor private var suppressedPostDragAxObserverEventsByWindowId: [UInt32: ContinuousClock.Instant] = [:]
 
 func isLeftMouseButtonPressed(mask: Int) -> Bool {
     (mask & 0x1) != 0
@@ -105,6 +109,54 @@ func resolvedDraggedWindowAnchorRect(for window: Window, subject: WindowDragSubj
     }
 }
 
+func currentSessionModifierFlags() -> CGEventFlags {
+    CGEventSource.flagsState(.combinedSessionState)
+}
+
+func shouldPromoteWindowDragToTabGroupDrag(isOptionPressed: Bool, isTabbedWindow: Bool) -> Bool {
+    isOptionPressed && isTabbedWindow
+}
+
+func shouldAllowSameWorkspaceWindowSurfaceIntent(
+    enableWindowManagement: Bool,
+    subject: WindowDragSubject,
+    detachOrigin: TabDetachOrigin,
+    isOptionPressed: Bool,
+) -> Bool {
+    if enableWindowManagement {
+        return true
+    }
+    if detachOrigin == .tabStrip {
+        return true
+    }
+    return subject == .window && isOptionPressed
+}
+
+@MainActor
+func isWindowInDraggableTabGroup(_ window: Window) -> Bool {
+    guard let parent = window.parent as? TilingContainer else { return false }
+    return parent.layout == .accordion && parent.children.count > 1
+}
+
+@MainActor
+func shouldContinueCurrentGroupDrag(windowId: UInt32) -> Bool {
+    getCurrentMouseManipulationKind() == .move &&
+        currentlyManipulatedWithMouseWindowId == windowId &&
+        getCurrentMouseDragSubject() == .group
+}
+
+@MainActor
+func resolvedMouseDragSubject(for window: Window) -> WindowDragSubject {
+    if shouldContinueCurrentGroupDrag(windowId: window.windowId) {
+        return .group
+    }
+    let isOptionPressed = currentSessionModifierFlags().contains(.maskAlternate)
+    return shouldPromoteWindowDragToTabGroupDrag(
+        isOptionPressed: isOptionPressed,
+        isTabbedWindow: isWindowInDraggableTabGroup(window),
+    ) ? .group : .window
+}
+
 @MainActor
 @discardableResult
 func beginWindowMoveWithMouseSessionIfNeeded(
@@ -147,6 +199,7 @@ func beginWindowMoveWithMouseSessionIfNeeded(
 @MainActor
 func cancelManipulatedWithMouseState() {
     cancelWindowDragActualRectRefresh()
+    clearPendingUnmanagedWindowSnap()
     clearDraggedWindowAnchorRect(for: currentlyManipulatedWithMouseWindowId)
     setCurrentMouseManipulationKind(.none)
     setCurrentMouseDragSubject(.window)
@@ -157,6 +210,55 @@ func cancelManipulatedWithMouseState() {
     for workspace in Workspace.all {
         workspace.resetResizeWeightBeforeResizeRecursive()
     }
+}
+
+@MainActor
+func suppressPostDragAxObserverEvents(for windowIds: some Sequence<UInt32>) {
+    let suppressionDeadline = ContinuousClock.now + postDragAxObserverSuppressionDuration
+    for windowId in windowIds {
+        suppressedPostDragAxObserverEventsByWindowId[windowId] = suppressionDeadline
+    }
+}
+
+@MainActor
+func armGlobalPostDragAxObserverSuppression() {
+    suppressedPostDragAxObserverEventsUntil = ContinuousClock.now + postDragAxObserverSuppressionDuration
+}
+
+@MainActor
+private func hasActiveGlobalPostDragAxObserverSuppression() -> Bool {
+    guard let suppressionDeadline = suppressedPostDragAxObserverEventsUntil else { return false }
+    if suppressionDeadline > ContinuousClock.now {
+        return true
+    }
+    suppressedPostDragAxObserverEventsUntil = nil
+    return false
+}
+
+@MainActor
+private func hasActivePostDragAxObserverSuppression(for windowId: UInt32) -> Bool {
+    guard let suppressionDeadline = suppressedPostDragAxObserverEventsByWindowId[windowId] else { return false }
+    if suppressionDeadline > ContinuousClock.now {
+        return true
+    }
+    suppressedPostDragAxObserverEventsByWindowId.removeValue(forKey: windowId)
+    return false
+}
+
+@MainActor
+func shouldIgnoreAxObserverEventForPostDragSuppression(windowId: UInt32?, notif: String) -> Bool {
+    guard notif == kAXMovedNotification as String || notif == kAXResizedNotification as String else { return false }
+    guard !isLeftMouseButtonDown else { return false }
+    if hasActiveGlobalPostDragAxObserverSuppression() {
+        debugFocusLog("axObserver.suppressed.global notif=\(notif) window=\(String(describing: windowId))")
+        return true
+    }
+    guard let windowId else { return false }
+    let shouldSuppress = hasActivePostDragAxObserverSuppression(for: windowId)
+    if shouldSuppress {
+        debugFocusLog("axObserver.suppressed window=\(windowId) notif=\(notif)")
+    }
+    return shouldSuppress
 }
 
 @MainActor

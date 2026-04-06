@@ -25,6 +25,15 @@ enum TapModifierKey: String, CaseIterable, Equatable, Sendable {
             default: return nil
         }
     }
+
+    var modifierFlag: NSEvent.ModifierFlags {
+        switch self {
+            case .leftAlt, .rightAlt: .option
+            case .leftCmd, .rightCmd: .command
+            case .leftCtrl, .rightCtrl: .control
+            case .leftShift, .rightShift: .shift
+        }
+    }
 }
 
 struct TapBinding: Equatable, Sendable {

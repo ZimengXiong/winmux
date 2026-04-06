@@ -8,6 +8,11 @@ import TOMLKit
 @MainActor private var activeTapBindings: [TapModifierKey: TapBinding] = [:]
 @MainActor private var pendingTapBindings: [TapModifierKey: TapBinding] = [:]
 @MainActor private var pressedTapModifiers: Set<TapModifierKey> = []
+@MainActor private var pendingTapTriggerTasks: [TapModifierKey: Task<Void, Never>] = [:]
+@MainActor private var pendingTapTriggerTokens: [TapModifierKey: Int] = [:]
+@MainActor private var nextTapTriggerToken = 0
+@MainActor private var hotkeysSuspended = false
+private let tapBindingTriggerDelayNs: UInt64 = 75_000_000
 
 @MainActor func resetHotKeys() {
     // Explicitly unregister all hotkeys. We cannot always rely on destruction of the HotKey object to trigger
@@ -19,6 +24,8 @@ import TOMLKit
     activeTapBindings = [:]
     pendingTapBindings = [:]
     pressedTapModifiers = []
+    cancelPendingTapTriggers()
+    hotkeysSuspended = false
 }
 
 extension HotKey {
@@ -33,6 +40,17 @@ extension HotKey {
 }
 
 @MainActor var activeMode: String? = mainModeId
+@MainActor func setHotkeysSuspended(_ suspended: Bool) {
+    if hotkeysSuspended == suspended { return }
+    hotkeysSuspended = suspended
+    if suspended {
+        pendingTapBindings = [:]
+        pressedTapModifiers = []
+        cancelPendingTapTriggers()
+    }
+    applyHotkeyEnabledState()
+}
+
 @MainActor func activateMode(_ targetMode: String?) async throws {
     let targetBindings = targetMode.flatMap { config.modes[$0] }?.bindings ?? [:]
     activeTapBindings = targetMode
@@ -42,22 +60,19 @@ extension HotKey {
         .reduce(into: [:]) { $0[$1.trigger] = $1 } ?? [:]
     pendingTapBindings = [:]
     pressedTapModifiers = []
+    cancelPendingTapTriggers()
     for binding in targetBindings.values where !hotkeys.keys.contains(binding.descriptionWithKeyCode) {
         hotkeys[binding.descriptionWithKeyCode] = HotKey(key: binding.keyCode, modifiers: binding.modifiers, keyDownHandler: {
             Task { @MainActor in
+                if hotkeysSuspended { return }
+                noteTapBindingKeyDown()
                 triggerBinding(binding.descriptionWithKeyNotation, binding.commands)
             }
         })
     }
-    for (binding, key) in hotkeys {
-        if targetBindings.keys.contains(binding) {
-            key.isEnabled = true
-        } else {
-            key.isEnabled = false
-        }
-    }
     let oldMode = activeMode
     activeMode = targetMode
+    applyHotkeyEnabledState()
     if oldMode != targetMode {
         broadcastEvent(.modeChanged(mode: targetMode))
         if !config.onModeChanged.isEmpty {
@@ -70,6 +85,7 @@ extension HotKey {
 }
 
 @MainActor private func triggerBinding(_ binding: String, _ commands: [any Command]) {
+    if hotkeysSuspended { return }
     Task {
         if let activeMode {
             broadcastEvent(.bindingTriggered(
@@ -88,17 +104,21 @@ extension HotKey {
 }
 
 @MainActor func noteTapBindingKeyDown() {
+    if hotkeysSuspended { return }
+    cancelPendingTapTriggers()
     pendingTapBindings = [:]
 }
 
 @MainActor func noteTapBindingFlagsChanged(keyCode: UInt16) {
-    if activeTapBindings.isEmpty && pendingTapBindings.isEmpty { return }
+    if hotkeysSuspended { return }
+    if activeTapBindings.isEmpty && pendingTapBindings.isEmpty && pendingTapTriggerTasks.isEmpty { return }
     guard let tapModifier = TapModifierKey(keyCode: keyCode) else { return }
+    cancelPendingTapTriggers()
 
     if pressedTapModifiers.contains(tapModifier) {
         pressedTapModifiers.remove(tapModifier)
         if let binding = pendingTapBindings.removeValue(forKey: tapModifier) {
-            triggerBinding(binding.descriptionWithKeyNotation, binding.commands)
+            scheduleTapBindingTrigger(binding)
         }
         return
     }
@@ -108,6 +128,37 @@ extension HotKey {
     pendingTapBindings = [:]
     if !hadOtherPressedModifiers, let binding = activeTapBindings[tapModifier] {
         pendingTapBindings[tapModifier] = binding
+    }
+}
+
+@MainActor private func scheduleTapBindingTrigger(_ binding: TapBinding) {
+    let trigger = binding.trigger
+    nextTapTriggerToken += 1
+    let token = nextTapTriggerToken
+    pendingTapTriggerTokens[trigger] = token
+    let task = Task { @MainActor in
+        try? await Task.sleep(nanoseconds: tapBindingTriggerDelayNs)
+        guard pendingTapTriggerTokens[trigger] == token else { return }
+        pendingTapTriggerTasks[trigger] = nil
+        pendingTapTriggerTokens[trigger] = nil
+        guard pressedTapModifiers.isEmpty else { return }
+        triggerBinding(binding.descriptionWithKeyNotation, binding.commands)
+    }
+    pendingTapTriggerTasks[trigger] = task
+}
+
+@MainActor private func cancelPendingTapTriggers() {
+    for task in pendingTapTriggerTasks.values {
+        task.cancel()
+    }
+    pendingTapTriggerTasks = [:]
+    pendingTapTriggerTokens = [:]
+}
+
+@MainActor private func applyHotkeyEnabledState() {
+    let targetBindings = activeMode.flatMap { config.modes[$0] }?.bindings ?? [:]
+    for (binding, key) in hotkeys {
+        key.isEnabled = !hotkeysSuspended && targetBindings.keys.contains(binding)
     }
 }
 

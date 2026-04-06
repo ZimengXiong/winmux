@@ -311,6 +311,8 @@ final class ConfigTest: XCTestCase {
                 enabled = true
                 width = 280
                 monitor = ['secondary', 2]
+                show-status-pills = false
+                show-date = false
 
             [workspace-sidebar.workspace-labels]
                 1 = 'Code'
@@ -325,6 +327,8 @@ final class ConfigTest: XCTestCase {
                 collapsedWidth: 44,
                 width: 280,
                 monitor: [.secondary, .sequenceNumber(2)],
+                showStatusPills: false,
+                showDate: false,
                 workspaceLabels: ["1": "Code", "2": "Web"],
             ),
         )
@@ -362,6 +366,57 @@ final class ConfigTest: XCTestCase {
         assertEquals(heightErrors.descriptions, [
             "window-tabs.height: Must be greater than 20",
         ])
+    }
+
+    func testParseEnableWindowManagement() {
+        let (parsed, errors) = parseConfig(
+            """
+            enable-window-management = false
+            """,
+        )
+        assertEquals(errors, [])
+        XCTAssertFalse(parsed.enableWindowManagement)
+    }
+
+    func testParseRectangleShortcutsPresetSeedsMainMode() {
+        let (parsed, errors) = parseConfig(
+            """
+            shortcuts-preset = 'rectangle'
+            [mode.foo.binding]
+                alt-h = 'focus left'
+            """,
+        )
+        assertEquals(errors, [])
+        XCTAssertEqual(parsed.shortcutsPreset, .rectangle)
+        XCTAssertNotNil(parsed.modes[mainModeId])
+        XCTAssertNotNil(parsed.modes["foo"])
+
+        let leftBinding = HotkeyBinding(.control.union(.option), .leftArrow, [
+            SnapCommand(args: SnapCmdArgs(rawArgs: [], action: .leftHalf)),
+        ])
+        let maximizeBinding = HotkeyBinding(.control.union(.option), .return, [
+            SnapCommand(args: SnapCmdArgs(rawArgs: [], action: .maximize)),
+        ])
+        assertEquals(parsed.modes[mainModeId]?.bindings[leftBinding.descriptionWithKeyCode], leftBinding)
+        assertEquals(parsed.modes[mainModeId]?.bindings[maximizeBinding.descriptionWithKeyCode], maximizeBinding)
+    }
+
+    func testRectangleShortcutsPresetDoesNotOverrideExplicitBindings() {
+        let (parsed, errors) = parseConfig(
+            """
+            shortcuts-preset = 'rectangle'
+            [mode.main.binding]
+                ctrl-alt-left = 'focus left'
+            """,
+        )
+        assertEquals(errors, [])
+
+        let explicitBinding = HotkeyBinding(.control.union(.option), .leftArrow, [FocusCommand.new(direction: .left)])
+        let seededBinding = HotkeyBinding(.control.union(.option), .rightArrow, [
+            SnapCommand(args: SnapCmdArgs(rawArgs: [], action: .rightHalf)),
+        ])
+        assertEquals(parsed.modes[mainModeId]?.bindings[explicitBinding.descriptionWithKeyCode], explicitBinding)
+        assertEquals(parsed.modes[mainModeId]?.bindings[seededBinding.descriptionWithKeyCode], seededBinding)
     }
 
     func testParseOnWindowDetected() {
@@ -612,5 +667,88 @@ final class ConfigTest: XCTestCase {
 
         XCTAssertFalse(updated.contains("[workspace-sidebar.workspace-labels]"))
         XCTAssertTrue(updated.contains("[mode.main.binding]"))
+    }
+
+    func testUpdateWindowManagementConfigReplacesExistingValueAndPreservesComment() {
+        let updated = updateWindowManagementConfig(
+            in: """
+            start-at-login = false
+            enable-window-management = true # keep this comment
+
+            [mode.main.binding]
+                alt-h = 'focus left'
+            """,
+            enabled: false,
+        )
+
+        XCTAssertTrue(updated.contains("enable-window-management = false # keep this comment"))
+        XCTAssertTrue(updated.contains("[mode.main.binding]"))
+        XCTAssertTrue(updated.contains("alt-h = 'focus left'"))
+        XCTAssertFalse(updated.contains("enable-window-management = true # keep this comment"))
+    }
+
+    func testUpdateWindowManagementConfigAppendsWithoutTouchingBindings() {
+        let updated = updateWindowManagementConfig(
+            in: """
+            [mode.main.binding]
+                alt-h = 'focus left'
+                ctrl-alt-left = 'focus monitor left'
+            """,
+            enabled: false,
+        )
+
+        XCTAssertTrue(updated.contains("[mode.main.binding]"))
+        XCTAssertTrue(updated.contains("alt-h = 'focus left'"))
+        XCTAssertTrue(updated.contains("ctrl-alt-left = 'focus monitor left'"))
+        XCTAssertTrue(updated.contains("enable-window-management = false"))
+    }
+
+    func testUpdateWindowManagementConfigAppendsAtTopLevelBeforeBindingTapSection() {
+        let updated = updateWindowManagementConfig(
+            in: """
+            [mode.main.binding-tap]
+                left-alt = 'focus left'
+            """,
+            enabled: false,
+        )
+
+        XCTAssertEqual(
+            updated,
+            """
+            enable-window-management = false
+
+            [mode.main.binding-tap]
+                left-alt = 'focus left'
+            """,
+        )
+        let (parsed, errors) = parseConfig(updated)
+        assertEquals(errors, [])
+        XCTAssertFalse(parsed.enableWindowManagement)
+        XCTAssertEqual(parsed.modes[mainModeId]?.tapBindings["left-alt"]?.descriptionWithKeyNotation, "left-alt")
+    }
+
+    func testUpdateWindowManagementConfigRepairsMisplacedLineInsideBindingTapSection() {
+        let updated = updateWindowManagementConfig(
+            in: """
+            [mode.main.binding-tap]
+                left-alt = 'focus left'
+            enable-window-management = true # legacy misplaced line
+            """,
+            enabled: false,
+        )
+
+        XCTAssertEqual(
+            updated,
+            """
+            enable-window-management = false # legacy misplaced line
+
+            [mode.main.binding-tap]
+                left-alt = 'focus left'
+            """,
+        )
+        let (parsed, errors) = parseConfig(updated)
+        assertEquals(errors, [])
+        XCTAssertFalse(parsed.enableWindowManagement)
+        XCTAssertEqual(parsed.modes[mainModeId]?.tapBindings["left-alt"]?.descriptionWithKeyNotation, "left-alt")
     }
 }

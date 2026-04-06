@@ -49,7 +49,9 @@ extension TreeNode {
                     } else {
                         lastAppliedLayoutPhysicalRect = physicalRect
                         window.isFullscreen = false
-                        if !canReuseLastAppliedWindowFrame(previousPhysicalRect: previousPhysicalRect, nextPhysicalRect: physicalRect) {
+                        if config.enableWindowManagement &&
+                            !canReuseLastAppliedWindowFrame(previousPhysicalRect: previousPhysicalRect, nextPhysicalRect: physicalRect)
+                        {
                             window.setAxFrame(point, CGSize(width: width, height: height))
                         }
                     }
@@ -96,6 +98,13 @@ private struct LayoutContext {
 extension Window {
     @MainActor
     fileprivate func layoutFloatingWindow(_ context: LayoutContext) async throws {
+        if !config.enableWindowManagement {
+            if isFullscreen {
+                layoutFullscreen(context)
+                isFullscreen = false
+            }
+            return
+        }
         let workspace = context.workspace
         let windowRect = try await getAxRect() // Probably not idempotent
         let currentMonitor = windowRect?.center.monitorApproximation

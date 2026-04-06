@@ -7,6 +7,7 @@ import SwiftUI
 struct AeroSpaceApp: App {
     @StateObject var viewModel = TrayMenuModel.shared
     @StateObject var messageModel = MessageModel.shared
+    @StateObject var shortcutSettingsModel = ShortcutSettingsModel.shared
     @Environment(\.openWindow) var openWindow: OpenWindowAction
 
     init() {
@@ -15,6 +16,10 @@ struct AeroSpaceApp: App {
 
     var body: some Scene {
         menuBar(viewModel: viewModel)
+        getShortcutSettingsWindow(model: shortcutSettingsModel)
+            .onChange(of: shortcutSettingsModel.openRequestId) { _ in
+                openShortcutSettingsWindow(openWindow)
+            }
         getMessageWindow(messageModel: messageModel)
             .onChange(of: messageModel.message) { message in
                 if message != nil {

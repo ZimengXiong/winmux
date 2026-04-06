@@ -49,6 +49,16 @@ on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
 # Also see: https://nikitabobko.github.io/AeroSpace/goodies#disable-hide-app
 automatically-unhide-macos-hidden-apps = false
 
+# Disable this to keep AeroSpace's workspace/sidebar/tab-group model without
+# resizing or repositioning visible windows. Hidden workspaces and inactive tabs
+# are still moved off-screen so virtual workspaces and tab groups keep working.
+enable-window-management = true
+
+# Possible values: none|rectangle
+# The rectangle preset seeds Rectangle-style unmanaged snap shortcuts into
+# mode.main without overriding bindings you explicitly define yourself.
+shortcuts-preset = 'none'
+
 # List of workspaces that should stay alive even when they contain no windows,
 # even when they are invisible. Persistent workspaces remain user-facing in
 # workspace lists and the sidebar even while empty after they have been created.
@@ -90,6 +100,8 @@ on-mode-changed = []
     collapsed-width = 44
     width = 240
     monitor = 'main'
+    show-status-pills = true
+    show-date = true
 
 [workspace-sidebar.workspace-labels]
     # 1 = 'Code'
@@ -98,7 +110,7 @@ on-mode-changed = []
 
 # 'main' binding mode declaration
 # See: https://nikitabobko.github.io/AeroSpace/guide#binding-modes
-# 'main' binding mode must be always presented
+# If you don't use a built-in shortcuts preset, 'main' binding mode must be present.
 # Fallback value (if you omit the key): mode.main.binding = {}
 [mode.main.binding]
 

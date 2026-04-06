@@ -1,16 +1,15 @@
 import AppKit
 import Foundation
-import IOKit.ps
 import SwiftUI
 
 private let workspaceSidebarStatusCornerRadius: CGFloat = 10
-private let workspaceSidebarStatusBatteryRefreshInterval: Duration = .seconds(30)
+private let workspaceSidebarStatusRefreshInterval: Duration = .seconds(5)
 
 struct WorkspaceSidebarStatusView: View {
     let sectionWidth: CGFloat
     let isCompact: Bool
 
-    @State private var batterySnapshot = WorkspaceSidebarBatterySnapshot.current()
+    @State private var systemStatus = WorkspaceSidebarSystemStatusSnapshot.current()
 
     var body: some View {
         Group {
@@ -25,7 +24,7 @@ struct WorkspaceSidebarStatusView: View {
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     WorkspaceSidebarExpandedStatusCard(
                         date: context.date,
-                        batterySnapshot: batterySnapshot,
+                        systemStatus: systemStatus,
                         sectionWidth: sectionWidth,
                     )
                 }
@@ -34,17 +33,17 @@ struct WorkspaceSidebarStatusView: View {
         .frame(width: sectionWidth, alignment: .leading)
         .frame(maxWidth: .infinity, alignment: .leading)
         .task {
-            await refreshBatterySnapshot()
+            await refreshSystemStatus()
         }
         .animation(.easeInOut(duration: 0.16), value: isCompact)
     }
 
-    private func refreshBatterySnapshot() async {
-        batterySnapshot = .current()
+    private func refreshSystemStatus() async {
+        systemStatus = .current()
         while !Task.isCancelled {
-            try? await Task.sleep(for: workspaceSidebarStatusBatteryRefreshInterval)
+            try? await Task.sleep(for: workspaceSidebarStatusRefreshInterval)
             guard !Task.isCancelled else { return }
-            batterySnapshot = .current()
+            systemStatus = .current()
         }
     }
 }
@@ -95,8 +94,26 @@ private struct WorkspaceSidebarCompactClockCard: View {
 
 private struct WorkspaceSidebarExpandedStatusCard: View {
     let date: Date
-    let batterySnapshot: WorkspaceSidebarBatterySnapshot
+    let systemStatus: WorkspaceSidebarSystemStatusSnapshot
     let sectionWidth: CGFloat
+
+    @MainActor private var showsDate: Bool { config.workspaceSidebar.showDate }
+    @MainActor private var showsStatusPills: Bool { config.workspaceSidebar.showStatusPills }
+
+    private var accessibilitySummary: String {
+        var parts: [String] = [
+            date.formatted(date: .omitted, time: .standard),
+        ]
+        if showsDate {
+            parts.append(date.formatted(date: .complete, time: .omitted))
+        }
+        if showsStatusPills {
+            parts.append(systemStatus.battery.accessibilityDescription)
+            parts.append(systemStatus.audio.accessibilityDescription)
+            parts.append(systemStatus.network.accessibilityDescription)
+        }
+        return parts.joined(separator: ", ")
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -106,18 +123,26 @@ private struct WorkspaceSidebarExpandedStatusCard: View {
                     .foregroundStyle(Color.primary.opacity(0.94))
                     .monospacedDigit()
                     .lineLimit(1)
-                Text(date, format: .dateTime.weekday(.abbreviated))
-                    .font(.system(size: 9, weight: .semibold, design: .rounded))
-                    .foregroundStyle(Color.secondary.opacity(0.72))
-                    .textCase(.uppercase)
-                Text(date, format: .dateTime.month(.abbreviated).day().year())
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                    .foregroundStyle(Color.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                if showsDate {
+                    Text(date, format: .dateTime.weekday(.abbreviated))
+                        .font(.system(size: 9, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Color.secondary.opacity(0.72))
+                        .textCase(.uppercase)
+                    Text(date, format: .dateTime.month(.abbreviated).day().year())
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundStyle(Color.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
             }
 
-            WorkspaceSidebarBatteryPill(snapshot: batterySnapshot)
+            if showsStatusPills {
+                HStack(alignment: .center, spacing: 6) {
+                    WorkspaceSidebarBatteryPill(snapshot: systemStatus.battery)
+                    WorkspaceSidebarAudioPill(snapshot: systemStatus.audio)
+                    WorkspaceSidebarNetworkPill(snapshot: systemStatus.network)
+                }
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
@@ -131,7 +156,7 @@ private struct WorkspaceSidebarExpandedStatusCard: View {
                 }
         )
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text("\(date.formatted(date: .complete, time: .standard)), \(batterySnapshot.accessibilityDescription)"))
+        .accessibilityLabel(Text(accessibilitySummary))
     }
 }
 
@@ -139,92 +164,99 @@ private struct WorkspaceSidebarBatteryPill: View {
     let snapshot: WorkspaceSidebarBatterySnapshot
 
     var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: snapshot.symbolName)
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(snapshot.isCharging ? Color.accentColor : Color.secondary.opacity(0.75))
+        WorkspaceSidebarStatusPill(
+            symbolName: snapshot.symbolName,
+            label: snapshot.label,
+            tint: snapshot.tintColor,
+            accessibilityDescription: snapshot.accessibilityDescription,
+        )
+    }
+}
 
-            Text(snapshot.label)
+private struct WorkspaceSidebarAudioPill: View {
+    let snapshot: WorkspaceSidebarAudioSnapshot
+
+    var body: some View {
+        WorkspaceSidebarStatusPill(
+            symbolName: snapshot.symbolName,
+            label: snapshot.label,
+            tint: snapshot.tintColor,
+            accessibilityDescription: snapshot.accessibilityDescription,
+        )
+    }
+}
+
+private struct WorkspaceSidebarNetworkPill: View {
+    let snapshot: WorkspaceSidebarNetworkSnapshot
+
+    var body: some View {
+        WorkspaceSidebarStatusPill(
+            symbolName: snapshot.symbolName,
+            label: snapshot.label,
+            tint: snapshot.tintColor,
+            accessibilityDescription: snapshot.accessibilityDescription,
+        )
+    }
+}
+
+private struct WorkspaceSidebarStatusPill: View {
+    let symbolName: String
+    let label: String
+    let tint: Color
+    let accessibilityDescription: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: symbolName)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(tint)
+
+            Text(label)
                 .font(.system(size: 10, weight: .semibold, design: .monospaced))
                 .foregroundStyle(Color.primary.opacity(0.9))
                 .monospacedDigit()
                 .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(
             Capsule(style: .continuous)
-                .fill(Color(nsColor: .windowBackgroundColor).opacity(0.52))
+                .fill(tint.opacity(0.16))
         )
         .overlay {
             Capsule(style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.04), lineWidth: 0.5)
+                .strokeBorder(tint.opacity(0.28), lineWidth: 0.5)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(snapshot.accessibilityDescription)
+        .accessibilityLabel(accessibilityDescription)
     }
 }
 
-private struct WorkspaceSidebarBatterySnapshot: Equatable {
-    let chargePercent: Int?
-    let isCharging: Bool
-    let isPluggedIn: Bool
-
-    var label: String {
-        if let chargePercent {
-            return "\(chargePercent)%"
+private extension WorkspaceSidebarBatterySnapshot {
+    var tintColor: Color {
+        switch state {
+            case .charging:
+                return Color(nsColor: .systemGreen)
+            case .ac:
+                return Color(nsColor: .systemGray)
+            case .discharging:
+                return Color(nsColor: .systemOrange)
+            case .unavailable:
+                return Color.secondary
         }
-        return isPluggedIn ? "AC" : "No Battery"
     }
+}
 
-    var symbolName: String {
-        if chargePercent != nil {
-            return isCharging ? "bolt.fill" : "battery.100percent"
-        }
-        return isPluggedIn ? "powerplug.fill" : "powerplug"
+private extension WorkspaceSidebarAudioSnapshot {
+    var tintColor: Color {
+        isMuted ? Color.secondary : Color(nsColor: .systemGreen)
     }
+}
 
-    var accessibilityDescription: String {
-        if let chargePercent {
-            return isCharging
-                ? "Battery \(chargePercent) percent, charging"
-                : "Battery \(chargePercent) percent"
-        }
-        return isPluggedIn ? "AC power connected" : "No battery detected"
-    }
-
-    static func current() -> Self {
-        guard let powerSourceInfo = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
-              let powerSources = IOPSCopyPowerSourcesList(powerSourceInfo)?.takeRetainedValue() as NSArray?
-        else {
-            return .init(chargePercent: nil, isCharging: false, isPluggedIn: false)
-        }
-
-        for powerSource in powerSources {
-            guard let powerSource = powerSource as AnyObject?,
-                  let description = IOPSGetPowerSourceDescription(powerSourceInfo, powerSource)?.takeUnretainedValue() as? [String: Any],
-                  let sourceType = description[kIOPSTypeKey] as? String,
-                  sourceType == kIOPSInternalBatteryType
-            else {
-                continue
-            }
-
-            let currentCapacity = description[kIOPSCurrentCapacityKey] as? Int
-            let maxCapacity = description[kIOPSMaxCapacityKey] as? Int
-            let chargePercent: Int? = if let currentCapacity, let maxCapacity, maxCapacity > 0 {
-                Int((Double(currentCapacity) / Double(maxCapacity) * 100).rounded())
-            } else {
-                nil
-            }
-
-            return .init(
-                chargePercent: chargePercent,
-                isCharging: description[kIOPSIsChargingKey] as? Bool ?? false,
-                isPluggedIn: (description[kIOPSPowerSourceStateKey] as? String) == kIOPSACPowerValue,
-            )
-        }
-
-        return .init(chargePercent: nil, isCharging: false, isPluggedIn: false)
+private extension WorkspaceSidebarNetworkSnapshot {
+    var tintColor: Color {
+        interfaceName == nil ? Color.secondary : Color(nsColor: .systemBlue)
     }
 }
 

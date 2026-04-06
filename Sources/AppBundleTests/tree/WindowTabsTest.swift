@@ -370,6 +370,49 @@ final class WindowTabsTest: XCTestCase {
     }
 
     @MainActor
+    func testUnmanagedLayoutKeepsVisibleWindowFrame() async throws {
+        setUpWorkspacesForTests()
+        config.enableWindowManagement = false
+        let workspace = Workspace.get(byName: "tabs")
+        let window = TestWindow.new(
+            id: 1,
+            parent: workspace.rootTilingContainer,
+            rect: Rect(topLeftX: 50, topLeftY: 70, width: 320, height: 240),
+        )
+
+        try await workspace.layoutWorkspace()
+
+        let rect = try await window.getAxRect().orDie()
+        XCTAssertEqual(rect.topLeftX, 50)
+        XCTAssertEqual(rect.topLeftY, 70)
+        XCTAssertEqual(rect.width, 320)
+        XCTAssertEqual(rect.height, 240)
+    }
+
+    @MainActor
+    func testUnmanagedAccordionTabBarUsesActiveWindowFrame() {
+        setUpWorkspacesForTests()
+        config.enableWindowManagement = false
+        let workspace = Workspace.get(byName: "tabs")
+        let accordion = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let active = TestWindow.new(
+            id: 1,
+            parent: accordion,
+            rect: Rect(topLeftX: 40, topLeftY: 60, width: 500, height: 300),
+        )
+        _ = TestWindow.new(id: 2, parent: accordion, rect: Rect(topLeftX: 10, topLeftY: 20, width: 100, height: 100))
+        accordion.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 240, height: 180)
+        active.markAsMostRecentChild()
+
+        let tabBarRect = accordion.windowTabBarRect.orDie()
+
+        XCTAssertEqual(tabBarRect.topLeftX, 40)
+        XCTAssertEqual(tabBarRect.topLeftY, 60)
+        XCTAssertEqual(tabBarRect.width, 500)
+        XCTAssertEqual(tabBarRect.height, CGFloat(config.windowTabs.height))
+    }
+
+    @MainActor
     func testWindowSplitZonesWrapCenteredSwapZoneWithoutTouchingTabDropZone() {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
@@ -810,6 +853,28 @@ final class WindowTabsTest: XCTestCase {
     }
 
     @MainActor
+    func testApplyWindowSwapDragIntentRejectsDraggingTabGroupOntoItsOwnTab() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let source = TestWindow.new(id: 1, parent: accordion)
+        let target = TestWindow.new(id: 2, parent: accordion)
+
+        XCTAssertFalse(applyWindowSwapDragIntent(
+            sourceWindow: source,
+            sourceSubject: .group,
+            targetWindow: target,
+        ))
+        assertEquals(root.layoutDescription, .h_tiles([
+            .v_accordion([
+                .window(1),
+                .window(2),
+            ]),
+        ]))
+    }
+
+    @MainActor
     func testApplyWindowSwapDragIntentRejectsSelfAccordionTabStripDrags() {
         setUpWorkspacesForTests()
         let previousDetachOrigin = getCurrentMouseTabDetachOrigin()
@@ -888,6 +953,29 @@ final class WindowTabsTest: XCTestCase {
             ]),
         ]))
         XCTAssertEqual(focus.windowOrNil, source)
+    }
+
+    @MainActor
+    func testApplyWindowStackSplitDragIntentRejectsDraggingTabGroupBesideItsOwnTab() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let source = TestWindow.new(id: 1, parent: accordion)
+        let target = TestWindow.new(id: 2, parent: accordion)
+
+        XCTAssertFalse(applyWindowStackSplitDragIntent(
+            sourceWindow: source,
+            sourceSubject: .group,
+            targetWindow: target,
+            position: .left,
+        ))
+        assertEquals(root.layoutDescription, .h_tiles([
+            .v_accordion([
+                .window(1),
+                .window(2),
+            ]),
+        ]))
     }
 
     @MainActor
@@ -1215,6 +1303,56 @@ final class WindowTabsTest: XCTestCase {
     }
 
     @MainActor
+    func testGroupDragDoesNotOfferSwapHintAgainstItsOwnTab() {
+        setUpWorkspacesForTests()
+        clearPendingWindowDragIntent()
+        defer { clearPendingWindowDragIntent() }
+
+        let workspace = Workspace.get(byName: "tabs")
+        XCTAssertTrue(workspace.focusWorkspace())
+        let root = workspace.rootTilingContainer
+        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let source = TestWindow.new(id: 1, parent: accordion)
+        let target = TestWindow.new(id: 2, parent: accordion)
+        accordion.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
+        source.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
+        target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
+
+        XCTAssertFalse(updatePendingWindowDragIntent(
+            sourceWindow: source,
+            mouseLocation: target.swapDropZoneRect.orDie().center,
+            subject: .group,
+            detachOrigin: .window,
+        ))
+        XCTAssertNil(debugPendingWindowDragIntentSummary())
+    }
+
+    @MainActor
+    func testGroupDragDoesNotOfferSplitHintAgainstItsOwnTab() {
+        setUpWorkspacesForTests()
+        clearPendingWindowDragIntent()
+        defer { clearPendingWindowDragIntent() }
+
+        let workspace = Workspace.get(byName: "tabs")
+        XCTAssertTrue(workspace.focusWorkspace())
+        let root = workspace.rootTilingContainer
+        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let source = TestWindow.new(id: 1, parent: accordion)
+        let target = TestWindow.new(id: 2, parent: accordion)
+        accordion.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
+        source.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
+        target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
+
+        XCTAssertFalse(updatePendingWindowDragIntent(
+            sourceWindow: source,
+            mouseLocation: target.stackSplitDropZoneRect(position: .left).orDie().center,
+            subject: .group,
+            detachOrigin: .window,
+        ))
+        XCTAssertNil(debugPendingWindowDragIntentSummary())
+    }
+
+    @MainActor
     func testStickyTabInsertHintDoesNotSurviveTargetRemoval() {
         setUpWorkspacesForTests()
         clearPendingWindowDragIntent()
@@ -1278,6 +1416,120 @@ final class WindowTabsTest: XCTestCase {
         config.windowTabs.enabled = false
 
         XCTAssertFalse(updatePendingWindowDragIntent(sourceWindow: source, mouseLocation: mouseLocation))
+    }
+
+    @MainActor
+    func testUnmanagedSameWorkspaceBodyMoveHintIsSuppressed() {
+        setUpWorkspacesForTests()
+        clearPendingWindowDragIntent()
+        let previousValue = config.enableWindowManagement
+        config.enableWindowManagement = false
+        defer {
+            config.enableWindowManagement = previousValue
+            clearPendingWindowDragIntent()
+        }
+
+        let workspace = Workspace.get(byName: "tabs")
+        XCTAssertTrue(workspace.focusWorkspace())
+        let root = workspace.rootTilingContainer
+        let source = TestWindow.new(id: 1, parent: root)
+        let target = TestWindow.new(id: 2, parent: root)
+        source.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 200, height: 220)
+        target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 220, topLeftY: 0, width: 200, height: 220)
+
+        XCTAssertFalse(updatePendingWindowDragIntent(
+            sourceWindow: source,
+            mouseLocation: target.swapDropZoneRect.orDie().center,
+            subject: .window,
+            detachOrigin: .window,
+        ))
+    }
+
+    @MainActor
+    func testUnmanagedDetachedTabStillOffersTabReentryHint() {
+        setUpWorkspacesForTests()
+        clearPendingWindowDragIntent()
+        let previousWindowManagement = config.enableWindowManagement
+        let previousWindowTabs = config.windowTabs.enabled
+        config.enableWindowManagement = false
+        config.windowTabs.enabled = true
+        defer {
+            config.enableWindowManagement = previousWindowManagement
+            config.windowTabs.enabled = previousWindowTabs
+            clearPendingWindowDragIntent()
+        }
+
+        let workspace = Workspace.get(byName: "tabs")
+        XCTAssertTrue(workspace.focusWorkspace())
+        let accordion = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let source = TestWindow.new(id: 1, parent: accordion)
+        let target = TestWindow.new(id: 2, parent: accordion)
+        accordion.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
+        source.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
+        target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
+
+        XCTAssertTrue(updatePendingWindowDragIntent(
+            sourceWindow: source,
+            mouseLocation: accordion.windowTabDropInteractionRect.orDie().center,
+            subject: .window,
+            detachOrigin: .tabStrip,
+        ))
+
+        XCTAssertEqual(debugPendingWindowDragIntentSummary()?.kind, .tabStack(targetWindowId: target.windowId))
+    }
+
+    @MainActor
+    func testUnmanagedCrossWorkspaceMoveHintStillWorks() {
+        setUpWorkspacesForTests()
+        clearPendingWindowDragIntent()
+        let previousValue = config.enableWindowManagement
+        config.enableWindowManagement = false
+        defer {
+            config.enableWindowManagement = previousValue
+            clearPendingWindowDragIntent()
+        }
+
+        let sourceWorkspace = Workspace.get(byName: "source")
+        XCTAssertTrue(sourceWorkspace.focusWorkspace())
+        let source = TestWindow.new(id: 1, parent: sourceWorkspace.rootTilingContainer)
+        source.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 220, height: 180)
+
+        let targetWorkspace = Workspace.get(byName: "target")
+        let mouseLocation = targetWorkspace.workspaceMonitor.visibleRectPaddedByOuterGaps.center
+
+        XCTAssertTrue(updatePendingWindowDragIntent(
+            sourceWindow: source,
+            mouseLocation: mouseLocation,
+            subject: .window,
+            detachOrigin: .window,
+        ))
+
+        XCTAssertEqual(debugPendingWindowDragIntentSummary()?.kind, .moveToWorkspace(workspaceName: targetWorkspace.name))
+    }
+
+    @MainActor
+    func testClearingMissingUnmanagedPreviewDoesNotHideManagedDragPreview() {
+        setUpWorkspacesForTests()
+        clearPendingWindowDragIntent()
+        clearPendingUnmanagedWindowSnap()
+        config.windowTabs.enabled = true
+        let workspace = Workspace.get(byName: "tabs")
+        XCTAssertTrue(workspace.focusWorkspace())
+        let root = workspace.rootTilingContainer
+        let source = TestWindow.new(id: 1, parent: root)
+        let target = TestWindow.new(id: 2, parent: root)
+        root.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 220)
+        source.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 200, height: 220)
+        target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 220, topLeftY: 0, width: 200, height: 220)
+        let mouseLocation = target.tabDropInteractionRect.orDie().center
+
+        XCTAssertTrue(updatePendingWindowDragIntent(sourceWindow: source, mouseLocation: mouseLocation))
+        XCTAssertTrue(WindowTabDropPreviewPanel.shared.isVisible)
+
+        clearPendingUnmanagedWindowSnap()
+
+        XCTAssertTrue(WindowTabDropPreviewPanel.shared.isVisible)
+        clearPendingWindowDragIntent()
     }
 
     @MainActor
@@ -1394,7 +1646,7 @@ final class WindowTabsTest: XCTestCase {
         ))
     }
 
-    func testMovedObsIgnoresManagedGroupDragSession() {
+    func testMovedObsIgnoresManagedGroupBodyDragSession() {
         XCTAssertTrue(shouldIgnoreMovedObsForManagedWindowDragSession(
             observedWindowId: 10,
             currentWindowId: 10,

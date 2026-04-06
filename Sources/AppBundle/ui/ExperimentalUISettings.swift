@@ -42,30 +42,21 @@ enum ExperimentalUISettingsItems: String {
 func getExperimentalUISettingsMenu(viewModel: TrayMenuModel) -> some View {
     let color = AppearanceTheme.current == .dark ? Color.white : Color.black
     return Menu {
-        Text("Menu bar style (macOS 14 or later):")
-        ForEach(MenuBarStyle.allCases, id: \.id) { style in
-            MenuBarStyleButton(style: style, color: color).environmentObject(viewModel)
-        }
-    } label: {
-        Text("Experimental UI Settings (No stability guarantees)")
-    }
-}
-
-@MainActor
-struct MenuBarStyleButton: View {
-    @EnvironmentObject var viewModel: TrayMenuModel
-    let style: MenuBarStyle
-    let color: Color
-
-    var body: some View {
-        Button {
-            viewModel.experimentalUISettings.displayStyle = style
-        } label: {
-            Toggle(isOn: .constant(viewModel.experimentalUISettings.displayStyle == style)) {
-                MenuBarLabel(style: style, color: color)
-                    .environmentObject(viewModel)
-                Text(" -  " + style.title)
+        Picker("Menu bar style", selection: Binding(
+            get: { viewModel.experimentalUISettings.displayStyle },
+            set: { viewModel.experimentalUISettings.displayStyle = $0 }
+        )) {
+            ForEach(MenuBarStyle.allCases) { style in
+                HStack {
+                    MenuBarLabel(style: style, color: color)
+                        .environmentObject(viewModel)
+                    Text(style.title)
+                }
+                .tag(style)
             }
         }
+        .pickerStyle(.inline)
+    } label: {
+        Text("Experimental UI Settings")
     }
 }

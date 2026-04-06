@@ -76,13 +76,7 @@ func persistWorkspaceSidebarLabel(workspaceName: String, label: String?) throws 
 
 @MainActor
 private func preferredWorkspaceSidebarConfigUrl() -> URL {
-    if let configLocation = serverArgs.configLocation {
-        return URL(filePath: configLocation)
-    }
-    if let customConfigUrl = findCustomConfigUrl().urlOrNil {
-        return customConfigUrl
-    }
-    return FileManager.default.homeDirectoryForCurrentUser.appending(path: configDotfileName)
+    preferredEditableConfigUrl()
 }
 
 private func workspaceSidebarLabelKey(in line: String) -> String? {

@@ -11,6 +11,7 @@ private let workspaceSidebarRowsRevealProgress: CGFloat = 0.58
 private let workspaceSidebarSectionCornerRadius: CGFloat = 8
 private let workspaceSidebarHoverCueWidthDelta: CGFloat = 12
 private let workspaceSidebarHoverOpenThresholdFraction: CGFloat = 0.75
+private let workspaceSidebarDisplayEdgeCompactionMargin: CGFloat = 12
 @MainActor
 private var workspaceSidebarDropTargets: [WorkspaceSidebarDropTarget] = []
 
@@ -170,6 +171,21 @@ func shouldDelayWorkspaceSidebarExpansion(
     isMouseWindowDragInProgress: Bool,
 ) -> Bool {
     !isExpanded && !isExpansionLocked && !isMouseWindowDragInProgress
+}
+
+@MainActor
+private func isMousePushedAgainstDisplayEdge() -> Bool {
+    let mouseLocation = NSEvent.mouseLocation
+    let screenFrame = NSScreen.screens
+        .first(where: { $0.frame.contains(mouseLocation) })?
+        .frame ?? NSScreen.main?.frame
+
+    guard let screenFrame else { return false }
+    return
+        mouseLocation.x <= screenFrame.minX + workspaceSidebarDisplayEdgeCompactionMargin ||
+        mouseLocation.x >= screenFrame.maxX - workspaceSidebarDisplayEdgeCompactionMargin ||
+        mouseLocation.y <= screenFrame.minY + workspaceSidebarDisplayEdgeCompactionMargin ||
+        mouseLocation.y >= screenFrame.maxY - workspaceSidebarDisplayEdgeCompactionMargin
 }
 
 @MainActor
@@ -343,15 +359,34 @@ final class WorkspaceSidebarPanel: NSPanelHud {
 
         if isHovering {
             let isExpansionLocked = shouldLockExpansionForSidebarDrag()
+            let isExternalWindowDrag = isMouseWindowDragInProgress()
+            let isSidebarOriginatedDrag = getCurrentMouseDragStartedInSidebar()
             pendingCollapse?.cancel()
             pendingCollapse = nil
             pendingCollapseFinalize?.cancel()
             pendingCollapseFinalize = nil
 
+            if isExternalWindowDrag && !isSidebarOriginatedDrag && isMousePushedAgainstDisplayEdge() {
+                pendingExpand?.cancel()
+                pendingExpand = nil
+                if !isVisible {
+                    refresh()
+                }
+                if TrayMenuModel.shared.workspaceSidebarVisibleWidth != collapsedWidth {
+                    animateVisibleSidebarWidth(
+                        collapsedWidth,
+                        animation: .easeInOut(duration: animationDuration),
+                    )
+                } else {
+                    updateMousePassthrough()
+                }
+                return
+            }
+
             if !shouldDelayWorkspaceSidebarExpansion(
                 isExpanded: TrayMenuModel.shared.isWorkspaceSidebarExpanded,
                 isExpansionLocked: isExpansionLocked,
-                isMouseWindowDragInProgress: isMouseWindowDragInProgress(),
+                isMouseWindowDragInProgress: isExternalWindowDrag,
             ) {
                 expandSidebar(to: expandedWidth)
                 return
@@ -680,7 +715,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
     }
 
     var body: some View {
-        sectionContent
+        interactiveSectionContent
             .padding(.vertical, 6)
             .padding(.horizontal, workspaceSidebarSectionInnerHorizontalInset)
             .frame(width: sectionWidth, alignment: .leading)
@@ -723,9 +758,29 @@ struct WorkspaceSidebarWorkspaceSection: View {
         }
     }
 
+    @ViewBuilder
+    private var interactiveSectionContent: some View {
+        if isCompact {
+            Button(action: handleSectionClick) {
+                sectionContent
+            }
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+        } else {
+            sectionContent
+        }
+    }
+
     private var sectionContent: some View {
         VStack(alignment: .leading, spacing: 3) {
-            headerButton
+            Group {
+                if isCompact {
+                    header
+                        .frame(maxWidth: .infinity, alignment: .center)
+                } else {
+                    headerButton
+                }
+            }
                 .frame(height: headerHeight)
                 .frame(maxWidth: .infinity, alignment: isCompact ? .center : .leading)
             windowRows

@@ -17,8 +17,9 @@ func updateWindowTabModel() async {
         }
         for container in workspace.rootTilingContainer.allTabbedContainersRecursive {
             guard let tabBarRect = container.windowTabBarRect else { continue }
+            let referenceRectSource = container.windowTabBarReferenceRectSource
             debugFocusLog(
-                "updateWindowTabModel container=\(ObjectIdentifier(container)) workspace=\(workspace.name) containerRect=\(String(describing: container.lastAppliedLayoutPhysicalRect)) tabBarRect=\(tabBarRect)"
+                "updateWindowTabModel container=\(ObjectIdentifier(container)) workspace=\(workspace.name) containerRect=\(String(describing: container.lastAppliedLayoutPhysicalRect)) tabBarRect=\(tabBarRect) activeWindowId=\(String(describing: container.tabActiveWindow?.windowId)) referenceRectSource=\(referenceRectSource)"
             )
 
             let activeWindowId = container.tabActiveWindow?.windowId
@@ -75,13 +76,44 @@ extension TilingContainer {
 
     @MainActor
     var windowTabBarHeight: CGFloat {
-        showsWindowTabs ? min(CGFloat(config.windowTabs.height), lastAppliedLayoutPhysicalRect?.height ?? 0) : 0
+        showsWindowTabs ? min(CGFloat(config.windowTabs.height), windowTabBarReferenceRect?.height ?? 0) : 0
     }
 
     @MainActor
     var windowTabBarRect: Rect? {
-        guard showsWindowTabs, let rect = lastAppliedLayoutPhysicalRect else { return nil }
+        guard showsWindowTabs, let rect = windowTabBarReferenceRect else { return nil }
         return Rect(topLeftX: rect.topLeftX, topLeftY: rect.topLeftY, width: rect.width, height: windowTabBarHeight)
+    }
+
+    @MainActor
+    private var windowTabBarReferenceRect: Rect? {
+        if config.enableWindowManagement {
+            return lastAppliedLayoutPhysicalRect
+        }
+        return tabActiveWindow?.lastKnownActualRect ??
+            mostRecentWindowRecursive?.lastKnownActualRect ??
+            anyLeafWindowRecursive?.lastKnownActualRect ??
+            lastAppliedLayoutPhysicalRect
+    }
+
+    @MainActor
+    fileprivate var windowTabBarReferenceRectSource: String {
+        if config.enableWindowManagement {
+            return "container.layout"
+        }
+        if tabActiveWindow?.lastKnownActualRect != nil {
+            return "activeWindow.actual"
+        }
+        if mostRecentWindowRecursive?.lastKnownActualRect != nil {
+            return "mostRecentWindow.actual"
+        }
+        if anyLeafWindowRecursive?.lastKnownActualRect != nil {
+            return "anyLeafWindow.actual"
+        }
+        if lastAppliedLayoutPhysicalRect != nil {
+            return "container.layout"
+        }
+        return "nil"
     }
 
     @MainActor

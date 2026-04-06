@@ -7,12 +7,21 @@ import Foundation
         initTerminationHandler()
         isCli = false
         initServerArgs()
+        var bootstrappedConfigUrl: URL? = nil
         if isDebug {
             await toggleReleaseServerIfDebug(.off)
             interceptTermination(SIGINT)
             interceptTermination(SIGKILL)
         }
-        if try await !reloadConfig() {
+        do {
+            bootstrappedConfigUrl = try ensureBootstrapConfigExistsIfNeeded()
+        } catch {
+            MessageModel.shared.message = Message(
+                description: "Config Bootstrap Error",
+                body: error.localizedDescription,
+            )
+        }
+        if try await !reloadConfig(forceConfigUrl: bootstrappedConfigUrl) {
             var out = ""
             check(
                 try await reloadConfig(forceConfigUrl: defaultConfigUrl, stdout: &out),
@@ -39,6 +48,11 @@ import Foundation
                 smartLayoutAtStartup()
             }
             _ = try await config.afterStartupCommand.runCmdSeq(.defaultEnv, .emptyStdin)
+        }
+        if bootstrappedConfigUrl != nil {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                ShortcutSettingsModel.shared.requestWindowOpen()
+            }
         }
     }
 }
@@ -69,8 +83,8 @@ private let serverHelp = """
     OPTIONS:
       -h, --help              Print help
       -v, --version           Print AeroSpace.app version
-      --config-path <path>    Config path. It will take priority over ~/.aerospace.toml
-                              and ${XDG_CONFIG_HOME}/aerospace/aerospace.toml
+      --config-path <path>    Config path. It will take priority over ~/.config/winmux/winbox.toml,
+                              ~/.aerospace.toml and ${XDG_CONFIG_HOME}/aerospace/aerospace.toml
       --read-only             Disable window management.
                               Useful if you want to use only debug-windows or other query commands.
     """

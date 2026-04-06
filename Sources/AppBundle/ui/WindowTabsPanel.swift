@@ -179,6 +179,8 @@ final class WindowTabDropPreviewPanel: NSPanelHud {
     private let state = WindowTabDropPreviewState()
     private var currentContent: WindowTabDropPreviewContent? = nil
     private var hasShownPreview = false
+    private var pendingHide: DispatchWorkItem? = nil
+    private let hideDebounce: TimeInterval = 0.07
 
     override private init() {
         super.init()
@@ -189,7 +191,8 @@ final class WindowTabDropPreviewPanel: NSPanelHud {
         animationBehavior = .none
         ignoresMouseEvents = true
         backgroundColor = .clear
-        level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue + 2)
+        // Keep the drop preview above actively dragged app windows.
+        level = .statusBar
         contentView = hostingView
         hostingView.rootView = AnyView(WindowTabDropPreviewView(state: state))
         hostingView.frame = contentView?.bounds ?? .zero
@@ -197,6 +200,8 @@ final class WindowTabDropPreviewPanel: NSPanelHud {
     }
 
     func show(_ preview: WindowTabDropPreviewViewModel) {
+        pendingHide?.cancel()
+        pendingHide = nil
         let nextContent = WindowTabDropPreviewContent(model: preview)
         let didChangeContent = currentContent != nextContent
         if didChangeContent {
@@ -223,11 +228,18 @@ final class WindowTabDropPreviewPanel: NSPanelHud {
     }
 
     func hide() {
-        state.model = nil
-        currentContent = nil
-        hasShownPreview = false
-        alphaValue = 1
-        orderOut(nil)
+        pendingHide?.cancel()
+        let hideWorkItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.pendingHide = nil
+            self.state.model = nil
+            self.currentContent = nil
+            self.hasShownPreview = false
+            self.alphaValue = 1
+            self.orderOut(nil)
+        }
+        pendingHide = hideWorkItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + hideDebounce, execute: hideWorkItem)
     }
 }
 
@@ -251,7 +263,7 @@ final class WindowDragCursorProxyPanel: NSPanelHud {
         animationBehavior = .none
         ignoresMouseEvents = true
         backgroundColor = .clear
-        level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue + 3)
+        level = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
         contentView = hostingView
         hostingView.frame = contentView?.bounds ?? .zero
         hostingView.autoresizingMask = [.width, .height]
@@ -561,6 +573,28 @@ private func finishMoveFromTabStrip() {
     }
 }
 
+@MainActor
+private func shouldPromoteTabStripDragToGroup(windowId: UInt32) -> Bool {
+    if shouldContinueCurrentGroupDrag(windowId: windowId) {
+        return true
+    }
+    guard let window = Window.get(byId: windowId) else { return false }
+    let isOptionPressed = currentSessionModifierFlags().contains(.maskAlternate)
+    return shouldPromoteWindowDragToTabGroupDrag(
+        isOptionPressed: isOptionPressed,
+        isTabbedWindow: isWindowInDraggableTabGroup(window),
+    )
+}
+
+@MainActor
+private func shouldAllowTabStripChromeGroupDrag(windowId: UInt32) -> Bool {
+    if shouldContinueCurrentGroupDrag(windowId: windowId) {
+        return true
+    }
+    guard let window = Window.get(byId: windowId) else { return false }
+    return isWindowInDraggableTabGroup(window)
+}
+
 // MARK: - Constants
 
 private let windowTabStripCornerRadius: CGFloat = 10
@@ -645,6 +679,13 @@ private struct WindowTabStripView: View {
                         .highPriorityGesture(
                             DragGesture(minimumDistance: 8)
                                 .onChanged { value in
+                                    if shouldPromoteTabStripDragToGroup(windowId: tab.windowId) {
+                                        draggingTabId = nil
+                                        dragTranslationX = 0
+                                        hasCommittedToDetach = false
+                                        updateMoveFromTabStrip(tab.windowId)
+                                        return
+                                    }
                                     if hasCommittedToDetach {
                                         updateDetachedTabFromTabStrip(tab.windowId)
                                         return
@@ -665,7 +706,9 @@ private struct WindowTabStripView: View {
                                     dragTranslationX = value.translation.width
                                 }
                                 .onEnded { _ in
-                                    if hasCommittedToDetach {
+                                    if shouldContinueCurrentGroupDrag(windowId: tab.windowId) {
+                                        finishMoveFromTabStrip()
+                                    } else if hasCommittedToDetach {
                                         hasCommittedToDetach = false
                                         Task { @MainActor in
                                             try? await resetManipulatedWithMouseIfPossible()
@@ -682,6 +725,22 @@ private struct WindowTabStripView: View {
                 .padding(.horizontal, windowTabStripContentHorizontalPadding)
             }
             .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 10)
+                    .onChanged { _ in
+                        guard let windowId = groupDragWindowId,
+                              shouldAllowTabStripChromeGroupDrag(windowId: windowId)
+                        else { return }
+                        updateMoveFromTabStrip(windowId)
+                    }
+                    .onEnded { _ in
+                        guard let windowId = groupDragWindowId,
+                              shouldContinueCurrentGroupDrag(windowId: windowId)
+                        else { return }
+                        finishMoveFromTabStrip()
+                    },
+            )
 
             windowTabStripGroupHandle(windowId: groupDragWindowId)
         }
@@ -869,8 +928,11 @@ private struct WindowTabDropPreviewView: View {
         .animation(previewAnimation, value: state.model?.geometry)
         .animation(previewAnimation, value: state.model?.referenceWindowId)
         .onAppear {
+            isPresented = state.model != nil
+        }
+        .onChange(of: state.model != nil) { isVisible in
             withAnimation(reduceMotion ? .easeOut(duration: 0.08) : .easeOut(duration: 0.12)) {
-                isPresented = true
+                isPresented = isVisible
             }
         }
     }
@@ -1048,7 +1110,7 @@ private struct WindowTabDropOutlineShape: InsettableShape {
 }
 
 extension CGRect {
-    fileprivate func alignedToBackingPixels() -> CGRect {
+    func alignedToBackingPixels() -> CGRect {
         let scale = (NSScreen.screens
             .max(by: { $0.frame.intersection(self).area < $1.frame.intersection(self).area })?
             .backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2)

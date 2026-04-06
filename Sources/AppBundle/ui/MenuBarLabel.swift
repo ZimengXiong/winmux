@@ -44,30 +44,24 @@ struct MenuBarLabel: View {
             switch style {
                 case .monospacedText: getText(for: .monospaced)
                 case .systemText: getText(for: .default)
-                case .squares: squares
+                case .squares:
+                    if viewModel.trayItems.isEmpty {
+                        appIndicator
+                    } else {
+                        squares
+                    }
                 case .i3:
-                    squares
-                    let workspaces = viewModel.workspaces.filter { !$0.isEffectivelyEmpty && !$0.isVisible }
-                    if !workspaces.isEmpty {
-                        otherWorkspaces(with: workspaces)
+                    if viewModel.trayItems.isEmpty {
+                        appIndicator
+                    } else {
+                        squares
                     }
                 case .i3Ordered:
                     let modeItem = viewModel.trayItems.first { $0.type == .mode }
                     if let modeItem {
                         itemView(for: modeItem)
-                        modeSeparator(with: .monospaced)
-                    }
-                    let orderedWorkspaces = viewModel.workspaces.filter { !$0.isEffectivelyEmpty || $0.isVisible }
-                    ForEach(orderedWorkspaces, id: \.name) { item in
-                        let trayItem = TrayItem(
-                            type: .workspace,
-                            name: item.name,
-                            displayName: item.displayName,
-                            isActive: item.isFocused,
-                            hasFullscreenWindows: item.hasFullscreenWindows,
-                        )
-                        itemView(for: trayItem)
-                            .opacity(item.isVisible ? 1 : 0.5)
+                    } else {
+                        appIndicator
                     }
             }
         }
@@ -86,6 +80,13 @@ struct MenuBarLabel: View {
                 modeSeparator(with: .monospaced)
             }
         }
+    }
+
+    private var appIndicator: some View {
+        Text("A")
+            .font(.system(.largeTitle, design: .monospaced))
+            .foregroundStyle(finalColor)
+            .bold()
     }
 
     private func otherWorkspaces(with otherWorkspaces: [WorkspaceViewModel]) -> some View {

@@ -19,18 +19,11 @@ public final class TrayMenuModel: ObservableObject {
     @Published var workspaceSidebarTopPadding: CGFloat = 12
     @Published var workspaceSidebarHoveredWorkspaceName: String? = nil
     @Published var experimentalUISettings: ExperimentalUISettings = ExperimentalUISettings()
-    @Published var sponsorshipMessage: String = sponsorshipPrompts.randomElement().orDie()
 }
 
 @MainActor func updateTrayText() {
     let focus = focus
-    let activeWorkspace = focus.workspace.workspaceMonitor.activeWorkspace
-    let activeWorkspaceName = activeWorkspace.isSystemStub ? "-" : workspaceDisplayName(activeWorkspace.name)
-    let formattedActiveWorkspaceName = activeWorkspace.allLeafWindowsRecursive.contains { $0.isFullscreen }
-        ? "[\(activeWorkspaceName)]"
-        : activeWorkspaceName
-    TrayMenuModel.shared.trayText = (activeMode?.takeIf { $0 != mainModeId }?.first.map { "(\($0.uppercased())) " } ?? "") +
-        formattedActiveWorkspaceName
+    TrayMenuModel.shared.trayText = activeMode?.takeIf { $0 != mainModeId }?.first.map { "(\($0.uppercased()))" } ?? "A"
     TrayMenuModel.shared.workspaces = userFacingWorkspaces(Workspace.all, focusedWorkspace: focus.workspace).map {
         let apps = $0.allLeafWindowsRecursive.map { $0.app.name?.takeIf { !$0.isEmpty } }.filterNotNil().toSet()
         let dash = " - "
@@ -49,19 +42,9 @@ public final class TrayMenuModel: ObservableObject {
             hasFullscreenWindows: hasFullscreenWindows,
         )
     }
-    var items = [TrayItem(
-        type: .workspace,
-        name: activeWorkspace.isSystemStub ? "-" : activeWorkspace.name,
-        displayName: activeWorkspace.isSystemStub ? "-" : workspaceDisplayName(activeWorkspace.name),
-        isActive: true,
-        hasFullscreenWindows: activeWorkspace.allLeafWindowsRecursive.contains { $0.isFullscreen },
-    )]
-    let mode = activeMode?.takeIf { $0 != mainModeId }?.first.map {
+    let items = activeMode?.takeIf { $0 != mainModeId }?.first.map {
         TrayItem(type: .mode, name: $0.uppercased(), isActive: true, hasFullscreenWindows: false)
-    }
-    if let mode {
-        items.insert(mode, at: 0)
-    }
+    }.map { [$0] } ?? []
     TrayMenuModel.shared.trayItems = items
 }
 
