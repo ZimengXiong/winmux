@@ -177,6 +177,8 @@ You can report issues via `Menu Bar > Report an Issue on Github`. Please conside
 - [ ] Integrate trackpad swiping support (see some work I did on [JiTouch](https://github.com/ZimengXiong/Jitouch2))
 
 ## Credits
+The app logo/icon is still Aerospace's and will proab stay that way for a while. Been focusing on getting everything working first.
+
 - https://github.com/nikitabobko/AeroSpace
 - https://github.com/rxhanson/rectangle
 - https://github.com/asmvik/yabai
