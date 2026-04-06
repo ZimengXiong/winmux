@@ -20,6 +20,8 @@ func syncStartAtLogin() {
 private func cleanupPlistFromPrevVersions() { // todo Drop after a couple of versions
     let launchAgentsDir = FileManager.default.homeDirectoryForCurrentUser.appending(component: "Library/LaunchAgents/")
     Result { try FileManager.default.createDirectory(at: launchAgentsDir, withIntermediateDirectories: true) }.getOrDie()
-    let url: URL = launchAgentsDir.appending(path: "com.zxzimeng.winmux.plist")
-    try? FileManager.default.removeItem(at: url)
+    let legacyUrl: URL = launchAgentsDir.appending(path: "com.zxzimeng.winmux.plist")
+    let currentUrl: URL = launchAgentsDir.appending(path: "com.zimengxiong.winmux.plist")
+    try? FileManager.default.removeItem(at: legacyUrl)
+    try? FileManager.default.removeItem(at: currentUrl)
 }

@@ -1,10 +1,11 @@
 # LICENSE
+WinMux is a derivative work of Aerospace, and is licensed under [MIT](./LICENSE.txt).
 
-The AeroSpace itself is licensed under MIT. See [LICENSE](./LICENSE.txt) for the full license text.
+[AeroSpace](https://github.com/nikitabobko/AeroSpace) itself is licensed under [MIT](third-party-license/LICENSE-Aerospace.txt).
 
 ## Bundled dependencies and materials
 
-AeroSpace bundles the following dependencies and uses the following materials:
+WinMux bundles the following dependencies and uses the following materials:
 
 **HotKey**.
 [HotKey GitHub link](https://github.com/soffes/HotKey).

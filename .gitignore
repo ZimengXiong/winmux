@@ -1,5 +1,6 @@
 /.idea
 /.debug
+/.derived
 /.release
 /.shell-completion
 /.site

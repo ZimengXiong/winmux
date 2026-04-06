@@ -32,14 +32,16 @@ targets:
         # Specifies whether the app runs as an agent app. If this key is set to YES, Launch Services runs the app as an agent app.
         # Agent apps do not appear in the Dock or in the Force Quit window (cmd-opt-esc)
         INFOPLIST_KEY_LSUIElement: YES
+        CODE_SIGN_STYLE: Automatic
         CODE_SIGN_IDENTITY: ${XCODEGEN_WINMUX_CODE_SIGN_IDENTITY}
+        DEVELOPMENT_TEAM: ${XCODEGEN_WINMUX_DEVELOPMENT_TEAM}
       configs:
         Debug:
           PRODUCT_NAME: WinMux-Debug
-          PRODUCT_BUNDLE_IDENTIFIER: com.zxzimeng.winmux.debug
+          PRODUCT_BUNDLE_IDENTIFIER: com.zimengxiong.winmux.debug
         Release:
           PRODUCT_NAME: WinMux
-          PRODUCT_BUNDLE_IDENTIFIER: com.zxzimeng.winmux
+          PRODUCT_BUNDLE_IDENTIFIER: com.zimengxiong.winmux
           SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
           GCC_TREAT_WARNINGS_AS_ERRORS: YES
     entitlements:
