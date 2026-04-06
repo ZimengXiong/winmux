@@ -1,8 +1,8 @@
 # WinMux
 
-WinMux is a fork of AeroSpace for macOS with:
+WinMux is a macOS WM built on top of AeroSpace with:
 
+- intuitive dragging UI
 - built-in workspace sidebar
-- stronger tab-group drag/drop behavior
+- stronger tab-group interactions
 - shortcuts/settings UI
-- first-boot config bootstrap to `~/.config/winmux/winmux.toml`

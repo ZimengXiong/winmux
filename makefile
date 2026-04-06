@@ -22,9 +22,9 @@ build:
 	$(MAKE) generate VERSION="$(VERSION)"
 	/bin/bash -lc 'cd "$(CURDIR)" && \
 	source ./script/setup.sh && \
+	rm -rf .build .debug && \
 	swift build && \
 	swift build --target AppBundleTests && \
-	rm -rf .debug && \
 	mkdir .debug && \
 	cp -r .build/debug/winmux .debug && \
 	cp -r .build/debug/WinMuxApp .debug'
