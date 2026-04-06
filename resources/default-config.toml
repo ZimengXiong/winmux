@@ -1,0 +1,42 @@
+config-version = 2
+
+start-at-login = false
+auto-reload-config = false
+enable-normalization-flatten-containers = true
+enable-normalization-opposite-orientation-for-nested-containers = true
+accordion-padding = 30
+
+window-tabs.enabled = true
+window-tabs.height = 34
+
+default-root-container-layout = 'tiles'
+default-root-container-orientation = 'auto'
+
+on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
+
+automatically-unhide-macos-hidden-apps = false
+enable-window-management = true
+shortcuts-preset = 'none'
+persistent-workspaces = []
+on-mode-changed = []
+
+[key-mapping]
+    preset = 'qwerty'
+
+[gaps]
+    inner.horizontal = 0
+    inner.vertical = 0
+    outer.left = 0
+    outer.bottom = 0
+    outer.top = 0
+    outer.right = 0
+
+[workspace-sidebar]
+    enabled = false
+    collapsed-width = 44
+    width = 240
+    monitor = 'main'
+    show-status-pills = true
+    show-date = true
+
+[mode.main.binding]

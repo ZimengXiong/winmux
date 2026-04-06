@@ -2,7 +2,7 @@ import AppKit
 import CoreGraphics
 import SwiftUI
 
-private let unsupportedMonitorPanelPrefix = "AeroSpace.unsupportedMonitor."
+private let unsupportedMonitorPanelPrefix = "WinMux.unsupportedMonitor."
 
 private struct UnsupportedMonitorView: View {
     let onAllowUnmanaged: () -> Void
@@ -175,6 +175,6 @@ final class UnsupportedMonitorGuard {
 }
 
 @MainActor
-func shouldAeroSpaceManageWindow(at point: CGPoint) -> Bool {
+func shouldWinMuxManageWindow(at point: CGPoint) -> Bool {
     UnsupportedMonitorGuard.shared.shouldManageWindow(at: point)
 }

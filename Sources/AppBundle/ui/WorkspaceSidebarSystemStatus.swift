@@ -194,7 +194,7 @@ struct WorkspaceSidebarNetworkSnapshot: Equatable {
     }
 
     private static func primaryInterfaceName() -> String? {
-        guard let store = SCDynamicStoreCreate(nil, "AeroSpaceWorkspaceSidebar" as CFString, nil, nil) else {
+        guard let store = SCDynamicStoreCreate(nil, "WinMuxWorkspaceSidebar" as CFString, nil, nil) else {
             return nil
         }
 

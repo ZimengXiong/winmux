@@ -1,8 +1,8 @@
-public let stableAeroSpaceAppId: String = "bobko.aerospace"
+public let stableWinMuxAppId: String = "com.zxzimeng.winmux"
 #if DEBUG
-    public let aeroSpaceAppId: String = "bobko.aerospace.debug"
-    public let aeroSpaceAppName: String = "AeroSpace-Debug"
+    public let winMuxAppId: String = "com.zxzimeng.winmux.debug"
+    public let winMuxAppName: String = "WinMux-Debug"
 #else
-    public let aeroSpaceAppId: String = stableAeroSpaceAppId
-    public let aeroSpaceAppName: String = "AeroSpace"
+    public let winMuxAppId: String = stableWinMuxAppId
+    public let winMuxAppName: String = "WinMux"
 #endif

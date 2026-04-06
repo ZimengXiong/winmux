@@ -1,9 +1,9 @@
 import AppKit
 import SwiftUI
 
-private let windowTabStripPanelPrefix = "AeroSpace.windowTabs.strip."
-private let windowTabDropPreviewPanelId = "AeroSpace.windowTabs.dropPreview"
-private let windowDragCursorProxyPanelId = "AeroSpace.windowTabs.cursorProxy"
+private let windowTabStripPanelPrefix = "WinMux.windowTabs.strip."
+private let windowTabDropPreviewPanelId = "WinMux.windowTabs.dropPreview"
+private let windowDragCursorProxyPanelId = "WinMux.windowTabs.cursorProxy"
 private let windowPreviewCornerAlphaThreshold: CGFloat = 0.3
 private let windowPreviewCornerScanLimit = 48
 private let windowTabDropPreviewTransitionDuration: TimeInterval = 0.16

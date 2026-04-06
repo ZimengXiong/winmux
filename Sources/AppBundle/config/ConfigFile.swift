@@ -1,7 +1,7 @@
 import Common
 import Foundation
 
-let legacyConfigDotfileName = ".aerospace.toml"
+let legacyConfigDotfileName = ".winmux.toml"
 let generatedConfigDirectoryName = "winmux"
 let generatedConfigFileName = "winmux.toml"
 
@@ -18,7 +18,7 @@ func generatedConfigUrl() -> URL {
 
 func legacyConfigCandidateUrls() -> [URL] {
     [
-        xdgConfigHomeUrl().appending(path: "aerospace").appending(path: "aerospace.toml"),
+        xdgConfigHomeUrl().appending(path: "winmux").appending(path: "winmux.toml"),
         FileManager.default.homeDirectoryForCurrentUser.appending(path: legacyConfigDotfileName),
     ]
 }

@@ -2,8 +2,8 @@ import AppKit
 import Common
 import SwiftUI
 
-private let exposePanelId = "AeroSpace.expose"
-private let exposeOverviewCoordinateSpace = "AeroSpace.expose.overview"
+private let exposePanelId = "WinMux.expose"
+private let exposeOverviewCoordinateSpace = "WinMux.expose.overview"
 private let exposeCardTitleHeight: CGFloat = 20
 private let exposeExpandedGroupSpacing: CGFloat = 16
 private let exposeExpandedGroupHoverPadding: CGFloat = 26

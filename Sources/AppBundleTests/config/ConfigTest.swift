@@ -5,7 +5,26 @@ import XCTest
 @MainActor
 final class ConfigTest: XCTestCase {
     func testParseI3Config() {
-        let toml = try! String(contentsOf: projectRoot.appending(component: "docs/config-examples/i3-like-config-example.toml"), encoding: .utf8)
+        let toml =
+            """
+            config-version = 2
+            persistent-workspaces = []
+            enable-normalization-flatten-containers = false
+            enable-normalization-opposite-orientation-for-nested-containers = false
+            on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
+
+            [mode.main.binding]
+                alt-enter = '''exec-and-forget osascript -e '
+                tell application "Terminal"
+                    do script
+                    activate
+                end tell'
+                '''
+                alt-j = 'focus --boundaries-action wrap-around-the-workspace left'
+                alt-k = 'focus --boundaries-action wrap-around-the-workspace down'
+                alt-l = 'focus --boundaries-action wrap-around-the-workspace up'
+                alt-semicolon = 'focus --boundaries-action wrap-around-the-workspace right'
+            """
         let (i3Config, errors) = parseConfig(toml)
         assertEquals(errors, [])
         assertEquals(i3Config.execConfig, defaultConfig.execConfig)
@@ -14,7 +33,7 @@ final class ConfigTest: XCTestCase {
     }
 
     func testParseDefaultConfig() {
-        let toml = try! String(contentsOf: projectRoot.appending(component: "docs/config-examples/default-config.toml"), encoding: .utf8)
+        let toml = try! String(contentsOf: projectRoot.appending(component: "resources/default-config.toml"), encoding: .utf8)
         let (_, errors) = parseConfig(toml)
         assertEquals(errors, [])
     }

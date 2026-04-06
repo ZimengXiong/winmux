@@ -1,12 +1,15 @@
-import Common
-import Foundation
-import SwiftUI
+    import Common
+    import Foundation
+    import SwiftUI
+    
+private let winmuxRepositoryURL = "https://github.com/zimengxiong/winmux"
+private let winmuxNewIssueURL = "https://github.com/zimengxiong/winmux/issues/new/choose"
 
-@MainActor
-public func menuBar(viewModel: TrayMenuModel) -> some Scene { // todo should it be converted to "SwiftUI struct"?
-    MenuBarExtra {
-        let shortIdentification = "\(aeroSpaceAppName) v\(aeroSpaceAppVersion) \(gitShortHash)"
-        let identification      = "\(aeroSpaceAppName) v\(aeroSpaceAppVersion) \(gitHash)"
+    @MainActor
+    public func menuBar(viewModel: TrayMenuModel) -> some Scene { // todo should it be converted to "SwiftUI struct"?
+        MenuBarExtra {
+            let shortIdentification = "\(winMuxAppName) v\(winMuxAppVersion) \(gitShortHash)"
+            let identification      = "\(winMuxAppName) v\(winMuxAppVersion) \(gitHash)"
         Text(shortIdentification)
         Button("Copy to clipboard") { identification.copyToClipboard() }
             .keyboardShortcut("C", modifiers: .command)
@@ -26,7 +29,13 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene { // todo should it 
         OpenShortcutSettingsButton()
         openConfigButton()
         reloadConfigButton()
-        Button("Quit \(aeroSpaceAppName)") {
+        Button("GitHub Repository") {
+            openURLString(winmuxRepositoryURL)
+        }
+        Button("File an issue...") {
+            openURLString(winmuxNewIssueURL)
+        }
+        Button("Quit \(winMuxAppName)") {
             Task {
                 defer { terminateApp() }
                 try await terminationHandler.beforeTermination()
@@ -77,6 +86,12 @@ func reloadConfigButton(showShortcutGroup: Bool = false) -> some View {
             button
         }
     }
+}
+
+@MainActor
+private func openURLString(_ urlString: String) {
+    guard let url = URL(string: urlString) else { return }
+    NSWorkspace.shared.open(url)
 }
 
 func shortcutGroup(label: some View, content: some View) -> some View {

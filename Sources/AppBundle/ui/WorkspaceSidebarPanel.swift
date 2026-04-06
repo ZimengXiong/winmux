@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-private let workspaceSidebarPanelId = "AeroSpace.workspaceSidebar"
+private let workspaceSidebarPanelId = "WinMux.workspaceSidebar"
 private let workspaceSidebarContentLeadingInset: CGFloat = 6
 private let workspaceSidebarContentTrailingInset: CGFloat = 10
 private let workspaceSidebarSectionInnerHorizontalInset: CGFloat = 4

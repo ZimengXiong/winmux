@@ -3,11 +3,11 @@ import Common
 import MASShortcut
 import SwiftUI
 
-public let shortcutSettingsWindowId = "\(aeroSpaceAppName).shortcutSettings"
+public let shortcutSettingsWindowId = "\(winMuxAppName).shortcutSettings"
 
 @MainActor
 public func getShortcutSettingsWindow(model: ShortcutSettingsModel) -> some Scene {
-    SwiftUI.Window("AeroSpace Settings", id: shortcutSettingsWindowId) {
+    SwiftUI.Window("WinMux Settings", id: shortcutSettingsWindowId) {
         ShortcutSettingsView(model: model)
             .frame(minWidth: 720, minHeight: 600)
             .onAppear {

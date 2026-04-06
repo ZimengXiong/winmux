@@ -157,7 +157,7 @@ func parseAfterLoginCommand(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktr
     if let array = raw.array, array.count == 0 {
         return .success([])
     }
-    let msg = "after-login-command is deprecated since AeroSpace 0.19.0. https://github.com/nikitabobko/AeroSpace/issues/1482"
+    let msg = "after-login-command is deprecated since WinMux 0.19.0. https://github.com/nikitabobko/WinMux/issues/1482"
     return .failure(.semantic(backtrace, msg))
 }
 
@@ -244,7 +244,7 @@ func parseIndentForNestedContainersWithTheSameOrientation(
     _ _: TOMLValueConvertible,
     _ backtrace: TomlBacktrace,
 ) -> ParsedToml<Void> {
-    let msg = "Deprecated. Please drop it from the config. See https://github.com/nikitabobko/AeroSpace/issues/96"
+    let msg = "Deprecated. Please drop it from the config. See https://github.com/nikitabobko/WinMux/issues/96"
     return .failure(.semantic(backtrace, msg))
 }
 

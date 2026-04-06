@@ -10,7 +10,7 @@ func getDefaultConfigUrlFromProject() -> URL {
         url.deleteLastPathComponent()
     }
     let projectRoot: URL = url
-    return projectRoot.appending(component: "docs/config-examples/default-config.toml")
+    return projectRoot.appending(component: "resources/default-config.toml")
 }
 
 var defaultConfigUrl: URL {

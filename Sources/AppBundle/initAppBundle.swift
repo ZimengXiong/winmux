@@ -78,13 +78,13 @@ struct ServerArgs: Sendable {
 }
 
 private let serverHelp = """
-    USAGE: \(CommandLine.arguments.first ?? "AeroSpace.app/Contents/MacOS/AeroSpace") [<options>]
+    USAGE: \(CommandLine.arguments.first ?? "WinMux.app/Contents/MacOS/WinMux") [<options>]
 
     OPTIONS:
       -h, --help              Print help
-      -v, --version           Print AeroSpace.app version
+      -v, --version           Print WinMux.app version
       --config-path <path>    Config path. It will take priority over ~/.config/winmux/winmux.toml,
-                              ~/.aerospace.toml and ${XDG_CONFIG_HOME}/aerospace/aerospace.toml
+                              ~/.winmux.toml and ${XDG_CONFIG_HOME}/winmux/winmux.toml
       --read-only             Disable window management.
                               Useful if you want to use only debug-windows or other query commands.
     """
@@ -102,7 +102,7 @@ private func initServerArgs() {
         index += 1
         switch current {
             case "--version", "-v":
-                exit(0, out: "\(aeroSpaceAppVersion) \(gitHash)")
+                exit(0, out: "\(winMuxAppVersion) \(gitHash)")
             case "--config-path":
                 if let arg = args.getOrNil(atIndex: index) {
                     _serverArgs.configLocation = arg
