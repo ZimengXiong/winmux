@@ -199,7 +199,7 @@ final class WorkspaceSidebarPanel: NSPanelHud {
     private var hoverMonitorTimer: Timer?
     private let hoverExitTolerance: CGFloat = 20
     private let hoverPollInterval: TimeInterval = 1.0 / 30.0
-    private let hoverOpenDelay: TimeInterval = 0.15
+    private let hoverOpenDelay: TimeInterval = 0.05
     private let hoverCueAnimationResponse: TimeInterval = 0.18
     private let animationDuration: TimeInterval = 0.14
 

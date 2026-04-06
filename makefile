@@ -2,7 +2,7 @@ VERSION ?= 0.0.0-SNAPSHOT
 CODESIGN_IDENTITY ?= winmux-codesign-certificate
 ARGS ?=
 
-.PHONY: generate xcodeproj build run cli clean
+.PHONY: generate xcodeproj build build-clean run run-clean cli clean
 
 generate:
 	/bin/bash -lc 'cd "$(CURDIR)" && \
@@ -22,15 +22,34 @@ build:
 	$(MAKE) generate VERSION="$(VERSION)"
 	/bin/bash -lc 'cd "$(CURDIR)" && \
 	source ./script/setup.sh && \
-	rm -rf .build .debug && \
 	swift build && \
 	swift build --target AppBundleTests && \
+	rm -rf .debug && \
 	mkdir .debug && \
 	cp -r .build/debug/winmux .debug && \
 	cp -r .build/debug/WinMuxApp .debug'
 
+build-clean:
+	/bin/bash -lc 'cd "$(CURDIR)" && rm -rf .build .debug'
+	$(MAKE) build VERSION="$(VERSION)"
+
 run:
 	$(MAKE) build VERSION="$(VERSION)"
+	/bin/bash -lc 'cd "$(CURDIR)" && \
+	if pgrep -x yabai >/dev/null 2>&1; then echo "warning: yabai is still running and may conflict with WinMux" >&2; fi && \
+	if pgrep -x skhd >/dev/null 2>&1; then echo "warning: skhd is still running; its yabai shortcuts will keep firing" >&2; fi && \
+	if [ -n "$${AEROSPACE_CONFIG_PATH:-}" ]; then \
+	    if [ ! -f "$$AEROSPACE_CONFIG_PATH" ]; then \
+	        echo "Missing WinMux config: $$AEROSPACE_CONFIG_PATH" >&2; \
+	        exit 1; \
+	    fi; \
+	    exec ./.debug/WinMuxApp --config-path "$$AEROSPACE_CONFIG_PATH" $(ARGS); \
+	else \
+	    exec ./.debug/WinMuxApp $(ARGS); \
+	fi'
+
+run-clean:
+	$(MAKE) build-clean VERSION="$(VERSION)"
 	/bin/bash -lc 'cd "$(CURDIR)" && \
 	if pgrep -x yabai >/dev/null 2>&1; then echo "warning: yabai is still running and may conflict with WinMux" >&2; fi && \
 	if pgrep -x skhd >/dev/null 2>&1; then echo "warning: skhd is still running; its yabai shortcuts will keep firing" >&2; fi && \

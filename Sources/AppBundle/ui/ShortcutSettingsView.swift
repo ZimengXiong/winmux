@@ -119,7 +119,7 @@ struct ShortcutCategoryView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 32) {
+            LazyVStack(alignment: .leading, spacing: 32) {
                 if let error = model.errorMessage {
                     Text(error)
                         .foregroundStyle(.white)
@@ -195,27 +195,66 @@ struct ShortcutSectionView: View {
 
 struct ManagedDirectionalShortcutsView: View {
     @ObservedObject var model: ShortcutSettingsModel
+    @State private var availableWidth: CGFloat = .zero
+
+    private static let horizontalLayoutMinWidth: CGFloat = 880
 
     var body: some View {
-        HStack(alignment: .top, spacing: 24) {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Focus")
-                    .font(.headline)
-                CompassPad(model: model, title: "Focus", prefix: "focus") {
-                    FocusDemoView()
+        Group {
+            if availableWidth >= Self.horizontalLayoutMinWidth {
+                HStack(alignment: .top, spacing: 24) {
+                    directionalPad(title: "Focus", prefix: "focus") {
+                        FocusDemoView()
+                    }
+
+                    directionalPad(title: "Move", prefix: "move") {
+                        MoveDemoView()
+                    }
+
+                    Spacer(minLength: 0)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 24) {
+                    directionalPad(title: "Focus", prefix: "focus") {
+                        FocusDemoView()
+                    }
+
+                    directionalPad(title: "Move", prefix: "move") {
+                        MoveDemoView()
+                    }
                 }
             }
-            
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Move")
-                    .font(.headline)
-                CompassPad(model: model, title: "Move", prefix: "move") {
-                    MoveDemoView()
-                }
-            }
-            
-            Spacer()
         }
+        .background {
+            GeometryReader { proxy in
+                Color.clear
+                    .preference(key: ManagedDirectionalShortcutsWidthKey.self, value: proxy.size.width)
+            }
+        }
+        .onPreferenceChange(ManagedDirectionalShortcutsWidthKey.self) { width in
+            availableWidth = width
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func directionalPad<Demo: View>(
+        title: String,
+        prefix: String,
+        @ViewBuilder demo: () -> Demo
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.headline)
+            CompassPad(model: model, title: title, prefix: prefix, demo: demo)
+        }
+    }
+}
+
+private struct ManagedDirectionalShortcutsWidthKey: PreferenceKey {
+    static let defaultValue: CGFloat = .zero
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 
