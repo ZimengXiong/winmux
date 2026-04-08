@@ -2,6 +2,10 @@ import AppKit
 import Common
 
 enum GlobalObserver {
+    @MainActor private static var isInitialized = false
+    @MainActor private static var notificationObserverTokens: [NSObjectProtocol] = []
+    @MainActor private static var eventMonitorTokens: [Any] = []
+
     private static func onNotif(_ notification: Notification) {
         // Third line of defence against lock screen window. See: closedWindowsCache
         // Second and third lines of defence are technically needed only to avoid potential flickering
@@ -69,15 +73,18 @@ enum GlobalObserver {
 
     @MainActor
     static func initObserver() {
-        let nc = NSWorkspace.shared.notificationCenter
-        nc.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main, using: onNotif)
-        nc.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main, using: onNotif)
-        nc.addObserver(forName: NSWorkspace.didHideApplicationNotification, object: nil, queue: .main, using: onHideApp)
-        nc.addObserver(forName: NSWorkspace.didUnhideApplicationNotification, object: nil, queue: .main, using: onNotif)
-        nc.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main, using: onNotif)
-        nc.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main, using: onNotif)
+        guard !isInitialized else { return }
+        isInitialized = true
 
-        NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { _ in
+        let nc = NSWorkspace.shared.notificationCenter
+        notificationObserverTokens.append(nc.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main, using: onNotif))
+        notificationObserverTokens.append(nc.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main, using: onNotif))
+        notificationObserverTokens.append(nc.addObserver(forName: NSWorkspace.didHideApplicationNotification, object: nil, queue: .main, using: onHideApp))
+        notificationObserverTokens.append(nc.addObserver(forName: NSWorkspace.didUnhideApplicationNotification, object: nil, queue: .main, using: onNotif))
+        notificationObserverTokens.append(nc.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main, using: onNotif))
+        notificationObserverTokens.append(nc.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main, using: onNotif))
+
+        retainEventMonitor(NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { _ in
             // todo reduce number of refreshSession in the callback
             //  resetManipulatedWithMouseIfPossible might call its own refreshSession
             //  The end of the callback calls refreshSession
@@ -98,38 +105,43 @@ enum GlobalObserver {
                         scheduleRefreshSession(.globalObserverLeftMouseUp)
                 }
             }
-        }
+        })
 
-        NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDragged) { _ in
+        retainEventMonitor(NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDragged) { _ in
             Task { @MainActor in
                 refreshPendingWindowDragIntentFromGlobalMouseDrag()
             }
-        }
+        })
 
         let pointerActivityMask: NSEvent.EventTypeMask = [
             .leftMouseDown, .rightMouseDown, .otherMouseDown,
             .leftMouseDragged, .rightMouseDragged, .otherMouseDragged,
             .scrollWheel,
         ]
-        NSEvent.addGlobalMonitorForEvents(matching: pointerActivityMask, handler: onPointerActivity)
-        NSEvent.addLocalMonitorForEvents(matching: pointerActivityMask) { event in
+        retainEventMonitor(NSEvent.addGlobalMonitorForEvents(matching: pointerActivityMask, handler: onPointerActivity))
+        retainEventMonitor(NSEvent.addLocalMonitorForEvents(matching: pointerActivityMask) { event in
             onPointerActivity(event)
             return event
-        }
+        })
 
-        NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged, handler: onFlagsChanged)
-        NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
+        retainEventMonitor(NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged, handler: onFlagsChanged))
+        retainEventMonitor(NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
             onFlagsChanged(event)
             return event
-        }
+        })
 
-        NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: onKeyDown)
-        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+        retainEventMonitor(NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: onKeyDown))
+        retainEventMonitor(NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             onKeyDown(event)
             if event.modifierFlags.contains(.control), event.keyCode == 34 {
                 return nil // consume the event
             }
             return event
-        }
+        })
+    }
+
+    @MainActor private static func retainEventMonitor(_ monitor: Any?) {
+        guard let monitor else { return }
+        eventMonitorTokens.append(monitor)
     }
 }
