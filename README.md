@@ -6,7 +6,8 @@ WinMux is a intuitive, batteries-included WM for macOS built on Aerospace ([for 
 
 https://github.com/user-attachments/assets/69d8872a-d6f0-460e-95ad-d55013c3216e
 
-
+An agent mode is in the works, read about it [here](https://blog.zimengxiong.com/#post/agents-will-need-a-good-window-manager) and see a [demo](https://cvx-me-api.alpacawebservices.com/api/storage/6dea289a-9559-49bd-87cf-42345f89c712
+)—this is just for fun right now (dont expect anyone would use it), but still interesting to see.
 
 ## Managed (Tiling) Mode
 <a href="intentzones.mp4">
