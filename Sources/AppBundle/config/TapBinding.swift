@@ -34,6 +34,20 @@ enum TapModifierKey: String, CaseIterable, Equatable, Sendable {
             case .leftShift, .rightShift: .shift
         }
     }
+
+    var sideSpecificModifierFlag: NSEvent.ModifierFlags {
+        // NSEvent keeps left/right hardware modifier bits in rawValue alongside the device-independent flags.
+        switch self {
+            case .leftCtrl: NSEvent.ModifierFlags(rawValue: 0x000001)
+            case .leftShift: NSEvent.ModifierFlags(rawValue: 0x000002)
+            case .rightShift: NSEvent.ModifierFlags(rawValue: 0x000004)
+            case .leftCmd: NSEvent.ModifierFlags(rawValue: 0x000008)
+            case .rightCmd: NSEvent.ModifierFlags(rawValue: 0x000010)
+            case .leftAlt: NSEvent.ModifierFlags(rawValue: 0x000020)
+            case .rightAlt: NSEvent.ModifierFlags(rawValue: 0x000040)
+            case .rightCtrl: NSEvent.ModifierFlags(rawValue: 0x002000)
+        }
+    }
 }
 
 struct TapBinding: Equatable, Sendable {

@@ -109,13 +109,14 @@ extension HotKey {
     pendingTapBindings = [:]
 }
 
-@MainActor func noteTapBindingFlagsChanged(keyCode: UInt16) {
+@MainActor func noteTapBindingFlagsChanged(keyCode: UInt16, modifierFlags: NSEvent.ModifierFlags) {
     if hotkeysSuspended { return }
     if activeTapBindings.isEmpty && pendingTapBindings.isEmpty && pendingTapTriggerTasks.isEmpty { return }
     guard let tapModifier = TapModifierKey(keyCode: keyCode) else { return }
     cancelPendingTapTriggers()
 
-    if pressedTapModifiers.contains(tapModifier) {
+    let isPressed = modifierFlags.contains(tapModifier.sideSpecificModifierFlag)
+    if !isPressed {
         pressedTapModifiers.remove(tapModifier)
         if let binding = pendingTapBindings.removeValue(forKey: tapModifier) {
             scheduleTapBindingTrigger(binding)
@@ -160,6 +161,10 @@ extension HotKey {
     for (binding, key) in hotkeys {
         key.isEnabled = !hotkeysSuspended && targetBindings.keys.contains(binding)
     }
+}
+
+@MainActor func tapBindingPressedModifiersForTests() -> Set<TapModifierKey> {
+    pressedTapModifiers
 }
 
 struct HotkeyBinding: Equatable, Sendable {

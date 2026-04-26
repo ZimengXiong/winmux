@@ -1,4 +1,5 @@
 @testable import AppBundle
+import AppKit
 import Common
 import XCTest
 
@@ -129,6 +130,37 @@ final class ConfigTest: XCTestCase {
                 ],
             ),
         )
+    }
+
+    func testTapModifierSideSpecificFlags() {
+        let leftAltFlags: NSEvent.ModifierFlags = [.option, TapModifierKey.leftAlt.sideSpecificModifierFlag]
+        XCTAssertTrue(leftAltFlags.contains(TapModifierKey.leftAlt.sideSpecificModifierFlag))
+        XCTAssertFalse(leftAltFlags.contains(TapModifierKey.rightAlt.sideSpecificModifierFlag))
+
+        let rightCmdFlags: NSEvent.ModifierFlags = [.command, TapModifierKey.rightCmd.sideSpecificModifierFlag]
+        XCTAssertTrue(rightCmdFlags.contains(TapModifierKey.rightCmd.sideSpecificModifierFlag))
+        XCTAssertFalse(rightCmdFlags.contains(TapModifierKey.leftCmd.sideSpecificModifierFlag))
+    }
+
+    func testTapModifierStateClearsAfterMissedRelease() async throws {
+        resetHotKeys()
+        config.modes = [
+            mainModeId: Mode(
+                bindings: [:],
+                tapBindings: ["left-alt": TapBinding(.leftAlt, [FocusCommand.new(direction: .left)])],
+            ),
+        ]
+        try await activateMode(mainModeId)
+
+        let leftAltDown: NSEvent.ModifierFlags = [.option, TapModifierKey.leftAlt.sideSpecificModifierFlag]
+        noteTapBindingFlagsChanged(keyCode: 58, modifierFlags: leftAltDown)
+        XCTAssertEqual(tapBindingPressedModifiersForTests(), [.leftAlt])
+
+        noteTapBindingFlagsChanged(keyCode: 58, modifierFlags: leftAltDown)
+        XCTAssertEqual(tapBindingPressedModifiersForTests(), [.leftAlt])
+
+        noteTapBindingFlagsChanged(keyCode: 58, modifierFlags: [])
+        XCTAssertTrue(tapBindingPressedModifiersForTests().isEmpty)
     }
 
     func testModesMustContainDefaultModeError() {

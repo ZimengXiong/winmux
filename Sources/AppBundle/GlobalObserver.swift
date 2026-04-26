@@ -60,8 +60,9 @@ enum GlobalObserver {
 
     private static func onFlagsChanged(_ event: NSEvent) {
         let keyCode = event.keyCode
+        let modifierFlags = event.modifierFlags
         Task { @MainActor in
-            noteTapBindingFlagsChanged(keyCode: keyCode)
+            noteTapBindingFlagsChanged(keyCode: keyCode, modifierFlags: modifierFlags)
         }
     }
 
