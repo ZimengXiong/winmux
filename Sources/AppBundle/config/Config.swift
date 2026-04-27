@@ -82,12 +82,13 @@ struct WorkspaceSidebarConfig: ConvenienceCopyable, Equatable, Sendable {
     var monitor: [MonitorDescription] = [.main]
     var showStatusPills: Bool = true
     var showDate: Bool = true
+    var menuBarReserveHeight: Int = 28
     var workspaceLabels: [String: String] = [:]
 }
 
 struct WindowTabsConfig: ConvenienceCopyable, Equatable, Sendable {
     var enabled: Bool = true
-    var height: Int = 34
+    var height: Int = 28
 }
 
 extension WorkspaceSidebarConfig {

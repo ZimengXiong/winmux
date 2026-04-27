@@ -34,6 +34,7 @@ struct ReloadConfigCommand: Command {
                 configUrl = url
                 try await activateMode(activeMode)
                 syncStartAtLogin()
+                WorkspaceSidebarPanel.shared.refresh()
                 MessageModel.shared.message = nil
             }
             result = true

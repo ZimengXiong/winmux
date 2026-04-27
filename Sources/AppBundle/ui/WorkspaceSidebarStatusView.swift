@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 import SwiftUI
 
-private let workspaceSidebarStatusCornerRadius: CGFloat = 10
+private let workspaceSidebarStatusCornerRadius: CGFloat = 8
 private let workspaceSidebarStatusRefreshInterval: Duration = .seconds(5)
 
 struct WorkspaceSidebarStatusView: View {
@@ -59,32 +59,31 @@ private struct WorkspaceSidebarCompactClockCard: View {
     var body: some View {
         VStack(spacing: 5) {
             Text(components.hour)
-                .foregroundStyle(Color.primary.opacity(0.92))
+                .foregroundStyle(Color.white.opacity(0.86))
 
             Capsule()
-                .fill(Color.secondary.opacity(0.22))
+                .fill(Color.white.opacity(0.18))
                 .frame(width: 12, height: 1)
 
             Text(components.minute)
-                .foregroundStyle(Color.primary.opacity(0.92))
+                .foregroundStyle(Color.white.opacity(0.86))
 
             Capsule()
-                .fill(Color.secondary.opacity(0.22))
+                .fill(Color.white.opacity(0.18))
                 .frame(width: 12, height: 1)
 
             Text(components.second)
-                .foregroundStyle(Color.secondary.opacity(0.82))
+                .foregroundStyle(Color.white.opacity(0.62))
         }
-        .font(.system(size: 11, weight: .semibold, design: .monospaced))
-        .monospacedDigit()
+        .font(.system(size: 11, weight: .semibold))
         .frame(width: sectionWidth, alignment: .center)
         .frame(minHeight: 84)
         .background(
             RoundedRectangle(cornerRadius: workspaceSidebarStatusCornerRadius, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.14))
+                .fill(Color.white.opacity(0.06))
                 .overlay {
                     RoundedRectangle(cornerRadius: workspaceSidebarStatusCornerRadius, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.05), lineWidth: 0.5)
+                        .strokeBorder(Color.white.opacity(0.04), lineWidth: 0.5)
                 }
         )
         .accessibilityElement(children: .ignore)
@@ -119,18 +118,17 @@ private struct WorkspaceSidebarExpandedStatusCard: View {
         VStack(alignment: .leading, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(date, format: .dateTime.hour().minute().second())
-                    .font(.system(size: 16, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(Color.primary.opacity(0.94))
-                    .monospacedDigit()
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.94))
                     .lineLimit(1)
                 if showsDate {
                     Text(date, format: .dateTime.weekday(.abbreviated))
-                        .font(.system(size: 9, weight: .semibold, design: .rounded))
-                        .foregroundStyle(Color.secondary.opacity(0.72))
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.64))
                         .textCase(.uppercase)
                     Text(date, format: .dateTime.month(.abbreviated).day().year())
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundStyle(Color.primary)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.86))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                 }
@@ -149,10 +147,10 @@ private struct WorkspaceSidebarExpandedStatusCard: View {
         .frame(width: sectionWidth, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: workspaceSidebarStatusCornerRadius, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.14))
+                .fill(Color.white.opacity(0.065))
                 .overlay {
                     RoundedRectangle(cornerRadius: workspaceSidebarStatusCornerRadius, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.05), lineWidth: 0.5)
+                        .strokeBorder(Color.white.opacity(0.05), lineWidth: 0.5)
                 }
         )
         .accessibilityElement(children: .combine)
@@ -209,12 +207,11 @@ private struct WorkspaceSidebarStatusPill: View {
         HStack(spacing: 4) {
             Image(systemName: symbolName)
                 .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(tint)
+                .foregroundStyle(Color.white.opacity(0.72))
 
             Text(label)
-                .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                .foregroundStyle(Color.primary.opacity(0.9))
-                .monospacedDigit()
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.82))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
@@ -222,11 +219,11 @@ private struct WorkspaceSidebarStatusPill: View {
         .padding(.vertical, 4)
         .background(
             Capsule(style: .continuous)
-                .fill(tint.opacity(0.16))
+                .fill(Color.white.opacity(0.08))
         )
         .overlay {
             Capsule(style: .continuous)
-                .strokeBorder(tint.opacity(0.28), lineWidth: 0.5)
+                .strokeBorder(Color.white.opacity(0.10), lineWidth: 0.5)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityDescription)

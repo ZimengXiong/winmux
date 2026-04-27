@@ -21,6 +21,7 @@ struct WindowDetectedCallback: ConvenienceCopyable, Equatable {
 
     static func == (lhs: WindowDetectedCallback, rhs: WindowDetectedCallback) -> Bool {
         return lhs.matcher == rhs.matcher && lhs.checkFurtherCallbacks == rhs.checkFurtherCallbacks &&
+            lhs.run.count == rhs.run.count &&
             zip(lhs.run, rhs.run).allSatisfy { $0.equals($1) }
     }
 }

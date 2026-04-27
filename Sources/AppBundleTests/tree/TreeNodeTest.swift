@@ -140,8 +140,8 @@ final class TreeNodeTest: XCTestCase {
         XCTAssertNil(Workspace.existing(byName: draftWorkspace.name))
     }
 
-    func testGarbageCollectUnusedWorkspacesKeepsWorkspaceWithOnlyMinimizedWindow() {
-        let workspace = Workspace.get(byName: "kept")
+    func testGarbageCollectUnusedWorkspacesDeletesWorkspaceWithOnlyMinimizedWindow() {
+        let workspace = Workspace.get(byName: "collected")
         let window = TestWindow.new(id: 111, parent: workspace.rootTilingContainer)
         let otherWorkspace = Workspace.get(byName: "other")
 
@@ -153,7 +153,30 @@ final class TreeNodeTest: XCTestCase {
         Workspace.garbageCollectUnusedWorkspaces()
 
         XCTAssertEqual(window.layoutReason, .macos(prevParentKind: .tilingContainer, prevWorkspaceName: workspace.name))
-        XCTAssertEqual(Workspace.existing(byName: workspace.name), workspace)
+        XCTAssertNil(Workspace.existing(byName: workspace.name))
+    }
+
+    func testRestoredMinimizedWindowUsesCurrentWorkspaceWhenOriginalWorkspaceWasCollected() async throws {
+        let workspace = Workspace.get(byName: "collected")
+        let window = TestWindow.new(id: 112, parent: workspace.rootTilingContainer)
+        let otherWorkspace = Workspace.get(byName: "other")
+
+        window.rememberMacOsLayoutOrigin()
+        window.nativeIsMacosMinimized = true
+        window.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+        _ = otherWorkspace.focusWorkspace()
+        Workspace.garbageCollectUnusedWorkspaces()
+        window.nativeIsMacosMinimized = false
+
+        try await exitMacOsNativeUnconventionalState(
+            window: window,
+            prevParentKind: .tilingContainer,
+            prevWorkspaceName: workspace.name,
+            workspace: otherWorkspace,
+        )
+
+        XCTAssertNil(Workspace.existing(byName: workspace.name))
+        XCTAssertEqual(window.nodeWorkspace, otherWorkspace)
     }
 
     func testRememberMacOsLayoutOriginCapturesCurrentWorkspace() {

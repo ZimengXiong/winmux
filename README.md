@@ -138,16 +138,21 @@ After importing an AeroSpace config, add the WinMux-specific features you want w
 
 ```toml
 window-tabs.enabled = true
-window-tabs.height = 34
+window-tabs.height = 28
 
 [workspace-sidebar]
     enabled = true
     collapsed-width = 44
     width = 240
     monitor = 'main'
+    # Reserve room for the visible macOS menu bar so the sidebar is not covered by the Apple menu.
+    # Use 0 when the macOS menu bar auto-hides.
+    menu-bar-reserve-height = 28
     show-status-pills = true
     show-date = true
 ```
+
+New WinMux bootstrap configs include `menu-bar-reserve-height = 28` by default. Imported AeroSpace configs are copied as-is, so add this key manually or set it from Settings if your sidebar starts underneath the macOS menu bar.
 ## Release Build
 Release builds use XcodeGen/Xcode
 

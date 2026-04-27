@@ -9,6 +9,7 @@ private let workspaceSidebarParser: [String: any ParserProtocol<WorkspaceSidebar
     },
     "show-status-pills": Parser(\.showStatusPills, parseBool),
     "show-date": Parser(\.showDate, parseBool),
+    "menu-bar-reserve-height": Parser(\.menuBarReserveHeight, parseWorkspaceSidebarMenuBarReserveHeight),
     "workspace-labels": Parser(\.workspaceLabels, parseWorkspaceSidebarLabels),
 ]
 
@@ -23,6 +24,11 @@ func parseWorkspaceSidebar(
 private func parseWorkspaceSidebarWidth(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace) -> ParsedToml<Int> {
     parseInt(raw, backtrace)
         .filter(.semantic(backtrace, "Must be greater than 0")) { $0 > 0 }
+}
+
+private func parseWorkspaceSidebarMenuBarReserveHeight(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace) -> ParsedToml<Int> {
+    parseInt(raw, backtrace)
+        .filter(.semantic(backtrace, "Must be greater than or equal to 0")) { $0 >= 0 }
 }
 
 private func parseWorkspaceSidebarLabels(

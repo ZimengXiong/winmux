@@ -115,20 +115,19 @@ extension HotKey {
     guard let tapModifier = TapModifierKey(keyCode: keyCode) else { return }
     cancelPendingTapTriggers()
 
-    let isPressed = modifierFlags.contains(tapModifier.sideSpecificModifierFlag)
-    if !isPressed {
-        pressedTapModifiers.remove(tapModifier)
-        if let binding = pendingTapBindings.removeValue(forKey: tapModifier) {
-            scheduleTapBindingTrigger(binding)
+    if tapModifier.isPressed(in: modifierFlags) {
+        let hadOtherPressedModifiers = !pressedTapModifiers.subtracting([tapModifier]).isEmpty
+        pressedTapModifiers.insert(tapModifier)
+        pendingTapBindings = [:]
+        if !hadOtherPressedModifiers, let binding = activeTapBindings[tapModifier] {
+            pendingTapBindings[tapModifier] = binding
         }
         return
     }
 
-    let hadOtherPressedModifiers = !pressedTapModifiers.isEmpty
-    pressedTapModifiers.insert(tapModifier)
-    pendingTapBindings = [:]
-    if !hadOtherPressedModifiers, let binding = activeTapBindings[tapModifier] {
-        pendingTapBindings[tapModifier] = binding
+    pressedTapModifiers.remove(tapModifier)
+    if let binding = pendingTapBindings.removeValue(forKey: tapModifier) {
+        scheduleTapBindingTrigger(binding)
     }
 }
 
@@ -188,6 +187,7 @@ struct HotkeyBinding: Equatable, Sendable {
         lhs.modifiers == rhs.modifiers &&
             lhs.keyCode == rhs.keyCode &&
             lhs.descriptionWithKeyCode == rhs.descriptionWithKeyCode &&
+            lhs.commands.count == rhs.commands.count &&
             zip(lhs.commands, rhs.commands).allSatisfy { $0.equals($1) }
     }
 }

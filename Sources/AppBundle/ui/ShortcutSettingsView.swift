@@ -656,6 +656,7 @@ struct ShortcutGeneralView: View {
     @ObservedObject var model: ShortcutSettingsModel
     @State private var enableWindowManagement = config.enableWindowManagement
     @State private var displayStyle = ExperimentalUISettings().displayStyle
+    @State private var workspaceSidebarMenuBarReserveHeight = config.workspaceSidebar.menuBarReserveHeight
 
     var body: some View {
         ScrollView {
@@ -681,22 +682,48 @@ struct ShortcutGeneralView: View {
                 }
 
                 GeneralSection(title: "Appearance") {
-                    HStack {
-                        Text("Menu bar style")
-                        Spacer()
-                        Picker("", selection: $displayStyle) {
-                            ForEach(MenuBarStyle.allCases) { style in
-                                Text(style.title).tag(style)
+                    VStack(alignment: .leading, spacing: 14) {
+                        HStack {
+                            Text("Menu bar style")
+                            Spacer()
+                            Picker("", selection: $displayStyle) {
+                                ForEach(MenuBarStyle.allCases) { style in
+                                    Text(style.title).tag(style)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                            .frame(width: 180)
+                            .onChange(of: displayStyle) { newValue in
+                                var settings = ExperimentalUISettings()
+                                settings.displayStyle = newValue
+                                TrayMenuModel.shared.experimentalUISettings = settings
+                                updateTrayText()
                             }
                         }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(width: 180)
-                        .onChange(of: displayStyle) { newValue in
-                            var settings = ExperimentalUISettings()
-                            settings.displayStyle = newValue
-                            TrayMenuModel.shared.experimentalUISettings = settings
-                            updateTrayText()
+
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Sidebar menu bar space")
+                                Text("Use 0 px when the macOS menu bar auto-hides.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Text("\(workspaceSidebarMenuBarReserveHeight) px")
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 48, alignment: .trailing)
+                            Stepper(
+                                "",
+                                value: $workspaceSidebarMenuBarReserveHeight,
+                                in: 0 ... 72,
+                                step: 1,
+                            )
+                            .labelsHidden()
+                            .onChange(of: workspaceSidebarMenuBarReserveHeight) { newValue in
+                                setWorkspaceSidebarMenuBarReserveHeight(newValue)
+                            }
                         }
                     }
                 }
@@ -729,6 +756,18 @@ struct ShortcutGeneralView: View {
         }
     }
 
+    private func setWorkspaceSidebarMenuBarReserveHeight(_ height: Int) {
+        Task { @MainActor in
+            do {
+                let targetUrl = try persistWorkspaceSidebarMenuBarReserveHeight(height)
+                _ = try await reloadConfig(forceConfigUrl: targetUrl)
+                WorkspaceSidebarPanel.shared.refresh()
+            } catch {
+                model.errorMessage = error.localizedDescription
+            }
+        }
+    }
+
     private func openConfigAction() {
         switch findCustomConfigUrl() {
             case .file(let url):
@@ -745,7 +784,11 @@ struct ShortcutGeneralView: View {
         Task {
             if let token: RunSessionGuard = .isServerEnabled {
                 try await runLightSession(.menuBarButton, token) {
-                    _ = try await reloadConfig()
+                    let isOk = try await reloadConfig()
+                    if isOk {
+                        workspaceSidebarMenuBarReserveHeight = config.workspaceSidebar.menuBarReserveHeight
+                        model.reload()
+                    }
                 }
             }
         }

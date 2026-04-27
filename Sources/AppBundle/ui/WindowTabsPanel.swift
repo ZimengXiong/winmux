@@ -597,11 +597,10 @@ private func shouldAllowTabStripChromeGroupDrag(windowId: UInt32) -> Bool {
 
 // MARK: - Constants
 
-private let windowTabStripCornerRadius: CGFloat = 10
-private let windowTabItemCornerRadius: CGFloat = 6
 private let windowTabPreviewCornerRadius: CGFloat = 8
-private let windowTabStripContentHorizontalPadding: CGFloat = 4
-private let windowTabStripGroupHandleWidth: CGFloat = 24
+private let windowTabStripContentHorizontalPadding: CGFloat = 8
+private let windowTabStripGroupHandleWidth: CGFloat = 30
+private let windowTabActivePillAnimation: Animation = .easeOut(duration: 0.07)
 
 func windowTabStripContentPadding() -> CGFloat {
     windowTabStripContentHorizontalPadding
@@ -635,14 +634,14 @@ private struct WindowTabStripView: View {
     @State private var draggingTabId: UInt32? = nil
     @State private var dragTranslationX: CGFloat = 0
     @State private var hasCommittedToDetach = false
+    @Namespace private var activeTabNamespace
 
     var body: some View {
         let count = max(strip.tabs.count, 1)
         let stripWidth = strip.frame.width
         let tabWidth = windowTabStripTabWidth(stripWidth: stripWidth, count: count)
-        let itemHeight = max(strip.frame.height - 6, 22)
+        let itemHeight = max(strip.frame.height - 8, 18)
         let effectiveTabWidth = tabWidth + 2 // include HStack spacing
-        let stripCornerRadius = activeWindowTabStripCornerRadius
         let groupDragWindowId = strip.tabs.first(where: \.isActive)?.windowId ?? strip.tabs.first?.windowId
 
         let draggingIndex = draggingTabId.flatMap { id in strip.tabs.firstIndex(where: { $0.windowId == id }) }
@@ -652,16 +651,17 @@ private struct WindowTabStripView: View {
         }
 
         HStack(spacing: 0) {
-            windowTabStripGroupHandle(windowId: groupDragWindowId)
+            windowTabStripGroupHandle(windowId: groupDragWindowId, showsCloseControl: true)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 2) {
+                HStack(spacing: 8) {
                     ForEach(strip.tabs) { tab in
                         WindowTabItemView(
                             tab: tab,
                             width: tabWidth,
                             height: itemHeight,
                             isDragSource: draggingTabId == tab.windowId,
+                            activeTabNamespace: activeTabNamespace,
                         )
                         .offset(x: tabVisualOffset(
                             for: tab,
@@ -725,6 +725,9 @@ private struct WindowTabStripView: View {
                 .padding(.horizontal, windowTabStripContentHorizontalPadding)
             }
             .frame(maxWidth: .infinity)
+            .background {
+                tabStripChromeButton(windowId: groupDragWindowId)
+            }
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 10)
@@ -742,26 +745,29 @@ private struct WindowTabStripView: View {
                     },
             )
 
-            windowTabStripGroupHandle(windowId: groupDragWindowId)
+            windowTabStripGroupHandle(windowId: groupDragWindowId, showsCloseControl: false)
         }
-        .padding(.vertical, 3)
+        .padding(.vertical, 4)
         .frame(width: stripWidth, height: strip.frame.height)
         .clipped()
-        .background(
-            RoundedRectangle(cornerRadius: stripCornerRadius, style: .continuous)
-                .fill(Color(nsColor: .windowBackgroundColor).opacity(0.92))
-                .overlay {
-                    RoundedRectangle(cornerRadius: stripCornerRadius, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
-                }
-                .shadow(color: Color.black.opacity(0.05), radius: 4, y: 2),
-        )
-    }
-
-    @MainActor
-    private var activeWindowTabStripCornerRadius: CGFloat {
-        let activeWindowId = strip.tabs.first(where: \.isActive)?.windowId ?? strip.tabs.first?.windowId
-        return activeWindowId.map(estimatedWindowPreviewCornerRadius) ?? windowTabStripCornerRadius
+        .background {
+            ZStack {
+                Capsule()
+                    .fill(.thinMaterial)
+                    .environment(\.colorScheme, .dark)
+                    .overlay {
+                        Capsule()
+                            .fill(Color.black.opacity(0.28))
+                    }
+                tabStripChromeButton(windowId: groupDragWindowId)
+            }
+        }
+        .overlay {
+            Capsule()
+                .strokeBorder(Color.white.opacity(0.22), lineWidth: 0.6)
+        }
+        .shadow(color: Color.black.opacity(0.24), radius: 4, y: 1.5)
+        .animation(windowTabActivePillAnimation, value: strip.tabs.first(where: \.isActive)?.windowId)
     }
 
     private func tabVisualOffset(
@@ -801,21 +807,72 @@ private struct WindowTabStripView: View {
         return 0
     }
 
+    private func focusTabStripChrome(windowId: UInt32?) {
+        guard let windowId, !isWindowTabStripDragInProgress() else { return }
+        focusWindowFromTabStrip(windowId, fallbackWorkspace: strip.workspaceName)
+    }
+
+    private func tabStripChromeButton(windowId: UInt32?) -> some View {
+        Button {
+            focusTabStripChrome(windowId: windowId)
+        } label: {
+            Capsule()
+                .fill(Color.clear)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Focus Tab Group")
+    }
+
+    private func windowTabStripHandleButton(windowId: UInt32?) -> some View {
+        Button {
+            focusTabStripChrome(windowId: windowId)
+        } label: {
+            Color.clear
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Focus Tab Group")
+    }
+
     @ViewBuilder
-    private func windowTabStripGroupHandle(windowId: UInt32?) -> some View {
-        Color.clear
-            .frame(width: windowTabStripReservedGroupHandleWidth())
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 10)
-                    .onChanged { _ in
-                        guard let windowId else { return }
-                        updateMoveFromTabStrip(windowId)
-                    }
-                    .onEnded { _ in
-                        finishMoveFromTabStrip()
-                    },
-            )
+    private func windowTabStripGroupHandle(windowId: UInt32?, showsCloseControl: Bool) -> some View {
+        ZStack {
+            windowTabStripHandleButton(windowId: windowId)
+            if showsCloseControl, let windowId {
+                Button {
+                    removeWindowFromTabStrip(windowId, fallbackWorkspace: strip.workspaceName)
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 13, height: 13)
+                        .background {
+                            Circle()
+                                .fill(Color.black.opacity(0.2))
+                                .background(.thinMaterial, in: Circle())
+                                .environment(\.colorScheme, .dark)
+                                .overlay {
+                                    Circle()
+                                        .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.6)
+                                }
+                        }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(width: windowTabStripReservedGroupHandleWidth())
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 10)
+                .onChanged { _ in
+                    guard let windowId else { return }
+                    updateMoveFromTabStrip(windowId)
+                }
+                .onEnded { _ in
+                    finishMoveFromTabStrip()
+                },
+        )
     }
 }
 
@@ -826,8 +883,10 @@ private struct WindowTabItemView: View {
     let width: CGFloat
     let height: CGFloat
     let isDragSource: Bool
+    let activeTabNamespace: Namespace.ID
 
     @State private var isHovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Button {
@@ -835,25 +894,28 @@ private struct WindowTabItemView: View {
             focusWindowFromTabStrip(tab.windowId, fallbackWorkspace: tab.workspaceName)
         } label: {
             Text(tab.title)
-                .font(.system(size: 11, weight: tab.isActive ? .semibold : .regular))
+                .font(.system(size: 10.8, weight: tab.isActive ? .semibold : .medium))
                 .lineLimit(1)
                 .foregroundStyle(foregroundColor)
+                .shadow(color: Color.black.opacity(0.55), radius: 1, y: 0.5)
                 .frame(maxWidth: .infinity, alignment: .center)
-                .padding(.horizontal, 6)
+                .padding(.horizontal, 8)
                 .frame(width: width, height: height)
                 .background(background)
+                .contentShape(Capsule())
         }
-        .contentShape(RoundedRectangle(cornerRadius: windowTabItemCornerRadius, style: .continuous))
+        .contentShape(Capsule())
         .buttonStyle(.plain)
-        .scaleEffect(isDragSource ? 1.05 : (isHovered ? 1.01 : 1.0))
+        .scaleEffect(isDragSource ? 1.04 : (isHovered ? 1.015 : 1.0))
         .opacity(isDragSource ? 0.75 : 1.0)
         .shadow(
             color: isDragSource ? Color.black.opacity(0.15) : Color.clear,
             radius: isDragSource ? 8 : 0,
             y: isDragSource ? 3 : 0,
         )
-        .animation(.spring(response: 0.2, dampingFraction: 0.75), value: isDragSource)
-        .animation(.easeOut(duration: 0.15), value: isHovered)
+        .animation(reduceMotion ? nil : .spring(response: 0.2, dampingFraction: 0.78), value: isDragSource)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: isHovered)
+        .animation(reduceMotion ? nil : windowTabActivePillAnimation, value: tab.isActive)
         .onHover { hovering in
             isHovered = hovering
         }
@@ -865,23 +927,40 @@ private struct WindowTabItemView: View {
     }
 
     private var foregroundColor: Color {
-        if tab.isActive { return Color.primary }
-        if isDragSource { return Color.primary }
-        return isHovered ? Color.primary.opacity(0.8) : Color.secondary.opacity(0.6)
+        if tab.isActive { return Color.white.opacity(0.98) }
+        if isDragSource { return Color.white.opacity(0.94) }
+        return isHovered ? Color.white.opacity(0.92) : Color.white.opacity(0.76)
     }
 
     @ViewBuilder
     private var background: some View {
         if isDragSource {
-            RoundedRectangle(cornerRadius: windowTabItemCornerRadius, style: .continuous)
-                .fill(Color.primary.opacity(0.09))
+            Capsule()
+                .fill(Color.white.opacity(0.2))
                 .overlay {
-                    RoundedRectangle(cornerRadius: windowTabItemCornerRadius, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+                    Capsule()
+                        .strokeBorder(Color.white.opacity(0.14), lineWidth: 0.5)
                 }
+        } else if tab.isActive {
+            Capsule()
+                .fill(Color.white.opacity(0.18))
+                .overlay {
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(0.18),
+                                    Color.clear,
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom,
+                            ),
+                        )
+                }
+                .matchedGeometryEffect(id: "window-tab-active-pill", in: activeTabNamespace)
         } else if isHovered, !tab.isActive {
-            RoundedRectangle(cornerRadius: windowTabItemCornerRadius, style: .continuous)
-                .fill(Color.primary.opacity(0.04))
+            Capsule()
+                .fill(Color.white.opacity(0.08))
         }
     }
 }

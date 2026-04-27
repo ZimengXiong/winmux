@@ -32,14 +32,40 @@ struct WorkspaceCommand: Command {
             }
             return !args.failIfNoop
         } else {
-            guard let workspace = Workspace.existing(byName: workspaceName),
-                  isUserFacingWorkspace(workspace, focusedWorkspace: focus.workspace)
-            else {
+            if let workspace = Workspace.existing(byName: workspaceName),
+               isUserFacingWorkspace(workspace, focusedWorkspace: focus.workspace)
+            {
+                return workspace.focusWorkspace()
+            }
+            guard let workspace = createTransientBlankWorkspaceIfAllowed(
+                named: workspaceName,
+                from: focusedWs,
+            ) else {
                 return io.err("Workspace '\(workspaceName)' doesn't exist")
             }
             return workspace.focusWorkspace()
         }
     }
+}
+
+@MainActor
+private func createTransientBlankWorkspaceIfAllowed(named workspaceName: String, from current: Workspace) -> Workspace? {
+    guard Workspace.existing(byName: workspaceName) == nil,
+          let targetIndex = Int(workspaceName),
+          targetIndex > 0,
+          String(targetIndex) == workspaceName
+    else {
+        return nil
+    }
+    let currentMaxIndex = userFacingWorkspaces(Workspace.all, focusedWorkspace: current)
+        .compactMap { Int($0.name) }
+        .max() ?? 0
+    guard targetIndex == currentMaxIndex + 1 else { return nil }
+
+    let workspace = Workspace.get(byName: workspaceName)
+    workspace.markAsTransientBlank()
+    workspace.seedMonitorIfNeeded(current.workspaceMonitor)
+    return workspace
 }
 
 private struct RelativeWorkspaceNavigation {

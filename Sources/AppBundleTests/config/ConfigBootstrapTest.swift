@@ -24,7 +24,7 @@ final class ConfigBootstrapTest: XCTestCase {
         XCTAssertNil(bindingMap["alt-slash"])
         XCTAssertNil(bindingMap["alt-comma"])
         XCTAssertTrue(parsedConfig.windowTabs.enabled)
-        XCTAssertEqual(parsedConfig.windowTabs.height, 34)
+        XCTAssertEqual(parsedConfig.windowTabs.height, 28)
         XCTAssertTrue(parsedConfig.workspaceSidebar.enabled)
         XCTAssertEqual(parsedConfig.workspaceSidebar.width, 240)
         XCTAssertTrue(parsedConfig.enableWindowManagement)

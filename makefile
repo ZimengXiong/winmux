@@ -85,16 +85,18 @@ release:
 	app_name="WinMux"; \
 	release_dir="$(RELEASE_DIR)"; \
 	archive_path="$$release_dir/$$app_name-$(VERSION).xcarchive"; \
+	derived_data_path="$$release_dir/$$app_name-$(VERSION).deriveddata"; \
 	app_path="$$archive_path/Products/Applications/$$app_name.app"; \
 	zip_path="$$release_dir/$$app_name-$(VERSION).zip"; \
 	log_path="$$release_dir/$$app_name-$(VERSION)-xcodebuild.log"; \
-	rm -rf "$$archive_path" "$$zip_path"; \
+	rm -rf "$$archive_path" "$$zip_path" "$$derived_data_path"; \
 	mkdir -p "$$release_dir"; \
 	xcodebuild-pretty "$$log_path" \
 	    -project WinMux.xcodeproj \
 	    -scheme WinMux \
 	    -configuration Release \
 	    -archivePath "$$archive_path" \
+	    -derivedDataPath "$$derived_data_path" \
 	    CODE_SIGN_IDENTITY="$(CODESIGN_IDENTITY)" \
 	    DEVELOPMENT_TEAM="$(DEVELOPMENT_TEAM)" \
 	    CODE_SIGN_STYLE=Automatic \

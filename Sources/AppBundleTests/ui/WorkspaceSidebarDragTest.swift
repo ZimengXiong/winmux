@@ -40,17 +40,17 @@ final class WorkspaceSidebarDragTest: XCTestCase {
         )
     }
 
-    func testWorkspaceSidebarHoverCueWidthAddsSmallBulge() {
+    func testWorkspaceSidebarHoverCueWidthStaysCollapsed() {
         XCTAssertEqual(
             workspaceSidebarHoverCueWidth(collapsedWidth: 28, expandedWidth: 160),
-            CGFloat(40),
+            CGFloat(28),
         )
     }
 
-    func testWorkspaceSidebarHoverCueWidthDoesNotExceedExpandedWidth() {
+    func testWorkspaceSidebarHoverCueWidthDoesNotProtrudeTowardExpandedWidth() {
         XCTAssertEqual(
             workspaceSidebarHoverCueWidth(collapsedWidth: 28, expandedWidth: 34),
-            CGFloat(34),
+            CGFloat(28),
         )
     }
 

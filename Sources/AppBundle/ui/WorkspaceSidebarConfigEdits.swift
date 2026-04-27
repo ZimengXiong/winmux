@@ -1,5 +1,58 @@
 import Foundation
 
+private let workspaceSidebarSectionHeader = "[workspace-sidebar]"
+private let workspaceSidebarMenuBarReserveKey = "menu-bar-reserve-height"
+
+func updateWorkspaceSidebarMenuBarReserveConfig(
+    in configText: String,
+    height: Int,
+) -> String {
+    let renderedValue = "\(height)"
+    let lines = configText.components(separatedBy: "\n")
+    guard let sectionIndex = lines.firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == workspaceSidebarSectionHeader }) else {
+        var result = configText
+        if !result.isEmpty, !result.hasSuffix("\n") {
+            result += "\n"
+        }
+        if !result.isEmpty {
+            result += "\n"
+        }
+        result += "\(workspaceSidebarSectionHeader)\n"
+        result += "    \(workspaceSidebarMenuBarReserveKey) = \(renderedValue)"
+        return result
+    }
+
+    let sectionEnd = lines[(sectionIndex + 1)...]
+        .firstIndex(where: { line in
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            return trimmed.hasPrefix("[") && trimmed.hasSuffix("]")
+        }) ?? lines.endIndex
+
+    var resultLines = lines
+    for lineIndex in (sectionIndex + 1)..<sectionEnd {
+        guard workspaceSidebarConfigKey(in: resultLines[lineIndex]) == workspaceSidebarMenuBarReserveKey else { continue }
+        let indentation = String(resultLines[lineIndex].prefix(while: { $0.isWhitespace }))
+        let trailingComment = trailingTomlComment(in: resultLines[lineIndex]).map { " " + $0 } ?? ""
+        resultLines[lineIndex] = "\(indentation)\(workspaceSidebarMenuBarReserveKey) = \(renderedValue)\(trailingComment)"
+        return resultLines.joined(separator: "\n")
+    }
+
+    resultLines.insert("    \(workspaceSidebarMenuBarReserveKey) = \(renderedValue)", at: sectionIndex + 1)
+    return resultLines.joined(separator: "\n")
+}
+
+@MainActor
+func persistWorkspaceSidebarMenuBarReserveHeight(_ height: Int) throws -> URL {
+    let targetUrl = preferredWorkspaceSidebarConfigUrl()
+    let currentText = (try? String(contentsOf: targetUrl, encoding: .utf8)) ?? starterConfigText()
+    let updatedText = updateWorkspaceSidebarMenuBarReserveConfig(in: currentText, height: height)
+    if let parent = targetUrl.deletingLastPathComponent().takeIf({ $0.path != targetUrl.path }) {
+        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+    }
+    try updatedText.write(to: targetUrl, atomically: true, encoding: .utf8)
+    return targetUrl
+}
+
 func updateWorkspaceSidebarLabelConfig(
     in configText: String,
     workspaceName: String,
@@ -80,6 +133,10 @@ private func preferredWorkspaceSidebarConfigUrl() -> URL {
 }
 
 private func workspaceSidebarLabelKey(in line: String) -> String? {
+    workspaceSidebarConfigKey(in: line)
+}
+
+private func workspaceSidebarConfigKey(in line: String) -> String? {
     let trimmed = line.trimmingCharacters(in: .whitespaces)
     guard !trimmed.isEmpty, !trimmed.hasPrefix("#"), let equals = trimmed.firstIndex(of: "=") else { return nil }
     let key = trimmed[..<equals].trimmingCharacters(in: .whitespaces)
@@ -88,6 +145,11 @@ private func workspaceSidebarLabelKey(in line: String) -> String? {
         return inner.replacingOccurrences(of: "\\\"", with: "\"").replacingOccurrences(of: "\\\\", with: "\\")
     }
     return String(key)
+}
+
+private func trailingTomlComment(in line: String) -> String? {
+    guard let hashIndex = line.firstIndex(of: "#") else { return nil }
+    return String(line[hashIndex...]).trimmingCharacters(in: .whitespaces)
 }
 
 private func tomlWorkspaceLabelLine(workspaceName: String, label: String) -> String {

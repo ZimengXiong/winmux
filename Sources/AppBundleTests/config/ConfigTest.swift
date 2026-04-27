@@ -132,16 +132,6 @@ final class ConfigTest: XCTestCase {
         )
     }
 
-    func testTapModifierSideSpecificFlags() {
-        let leftAltFlags: NSEvent.ModifierFlags = [.option, TapModifierKey.leftAlt.sideSpecificModifierFlag]
-        XCTAssertTrue(leftAltFlags.contains(TapModifierKey.leftAlt.sideSpecificModifierFlag))
-        XCTAssertFalse(leftAltFlags.contains(TapModifierKey.rightAlt.sideSpecificModifierFlag))
-
-        let rightCmdFlags: NSEvent.ModifierFlags = [.command, TapModifierKey.rightCmd.sideSpecificModifierFlag]
-        XCTAssertTrue(rightCmdFlags.contains(TapModifierKey.rightCmd.sideSpecificModifierFlag))
-        XCTAssertFalse(rightCmdFlags.contains(TapModifierKey.leftCmd.sideSpecificModifierFlag))
-    }
-
     func testTapModifierStateClearsAfterMissedRelease() async throws {
         resetHotKeys()
         config.modes = [
@@ -152,7 +142,7 @@ final class ConfigTest: XCTestCase {
         ]
         try await activateMode(mainModeId)
 
-        let leftAltDown: NSEvent.ModifierFlags = [.option, TapModifierKey.leftAlt.sideSpecificModifierFlag]
+        let leftAltDown: NSEvent.ModifierFlags = [.option, TapModifierKey.leftAlt.deviceSpecificModifierFlag]
         noteTapBindingFlagsChanged(keyCode: 58, modifierFlags: leftAltDown)
         XCTAssertEqual(tapBindingPressedModifiersForTests(), [.leftAlt])
 
@@ -161,6 +151,32 @@ final class ConfigTest: XCTestCase {
 
         noteTapBindingFlagsChanged(keyCode: 58, modifierFlags: [])
         XCTAssertTrue(tapBindingPressedModifiersForTests().isEmpty)
+    }
+
+    func testBindingEqualityChecksCommandCount() {
+        let focusLeft = FocusCommand.new(direction: .left)
+        let focusRight = FocusCommand.new(direction: .right)
+        let shortHotkey = HotkeyBinding(.option, .h, [focusLeft])
+        let longHotkey = HotkeyBinding(.option, .h, [focusLeft, focusRight])
+        let shortTap = TapBinding(.leftAlt, [focusLeft])
+        let longTap = TapBinding(.leftAlt, [focusLeft, focusRight])
+
+        XCTAssertNotEqual(shortHotkey, longHotkey)
+        XCTAssertNotEqual(shortTap, longTap)
+    }
+
+    func testWindowDetectedCallbackEqualityChecksCommandCount() {
+        let matcher = WindowDetectedCallbackMatcher(appId: "com.example.app")
+        let short = WindowDetectedCallback(
+            matcher: matcher,
+            rawRun: [FocusCommand.new(direction: .left)],
+        )
+        let long = WindowDetectedCallback(
+            matcher: matcher,
+            rawRun: [FocusCommand.new(direction: .left), FocusCommand.new(direction: .right)],
+        )
+
+        XCTAssertNotEqual(short, long)
     }
 
     func testModesMustContainDefaultModeError() {
@@ -214,6 +230,23 @@ final class ConfigTest: XCTestCase {
             ],
         )
         assertEquals(config.modes[mainModeId], Mode(bindings: [:], tapBindings: [:]))
+    }
+
+    func testTapModifierKeyUsesSideSpecificModifierFlags() {
+        let leftAltFlags: NSEvent.ModifierFlags = [
+            .option,
+            NSEvent.ModifierFlags(rawValue: UInt(NX_DEVICELALTKEYMASK)),
+        ]
+        let rightCmdFlags: NSEvent.ModifierFlags = [
+            .command,
+            NSEvent.ModifierFlags(rawValue: UInt(NX_DEVICERCMDKEYMASK)),
+        ]
+
+        XCTAssertTrue(TapModifierKey.leftAlt.isPressed(in: leftAltFlags))
+        XCTAssertFalse(TapModifierKey.rightAlt.isPressed(in: leftAltFlags))
+        XCTAssertTrue(TapModifierKey.rightCmd.isPressed(in: rightCmdFlags))
+        XCTAssertFalse(TapModifierKey.leftCmd.isPressed(in: rightCmdFlags))
+        XCTAssertTrue(TapModifierKey.leftAlt.isPressed(in: .option))
     }
 
     func testPermanentWorkspaceNames() {
@@ -364,6 +397,7 @@ final class ConfigTest: XCTestCase {
                 monitor = ['secondary', 2]
                 show-status-pills = false
                 show-date = false
+                menu-bar-reserve-height = 30
 
             [workspace-sidebar.workspace-labels]
                 1 = 'Code'
@@ -380,6 +414,7 @@ final class ConfigTest: XCTestCase {
                 monitor: [.secondary, .sequenceNumber(2)],
                 showStatusPills: false,
                 showDate: false,
+                menuBarReserveHeight: 30,
                 workspaceLabels: ["1": "Code", "2": "Web"],
             ),
         )
@@ -389,10 +424,12 @@ final class ConfigTest: XCTestCase {
             [workspace-sidebar]
                 collapsed-width = 0
                 width = 0
+                menu-bar-reserve-height = -1
             """,
         )
         assertEquals(widthErrors.descriptions, [
             "workspace-sidebar.collapsed-width: Must be greater than 0",
+            "workspace-sidebar.menu-bar-reserve-height: Must be greater than or equal to 0",
             "workspace-sidebar.width: Must be greater than 0",
         ])
     }
@@ -718,6 +755,37 @@ final class ConfigTest: XCTestCase {
 
         XCTAssertFalse(updated.contains("[workspace-sidebar.workspace-labels]"))
         XCTAssertTrue(updated.contains("[mode.main.binding]"))
+    }
+
+    func testUpdateWorkspaceSidebarMenuBarReserveConfigAddsValueToExistingSection() {
+        let updated = updateWorkspaceSidebarMenuBarReserveConfig(
+            in: """
+            [workspace-sidebar]
+                enabled = true
+                width = 240
+
+            [mode.main.binding]
+                alt-h = 'focus left'
+            """,
+            height: 32,
+        )
+
+        XCTAssertTrue(updated.contains("[workspace-sidebar]\n    menu-bar-reserve-height = 32\n    enabled = true"))
+        XCTAssertTrue(updated.contains("[mode.main.binding]"))
+    }
+
+    func testUpdateWorkspaceSidebarMenuBarReserveConfigReplacesValueAndPreservesComment() {
+        let updated = updateWorkspaceSidebarMenuBarReserveConfig(
+            in: """
+            [workspace-sidebar]
+                menu-bar-reserve-height = 28 # visible menu bar
+                enabled = true
+            """,
+            height: 0,
+        )
+
+        XCTAssertTrue(updated.contains("menu-bar-reserve-height = 0 # visible menu bar"))
+        XCTAssertFalse(updated.contains("menu-bar-reserve-height = 28"))
     }
 
     func testUpdateWindowManagementConfigReplacesExistingValueAndPreservesComment() {

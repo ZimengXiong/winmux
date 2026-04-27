@@ -64,11 +64,7 @@ func exitMacOsNativeUnconventionalState(
 ) async throws {
     window.layoutReason = .standard
     let workspace = prevWorkspaceName
-        .map {
-            let workspace = Workspace.get(byName: $0)
-            workspace.seedMonitorIfNeeded(fallbackWorkspace.workspaceMonitor)
-            return workspace
-        }
+        .flatMap { Workspace.existing(byName: $0) }
         ?? fallbackWorkspace
     switch prevParentKind {
         case .workspace:

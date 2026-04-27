@@ -2,14 +2,17 @@ import AppKit
 import SwiftUI
 
 private let workspaceSidebarPanelId = "WinMux.workspaceSidebar"
-private let workspaceSidebarContentLeadingInset: CGFloat = 6
-private let workspaceSidebarContentTrailingInset: CGFloat = 10
+private let workspaceSidebarContentLeadingInset: CGFloat = 8
+private let workspaceSidebarContentTrailingInset: CGFloat = 8
+private let workspaceSidebarCompactRailHorizontalInset: CGFloat = 4
 private let workspaceSidebarSectionInnerHorizontalInset: CGFloat = 4
 private let workspaceSidebarBadgeWidth: CGFloat = 22
 private let workspaceSidebarHeaderSpacing: CGFloat = 8
 private let workspaceSidebarRowsRevealProgress: CGFloat = 0.58
+private let workspaceSidebarOuterCornerRadius: CGFloat = 16
 private let workspaceSidebarSectionCornerRadius: CGFloat = 8
-private let workspaceSidebarHoverCueWidthDelta: CGFloat = 12
+private let workspaceSidebarRowCornerRadius: CGFloat = 6
+private let workspaceSidebarRowHorizontalPadding: CGFloat = 7
 private let workspaceSidebarHoverOpenThresholdFraction: CGFloat = 0.75
 private let workspaceSidebarDisplayEdgeCompactionMargin: CGFloat = 12
 @MainActor
@@ -18,10 +21,8 @@ private var workspaceSidebarDropTargets: [WorkspaceSidebarDropTarget] = []
 @MainActor
 private func workspaceSidebarCompactSectionWidth() -> CGFloat {
     max(
-        CGFloat(config.workspaceSidebar.collapsedWidth) -
-            workspaceSidebarContentLeadingInset -
-            workspaceSidebarContentTrailingInset,
-        workspaceSidebarBadgeWidth + (workspaceSidebarSectionInnerHorizontalInset * 2) + 2,
+        CGFloat(config.workspaceSidebar.collapsedWidth) - (workspaceSidebarCompactRailHorizontalInset * 2),
+        workspaceSidebarBadgeWidth + (workspaceSidebarSectionInnerHorizontalInset * 2),
     )
 }
 
@@ -139,7 +140,7 @@ func nextWorkspaceSidebarHoveredWindowId(
 }
 
 func workspaceSidebarHoverCueWidth(collapsedWidth: CGFloat, expandedWidth: CGFloat) -> CGFloat {
-    collapsedWidth + min(max(expandedWidth - collapsedWidth, 0), workspaceSidebarHoverCueWidthDelta)
+    min(collapsedWidth, expandedWidth)
 }
 
 func isWorkspaceSidebarHoverDeepEnoughToExpand(
@@ -245,11 +246,15 @@ final class WorkspaceSidebarPanel: NSPanelHud {
         }
 
         let screenFrame = screen.frame
+        let menuBarReserveHeight = min(
+            CGFloat(sidebarConfig.menuBarReserveHeight),
+            max(screenFrame.height - 1, 0),
+        )
         let frame = NSRect(
             x: screenFrame.minX,
             y: screenFrame.minY,
             width: expandedWidth,
-            height: screenFrame.height,
+            height: screenFrame.height - menuBarReserveHeight,
         )
 
         if self.frame != frame {
@@ -625,6 +630,10 @@ struct WorkspaceSidebarView: View {
     }
 
     private func sidebarContent(expansionProgress: CGFloat) -> some View {
+        let isCompact = expansionProgress < workspaceSidebarRowsRevealProgress
+        let leadingInset = isCompact ? workspaceSidebarCompactRailHorizontalInset : workspaceSidebarContentLeadingInset
+        let trailingInset = isCompact ? workspaceSidebarCompactRailHorizontalInset : workspaceSidebarContentTrailingInset
+
         return VStack(alignment: .leading, spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 6) {
@@ -641,10 +650,10 @@ struct WorkspaceSidebarView: View {
                         onCreateWorkspace: createWorkspaceFromSidebarButton
                     )
                 }
-                .padding(.leading, workspaceSidebarContentLeadingInset)
-                .padding(.trailing, workspaceSidebarContentTrailingInset)
+                .padding(.leading, leadingInset)
+                .padding(.trailing, trailingInset)
                 .padding(.top, viewModel.workspaceSidebarTopPadding)
-                .padding(.bottom, 12)
+                .padding(.bottom, 10)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .coordinateSpace(name: "workspaceSidebarContent")
@@ -654,24 +663,36 @@ struct WorkspaceSidebarView: View {
 
             WorkspaceSidebarStatusView(
                 sectionWidth: workspaceSidebarSectionWidth(expansionProgress),
-                isCompact: expansionProgress < workspaceSidebarRowsRevealProgress,
+                isCompact: isCompact,
             )
-            .padding(.leading, workspaceSidebarContentLeadingInset)
-            .padding(.trailing, workspaceSidebarContentTrailingInset)
-            .padding(.top, 10)
-            .padding(.bottom, 12)
+            .padding(.leading, leadingInset)
+            .padding(.trailing, trailingInset)
+            .padding(.top, 8)
+            .padding(.bottom, 10)
         }
         .background(sidebarSurface)
+        .environment(\.colorScheme, .dark)
+        .clipShape(UnevenRoundedRectangle(
+            bottomTrailingRadius: workspaceSidebarOuterCornerRadius,
+            topTrailingRadius: topTrailingCornerRadius,
+            style: .continuous
+        ))
         .overlay(alignment: .trailing) {
             Rectangle()
-                .fill(Color(nsColor: .separatorColor).opacity(0.5))
-                .frame(width: 1)
+                .fill(Color.white.opacity(0.08))
+                .frame(width: 0.5)
         }
+        .shadow(color: Color.black.opacity(0.32), radius: 14, x: 2, y: 0)
     }
 
     private var sidebarSurface: some View {
-        VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
+        VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
             .ignoresSafeArea()
+            .overlay(Color.black.opacity(0.42))
+    }
+
+    private var topTrailingCornerRadius: CGFloat {
+        config.workspaceSidebar.menuBarReserveHeight == 0 ? 0 : workspaceSidebarOuterCornerRadius
     }
 }
 
@@ -684,12 +705,14 @@ struct VisualEffectView: NSViewRepresentable {
         view.material = material
         view.blendingMode = blendingMode
         view.state = .active
+        view.appearance = NSAppearance(named: .darkAqua)
         return view
     }
 
     func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
         nsView.material = material
         nsView.blendingMode = blendingMode
+        nsView.appearance = NSAppearance(named: .darkAqua)
     }
 }
 
@@ -702,7 +725,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
     @State private var hoveredWindowId: UInt32? = nil
 
     private let headerHeight: CGFloat = 26
-    private let rowHeight: CGFloat = 22
+    private let rowHeight: CGFloat = 23
 
     private var contentWidth: CGFloat { workspaceSidebarContentWidth(expansionProgress) }
     private var sectionWidth: CGFloat { workspaceSidebarSectionWidth(expansionProgress) }
@@ -716,7 +739,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
 
     var body: some View {
         interactiveSectionContent
-            .padding(.vertical, 6)
+            .padding(.vertical, isCompact ? 4 : 5)
             .padding(.horizontal, workspaceSidebarSectionInnerHorizontalInset)
             .frame(width: sectionWidth, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -734,7 +757,14 @@ struct WorkspaceSidebarWorkspaceSection: View {
             .animation(.spring(response: 0.2, dampingFraction: 0.82), value: dragPreview)
             .animation(.spring(response: 0.2, dampingFraction: 0.82), value: expansionProgress)
             .animation(.easeOut(duration: 0.15), value: isHovered)
-            .background(sectionBackground)
+            .background {
+                ZStack {
+                    sectionBackground
+                    if !isCompact {
+                        sectionActivationButton
+                    }
+                }
+            }
             .shadow(
                 color: isDropTarget ? Color.accentColor.opacity(0.18) : .clear,
                 radius: isDropTarget ? 12 : 0
@@ -763,12 +793,25 @@ struct WorkspaceSidebarWorkspaceSection: View {
         if isCompact {
             Button(action: handleSectionClick) {
                 sectionContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .contentShape(sectionShape)
             }
             .buttonStyle(.plain)
-            .contentShape(Rectangle())
+            .frame(maxWidth: .infinity, alignment: .center)
+            .contentShape(sectionShape)
         } else {
             sectionContent
+                .contentShape(sectionShape)
         }
+    }
+
+    private var sectionActivationButton: some View {
+        Button(action: handleSectionClick) {
+            Color.clear
+                .contentShape(sectionShape)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(workspace.displayName)
     }
 
     private var sectionContent: some View {
@@ -795,6 +838,8 @@ struct WorkspaceSidebarWorkspaceSection: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     @ViewBuilder
@@ -834,20 +879,30 @@ struct WorkspaceSidebarWorkspaceSection: View {
         }
     }
 
-    private func workspaceWindowButton(_ window: WorkspaceSidebarWindowViewModel, allowsDrag: Bool, subject: WindowDragSubject = .window) -> some View {
+    private func workspaceWindowButton(
+        _ window: WorkspaceSidebarWindowViewModel,
+        allowsDrag: Bool,
+        subject: WindowDragSubject = .window,
+        leadingHitInset: CGFloat = 0,
+    ) -> some View {
         Button {
             guard shouldHandleWorkspaceSidebarActivation(isEditing: false, isSidebarDragInProgress: isWorkspaceSidebarDragInProgress()) else { return }
             focusWindowFromSidebar(window.windowId, fallbackWorkspace: window.workspaceName)
         } label: {
             WorkspaceSidebarWindowRow(
-                window: window,
-                expansionProgress: expansionProgress,
+                title: window.title ?? window.appName,
+                badge: nil,
+                isFocused: window.isFocused,
                 rowHeight: rowHeight,
                 isHovered: hoveredWindowId == window.windowId,
-                expandedContentWidth: contentWidth
             )
+            .padding(.leading, leadingHitInset)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
         .modifier(WorkspaceSidebarOptionalDragModifier(
             isEnabled: allowsDrag,
             onChanged: {
@@ -876,14 +931,19 @@ struct WorkspaceSidebarWorkspaceSection: View {
                 guard shouldHandleWorkspaceSidebarActivation(isEditing: false, isSidebarDragInProgress: isWorkspaceSidebarDragInProgress()) else { return }
                 focusWindowFromSidebar(group.representativeWindowId, fallbackWorkspace: group.workspaceName)
             } label: {
-                WorkspaceSidebarTabGroupRow(
-                    group: group,
-                    expansionProgress: expansionProgress,
+                WorkspaceSidebarWindowRow(
+                    title: group.title.isEmpty ? "Tab Group" : group.title,
+                    badge: group.windowCount > 1 ? "\(group.windowCount)" : nil,
+                    isFocused: group.isFocused,
                     rowHeight: rowHeight,
-                    expandedContentWidth: contentWidth
+                    isHovered: false,
                 )
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
             .modifier(WorkspaceSidebarOptionalDragModifier(
                 isEnabled: true,
                 onChanged: {
@@ -898,18 +958,12 @@ struct WorkspaceSidebarWorkspaceSection: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 ForEach(group.tabs) { tab in
-                    workspaceWindowButton(tab, allowsDrag: true, subject: .window)
-                        .padding(.leading, 16)
+                    workspaceWindowButton(tab, allowsDrag: true, subject: .window, leadingHitInset: 14)
                 }
             }
             .opacity(isDragging ? 0.4 : 1)
         }
-        .padding(.vertical, 2)
-        .padding(.horizontal, 2)
-        .background(
-            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(Color.primary.opacity(0.03))
-        )
+        .padding(.vertical, 1)
         .animation(.spring(response: 0.2, dampingFraction: 0.78), value: isDragging)
     }
 
@@ -938,13 +992,13 @@ struct WorkspaceSidebarWorkspaceSection: View {
                         .frame(width: workspaceSidebarBadgeWidth, height: workspaceSidebarBadgeWidth, alignment: .center)
                     VStack(alignment: .leading, spacing: 0) {
                         Text(workspace.displayName)
-                            .font(.system(size: 12, weight: workspace.isFocused ? .semibold : .medium))
-                            .foregroundStyle(workspace.isFocused ? Color.primary : Color.secondary)
+                            .font(.system(size: 12.5, weight: workspace.isFocused ? .semibold : .medium))
+                            .foregroundStyle(workspace.isFocused ? Color.white : Color.white.opacity(0.86))
                             .lineLimit(1)
                         if let monitorName = workspace.monitorName, showsWindowRows {
                             Text(monitorName)
-                                .font(.system(size: 9, weight: .regular))
-                                .foregroundStyle(Color.secondary.opacity(0.6))
+                                .font(.system(size: 9.5, weight: .regular))
+                                .foregroundStyle(Color.white.opacity(0.54))
                                 .lineLimit(1)
                         }
                     }
@@ -956,47 +1010,71 @@ struct WorkspaceSidebarWorkspaceSection: View {
 
     private var sectionBackgroundFill: Color {
         if isDropTarget {
-            return Color.white.opacity(0.04)
+            return Color.accentColor.opacity(0.16)
+        } else if isCompact {
+            if workspace.isFocused {
+                return Color.white.opacity(0.10)
+            } else if isHovered {
+                return Color.white.opacity(0.06)
+            }
         } else if workspace.isFocused {
-            return Color(nsColor: .controlBackgroundColor).opacity(0.45)
+            return Color.white.opacity(0.055)
         } else if isHovered {
-            return Color(nsColor: .controlBackgroundColor).opacity(0.3)
+            return Color.white.opacity(0.045)
         } else if workspace.isVisible && expansionProgress > 0.5 {
-            return Color(nsColor: .controlBackgroundColor).opacity(0.2)
+            return Color.white.opacity(0.02)
         }
-        return Color(nsColor: .controlBackgroundColor).opacity(0.08)
+        return Color.clear
     }
 
     private var sectionBorderColor: Color {
         if isDropTarget {
-            return Color.accentColor.opacity(0.45)
+            return Color.accentColor.opacity(0.35)
         }
-        if workspace.isFocused {
-            return Color.accentColor.opacity(0.10)
+        if workspace.isFocused && !isCompact {
+            return Color.white.opacity(0.06)
         }
-        return Color.primary.opacity(0.03)
+        return Color.clear
     }
 
     private var workspaceBadge: some View {
         Group {
             if workspace.isGeneratedName, workspace.sidebarLabel.isEmpty {
                 Image(systemName: "plus")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.system(size: 9, weight: .medium))
             } else if workspace.isGeneratedName, let initial = workspace.displayName.first {
                 Text(String(initial).uppercased())
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .font(.system(size: 9, weight: .semibold))
             } else {
                 Text(workspace.name)
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .font(.system(size: 9, weight: .semibold))
             }
         }
-        .foregroundStyle(workspace.isFocused ? Color.white : Color.primary.opacity(0.8))
+        .foregroundStyle(workspace.isFocused ? Color.white : Color.white.opacity(0.84))
         .lineLimit(1)
         .frame(width: workspaceSidebarBadgeWidth, height: workspaceSidebarBadgeWidth, alignment: .center)
         .background(
             RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(workspace.isFocused ? Color.accentColor : Color(nsColor: .controlBackgroundColor).opacity(0.6))
+                .fill(workspaceBadgeFill)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .strokeBorder(workspaceBadgeBorder, lineWidth: 0.5)
+                }
         )
+    }
+
+    private var workspaceBadgeFill: Color {
+        if workspace.isFocused {
+            return Color.accentColor.opacity(0.84)
+        }
+        return Color.white.opacity(isCompact ? 0.09 : 0.06)
+    }
+
+    private var workspaceBadgeBorder: Color {
+        if workspace.isFocused {
+            return Color.clear
+        }
+        return Color.white.opacity(0.08)
     }
 }
 
@@ -1024,19 +1102,14 @@ struct WorkspaceSidebarCreateWorkspaceSection: View {
             } label: {
                 Group {
                     if isCompact {
-                        Image(systemName: "plus")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(Color.accentColor)
+                        plusBadge
                             .frame(maxWidth: .infinity, minHeight: 22, alignment: .center)
                     } else {
                         HStack(spacing: workspaceSidebarHeaderSpacing) {
-                            Image(systemName: "plus")
-                                .font(.system(size: 11, weight: .medium))
-                                .frame(width: workspaceSidebarBadgeWidth, height: workspaceSidebarBadgeWidth, alignment: .center)
-                                .foregroundStyle(Color.accentColor)
+                            plusBadge
                             Text("New Workspace")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(Color.secondary)
+                                .font(.system(size: 12.5, weight: .medium))
+                                .foregroundStyle(Color.white.opacity(0.66))
                                 .lineLimit(1)
                             Spacer(minLength: 0)
                         }
@@ -1048,21 +1121,19 @@ struct WorkspaceSidebarCreateWorkspaceSection: View {
                 .frame(maxWidth: .infinity, alignment: isCompact ? .center : .leading)
                 .background(
                     sectionShape
-                        .fill(
-                            isDropTarget
-                                ? Color.white.opacity(0.04)
-                                : Color(nsColor: .controlBackgroundColor).opacity(isHovered ? 0.3 : 0.12)
-                        )
+                        .fill(createSectionFill)
                         .overlay {
                             sectionShape
                                 .strokeBorder(
-                                    isDropTarget ? Color.accentColor.opacity(0.45) : Color.accentColor.opacity(0.08),
+                                    isDropTarget ? Color.accentColor.opacity(0.35) : Color.white.opacity(isHovered ? 0.06 : 0),
                                     lineWidth: isDropTarget ? 1.5 : 0.5
                                 )
                         }
                 )
+                .contentShape(sectionShape)
                 }
             .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: isCompact ? .center : .leading)
             .contentShape(sectionShape)
             .onHover { hover in
                 isHovered = hover
@@ -1101,69 +1172,62 @@ struct WorkspaceSidebarCreateWorkspaceSection: View {
             }
         }
     }
+
+    private var createSectionFill: Color {
+        if isDropTarget {
+            return Color.accentColor.opacity(0.16)
+        }
+        if isHovered {
+            return Color.white.opacity(isCompact ? 0.08 : 0.06)
+        }
+        return Color.clear
+    }
+
+    private var plusBadge: some View {
+        Image(systemName: "plus")
+            .font(.system(size: 10, weight: .medium))
+            .foregroundStyle(Color.white.opacity(0.72))
+            .frame(width: workspaceSidebarBadgeWidth, height: workspaceSidebarBadgeWidth, alignment: .center)
+            .background(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(Color.white.opacity(isCompact ? 0.05 : 0.04))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 5, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5)
+                    }
+            )
+    }
 }
 
 // MARK: - Window Row
 
 struct WorkspaceSidebarWindowRow: View {
-    let window: WorkspaceSidebarWindowViewModel
-    let expansionProgress: CGFloat
+    let title: String
+    let badge: String?
+    let isFocused: Bool
     let rowHeight: CGFloat
     let isHovered: Bool
-    let expandedContentWidth: CGFloat
 
     var body: some View {
-        HStack(spacing: 5) {
-            Text(window.title ?? window.appName)
-                .font(.system(size: 11, weight: window.isFocused ? .medium : .regular))
-                .foregroundStyle(window.isFocused ? Color.primary : Color.secondary.opacity(0.85))
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.system(size: 12, weight: isFocused ? .semibold : .regular))
+                .foregroundStyle(isFocused ? Color.white : Color.white.opacity(0.78))
                 .lineLimit(1)
             Spacer(minLength: 0)
+            if let badge {
+                Text(badge)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.52))
+            }
         }
-        .padding(.horizontal, 6)
+        .padding(.horizontal, workspaceSidebarRowHorizontalPadding)
         .padding(.vertical, 1.5)
         .frame(height: rowHeight)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(isHovered ? Color.primary.opacity(0.04) : Color.clear)
-        )
-        .contentShape(Rectangle())
-    }
-}
-
-// MARK: - Tab Group Row
-
-struct WorkspaceSidebarTabGroupRow: View {
-    let group: WorkspaceSidebarTabGroupViewModel
-    let expansionProgress: CGFloat
-    let rowHeight: CGFloat
-    let expandedContentWidth: CGFloat
-
-    var body: some View {
-        HStack(spacing: 5) {
-            Image(systemName: "square.stack")
-                .font(.system(size: 10, weight: .regular))
-                .foregroundStyle(group.isFocused ? Color.accentColor : Color.secondary.opacity(0.5))
-                .frame(width: 14, height: 14)
-
-            Text(group.title.isEmpty ? "Tab Group" : group.title)
-                .font(.system(size: 11, weight: group.isFocused ? .medium : .regular))
-                .foregroundStyle(group.isFocused ? Color.primary : Color.secondary.opacity(0.85))
-                .lineLimit(1)
-            Spacer(minLength: 0)
-            Text("\(group.windowCount)")
-                .font(.system(size: 9, weight: .medium, design: .rounded))
-                .foregroundStyle(Color.secondary.opacity(0.4))
-                .opacity(expansionProgress)
-        }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 1.5)
-        .frame(height: rowHeight + 2)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(group.isFocused ? Color.accentColor.opacity(0.05) : Color.clear)
+            RoundedRectangle(cornerRadius: workspaceSidebarRowCornerRadius, style: .continuous)
+                .fill(isFocused ? Color.white.opacity(0.13) : isHovered ? Color.white.opacity(0.07) : Color.clear)
         )
         .contentShape(Rectangle())
     }
@@ -1178,24 +1242,20 @@ struct WorkspaceSidebarPreviewRow: View {
     let expandedContentWidth: CGFloat
 
     var body: some View {
-        HStack(spacing: 5) {
-            Image(systemName: preview.isTabGroup ? "square.stack" : "macwindow")
-                .font(.system(size: 9, weight: .regular))
-                .foregroundStyle(Color.accentColor.opacity(0.5))
-                .frame(width: 14, height: 14)
+        HStack(spacing: 8) {
             Text(preview.label)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Color.primary.opacity(0.5))
+                .foregroundStyle(Color.white.opacity(0.74))
                 .lineLimit(1)
                 .opacity(expansionProgress)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 6)
+        .padding(.horizontal, workspaceSidebarRowHorizontalPadding)
         .padding(.vertical, 1.5)
         .frame(height: rowHeight + 2)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
+            RoundedRectangle(cornerRadius: workspaceSidebarRowCornerRadius, style: .continuous)
                 .strokeBorder(
                     Color.accentColor.opacity(0.2),
                     style: StrokeStyle(lineWidth: 1, dash: [4, 3])

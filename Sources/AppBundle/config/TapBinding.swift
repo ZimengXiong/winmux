@@ -35,18 +35,25 @@ enum TapModifierKey: String, CaseIterable, Equatable, Sendable {
         }
     }
 
-    var sideSpecificModifierFlag: NSEvent.ModifierFlags {
-        // NSEvent keeps left/right hardware modifier bits in rawValue alongside the device-independent flags.
+    var deviceSpecificModifierFlag: NSEvent.ModifierFlags {
         switch self {
-            case .leftCtrl: NSEvent.ModifierFlags(rawValue: 0x000001)
-            case .leftShift: NSEvent.ModifierFlags(rawValue: 0x000002)
-            case .rightShift: NSEvent.ModifierFlags(rawValue: 0x000004)
-            case .leftCmd: NSEvent.ModifierFlags(rawValue: 0x000008)
-            case .rightCmd: NSEvent.ModifierFlags(rawValue: 0x000010)
-            case .leftAlt: NSEvent.ModifierFlags(rawValue: 0x000020)
-            case .rightAlt: NSEvent.ModifierFlags(rawValue: 0x000040)
-            case .rightCtrl: NSEvent.ModifierFlags(rawValue: 0x002000)
+            case .leftAlt: NSEvent.ModifierFlags(rawValue: UInt(NX_DEVICELALTKEYMASK))
+            case .rightAlt: NSEvent.ModifierFlags(rawValue: UInt(NX_DEVICERALTKEYMASK))
+            case .leftCmd: NSEvent.ModifierFlags(rawValue: UInt(NX_DEVICELCMDKEYMASK))
+            case .rightCmd: NSEvent.ModifierFlags(rawValue: UInt(NX_DEVICERCMDKEYMASK))
+            case .leftCtrl: NSEvent.ModifierFlags(rawValue: UInt(NX_DEVICELCTLKEYMASK))
+            case .rightCtrl: NSEvent.ModifierFlags(rawValue: UInt(NX_DEVICERCTLKEYMASK))
+            case .leftShift: NSEvent.ModifierFlags(rawValue: UInt(NX_DEVICELSHIFTKEYMASK))
+            case .rightShift: NSEvent.ModifierFlags(rawValue: UInt(NX_DEVICERSHIFTKEYMASK))
         }
+    }
+
+    func isPressed(in modifierFlags: NSEvent.ModifierFlags) -> Bool {
+        let deviceSpecificFlags = modifierFlags.rawValue & ~NSEvent.ModifierFlags.deviceIndependentFlagsMask.rawValue
+        if deviceSpecificFlags != 0 {
+            return modifierFlags.contains(deviceSpecificModifierFlag)
+        }
+        return modifierFlags.contains(modifierFlag)
     }
 }
 
@@ -64,6 +71,7 @@ struct TapBinding: Equatable, Sendable {
     static func == (lhs: TapBinding, rhs: TapBinding) -> Bool {
         lhs.trigger == rhs.trigger &&
             lhs.descriptionWithKeyNotation == rhs.descriptionWithKeyNotation &&
+            lhs.commands.count == rhs.commands.count &&
             zip(lhs.commands, rhs.commands).allSatisfy { $0.equals($1) }
     }
 }

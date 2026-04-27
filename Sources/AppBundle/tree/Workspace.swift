@@ -142,7 +142,7 @@ func workspaceOwnedMinimizedWindows(_ workspace: Workspace) -> [Window] {
 
 @MainActor
 func workspaceHasLifecycleWindows(_ workspace: Workspace) -> Bool {
-    !workspace.isEffectivelyEmpty || !workspaceOwnedMinimizedWindows(workspace).isEmpty
+    !workspace.isEffectivelyEmpty
 }
 
 @MainActor
@@ -328,6 +328,12 @@ extension Workspace {
 
     @MainActor
     func markAsSidebarManaged() {
+        markAsAutomaticallyNamed()
+        retainsFocusedEmptyWorkspace = true
+    }
+
+    @MainActor
+    func markAsTransientBlank() {
         markAsAutomaticallyNamed()
         retainsFocusedEmptyWorkspace = true
     }
