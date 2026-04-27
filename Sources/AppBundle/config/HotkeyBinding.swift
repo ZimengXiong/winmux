@@ -115,9 +115,14 @@ extension HotKey {
     guard let tapModifier = TapModifierKey(keyCode: keyCode) else { return }
     cancelPendingTapTriggers()
 
-    if tapModifier.isPressed(in: modifierFlags) {
+    // Rebuild the pressed-modifier state from the event snapshot instead of only
+    // applying the single changed key. macOS can occasionally drop a modifier
+    // release event; if that happens, a stale entry here makes later single-key
+    // tap launchers look like multi-modifier chords and they stop firing.
+    pressedTapModifiers = tapModifiersPressed(in: modifierFlags)
+
+    if pressedTapModifiers.contains(tapModifier) {
         let hadOtherPressedModifiers = !pressedTapModifiers.subtracting([tapModifier]).isEmpty
-        pressedTapModifiers.insert(tapModifier)
         pendingTapBindings = [:]
         if !hadOtherPressedModifiers, let binding = activeTapBindings[tapModifier] {
             pendingTapBindings[tapModifier] = binding
@@ -125,10 +130,13 @@ extension HotKey {
         return
     }
 
-    pressedTapModifiers.remove(tapModifier)
     if let binding = pendingTapBindings.removeValue(forKey: tapModifier) {
         scheduleTapBindingTrigger(binding)
     }
+}
+
+private func tapModifiersPressed(in modifierFlags: NSEvent.ModifierFlags) -> Set<TapModifierKey> {
+    Set(TapModifierKey.allCases.filter { $0.isPressed(in: modifierFlags) })
 }
 
 @MainActor private func scheduleTapBindingTrigger(_ binding: TapBinding) {
