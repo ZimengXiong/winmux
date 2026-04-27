@@ -230,7 +230,7 @@ final class WorkspaceSidebarPanel: NSPanelHud {
     func refresh() {
         guard TrayMenuModel.shared.isEnabled,
               config.workspaceSidebar.enabled,
-              let screen = NSScreen.screens.getOrNil(atIndex: mainMonitor.monitorAppKitNsScreenScreensId - 1) ?? NSScreen.screens.first
+              let screen = NSScreen.screens.getOrNil(atIndex: workspaceSidebarResolvedPanelMonitor().monitorAppKitNsScreenScreensId - 1) ?? NSScreen.screens.first
         else {
             stopHoverMonitoring()
             resetHiddenSidebarState()
@@ -528,7 +528,38 @@ private func showWorkspaceSidebarError(_ body: String) {
 
 @MainActor
 private func sidebarWorkspaceTargetMonitor(fallbackWindow: Window? = nil) -> Monitor {
-    fallbackWindow?.nodeMonitor ?? focus.workspace.workspaceMonitor
+    if let selectedMonitor = selectedWorkspaceSidebarMonitorScope() {
+        return selectedMonitor
+    }
+    return fallbackWindow?.nodeMonitor ?? focus.workspace.workspaceMonitor
+}
+
+@MainActor
+private func selectedWorkspaceSidebarMonitorScope() -> Monitor? {
+    let selectedScopeId = TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId
+    guard selectedScopeId != workspaceSidebarFocusedScopeId,
+          selectedScopeId != workspaceSidebarAllScopeId
+    else {
+        return nil
+    }
+    return sortedMonitors.first { workspaceSidebarMonitorScopeId(for: $0) == selectedScopeId }
+}
+
+@MainActor
+private func selectWorkspaceSidebarMonitorScope(_ scopeId: String) {
+    guard TrayMenuModel.shared.workspaceSidebarMonitorScopes.contains(where: { $0.id == scopeId }) else { return }
+    guard TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId != scopeId else { return }
+    TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId = scopeId
+    let visibleWorkspaceNames = Set(TrayMenuModel.shared.visibleWorkspaceSidebarWorkspaces.map(\.name))
+    let sanitizedTransientState = sanitizedWorkspaceSidebarTransientState(
+        visibleWorkspaceNames: visibleWorkspaceNames,
+        state: WorkspaceSidebarTransientState(
+            hoveredWorkspaceName: TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName,
+        ),
+    )
+    if TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName != sanitizedTransientState.hoveredWorkspaceName {
+        TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName = sanitizedTransientState.hoveredWorkspaceName
+    }
 }
 
 @MainActor
@@ -633,11 +664,24 @@ struct WorkspaceSidebarView: View {
         let isCompact = expansionProgress < workspaceSidebarRowsRevealProgress
         let leadingInset = isCompact ? workspaceSidebarCompactRailHorizontalInset : workspaceSidebarContentLeadingInset
         let trailingInset = isCompact ? workspaceSidebarCompactRailHorizontalInset : workspaceSidebarContentTrailingInset
+        let showsMonitorSelector = !isCompact && viewModel.workspaceSidebarShowsMonitorSelector
 
         return VStack(alignment: .leading, spacing: 0) {
+            if showsMonitorSelector {
+                WorkspaceSidebarMonitorSelector(
+                    scopes: viewModel.workspaceSidebarMonitorScopes,
+                    selectedScopeId: viewModel.workspaceSidebarSelectedMonitorScopeId,
+                    expansionProgress: expansionProgress,
+                )
+                .padding(.leading, leadingInset)
+                .padding(.trailing, trailingInset)
+                .padding(.top, viewModel.workspaceSidebarTopPadding)
+                .padding(.bottom, 6)
+            }
+
             ScrollView {
                 VStack(alignment: .leading, spacing: 6) {
-                    ForEach(viewModel.workspaceSidebarWorkspaces) { workspace in
+                    ForEach(viewModel.visibleWorkspaceSidebarWorkspaces) { workspace in
                         WorkspaceSidebarWorkspaceSection(
                             workspace: workspace,
                             dragPreview: viewModel.workspaceSidebarDropPreview,
@@ -652,7 +696,7 @@ struct WorkspaceSidebarView: View {
                 }
                 .padding(.leading, leadingInset)
                 .padding(.trailing, trailingInset)
-                .padding(.top, viewModel.workspaceSidebarTopPadding)
+                .padding(.top, showsMonitorSelector ? 0 : viewModel.workspaceSidebarTopPadding)
                 .padding(.bottom, 10)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -693,6 +737,94 @@ struct WorkspaceSidebarView: View {
 
     private var topTrailingCornerRadius: CGFloat {
         config.workspaceSidebar.menuBarReserveHeight == 0 ? 0 : workspaceSidebarOuterCornerRadius
+    }
+}
+
+// MARK: - Monitor Selector
+
+struct WorkspaceSidebarMonitorSelector: View {
+    let scopes: [WorkspaceSidebarMonitorScopeViewModel]
+    let selectedScopeId: String
+    let expansionProgress: CGFloat
+
+    @State private var hoveredScopeId: String? = nil
+
+    private var sectionWidth: CGFloat { workspaceSidebarSectionWidth(expansionProgress) }
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 5) {
+                ForEach(scopes) { scope in
+                    Button {
+                        selectWorkspaceSidebarMonitorScope(scope.id)
+                    } label: {
+                        scopeLabel(scope)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(scopeAccessibilityLabel(scope))
+                    .onHover { hover in
+                        hoveredScopeId = hover ? scope.id : (hoveredScopeId == scope.id ? nil : hoveredScopeId)
+                    }
+                }
+            }
+            .frame(minWidth: sectionWidth, alignment: .leading)
+        }
+        .frame(width: sectionWidth, height: 30, alignment: .leading)
+        .clipped()
+    }
+
+    private func scopeLabel(_ scope: WorkspaceSidebarMonitorScopeViewModel) -> some View {
+        let isSelected = selectedScopeId == scope.id
+        let isHovered = hoveredScopeId == scope.id
+        return HStack(spacing: 5) {
+            Image(systemName: scope.systemImageName)
+                .font(.system(size: 10, weight: .semibold))
+                .frame(width: 12, height: 12)
+            Text(scope.displayName)
+                .font(.system(size: 11.5, weight: isSelected ? .semibold : .medium))
+                .lineLimit(1)
+            if scope.isFocusedMonitor && scope.id != workspaceSidebarFocusedScopeId {
+                Circle()
+                    .fill(Color.accentColor.opacity(isSelected ? 0.95 : 0.72))
+                    .frame(width: 4, height: 4)
+            }
+        }
+        .foregroundStyle(isSelected ? Color.white : Color.white.opacity(0.72))
+        .padding(.horizontal, 8)
+        .frame(height: 26)
+        .background(
+            Capsule(style: .continuous)
+                .fill(scopeFill(isSelected: isSelected, isHovered: isHovered))
+                .overlay {
+                    Capsule(style: .continuous)
+                        .strokeBorder(scopeBorder(isSelected: isSelected, isHovered: isHovered), lineWidth: 0.5)
+                }
+        )
+        .contentShape(Capsule(style: .continuous))
+    }
+
+    private func scopeFill(isSelected: Bool, isHovered: Bool) -> Color {
+        if isSelected {
+            return Color.accentColor.opacity(0.22)
+        }
+        if isHovered {
+            return Color.white.opacity(0.07)
+        }
+        return Color.white.opacity(0.035)
+    }
+
+    private func scopeBorder(isSelected: Bool, isHovered: Bool) -> Color {
+        if isSelected {
+            return Color.accentColor.opacity(0.36)
+        }
+        return Color.white.opacity(isHovered ? 0.10 : 0.06)
+    }
+
+    private func scopeAccessibilityLabel(_ scope: WorkspaceSidebarMonitorScopeViewModel) -> String {
+        if let subtitle = scope.subtitle {
+            return "\(scope.displayName), \(subtitle)"
+        }
+        return scope.displayName
     }
 }
 

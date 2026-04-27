@@ -40,6 +40,50 @@ final class WorkspaceSidebarDragTest: XCTestCase {
         )
     }
 
+    func testWorkspaceSidebarFocusedMonitorScopeOnlyMatchesFocusedMonitor() {
+        XCTAssertTrue(
+            workspaceSidebarWorkspaceMatchesScope(
+                workspaceMonitorScopeId: "monitor:0.0,0.0",
+                selectedScopeId: workspaceSidebarFocusedScopeId,
+                focusedMonitorScopeId: "monitor:0.0,0.0",
+            ),
+        )
+        XCTAssertFalse(
+            workspaceSidebarWorkspaceMatchesScope(
+                workspaceMonitorScopeId: "monitor:1440.0,0.0",
+                selectedScopeId: workspaceSidebarFocusedScopeId,
+                focusedMonitorScopeId: "monitor:0.0,0.0",
+            ),
+        )
+    }
+
+    func testWorkspaceSidebarAllMonitorScopeMatchesAnyMonitor() {
+        XCTAssertTrue(
+            workspaceSidebarWorkspaceMatchesScope(
+                workspaceMonitorScopeId: "monitor:1440.0,0.0",
+                selectedScopeId: workspaceSidebarAllScopeId,
+                focusedMonitorScopeId: "monitor:0.0,0.0",
+            ),
+        )
+    }
+
+    func testWorkspaceSidebarExplicitMonitorScopeOnlyMatchesThatMonitor() {
+        XCTAssertTrue(
+            workspaceSidebarWorkspaceMatchesScope(
+                workspaceMonitorScopeId: "monitor:1440.0,0.0",
+                selectedScopeId: "monitor:1440.0,0.0",
+                focusedMonitorScopeId: "monitor:0.0,0.0",
+            ),
+        )
+        XCTAssertFalse(
+            workspaceSidebarWorkspaceMatchesScope(
+                workspaceMonitorScopeId: "monitor:0.0,0.0",
+                selectedScopeId: "monitor:1440.0,0.0",
+                focusedMonitorScopeId: "monitor:0.0,0.0",
+            ),
+        )
+    }
+
     func testWorkspaceSidebarHoverCueWidthStaysCollapsed() {
         XCTAssertEqual(
             workspaceSidebarHoverCueWidth(collapsedWidth: 28, expandedWidth: 160),
