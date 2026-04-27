@@ -92,6 +92,9 @@ open class TreeNode: Equatable, AeroAny {
         // 2. Misbehaved apps that abuse real window as popups https://github.com/nikitabobko/WinMux/issues/106 (the
         //    last appeared window, is not necessarily the one that has the focus)
         markAsMostRecentChild()
+        if anyLeafWindowRecursive != nil {
+            nodeWorkspace?.refreshEmptyLifecycle()
+        }
         return result
     }
 

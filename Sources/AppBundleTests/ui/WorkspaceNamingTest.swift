@@ -59,6 +59,37 @@ final class WorkspaceNamingTest: XCTestCase {
         XCTAssertEqual(workspaceDisplayName(second.name), "Workspace 2")
     }
 
+    func testAutomaticNumericWorkspaceNamesCompactLiveWorkspaceSet() {
+        let first = Workspace.get(byName: "1")
+        first.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 6, parent: first.rootTilingContainer)
+        let second = Workspace.get(byName: "3")
+        second.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 7, parent: second.rootTilingContainer)
+
+        Workspace.garbageCollectUnusedWorkspaces()
+
+        XCTAssertEqual(first.name, "1")
+        XCTAssertEqual(second.name, "2")
+        XCTAssertTrue(Workspace.existing(byName: "2") === second)
+        XCTAssertNil(Workspace.existing(byName: "3"))
+    }
+
+    func testAutomaticWorkspaceNameCompactionPreservesFocus() {
+        let first = Workspace.get(byName: "1")
+        first.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 8, parent: first.rootTilingContainer)
+        let focused = Workspace.get(byName: "3")
+        focused.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 9, parent: focused.rootTilingContainer)
+        _ = focused.focusWorkspace()
+
+        Workspace.garbageCollectUnusedWorkspaces()
+
+        XCTAssertEqual(focused.name, "2")
+        XCTAssertTrue(focus.workspace === focused)
+    }
+
     func testAutomaticDraftWorkspaceDisplayNamesCompactLiveWorkspaceSet() {
         let first = Workspace.get(byName: "__sidebar_draft_workspace_1")
         first.markAsSidebarManaged()

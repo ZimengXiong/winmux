@@ -128,9 +128,6 @@ func runRefreshSessionBlocking(
                     gcMonitors()
                 }
 
-                updateTrayText()
-                await updateWorkspaceSidebarModel()
-                SecureInputPanel.shared.refresh()
                 if event.requiresLayoutReasonNormalization {
                     if let normalizeLayoutReasonOverrideForTests {
                         try await normalizeLayoutReasonOverrideForTests()
@@ -138,7 +135,11 @@ func runRefreshSessionBlocking(
                         try await normalizeLayoutReason()
                     }
                     try checkCancellation()
+                    refreshModel()
                 }
+                updateTrayText()
+                await updateWorkspaceSidebarModel()
+                SecureInputPanel.shared.refresh()
                 if shouldLayoutWorkspaces {
                     try await layoutWorkspaces()
                     try checkCancellation()

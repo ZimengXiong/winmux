@@ -60,9 +60,12 @@ extension Window {
     }
 
     @MainActor
-    func rememberMacOsLayoutOrigin() {
+    func rememberMacOsLayoutOrigin(detachFromWorkspace: Bool = false) {
         guard let parent else { return }
-        layoutReason = .macos(prevParentKind: parent.kind, prevWorkspaceName: nodeWorkspace?.name)
+        layoutReason = .macos(
+            prevParentKind: parent.kind,
+            prevWorkspaceName: detachFromWorkspace ? nil : nodeWorkspace?.name,
+        )
     }
 
     func asMacWindow() -> MacWindow { self as! MacWindow }

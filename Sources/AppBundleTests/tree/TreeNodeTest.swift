@@ -145,15 +145,45 @@ final class TreeNodeTest: XCTestCase {
         let window = TestWindow.new(id: 111, parent: workspace.rootTilingContainer)
         let otherWorkspace = Workspace.get(byName: "other")
 
-        window.rememberMacOsLayoutOrigin()
+        window.rememberMacOsLayoutOrigin(detachFromWorkspace: true)
         window.nativeIsMacosMinimized = true
         window.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
         _ = otherWorkspace.focusWorkspace()
 
         Workspace.garbageCollectUnusedWorkspaces()
 
-        XCTAssertEqual(window.layoutReason, .macos(prevParentKind: .tilingContainer, prevWorkspaceName: workspace.name))
+        XCTAssertEqual(window.layoutReason, .macos(prevParentKind: .tilingContainer, prevWorkspaceName: nil))
         XCTAssertNil(Workspace.existing(byName: workspace.name))
+    }
+
+    func testGarbageCollectUnusedWorkspacesDeletesFocusedSidebarWorkspaceAfterLastWindowCloses() {
+        let workspace = Workspace.get(byName: "2")
+        workspace.markAsSidebarManaged()
+        _ = workspace.focusWorkspace()
+        let window = TestWindow.new(id: 113, parent: workspace.rootTilingContainer)
+
+        window.unbindFromParent()
+        Workspace.garbageCollectUnusedWorkspaces()
+
+        XCTAssertNil(Workspace.existing(byName: workspace.name))
+    }
+
+    func testGarbageCollectUnusedWorkspacesDeletesFocusedSidebarWorkspaceAfterLastWindowMinimizes() {
+        let survivingWorkspace = Workspace.get(byName: "1")
+        survivingWorkspace.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 115, parent: survivingWorkspace.rootTilingContainer)
+        let workspace = Workspace.get(byName: "2")
+        workspace.markAsSidebarManaged()
+        _ = workspace.focusWorkspace()
+        let window = TestWindow.new(id: 114, parent: workspace.rootTilingContainer)
+
+        window.rememberMacOsLayoutOrigin(detachFromWorkspace: true)
+        window.nativeIsMacosMinimized = true
+        window.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+        Workspace.garbageCollectUnusedWorkspaces()
+
+        XCTAssertNil(Workspace.existing(byName: workspace.name))
+        XCTAssertEqual(nextSidebarCreatedWorkspaceName(), workspace.name)
     }
 
     func testRestoredMinimizedWindowUsesCurrentWorkspaceWhenOriginalWorkspaceWasCollected() async throws {
@@ -161,7 +191,7 @@ final class TreeNodeTest: XCTestCase {
         let window = TestWindow.new(id: 112, parent: workspace.rootTilingContainer)
         let otherWorkspace = Workspace.get(byName: "other")
 
-        window.rememberMacOsLayoutOrigin()
+        window.rememberMacOsLayoutOrigin(detachFromWorkspace: true)
         window.nativeIsMacosMinimized = true
         window.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
         _ = otherWorkspace.focusWorkspace()
@@ -177,6 +207,18 @@ final class TreeNodeTest: XCTestCase {
 
         XCTAssertNil(Workspace.existing(byName: workspace.name))
         XCTAssertEqual(window.nodeWorkspace, otherWorkspace)
+    }
+
+    func testRememberMacOsLayoutOriginCanDetachFromWorkspace() {
+        let workspace = Workspace.get(byName: "a")
+        let window = TestWindow.new(id: 2, parent: workspace.rootTilingContainer)
+
+        window.rememberMacOsLayoutOrigin(detachFromWorkspace: true)
+
+        XCTAssertEqual(
+            window.layoutReason,
+            .macos(prevParentKind: .tilingContainer, prevWorkspaceName: nil),
+        )
     }
 
     func testRememberMacOsLayoutOriginCapturesCurrentWorkspace() {
@@ -465,19 +507,18 @@ final class TreeNodeTest: XCTestCase {
         }
     }
 
-    func testSnapshotCurrentFrozenWorldIncludesWorkspaceOwnedMinimizedWindow() {
+    func testSnapshotCurrentFrozenWorldExcludesDetachedMinimizedWindow() {
         let workspace = Workspace.get(byName: "minimized")
         let window = TestWindow.new(id: 32, parent: workspace.rootTilingContainer)
 
-        window.rememberMacOsLayoutOrigin()
+        window.rememberMacOsLayoutOrigin(detachFromWorkspace: true)
         window.nativeIsMacosMinimized = true
         window.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
 
         let frozenWorld = snapshotCurrentFrozenWorld()
 
-        XCTAssertEqual(frozenWorld.windowIds, [window.windowId])
-        XCTAssertEqual(frozenWorld.workspaces.map(\.name), [workspace.name])
-        XCTAssertEqual(frozenWorld.workspaces.singleOrNil()?.macosUnconventionalWindows.map(\.id), [window.windowId])
+        XCTAssertTrue(frozenWorld.windowIds.isEmpty)
+        XCTAssertTrue(frozenWorld.workspaces.isEmpty)
     }
 
     func testRestoreFrozenWorldIfNeededDoesNotReviveEmptyVisibleWorkspace() async throws {
@@ -536,7 +577,7 @@ final class TreeNodeTest: XCTestCase {
     func testRestoreFrozenWorldIfNeededRetilesRestoredMinimizedWindowAfterNativeUnminimize() async throws {
         let workspace = Workspace.get(byName: "restore")
         let window = TestWindow.new(id: 43, parent: workspace.rootTilingContainer)
-        window.rememberMacOsLayoutOrigin()
+        window.rememberMacOsLayoutOrigin(detachFromWorkspace: true)
         window.nativeIsMacosMinimized = true
         window.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
 
@@ -553,16 +594,16 @@ final class TreeNodeTest: XCTestCase {
 
         let didRestore = try await restoreFrozenWorldIfNeeded(frozenWorld, newlyDetectedWindow: window)
 
-        XCTAssertTrue(didRestore)
-        XCTAssertEqual(window.nodeWorkspace, workspace)
-        XCTAssertTrue(workspace.rootTilingContainer.children.contains(window))
+        XCTAssertFalse(didRestore)
+        XCTAssertEqual(window.nodeWorkspace, stagingWorkspace)
+        XCTAssertTrue(stagingWorkspace.floatingWindows.contains(window))
         XCTAssertEqual(window.layoutReason, .standard)
     }
 
     func testRestoreFrozenWorldIfNeededKeepsStillMinimizedWindowInMinimizedContainer() async throws {
         let workspace = Workspace.get(byName: "restore")
         let window = TestWindow.new(id: 44, parent: workspace.rootTilingContainer)
-        window.rememberMacOsLayoutOrigin()
+        window.rememberMacOsLayoutOrigin(detachFromWorkspace: true)
         window.nativeIsMacosMinimized = true
         window.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
 
@@ -578,9 +619,9 @@ final class TreeNodeTest: XCTestCase {
 
         let didRestore = try await restoreFrozenWorldIfNeeded(frozenWorld, newlyDetectedWindow: window)
 
-        XCTAssertTrue(didRestore)
-        XCTAssertTrue(window.parent === macosMinimizedWindowsContainer)
-        XCTAssertEqual(window.layoutReason, .macos(prevParentKind: .tilingContainer, prevWorkspaceName: workspace.name))
-        XCTAssertEqual(Workspace.existing(byName: workspace.name), workspace)
+        XCTAssertFalse(didRestore)
+        XCTAssertEqual(window.nodeWorkspace, stagingWorkspace)
+        XCTAssertTrue(stagingWorkspace.floatingWindows.contains(window))
+        XCTAssertEqual(window.layoutReason, .standard)
     }
 }
