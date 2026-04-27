@@ -23,6 +23,10 @@ func updateWorkspaceSidebarModel() async {
         if !TrayMenuModel.shared.workspaceSidebarWorkspaces.isEmpty {
             TrayMenuModel.shared.workspaceSidebarWorkspaces = []
         }
+        if !TrayMenuModel.shared.workspaceSidebarMonitorScopes.isEmpty {
+            TrayMenuModel.shared.workspaceSidebarMonitorScopes = []
+        }
+        TrayMenuModel.shared.workspaceSidebarShowsMonitorSelector = false
         WorkspaceSidebarPanel.shared.refresh()
         return
     }
@@ -32,7 +36,18 @@ func updateWorkspaceSidebarModel() async {
     let previousTopPadding = TrayMenuModel.shared.workspaceSidebarTopPadding
     pruneCachedWindowTitles()
 
-    let gaps = ResolvedGaps(gaps: config.gaps, monitor: mainMonitor)
+    let availableMonitors = sortedMonitors
+    let focusedMonitorScopeId = workspaceSidebarMonitorScopeId(for: currentFocus.workspace.workspaceMonitor)
+    let monitorScopes = buildWorkspaceSidebarMonitorScopes(
+        sortedMonitors: availableMonitors,
+        focusedMonitorScopeId: focusedMonitorScopeId,
+    )
+    let validScopeIds = Set(monitorScopes.map(\.id))
+    let selectedMonitorScopeId = validScopeIds.contains(TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId)
+        ? TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId
+        : workspaceSidebarFocusedScopeId
+
+    let gaps = ResolvedGaps(gaps: config.gaps, monitor: workspaceSidebarResolvedPanelMonitor())
     TrayMenuModel.shared.workspaceSidebarTopPadding = CGFloat(gaps.outer.top)
     let didTopPaddingChange = TrayMenuModel.shared.workspaceSidebarTopPadding != previousTopPadding
 
@@ -46,6 +61,7 @@ func updateWorkspaceSidebarModel() async {
         let sidebarLabel = workspaceLabels[workspace.name] ?? ""
         let isGeneratedName = isSidebarDraftWorkspaceName(workspace.name)
         let displayName = workspaceDisplayName(workspace.name)
+        let workspaceMonitor = workspace.workspaceMonitor
 
         sidebarWorkspaces.append(
             WorkspaceSidebarWorkspaceViewModel(
@@ -53,7 +69,8 @@ func updateWorkspaceSidebarModel() async {
                 displayName: displayName,
                 sidebarLabel: sidebarLabel,
                 isGeneratedName: isGeneratedName,
-                monitorName: nil,
+                monitorScopeId: workspaceSidebarMonitorScopeId(for: workspaceMonitor),
+                monitorName: availableMonitors.count > 1 ? workspaceMonitor.name : nil,
                 isFocused: currentFocus.workspace == workspace,
                 isVisible: workspace.isVisible,
                 items: sidebarItems,
@@ -61,8 +78,16 @@ func updateWorkspaceSidebarModel() async {
         )
     }
 
+    let visibleSidebarWorkspaceNames = Set(sidebarWorkspaces.filter {
+        workspaceSidebarWorkspaceMatchesScope(
+            workspaceMonitorScopeId: $0.monitorScopeId,
+            selectedScopeId: selectedMonitorScopeId,
+            focusedMonitorScopeId: focusedMonitorScopeId,
+        )
+    }.map(\.name))
+
     let sanitizedTransientState = sanitizedWorkspaceSidebarTransientState(
-        visibleWorkspaceNames: Set(sidebarWorkspaces.map(\.name)),
+        visibleWorkspaceNames: visibleSidebarWorkspaceNames,
         state: WorkspaceSidebarTransientState(
             hoveredWorkspaceName: TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName,
         ),
@@ -70,13 +95,75 @@ func updateWorkspaceSidebarModel() async {
     if TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName != sanitizedTransientState.hoveredWorkspaceName {
         TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName = sanitizedTransientState.hoveredWorkspaceName
     }
+    let didMonitorScopeChange =
+        TrayMenuModel.shared.workspaceSidebarMonitorScopes != monitorScopes ||
+        TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId != selectedMonitorScopeId ||
+        TrayMenuModel.shared.workspaceSidebarFocusedMonitorScopeId != focusedMonitorScopeId ||
+        TrayMenuModel.shared.workspaceSidebarShowsMonitorSelector != (availableMonitors.count > 1)
+    if TrayMenuModel.shared.workspaceSidebarMonitorScopes != monitorScopes {
+        TrayMenuModel.shared.workspaceSidebarMonitorScopes = monitorScopes
+    }
+    if TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId != selectedMonitorScopeId {
+        TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId = selectedMonitorScopeId
+    }
+    if TrayMenuModel.shared.workspaceSidebarFocusedMonitorScopeId != focusedMonitorScopeId {
+        TrayMenuModel.shared.workspaceSidebarFocusedMonitorScopeId = focusedMonitorScopeId
+    }
+    if TrayMenuModel.shared.workspaceSidebarShowsMonitorSelector != (availableMonitors.count > 1) {
+        TrayMenuModel.shared.workspaceSidebarShowsMonitorSelector = availableMonitors.count > 1
+    }
     let didWorkspaceChange = TrayMenuModel.shared.workspaceSidebarWorkspaces != sidebarWorkspaces
     if didWorkspaceChange {
         TrayMenuModel.shared.workspaceSidebarWorkspaces = sidebarWorkspaces
     }
-    if didWorkspaceChange || didTopPaddingChange || !WorkspaceSidebarPanel.shared.isVisible {
+    if didWorkspaceChange || didTopPaddingChange || didMonitorScopeChange || !WorkspaceSidebarPanel.shared.isVisible {
         WorkspaceSidebarPanel.shared.refresh()
     }
+}
+
+@MainActor
+func workspaceSidebarResolvedPanelMonitor() -> Monitor {
+    config.workspaceSidebar.resolvedMonitor(sortedMonitors: sortedMonitors) ?? mainMonitor
+}
+
+@MainActor
+private func buildWorkspaceSidebarMonitorScopes(
+    sortedMonitors: [Monitor],
+    focusedMonitorScopeId: String,
+) -> [WorkspaceSidebarMonitorScopeViewModel] {
+    [
+        WorkspaceSidebarMonitorScopeViewModel(
+            id: workspaceSidebarFocusedScopeId,
+            displayName: "Focused",
+            subtitle: nil,
+            systemImageName: "scope",
+            isFocusedMonitor: false,
+        ),
+        WorkspaceSidebarMonitorScopeViewModel(
+            id: workspaceSidebarAllScopeId,
+            displayName: "All",
+            subtitle: nil,
+            systemImageName: "rectangle.grid.2x2",
+            isFocusedMonitor: false,
+        ),
+    ] + sortedMonitors.enumerated().map { index, monitor in
+        let scopeId = workspaceSidebarMonitorScopeId(for: monitor)
+        return WorkspaceSidebarMonitorScopeViewModel(
+            id: scopeId,
+            displayName: workspaceSidebarMonitorDisplayName(monitor, fallbackIndex: index + 1),
+            subtitle: monitor.isMain ? monitor.name : nil,
+            systemImageName: "display",
+            isFocusedMonitor: scopeId == focusedMonitorScopeId,
+        )
+    }
+}
+
+private func workspaceSidebarMonitorDisplayName(_ monitor: Monitor, fallbackIndex: Int) -> String {
+    let name = monitor.name.trimmingCharacters(in: .whitespacesAndNewlines)
+    if monitor.isMain {
+        return "Main"
+    }
+    return name.isEmpty ? "Display \(fallbackIndex)" : name
 }
 
 @MainActor

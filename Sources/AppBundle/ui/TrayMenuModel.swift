@@ -1,6 +1,33 @@
 import AppKit
 import Common
 
+let workspaceSidebarFocusedScopeId = "focused"
+let workspaceSidebarAllScopeId = "all"
+private let workspaceSidebarMonitorScopePrefix = "monitor:"
+
+func workspaceSidebarMonitorScopeId(for monitor: Monitor) -> String {
+    workspaceSidebarMonitorScopeId(for: monitor.rect.topLeftCorner)
+}
+
+func workspaceSidebarMonitorScopeId(for point: CGPoint) -> String {
+    "\(workspaceSidebarMonitorScopePrefix)\(point.x),\(point.y)"
+}
+
+func workspaceSidebarWorkspaceMatchesScope(
+    workspaceMonitorScopeId: String,
+    selectedScopeId: String,
+    focusedMonitorScopeId: String,
+) -> Bool {
+    switch selectedScopeId {
+        case workspaceSidebarAllScopeId:
+            return true
+        case workspaceSidebarFocusedScopeId:
+            return workspaceMonitorScopeId == focusedMonitorScopeId
+        default:
+            return workspaceMonitorScopeId == selectedScopeId
+    }
+}
+
 public final class TrayMenuModel: ObservableObject {
     @MainActor public static let shared = TrayMenuModel()
 
@@ -12,6 +39,10 @@ public final class TrayMenuModel: ObservableObject {
     @Published var isEnabled: Bool = true
     @Published var workspaces: [WorkspaceViewModel] = []
     @Published var workspaceSidebarWorkspaces: [WorkspaceSidebarWorkspaceViewModel] = []
+    @Published var workspaceSidebarMonitorScopes: [WorkspaceSidebarMonitorScopeViewModel] = []
+    @Published var workspaceSidebarSelectedMonitorScopeId: String = workspaceSidebarFocusedScopeId
+    @Published var workspaceSidebarFocusedMonitorScopeId: String = ""
+    @Published var workspaceSidebarShowsMonitorSelector: Bool = false
     @Published var workspaceSidebarDropPreview: WorkspaceSidebarDropPreviewViewModel? = nil
     @Published var windowTabStrips: [WindowTabStripViewModel] = []
     @Published var isWorkspaceSidebarExpanded: Bool = false
@@ -19,6 +50,16 @@ public final class TrayMenuModel: ObservableObject {
     @Published var workspaceSidebarTopPadding: CGFloat = 12
     @Published var workspaceSidebarHoveredWorkspaceName: String? = nil
     @Published var experimentalUISettings: ExperimentalUISettings = ExperimentalUISettings()
+
+    var visibleWorkspaceSidebarWorkspaces: [WorkspaceSidebarWorkspaceViewModel] {
+        workspaceSidebarWorkspaces.filter {
+            workspaceSidebarWorkspaceMatchesScope(
+                workspaceMonitorScopeId: $0.monitorScopeId,
+                selectedScopeId: workspaceSidebarSelectedMonitorScopeId,
+                focusedMonitorScopeId: workspaceSidebarFocusedMonitorScopeId,
+            )
+        }
+    }
 }
 
 @MainActor func updateTrayText() {
@@ -63,12 +104,21 @@ struct WorkspaceSidebarWorkspaceViewModel: Hashable, Identifiable {
     let displayName: String
     let sidebarLabel: String
     let isGeneratedName: Bool
+    let monitorScopeId: String
     let monitorName: String?
     let isFocused: Bool
     let isVisible: Bool
     let items: [WorkspaceSidebarItemViewModel]
 
     var id: String { name }
+}
+
+struct WorkspaceSidebarMonitorScopeViewModel: Hashable, Identifiable {
+    let id: String
+    let displayName: String
+    let subtitle: String?
+    let systemImageName: String
+    let isFocusedMonitor: Bool
 }
 
 struct WorkspaceSidebarItemViewModel: Hashable, Identifiable {
