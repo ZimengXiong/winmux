@@ -78,6 +78,56 @@ final class WorkspaceCommandTest: XCTestCase {
         XCTAssertEqual(workspaceDisplayName("1"), "Workspace 1")
     }
 
+    func testWorkspaceNextCreatesBlankNumericWorkspaceAtRightEdge() async throws {
+        let workspace1 = Workspace.get(byName: "1")
+        workspace1.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 4, parent: workspace1.rootTilingContainer)
+        _ = workspace1.focusWorkspace()
+
+        let result = try await WorkspaceCommand(
+            args: WorkspaceCmdArgs(target: .relative(.next)),
+        ).run(.defaultEnv, .emptyStdin)
+
+        assertEquals(result.exitCode, 0)
+        XCTAssertEqual(focus.workspace.name, "2")
+        XCTAssertEqual(workspaceDisplayName("2"), "Workspace 2")
+    }
+
+    func testWorkspaceNextBlankNumericWorkspaceIsDeletedAfterLeavingItEmpty() async throws {
+        let workspace1 = Workspace.get(byName: "1")
+        workspace1.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 5, parent: workspace1.rootTilingContainer)
+        _ = workspace1.focusWorkspace()
+
+        assertEquals(
+            try await WorkspaceCommand(
+                args: WorkspaceCmdArgs(target: .relative(.next)),
+            ).run(.defaultEnv, .emptyStdin).exitCode,
+            0,
+        )
+
+        _ = workspace1.focusWorkspace()
+        Workspace.garbageCollectUnusedWorkspaces()
+
+        XCTAssertNil(Workspace.existing(byName: "2"))
+        XCTAssertEqual(workspaceDisplayName("1"), "Workspace 1")
+    }
+
+    func testWorkspaceNextDoesNotCreateBlankWorkspaceWhenWrapping() async throws {
+        let workspace1 = Workspace.get(byName: "1")
+        workspace1.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 6, parent: workspace1.rootTilingContainer)
+        _ = workspace1.focusWorkspace()
+
+        let result = try await WorkspaceCommand(
+            args: WorkspaceCmdArgs(target: .relative(.next), wrapAround: true),
+        ).run(.defaultEnv, .emptyStdin)
+
+        assertEquals(result.exitCode, 0)
+        XCTAssertEqual(focus.workspace, workspace1)
+        XCTAssertNil(Workspace.existing(byName: "2"))
+    }
+
     func testDirectWorkspaceFocusDoesNotCreateConfiguredPersistentWorkspace() async throws {
         config.persistentWorkspaces = ["2"]
 
