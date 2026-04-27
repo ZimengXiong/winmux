@@ -60,6 +60,33 @@ final class AxRefreshFastPathTest: XCTestCase {
     }
 
     @MainActor
+    func testNativeMinimizeRefreshDeletesDetachedWorkspaceBeforeNextAutomaticName() async throws {
+        setUpWorkspacesForTests()
+        TrayMenuModel.shared.isEnabled = true
+        config.automaticallyUnhideMacosHiddenApps = true
+        appForTests = TestApp.shared
+        setBlockingRefreshOverridesForTests(refresh: {})
+
+        let survivingWorkspace = Workspace.get(byName: "1")
+        survivingWorkspace.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 1, parent: survivingWorkspace.rootTilingContainer)
+
+        let minimizedWorkspace = Workspace.get(byName: "2")
+        minimizedWorkspace.markAsAutomaticallyNamed()
+        let minimizedWindow = TestWindow.new(id: 2, parent: minimizedWorkspace.rootTilingContainer)
+        _ = minimizedWorkspace.focusWorkspace()
+        TestApp.shared.focusedWindow = minimizedWindow
+        minimizedWindow.nativeIsMacosMinimized = true
+
+        try await runRefreshSessionBlocking(.ax("native-minimize"), layoutWorkspaces: false)
+
+        XCTAssertNil(Workspace.existing(byName: minimizedWorkspace.name))
+        XCTAssertEqual(nextSidebarCreatedWorkspaceName(), minimizedWorkspace.name)
+        XCTAssertTrue(minimizedWindow.parent === macosMinimizedWindowsContainer)
+        XCTAssertEqual(minimizedWindow.layoutReason, .macos(prevParentKind: .tilingContainer, prevWorkspaceName: nil))
+    }
+
+    @MainActor
     private func setUpFocusScenario() -> (TestWindow, TestWindow) {
         setUpWorkspacesForTests()
         TrayMenuModel.shared.isEnabled = true
