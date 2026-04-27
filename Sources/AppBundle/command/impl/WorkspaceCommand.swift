@@ -18,6 +18,12 @@ struct WorkspaceCommand: Command {
                     wrapAround: args.wrapAround,
                     stdin: args.useStdin ? io.readStdin() : nil,
                 )
+                    ?? createNextTransientBlankWorkspaceIfAllowed(
+                        from: focusedWs,
+                        isNext: nextPrev == .next,
+                        wrapAround: args.wrapAround,
+                        usesStdin: args.useStdin,
+                    )
                 guard let workspace else { return false }
                 workspaceName = workspace.name
             case .direct(let name):
@@ -33,7 +39,10 @@ struct WorkspaceCommand: Command {
             return !args.failIfNoop
         } else {
             if let workspace = Workspace.existing(byName: workspaceName),
-               isUserFacingWorkspace(workspace, focusedWorkspace: focus.workspace)
+               (
+                   isUserFacingWorkspace(workspace, focusedWorkspace: focus.workspace) ||
+                       workspace.shouldRetainEmptyWorkspace(focusedWorkspace: workspace)
+               )
             {
                 return workspace.focusWorkspace()
             }
@@ -46,6 +55,21 @@ struct WorkspaceCommand: Command {
             return workspace.focusWorkspace()
         }
     }
+}
+
+@MainActor
+private func createNextTransientBlankWorkspaceIfAllowed(
+    from current: Workspace,
+    isNext: Bool,
+    wrapAround: Bool,
+    usesStdin: Bool,
+) -> Workspace? {
+    guard isNext, !wrapAround, !usesStdin else { return nil }
+    let nextWorkspaceIndex = userFacingWorkspaces(Workspace.all, focusedWorkspace: current)
+        .compactMap { Int($0.name) }
+        .max()
+        .map { $0 + 1 } ?? 1
+    return createTransientBlankWorkspaceIfAllowed(named: String(nextWorkspaceIndex), from: current)
 }
 
 @MainActor
