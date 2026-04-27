@@ -35,7 +35,7 @@ private func _normalizeLayoutReason(workspace: Workspace, windows: [Window]) asy
                         window.rememberMacOsLayoutOrigin()
                         window.bind(to: workspace.macOsNativeFullscreenWindowsContainer, adaptiveWeight: WEIGHT_DOESNT_MATTER, index: INDEX_BIND_LAST)
                     case isMacosMinimized:
-                        window.rememberMacOsLayoutOrigin()
+                        window.rememberMacOsLayoutOrigin(detachFromWorkspace: true)
                         window.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
                     case isMacosWindowOfHiddenApp:
                         window.rememberMacOsLayoutOrigin()

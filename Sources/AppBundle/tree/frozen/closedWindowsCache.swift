@@ -85,6 +85,9 @@ func restoreFrozenWorldIfNeeded(_ frozenWorld: FrozenWorld, newlyDetectedWindow:
     if !frozenWorld.windowIds.contains(newlyDetectedWindow.windowId) {
         return false
     }
+    guard frozenWorld.workspaces.contains(where: { collectFrozenWindows($0)[newlyDetectedWindow.windowId] != nil }) else {
+        return false
+    }
     let monitors = monitors
     let topLeftCornerToMonitor = monitors.grouped { $0.rect.topLeftCorner }
     let restoredWorkspaceNames = Set(frozenWorld.workspaces.map(\.name))
