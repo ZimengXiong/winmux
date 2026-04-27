@@ -209,8 +209,8 @@ private func automaticWorkspaceDisplayIndexFallback(_ workspaceName: String) -> 
 }
 
 final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
-    let name: String
-    nonisolated private let nameLogicalSegments: StringLogicalSegments
+    private(set) var name: String
+    nonisolated private var nameLogicalSegments: StringLogicalSegments
     /// `assignedMonitorPoint` must be interpreted only when the workspace is invisible
     fileprivate var assignedMonitorPoint: CGPoint? = nil
     private var retainsFocusedEmptyWorkspace: Bool = false
@@ -309,6 +309,7 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
             workspaceNameToWorkspace[workspaceName] != nil
         }
         clearOrphanedSidebarDraftWorkspaceLabels()
+        compactAutomaticWorkspaceNames()
     }
 
     nonisolated static func == (lhs: Workspace, rhs: Workspace) -> Bool {
@@ -316,7 +317,64 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
         return lhs === rhs
     }
 
-    nonisolated func hash(into hasher: inout Hasher) { hasher.combine(name) }
+    nonisolated func hash(into hasher: inout Hasher) { hasher.combine(ObjectIdentifier(self)) }
+
+    @MainActor
+    fileprivate func rename(to newName: String) {
+        let oldName = name
+        guard oldName != newName else { return }
+        check(workspaceNameToWorkspace[oldName] === self)
+        check(workspaceNameToWorkspace[newName] == nil)
+
+        workspaceNameToWorkspace.removeValue(forKey: oldName)
+        name = newName
+        nameLogicalSegments = newName.toLogicalSegments()
+        workspaceNameToWorkspace[newName] = self
+
+        if let sidebarLabel = config.workspaceSidebar.workspaceLabels.removeValue(forKey: oldName) {
+            config.workspaceSidebar.workspaceLabels[newName] = sidebarLabel
+            if !isUnitTest {
+                try? persistWorkspaceSidebarLabel(workspaceName: oldName, label: nil)
+                try? persistWorkspaceSidebarLabel(workspaceName: newName, label: sidebarLabel)
+            }
+        }
+        screenPointToPrevVisibleWorkspace = screenPointToPrevVisibleWorkspace.mapValues { $0 == oldName ? newName : $0 }
+        replaceWorkspaceNameInFocusState(oldName: oldName, newName: newName)
+        replaceWorkspaceNameInLayoutReasons(oldName: oldName, newName: newName)
+    }
+}
+
+@MainActor
+private func compactAutomaticWorkspaceNames() {
+    let automaticallyNamedWorkspaces = Workspace.all
+        .filter { $0.usesAutomaticDisplayName && automaticWorkspaceIndex($0.name) != nil }
+    guard !automaticallyNamedWorkspaces.isEmpty else { return }
+
+    var usedIndices = Set(
+        workspaceNameToWorkspace.values
+            .filter { !$0.usesAutomaticDisplayName }
+            .compactMap { automaticWorkspaceIndex($0.name) }
+    )
+    for workspace in automaticallyNamedWorkspaces {
+        let targetIndex = lowestUnusedPositiveIndex(usedIndices)
+        usedIndices.insert(targetIndex)
+        workspace.rename(to: String(targetIndex))
+    }
+}
+
+@MainActor
+private func replaceWorkspaceNameInLayoutReasons(oldName: String, newName: String) {
+    let windows =
+        Workspace.all.flatMap(\.allLeafWindowsRecursive) +
+        macosMinimizedWindowsContainer.children.filterIsInstance(of: Window.self)
+    for window in windows {
+        switch window.layoutReason {
+            case .macos(let prevParentKind, let prevWorkspaceName) where prevWorkspaceName == oldName:
+                window.layoutReason = .macos(prevParentKind: prevParentKind, prevWorkspaceName: newName)
+            case .macos, .standard:
+                break
+        }
+    }
 }
 
 extension Workspace {

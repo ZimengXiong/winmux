@@ -49,6 +49,12 @@ struct FrozenFocus: AeroAny, Equatable, Sendable {
     }
 
     @MainActor var live: LiveFocus { liveOrNil ?? mainMonitor.activeWorkspace.toLiveFocus() }
+
+    func replacingWorkspaceName(_ oldName: String, with newName: String) -> FrozenFocus {
+        workspaceName == oldName
+            ? FrozenFocus(windowId: windowId, workspaceName: newName, monitorId_oneBased: monitorId_oneBased)
+            : self
+    }
 }
 
 struct RefreshSessionFocusSnapshot: Sendable {
@@ -93,6 +99,17 @@ func debugDescribe(_ snapshot: RefreshSessionFocusSnapshot?) -> String {
     let monitor = mainMonitor
     return FrozenFocus(windowId: nil, workspaceName: monitor.activeWorkspace.name, monitorId_oneBased: monitor.monitorId_oneBased ?? 0)
 }()
+
+@MainActor
+func replaceWorkspaceNameInFocusState(oldName: String, newName: String) {
+    _focus = _focus.replacingWorkspaceName(oldName, with: newName)
+    _lastKnownFocus = _lastKnownFocus.replacingWorkspaceName(oldName, with: newName)
+    _prevFocus = _prevFocus?.replacingWorkspaceName(oldName, with: newName)
+    _prevPrevFocus = _prevPrevFocus?.replacingWorkspaceName(oldName, with: newName)
+    if _prevFocusedWorkspaceName == oldName {
+        _prevFocusedWorkspaceName = newName
+    }
+}
 
 /// Global focus.
 /// Commands must be cautious about accessing this property directly. There are legitimate cases.

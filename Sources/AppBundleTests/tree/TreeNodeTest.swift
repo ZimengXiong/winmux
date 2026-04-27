@@ -156,6 +156,36 @@ final class TreeNodeTest: XCTestCase {
         XCTAssertNil(Workspace.existing(byName: workspace.name))
     }
 
+    func testGarbageCollectUnusedWorkspacesDeletesFocusedSidebarWorkspaceAfterLastWindowCloses() {
+        let workspace = Workspace.get(byName: "2")
+        workspace.markAsSidebarManaged()
+        _ = workspace.focusWorkspace()
+        let window = TestWindow.new(id: 113, parent: workspace.rootTilingContainer)
+
+        window.unbindFromParent()
+        Workspace.garbageCollectUnusedWorkspaces()
+
+        XCTAssertNil(Workspace.existing(byName: workspace.name))
+    }
+
+    func testGarbageCollectUnusedWorkspacesDeletesFocusedSidebarWorkspaceAfterLastWindowMinimizes() {
+        let survivingWorkspace = Workspace.get(byName: "1")
+        survivingWorkspace.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 115, parent: survivingWorkspace.rootTilingContainer)
+        let workspace = Workspace.get(byName: "2")
+        workspace.markAsSidebarManaged()
+        _ = workspace.focusWorkspace()
+        let window = TestWindow.new(id: 114, parent: workspace.rootTilingContainer)
+
+        window.rememberMacOsLayoutOrigin(detachFromWorkspace: true)
+        window.nativeIsMacosMinimized = true
+        window.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+        Workspace.garbageCollectUnusedWorkspaces()
+
+        XCTAssertNil(Workspace.existing(byName: workspace.name))
+        XCTAssertEqual(nextSidebarCreatedWorkspaceName(), workspace.name)
+    }
+
     func testRestoredMinimizedWindowUsesCurrentWorkspaceWhenOriginalWorkspaceWasCollected() async throws {
         let workspace = Workspace.get(byName: "collected")
         let window = TestWindow.new(id: 112, parent: workspace.rootTilingContainer)
