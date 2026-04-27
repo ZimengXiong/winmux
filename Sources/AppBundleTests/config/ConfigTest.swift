@@ -137,12 +137,16 @@ final class ConfigTest: XCTestCase {
         config.modes = [
             mainModeId: Mode(
                 bindings: [:],
-                tapBindings: ["left-alt": TapBinding(.leftAlt, [FocusCommand.new(direction: .left)])],
+                tapBindings: [
+                    "left-alt": TapBinding(.leftAlt, [FocusCommand.new(direction: .left)]),
+                    "right-cmd": TapBinding(.rightCmd, [FocusCommand.new(direction: .right)]),
+                ],
             ),
         ]
         try await activateMode(mainModeId)
 
         let leftAltDown: NSEvent.ModifierFlags = [.option, TapModifierKey.leftAlt.deviceSpecificModifierFlag]
+        let rightCmdDown: NSEvent.ModifierFlags = [.command, TapModifierKey.rightCmd.deviceSpecificModifierFlag]
         noteTapBindingFlagsChanged(keyCode: 58, modifierFlags: leftAltDown)
         XCTAssertEqual(tapBindingPressedModifiersForTests(), [.leftAlt])
 
@@ -151,6 +155,15 @@ final class ConfigTest: XCTestCase {
 
         noteTapBindingFlagsChanged(keyCode: 58, modifierFlags: [])
         XCTAssertTrue(tapBindingPressedModifiersForTests().isEmpty)
+
+        noteTapBindingFlagsChanged(keyCode: 54, modifierFlags: rightCmdDown)
+        XCTAssertEqual(tapBindingPressedModifiersForTests(), [.rightCmd])
+
+        // Simulate macOS missing the right-cmd release event. The next modifier
+        // event snapshot says only left-alt is down, so stale right-cmd state
+        // must be cleared; otherwise tap bindings stop launching after a while.
+        noteTapBindingFlagsChanged(keyCode: 58, modifierFlags: leftAltDown)
+        XCTAssertEqual(tapBindingPressedModifiersForTests(), [.leftAlt])
     }
 
     func testBindingEqualityChecksCommandCount() {
