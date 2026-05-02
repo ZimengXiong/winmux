@@ -1,6 +1,6 @@
 # WinMux *Beta*
 
-WinMux is a intuitive, batteries-included WM for macOS built on Aerospace ([for now](#on-aerospace)). 
+WinMux is a intuitive, sidebar'ed WM for macOS built on Aerospace ([for now](#on-aerospace)). 
 
 
 
