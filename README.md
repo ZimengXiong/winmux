@@ -9,6 +9,33 @@ https://github.com/user-attachments/assets/69d8872a-d6f0-460e-95ad-d55013c3216e
 An agent mode is in the works, read about it [here](https://blog.zimengxiong.com/#post/agents-will-need-a-good-window-manager) and see a [demo](https://cvx-me-api.alpacawebservices.com/api/storage/6dea289a-9559-49bd-87cf-42345f89c712
 )—this is just for fun right now (dont expect anyone would use it), but still interesting to see.
 
+
+## Highlights
+### Sidebar
+<a href="sidebar.mp4">
+  <img src="sidebar.gif" width="800" alt="Sidebar demo">
+</a>
+
+The sidebar is a more interactively-performant and useful (though less customizable—WIP!) alternative to [Sketchybar](https://github.com/felixkratz/sketchybar) and Aerospace's built in menu bar dropdown for most everyday tasks. It provides better visibility into spaces and spatial awareness on the desktop.
+
+You can drag windows in and out of the sidebar from and to the current workspace. You can rearrange windows across all spaces using the sidebar, including tab groups.
+
+![](sidebar.png)
+
+The sidebar can be configured (as shown) to display the current date, time, battery, sound, and network interface (things that I used to have in sketchybar).
+
+
+
+### Tab Groups
+<a href="tabgroups.mp4">
+  <img src="tabgroups.gif" width="800" alt="Tab groups demo">
+</a>
+
+Tab groups allow you to have many windows occupy the same footprint, similar to Aerospace accordians or Yabai stacks. This is useful when you want to have multiple pieces of reference information next to an editor, multiple tabs in different browser profiles, or, when you simply want multiple fullscreen views without the additional friction and overhead of creating a new workspace.
+
+Unlike accordians or stacks, WinMux tab groups behave more intuitively like you would expect tabs to in browsers, and don't need a keyboard shortcut to activate. You can drag tabs from tab groups into another window's [intent zone](#managed-tiling-mode), or in between workspaces. You can also rearrange tab order within a tab group, and navigate through them with relative and absolute keybindings. 
+
+
 ## Managed (Tiling) Mode
 <a href="intentzones.mp4">
   <img src="intentzones.gif" width="800" alt="Managed mode intent zones demo">
@@ -28,29 +55,6 @@ WinMux has 6 intent (hover-hint) zones that make it easy to move windows without
 In unmanaged mode, WinMux does not perform tiling. It still supports tab groups and the sidebar. In lieu of tiling, WinMux supports traditional corner snapping.
 
 Unmanaged mode can be toggled from the menu bar or via settings.
-
-## Highlights
-### Tab Groups
-<a href="tabgroups.mp4">
-  <img src="tabgroups.gif" width="800" alt="Tab groups demo">
-</a>
-
-Tab groups allow you to have many windows occupy the same footprint, similar to Aerospace accordians or Yabai stacks. This is useful when you want to have multiple pieces of reference information next to an editor, multiple tabs in different browser profiles, or, when you simply want multiple fullscreen views without the additional friction and overhead of creating a new workspace.
-
-Unlike accordians or stacks, WinMux tab groups behave more intuitively like you would expect tabs to in browsers, and don't need a keyboard shortcut to activate. You can drag tabs from tab groups into another window's [intent zone](#managed-tiling-mode), or in between workspaces. You can also rearrange tab order within a tab group, and navigate through them with relative and absolute keybindings. 
-
-### Sidebar
-<a href="sidebar.mp4">
-  <img src="sidebar.gif" width="800" alt="Sidebar demo">
-</a>
-
-The sidebar is a more interactively-performant and useful (though less customizable—WIP!) alternative to [Sketchybar](https://github.com/felixkratz/sketchybar) and Aerospace's built in menu bar dropdown for most everyday tasks. It provides better visibility into spaces and spatial awareness on the desktop.
-
-You can drag windows in and out of the sidebar from and to the current workspace. You can rearrange windows across all spaces using the sidebar, including tab groups.
-
-![](sidebar.png)
-
-The sidebar can be configured (as shown) to display the current date, time, battery, sound, and network interface (things that I used to have in sketchybar).
 
 ### Settings
 ![](settings.gif)
