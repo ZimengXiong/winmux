@@ -415,6 +415,9 @@ final class ConfigTest: XCTestCase {
             [workspace-sidebar.workspace-labels]
                 1 = 'Code'
                 2 = 'Web'
+
+            [workspace-sidebar.project-labels]
+                default = 'Personal'
             """,
         )
         assertEquals(errors, [])
@@ -429,6 +432,7 @@ final class ConfigTest: XCTestCase {
                 showDate: false,
                 menuBarReserveHeight: 30,
                 workspaceLabels: ["1": "Code", "2": "Web"],
+                projectLabels: ["default": "Personal"],
             ),
         )
 

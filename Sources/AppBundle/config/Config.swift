@@ -84,6 +84,7 @@ struct WorkspaceSidebarConfig: ConvenienceCopyable, Equatable, Sendable {
     var showDate: Bool = true
     var menuBarReserveHeight: Int = 28
     var workspaceLabels: [String: String] = [:]
+    var projectLabels: [String: String] = [:]
 }
 
 struct WindowTabsConfig: ConvenienceCopyable, Equatable, Sendable {

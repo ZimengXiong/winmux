@@ -66,6 +66,7 @@ private func createNextTransientBlankWorkspaceIfAllowed(
 ) -> Workspace? {
     guard isNext, !wrapAround, !usesStdin else { return nil }
     let nextWorkspaceIndex = userFacingWorkspaces(Workspace.all, focusedWorkspace: current)
+        .filter { $0.scope == current.scope }
         .compactMap { Int($0.name) }
         .max()
         .map { $0 + 1 } ?? 1
@@ -82,12 +83,14 @@ private func createTransientBlankWorkspaceIfAllowed(named workspaceName: String,
         return nil
     }
     let currentMaxIndex = userFacingWorkspaces(Workspace.all, focusedWorkspace: current)
+        .filter { $0.scope == current.scope }
         .compactMap { Int($0.name) }
         .max() ?? 0
     guard targetIndex == currentMaxIndex + 1 else { return nil }
 
     let workspace = Workspace.get(byName: workspaceName)
     workspace.markAsTransientBlank()
+    workspace.assignProject(current.projectId)
     workspace.seedMonitorIfNeeded(current.workspaceMonitor)
     return workspace
 }
@@ -118,7 +121,7 @@ private func resolveRelativeWorkspaceCandidates(current: Workspace, stdin: Strin
 
     let currentMonitor = current.workspaceMonitor
     return userFacingWorkspaces(
-        Workspace.all.filter { $0.workspaceMonitor.rect.topLeftCorner == currentMonitor.rect.topLeftCorner },
+        Workspace.all.filter { $0.scope == workspaceScope(projectId: current.projectId, monitor: currentMonitor) },
         focusedWorkspace: current,
     )
         .toSet()

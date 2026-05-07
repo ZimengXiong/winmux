@@ -752,22 +752,34 @@ private struct WindowTabStripView: View {
         .clipped()
         .background {
             ZStack {
-                Capsule()
-                    .fill(.thinMaterial)
-                    .environment(\.colorScheme, .dark)
-                    .overlay {
-                        Capsule()
-                            .fill(Color.black.opacity(0.28))
-                    }
+                tabStripSurface
                 tabStripChromeButton(windowId: groupDragWindowId)
             }
         }
         .overlay {
-            Capsule()
-                .strokeBorder(Color.white.opacity(0.22), lineWidth: 0.6)
+            if !usesNativeLiquidGlass {
+                Capsule()
+                    .strokeBorder(Color.white.opacity(0.22), lineWidth: 0.6)
+            }
         }
-        .shadow(color: Color.black.opacity(0.24), radius: 4, y: 1.5)
+        .shadow(
+            color: Color.black.opacity(usesNativeLiquidGlass ? 0 : 0.24),
+            radius: usesNativeLiquidGlass ? 0 : 4,
+            y: usesNativeLiquidGlass ? 0 : 1.5
+        )
         .animation(windowTabActivePillAnimation, value: strip.tabs.first(where: \.isActive)?.windowId)
+    }
+
+    private var tabStripSurface: some View {
+        liquidGlassBackground(in: Capsule(), isInteractive: true) {
+            Capsule()
+                .fill(.thinMaterial)
+                .environment(\.colorScheme, .dark)
+                .overlay {
+                    Capsule()
+                        .fill(Color.black.opacity(0.28))
+                }
+        }
     }
 
     private func tabVisualOffset(

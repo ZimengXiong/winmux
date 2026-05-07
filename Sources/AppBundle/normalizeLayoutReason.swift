@@ -66,6 +66,7 @@ func exitMacOsNativeUnconventionalState(
     let workspace = prevWorkspaceName
         .flatMap { Workspace.existing(byName: $0) }
         ?? fallbackWorkspace
+    workspace.seedMonitorIfNeeded(fallbackWorkspace.workspaceMonitor)
     switch prevParentKind {
         case .workspace:
             window.bindAsFloatingWindow(to: workspace)

@@ -98,8 +98,17 @@ private let testMonitor = MonitorImpl(
     visibleRect: testMonitorRect,
     isMain: true,
 )
+nonisolated(unsafe) private var monitorsOverrideForTests: [Monitor]? = nil
+
+@MainActor
+func setMonitorsForTests(_ monitors: [Monitor]?) {
+    monitorsOverrideForTests = monitors
+}
 
 var mainMonitor: Monitor {
+    if isUnitTest, let monitor = monitorsOverrideForTests?.first(where: \.isMain) ?? monitorsOverrideForTests?.first {
+        return monitor
+    }
     if isUnitTest { return testMonitor }
     let screens = NSScreen.screens
     // Fallback: If main screen can't be found (e.g., during display reconfiguration),
@@ -110,9 +119,25 @@ var mainMonitor: Monitor {
 }
 
 var monitors: [Monitor] {
-    [mainMonitor]
+    if isUnitTest, let override = monitorsOverrideForTests {
+        return override
+    }
+    if isUnitTest { return [mainMonitor] }
+    let screens = NSScreen.screens
+    guard !screens.isEmpty else { return [mainMonitor] }
+    return screens.withIndex.map { index, screen in
+        screen.toMonitor(monitorAppKitNsScreenScreensId: index + 1)
+    }
 }
 
 var sortedMonitors: [Monitor] {
-    [mainMonitor]
+    monitors.sorted {
+        if $0.isMain != $1.isMain {
+            return $0.isMain
+        }
+        if $0.rect.minX != $1.rect.minX {
+            return $0.rect.minX < $1.rect.minX
+        }
+        return $0.rect.minY < $1.rect.minY
+    }
 }

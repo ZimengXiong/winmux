@@ -58,10 +58,36 @@ func updateWorkspaceSidebarLabelConfig(
     workspaceName: String,
     label: String?,
 ) -> String {
-    let sectionHeader = "[workspace-sidebar.workspace-labels]"
+    updateWorkspaceSidebarKeyValueSectionConfig(
+        in: configText,
+        sectionHeader: "[workspace-sidebar.workspace-labels]",
+        key: workspaceName,
+        value: label,
+    )
+}
+
+func updateWorkspaceSidebarProjectLabelConfig(
+    in configText: String,
+    projectId: String,
+    label: String?,
+) -> String {
+    updateWorkspaceSidebarKeyValueSectionConfig(
+        in: configText,
+        sectionHeader: "[workspace-sidebar.project-labels]",
+        key: projectId,
+        value: label,
+    )
+}
+
+private func updateWorkspaceSidebarKeyValueSectionConfig(
+    in configText: String,
+    sectionHeader: String,
+    key: String,
+    value: String?,
+) -> String {
     let lines = configText.components(separatedBy: "\n")
     guard let sectionIndex = lines.firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == sectionHeader }) else {
-        guard let label else { return configText }
+        guard let value else { return configText }
         var result = configText
         if !result.isEmpty, !result.hasSuffix("\n") {
             result += "\n"
@@ -70,7 +96,7 @@ func updateWorkspaceSidebarLabelConfig(
             result += "\n"
         }
         result += "\(sectionHeader)\n"
-        result += tomlWorkspaceLabelLine(workspaceName: workspaceName, label: label)
+        result += tomlWorkspaceSidebarKeyValueLine(key: key, value: value)
         return result
     }
 
@@ -83,20 +109,20 @@ func updateWorkspaceSidebarLabelConfig(
     var resultLines = Array(lines[..<sectionIndex])
     resultLines.append(lines[sectionIndex])
 
-    var wroteLabel = false
+    var wroteValue = false
     var bodyLines: [String] = []
     for line in lines[(sectionIndex + 1)..<sectionEnd] {
-        if workspaceSidebarLabelKey(in: line) == workspaceName {
-            if let label, !wroteLabel {
-                bodyLines.append(tomlWorkspaceLabelLine(workspaceName: workspaceName, label: label))
-                wroteLabel = true
+        if workspaceSidebarLabelKey(in: line) == key {
+            if let value, !wroteValue {
+                bodyLines.append(tomlWorkspaceSidebarKeyValueLine(key: key, value: value))
+                wroteValue = true
             }
             continue
         }
         bodyLines.append(line)
     }
-    if let label, !wroteLabel {
-        bodyLines.append(tomlWorkspaceLabelLine(workspaceName: workspaceName, label: label))
+    if let value, !wroteValue {
+        bodyLines.append(tomlWorkspaceSidebarKeyValueLine(key: key, value: value))
     }
 
     let hasAnyEntries = bodyLines.contains(where: { workspaceSidebarLabelKey(in: $0) != nil })
@@ -119,6 +145,21 @@ func persistWorkspaceSidebarLabel(workspaceName: String, label: String?) throws 
     let updatedText = updateWorkspaceSidebarLabelConfig(
         in: currentText,
         workspaceName: workspaceName,
+        label: label,
+    )
+    if let parent = targetUrl.deletingLastPathComponent().takeIf({ $0.path != targetUrl.path }) {
+        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+    }
+    try updatedText.write(to: targetUrl, atomically: true, encoding: .utf8)
+}
+
+@MainActor
+func persistWorkspaceSidebarProjectLabel(projectId: String, label: String?) throws {
+    let targetUrl = preferredWorkspaceSidebarConfigUrl()
+    let currentText = (try? String(contentsOf: targetUrl, encoding: .utf8)) ?? ""
+    let updatedText = updateWorkspaceSidebarProjectLabelConfig(
+        in: currentText,
+        projectId: projectId,
         label: label,
     )
     if let parent = targetUrl.deletingLastPathComponent().takeIf({ $0.path != targetUrl.path }) {
@@ -152,8 +193,8 @@ private func trailingTomlComment(in line: String) -> String? {
     return String(line[hashIndex...]).trimmingCharacters(in: .whitespaces)
 }
 
-private func tomlWorkspaceLabelLine(workspaceName: String, label: String) -> String {
-    "\"\(tomlEscape(workspaceName))\" = \"\(tomlEscape(label))\""
+private func tomlWorkspaceSidebarKeyValueLine(key: String, value: String) -> String {
+    "\"\(tomlEscape(key))\" = \"\(tomlEscape(value))\""
 }
 
 private func tomlEscape(_ raw: String) -> String {

@@ -39,6 +39,8 @@ public final class TrayMenuModel: ObservableObject {
     @Published var isEnabled: Bool = true
     @Published var workspaces: [WorkspaceViewModel] = []
     @Published var workspaceSidebarWorkspaces: [WorkspaceSidebarWorkspaceViewModel] = []
+    @Published var workspaceSidebarProjects: [WorkspaceSidebarProjectViewModel] = []
+    @Published var workspaceSidebarSelectedProjectId: String = workspaceProjectDefaultId
     @Published var workspaceSidebarMonitorScopes: [WorkspaceSidebarMonitorScopeViewModel] = []
     @Published var workspaceSidebarSelectedMonitorScopeId: String = workspaceSidebarFocusedScopeId
     @Published var workspaceSidebarFocusedMonitorScopeId: String = ""
@@ -53,6 +55,7 @@ public final class TrayMenuModel: ObservableObject {
 
     var visibleWorkspaceSidebarWorkspaces: [WorkspaceSidebarWorkspaceViewModel] {
         workspaceSidebarWorkspaces.filter {
+            $0.projectId == workspaceSidebarSelectedProjectId &&
             workspaceSidebarWorkspaceMatchesScope(
                 workspaceMonitorScopeId: $0.monitorScopeId,
                 selectedScopeId: workspaceSidebarSelectedMonitorScopeId,
@@ -66,6 +69,10 @@ public final class TrayMenuModel: ObservableObject {
     let focus = focus
     TrayMenuModel.shared.trayText = activeMode?.takeIf { $0 != mainModeId }?.first.map { "(\($0.uppercased()))" } ?? "A"
     TrayMenuModel.shared.workspaces = userFacingWorkspaces(Workspace.all, focusedWorkspace: focus.workspace).map {
+        $0
+    }.filter {
+        $0.projectId == activeWorkspaceProjectId(for: $0.workspaceMonitor)
+    }.map {
         let apps = $0.allLeafWindowsRecursive.map { $0.app.name?.takeIf { !$0.isEmpty } }.filterNotNil().toSet()
         let dash = " - "
         let suffix = switch true {
@@ -101,6 +108,7 @@ struct WorkspaceViewModel: Hashable {
 
 struct WorkspaceSidebarWorkspaceViewModel: Hashable, Identifiable {
     let name: String
+    let projectId: String
     let displayName: String
     let sidebarLabel: String
     let isGeneratedName: Bool
@@ -111,6 +119,12 @@ struct WorkspaceSidebarWorkspaceViewModel: Hashable, Identifiable {
     let items: [WorkspaceSidebarItemViewModel]
 
     var id: String { name }
+}
+
+struct WorkspaceSidebarProjectViewModel: Hashable, Identifiable {
+    let id: String
+    let displayName: String
+    let isActiveOnSelectedMonitor: Bool
 }
 
 struct WorkspaceSidebarMonitorScopeViewModel: Hashable, Identifiable {

@@ -26,6 +26,9 @@ func updateWorkspaceSidebarModel() async {
         if !TrayMenuModel.shared.workspaceSidebarMonitorScopes.isEmpty {
             TrayMenuModel.shared.workspaceSidebarMonitorScopes = []
         }
+        if !TrayMenuModel.shared.workspaceSidebarProjects.isEmpty {
+            TrayMenuModel.shared.workspaceSidebarProjects = []
+        }
         TrayMenuModel.shared.workspaceSidebarShowsMonitorSelector = false
         WorkspaceSidebarPanel.shared.refresh()
         return
@@ -38,6 +41,11 @@ func updateWorkspaceSidebarModel() async {
 
     let availableMonitors = sortedMonitors
     let focusedMonitorScopeId = workspaceSidebarMonitorScopeId(for: currentFocus.workspace.workspaceMonitor)
+    let projectMonitor = workspaceSidebarSelectedProjectMonitor(
+        selectedScopeId: TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId,
+        focusedMonitor: currentFocus.workspace.workspaceMonitor,
+        sortedMonitors: availableMonitors,
+    )
     let monitorScopes = buildWorkspaceSidebarMonitorScopes(
         sortedMonitors: availableMonitors,
         focusedMonitorScopeId: focusedMonitorScopeId,
@@ -46,6 +54,11 @@ func updateWorkspaceSidebarModel() async {
     let selectedMonitorScopeId = validScopeIds.contains(TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId)
         ? TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId
         : workspaceSidebarFocusedScopeId
+    let projects = buildWorkspaceSidebarProjectViewModels(selectedMonitor: projectMonitor)
+    let validProjectIds = Set(projects.map(\.id))
+    let selectedProjectId = validProjectIds.contains(TrayMenuModel.shared.workspaceSidebarSelectedProjectId)
+        ? TrayMenuModel.shared.workspaceSidebarSelectedProjectId
+        : activeWorkspaceProjectId(for: projectMonitor)
 
     let gaps = ResolvedGaps(gaps: config.gaps, monitor: workspaceSidebarResolvedPanelMonitor())
     TrayMenuModel.shared.workspaceSidebarTopPadding = CGFloat(gaps.outer.top)
@@ -59,13 +72,14 @@ func updateWorkspaceSidebarModel() async {
         let sidebarItems = await buildWorkspaceSidebarItems(for: workspace, currentFocus: currentFocus)
 
         let sidebarLabel = workspaceLabels[workspace.name] ?? ""
-        let isGeneratedName = isSidebarDraftWorkspaceName(workspace.name)
+        let isGeneratedName = isSidebarDraftWorkspaceName(workspace.name) || workspace.usesAutomaticDisplayName
         let displayName = workspaceDisplayName(workspace.name)
         let workspaceMonitor = workspace.workspaceMonitor
 
         sidebarWorkspaces.append(
             WorkspaceSidebarWorkspaceViewModel(
                 name: workspace.name,
+                projectId: workspace.projectId,
                 displayName: displayName,
                 sidebarLabel: sidebarLabel,
                 isGeneratedName: isGeneratedName,
@@ -100,6 +114,15 @@ func updateWorkspaceSidebarModel() async {
         TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId != selectedMonitorScopeId ||
         TrayMenuModel.shared.workspaceSidebarFocusedMonitorScopeId != focusedMonitorScopeId ||
         TrayMenuModel.shared.workspaceSidebarShowsMonitorSelector != (availableMonitors.count > 1)
+    let didProjectChange =
+        TrayMenuModel.shared.workspaceSidebarProjects != projects ||
+        TrayMenuModel.shared.workspaceSidebarSelectedProjectId != selectedProjectId
+    if TrayMenuModel.shared.workspaceSidebarProjects != projects {
+        TrayMenuModel.shared.workspaceSidebarProjects = projects
+    }
+    if TrayMenuModel.shared.workspaceSidebarSelectedProjectId != selectedProjectId {
+        TrayMenuModel.shared.workspaceSidebarSelectedProjectId = selectedProjectId
+    }
     if TrayMenuModel.shared.workspaceSidebarMonitorScopes != monitorScopes {
         TrayMenuModel.shared.workspaceSidebarMonitorScopes = monitorScopes
     }
@@ -116,9 +139,23 @@ func updateWorkspaceSidebarModel() async {
     if didWorkspaceChange {
         TrayMenuModel.shared.workspaceSidebarWorkspaces = sidebarWorkspaces
     }
-    if didWorkspaceChange || didTopPaddingChange || didMonitorScopeChange || !WorkspaceSidebarPanel.shared.isVisible {
+    if didWorkspaceChange || didTopPaddingChange || didMonitorScopeChange || didProjectChange || !WorkspaceSidebarPanel.shared.isVisible {
         WorkspaceSidebarPanel.shared.refresh()
     }
+}
+
+@MainActor
+private func workspaceSidebarSelectedProjectMonitor(
+    selectedScopeId: String,
+    focusedMonitor: Monitor,
+    sortedMonitors: [Monitor],
+) -> Monitor {
+    guard selectedScopeId != workspaceSidebarFocusedScopeId,
+          selectedScopeId != workspaceSidebarAllScopeId
+    else {
+        return focusedMonitor
+    }
+    return sortedMonitors.first { workspaceSidebarMonitorScopeId(for: $0) == selectedScopeId } ?? focusedMonitor
 }
 
 @MainActor
@@ -164,6 +201,18 @@ private func workspaceSidebarMonitorDisplayName(_ monitor: Monitor, fallbackInde
         return "Main"
     }
     return name.isEmpty ? "Display \(fallbackIndex)" : name
+}
+
+@MainActor
+private func buildWorkspaceSidebarProjectViewModels(selectedMonitor: Monitor) -> [WorkspaceSidebarProjectViewModel] {
+    let activeProjectId = activeWorkspaceProjectId(for: selectedMonitor)
+    return workspaceProjects().map {
+        WorkspaceSidebarProjectViewModel(
+            id: $0.id,
+            displayName: $0.name,
+            isActiveOnSelectedMonitor: $0.id == activeProjectId,
+        )
+    }
 }
 
 @MainActor

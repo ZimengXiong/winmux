@@ -20,6 +20,7 @@ struct FrozenMonitor: Codable, Sendable {
 
 struct FrozenWorkspace: Codable, Sendable {
     let name: String
+    let projectId: String
     let namingStyle: WorkspaceNamingStyle
     let monitor: FrozenMonitor // todo drop this property, once monitor to workspace assignment migrates to TreeNode
     let rootTilingNode: FrozenContainer
@@ -28,6 +29,7 @@ struct FrozenWorkspace: Codable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case name
+        case projectId
         case namingStyle
         case monitor
         case rootTilingNode
@@ -37,6 +39,7 @@ struct FrozenWorkspace: Codable, Sendable {
 
     @MainActor init(_ workspace: Workspace) {
         name = workspace.name
+        projectId = workspace.projectId
         namingStyle = workspace.namingStyle
         monitor = FrozenMonitor(workspace.workspaceMonitor)
         rootTilingNode = FrozenContainer(workspace.rootTilingContainer)
@@ -50,6 +53,7 @@ struct FrozenWorkspace: Codable, Sendable {
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         name = try container.decode(String.self, forKey: .name)
+        projectId = try container.decodeIfPresent(String.self, forKey: .projectId) ?? workspaceProjectDefaultId
         namingStyle = try container.decodeIfPresent(WorkspaceNamingStyle.self, forKey: .namingStyle) ?? .explicit
         monitor = try container.decode(FrozenMonitor.self, forKey: .monitor)
         rootTilingNode = try container.decode(FrozenContainer.self, forKey: .rootTilingNode)
@@ -94,6 +98,7 @@ func restoreFrozenWorldIfNeeded(_ frozenWorld: FrozenWorld, newlyDetectedWindow:
 
     for frozenWorkspace in frozenWorld.workspaces {
         let workspace = Workspace.get(byName: frozenWorkspace.name)
+        workspace.assignProject(frozenWorkspace.projectId)
         workspace.restoreNamingStyle(frozenWorkspace.namingStyle)
         let frozenWindowById = collectFrozenWindows(frozenWorkspace)
         _ = topLeftCornerToMonitor[frozenWorkspace.monitor.topLeftCorner]?

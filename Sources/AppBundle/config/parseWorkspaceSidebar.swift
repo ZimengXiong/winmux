@@ -11,6 +11,7 @@ private let workspaceSidebarParser: [String: any ParserProtocol<WorkspaceSidebar
     "show-date": Parser(\.showDate, parseBool),
     "menu-bar-reserve-height": Parser(\.menuBarReserveHeight, parseWorkspaceSidebarMenuBarReserveHeight),
     "workspace-labels": Parser(\.workspaceLabels, parseWorkspaceSidebarLabels),
+    "project-labels": Parser(\.projectLabels, parseWorkspaceSidebarLabels),
 ]
 
 func parseWorkspaceSidebar(

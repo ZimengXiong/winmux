@@ -16,6 +16,7 @@ let projectRoot: URL = {
 @MainActor
 func setUpWorkspacesForTests() {
     config = defaultConfig
+    setMonitorsForTests(nil)
     configUrl = defaultConfigUrl
     resetWorkspaceNameGenerationStateForTests()
     resetCachedWindowTitles()
@@ -32,6 +33,7 @@ func setUpWorkspacesForTests() {
             child.unbindFromParent()
         }
     }
+    resetWorkspaceTopologyForTests()
     check(Workspace.get(byName: "setUpWorkspacesForTests").focusWorkspace())
     Workspace.garbageCollectUnusedWorkspaces()
     check(focus.workspace.isEffectivelyEmpty)

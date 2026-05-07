@@ -266,6 +266,16 @@ final class TreeNodeTest: XCTestCase {
         XCTAssertEqual(workspaceDisplayName("__sidebar_draft_workspace_1"), "Workspace 1")
     }
 
+    func testGarbageCollectUnusedWorkspacesClearsStaleWorkspaceLabel() {
+        config.workspaceSidebar.workspaceLabels["ghost"] = "Ghost Name"
+        _ = Workspace.get(byName: "ghost")
+
+        Workspace.garbageCollectUnusedWorkspaces()
+
+        XCTAssertNil(config.workspaceSidebar.workspaceLabels["ghost"])
+        XCTAssertEqual(workspaceDisplayName("ghost"), "ghost")
+    }
+
     func testGarbageCollectUnusedWorkspacesClearsOrphanedDraftWorkspaceLabel() {
         config.workspaceSidebar.workspaceLabels["__sidebar_draft_workspace_7"] = "Old Name"
 

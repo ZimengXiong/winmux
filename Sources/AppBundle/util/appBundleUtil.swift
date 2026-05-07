@@ -105,7 +105,9 @@ extension CGPoint {
 
     func distance(to point: CGPoint) -> Double { (self - point).vectorLength }
 
-    var monitorApproximation: Monitor { monitors.minByOrDie { distance(toOuterFrame: $0.rect) } }
+    var monitorApproximation: Monitor {
+        monitors.first { $0.rect.contains(self) } ?? monitors.minByOrDie { distance(toOuterFrame: $0.rect) }
+    }
 }
 
 extension CGFloat {

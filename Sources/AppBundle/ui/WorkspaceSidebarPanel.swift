@@ -13,6 +13,7 @@ private let workspaceSidebarOuterCornerRadius: CGFloat = 16
 private let workspaceSidebarSectionCornerRadius: CGFloat = 8
 private let workspaceSidebarRowCornerRadius: CGFloat = 6
 private let workspaceSidebarRowHorizontalPadding: CGFloat = 7
+private let workspaceSidebarPagerHeight: CGFloat = 42
 private let workspaceSidebarHoverOpenThresholdFraction: CGFloat = 0.75
 private let workspaceSidebarDisplayEdgeCompactionMargin: CGFloat = 12
 @MainActor
@@ -527,6 +528,26 @@ private func showWorkspaceSidebarError(_ body: String) {
 }
 
 @MainActor
+private func promptWorkspaceSidebarName(title: String, currentName: String) -> String? {
+    let field = NSTextField(string: currentName)
+    field.frame = NSRect(x: 0, y: 0, width: 260, height: 24)
+    field.lineBreakMode = .byTruncatingTail
+
+    let alert = NSAlert()
+    alert.messageText = title
+    alert.informativeText = "Enter a name."
+    alert.accessoryView = field
+    alert.addButton(withTitle: "Rename")
+    alert.addButton(withTitle: "Cancel")
+
+    let window = WorkspaceSidebarPanel.shared
+    window.makeKey()
+    field.becomeFirstResponder()
+    guard alert.runModal() == .alertFirstButtonReturn else { return nil }
+    return field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+@MainActor
 private func sidebarWorkspaceTargetMonitor(fallbackWindow: Window? = nil) -> Monitor {
     if let selectedMonitor = selectedWorkspaceSidebarMonitorScope() {
         return selectedMonitor
@@ -565,13 +586,16 @@ private func selectWorkspaceSidebarMonitorScope(_ scopeId: String) {
 @MainActor
 private func createWorkspaceFromSidebarButton() {
     guard let token: RunSessionGuard = .isServerEnabled else { return }
-    let workspaceName = nextSidebarCreatedWorkspaceName()
     Task { @MainActor in
         do {
             try await runLightSession(.menuBarButton, token) {
+                let targetMonitor = sidebarWorkspaceTargetMonitor()
+                let projectId = sidebarWorkspaceTargetProjectId(targetMonitor: targetMonitor)
+                let workspaceName = nextSidebarCreatedWorkspaceName(projectId: projectId, monitor: targetMonitor)
                 let workspace = Workspace.get(byName: workspaceName)
                 workspace.markAsSidebarManaged()
-                workspace.seedMonitorIfNeeded(sidebarWorkspaceTargetMonitor())
+                workspace.assignProject(projectId)
+                workspace.seedMonitorIfNeeded(targetMonitor)
                 _ = workspace.focusWorkspace()
             }
         } catch {
@@ -582,10 +606,13 @@ private func createWorkspaceFromSidebarButton() {
 
 @MainActor
 func createWorkspaceFromSidebarDrag(sourceNode: TreeNode, sourceWindow: Window) -> Bool {
-    let workspaceName = nextSidebarCreatedWorkspaceName()
+    let targetMonitor = sidebarWorkspaceTargetMonitor(fallbackWindow: sourceWindow)
+    let projectId = sidebarWorkspaceTargetProjectId(targetMonitor: targetMonitor)
+    let workspaceName = nextSidebarCreatedWorkspaceName(projectId: projectId, monitor: targetMonitor)
     let workspace = Workspace.get(byName: workspaceName)
     workspace.markAsSidebarManaged()
-    workspace.seedMonitorIfNeeded(sidebarWorkspaceTargetMonitor(fallbackWindow: sourceWindow))
+    workspace.assignProject(projectId)
+    workspace.seedMonitorIfNeeded(targetMonitor)
     let targetContainer: NonLeafTreeNodeObject
     if sourceNode is Window, sourceWindow.isFloating {
         targetContainer = workspace
@@ -594,6 +621,137 @@ func createWorkspaceFromSidebarDrag(sourceNode: TreeNode, sourceWindow: Window) 
     }
     sourceNode.bind(to: targetContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
     return sourceWindow.focusWindow()
+}
+
+@MainActor
+private func sidebarWorkspaceTargetProjectId(targetMonitor: Monitor) -> String {
+    let selectedProjectId = TrayMenuModel.shared.workspaceSidebarSelectedProjectId
+    guard workspaceProjects().contains(where: { $0.id == selectedProjectId }) else {
+        return activeWorkspaceProjectId(for: targetMonitor)
+    }
+    return selectedProjectId
+}
+
+@MainActor
+private func selectWorkspaceSidebarProject(_ projectId: String) {
+    guard let token: RunSessionGuard = .isServerEnabled else { return }
+    TrayMenuModel.shared.workspaceSidebarSelectedProjectId = projectId
+    Task {
+        try await runLightSession(.menuBarButton, token) {
+            if let workspace = switchWorkspaceProject(projectId, on: sidebarWorkspaceTargetMonitor()) {
+                _ = workspace.focusWorkspace()
+            }
+        }
+    }
+}
+
+@MainActor
+private func createWorkspaceSidebarProject() {
+    guard let token: RunSessionGuard = .isServerEnabled else { return }
+    let project = createWorkspaceProject()
+    TrayMenuModel.shared.workspaceSidebarSelectedProjectId = project.id
+    Task {
+        do {
+            try await runLightSession(.menuBarButton, token) {
+                if let workspace = switchWorkspaceProject(project.id, on: sidebarWorkspaceTargetMonitor()) {
+                    _ = workspace.focusWorkspace()
+                }
+            }
+        } catch {
+            showWorkspaceSidebarError(error.localizedDescription)
+        }
+    }
+}
+
+@MainActor
+private func renameWorkspaceSidebarProject(_ project: WorkspaceSidebarProjectViewModel) {
+    guard let newName = promptWorkspaceSidebarName(title: "Rename Project", currentName: project.displayName) else { return }
+    renameWorkspaceSidebarProject(project, displayName: newName)
+}
+
+@MainActor
+private func renameWorkspaceSidebarProject(_ project: WorkspaceSidebarProjectViewModel, displayName: String) {
+    guard let token: RunSessionGuard = .isServerEnabled else { return }
+    Task {
+        do {
+            try await runLightSession(.menuBarButton, token) {
+                try renameWorkspaceProject(project.id, displayName: displayName)
+                await updateWorkspaceSidebarModel()
+            }
+        } catch {
+            showWorkspaceSidebarError(error.localizedDescription)
+        }
+    }
+}
+
+@MainActor
+private func deleteWorkspaceSidebarProject(_ project: WorkspaceSidebarProjectViewModel) {
+    guard canDeleteWorkspaceProject(project.id), let token: RunSessionGuard = .isServerEnabled else { return }
+    Task {
+        do {
+            try await runLightSession(.menuBarButton, token) {
+                try deleteWorkspaceProject(project.id)
+                await updateWorkspaceSidebarModel()
+            }
+        } catch {
+            showWorkspaceSidebarError(error.localizedDescription)
+        }
+    }
+}
+
+@MainActor
+private func renameWorkspaceFromSidebar(_ workspace: WorkspaceSidebarWorkspaceViewModel) {
+    guard let newName = promptWorkspaceSidebarName(title: "Rename Workspace", currentName: workspace.displayName) else { return }
+    renameWorkspaceFromSidebar(workspace, displayName: newName)
+}
+
+@MainActor
+private func renameWorkspaceFromSidebar(_ workspace: WorkspaceSidebarWorkspaceViewModel, displayName: String) {
+    guard let token: RunSessionGuard = .isServerEnabled else { return }
+    Task {
+        do {
+            try await runLightSession(.menuBarButton, token) {
+                try renameWorkspaceForSidebar(workspaceName: workspace.name, displayName: displayName)
+                await updateWorkspaceSidebarModel()
+            }
+        } catch {
+            showWorkspaceSidebarError(error.localizedDescription)
+        }
+    }
+}
+
+@MainActor
+private func deleteWorkspaceFromSidebar(_ workspace: WorkspaceSidebarWorkspaceViewModel) {
+    guard let token: RunSessionGuard = .isServerEnabled else { return }
+    Task {
+        do {
+            try await runLightSession(.menuBarButton, token) {
+                try deleteWorkspaceForSidebar(workspaceName: workspace.name)
+                await updateWorkspaceSidebarModel()
+            }
+        } catch {
+            showWorkspaceSidebarError(error.localizedDescription)
+        }
+    }
+}
+
+@MainActor
+private func currentWorkspaceSidebarPagerIndex(in workspaces: [WorkspaceSidebarWorkspaceViewModel]) -> Int? {
+    workspaces.firstIndex(where: \.isFocused)
+        ?? workspaces.firstIndex(where: \.isVisible)
+        ?? workspaces.indices.first
+}
+
+@MainActor
+private func navigateWorkspaceSidebarPager(
+    workspaces: [WorkspaceSidebarWorkspaceViewModel],
+    direction: Int,
+) {
+    guard !workspaces.isEmpty,
+          let currentIndex = currentWorkspaceSidebarPagerIndex(in: workspaces)
+    else { return }
+    let nextIndex = (currentIndex + direction + workspaces.count) % workspaces.count
+    focusWorkspaceFromSidebar(workspaces[nextIndex].name)
 }
 
 @MainActor
@@ -705,6 +863,16 @@ struct WorkspaceSidebarView: View {
                 WorkspaceSidebarPanel.shared.updateDropTargets(frames)
             }
 
+            WorkspaceSidebarProjectPager(
+                projects: viewModel.workspaceSidebarProjects,
+                selectedProjectId: viewModel.workspaceSidebarSelectedProjectId,
+                expansionProgress: expansionProgress,
+            )
+            .padding(.leading, leadingInset)
+            .padding(.trailing, trailingInset)
+            .padding(.top, 6)
+            .padding(.bottom, 2)
+
             WorkspaceSidebarStatusView(
                 sectionWidth: workspaceSidebarSectionWidth(expansionProgress),
                 isCompact: isCompact,
@@ -714,29 +882,146 @@ struct WorkspaceSidebarView: View {
             .padding(.top, 8)
             .padding(.bottom, 10)
         }
-        .background(sidebarSurface)
+        .background {
+            sidebarSurface(in: sidebarShape)
+        }
         .environment(\.colorScheme, .dark)
-        .clipShape(UnevenRoundedRectangle(
+        .clipShape(sidebarShape)
+        .overlay(alignment: .trailing) {
+            if !usesNativeLiquidGlass {
+                Rectangle()
+                    .fill(Color.white.opacity(0.08))
+                    .frame(width: 0.5)
+            }
+        }
+        .shadow(
+            color: Color.black.opacity(usesNativeLiquidGlass ? 0 : 0.32),
+            radius: usesNativeLiquidGlass ? 0 : 14,
+            x: usesNativeLiquidGlass ? 0 : 2,
+            y: 0
+        )
+    }
+
+    private var sidebarShape: some Shape {
+        UnevenRoundedRectangle(
             bottomTrailingRadius: workspaceSidebarOuterCornerRadius,
             topTrailingRadius: topTrailingCornerRadius,
             style: .continuous
-        ))
-        .overlay(alignment: .trailing) {
-            Rectangle()
-                .fill(Color.white.opacity(0.08))
-                .frame(width: 0.5)
-        }
-        .shadow(color: Color.black.opacity(0.32), radius: 14, x: 2, y: 0)
+        )
     }
 
-    private var sidebarSurface: some View {
-        VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
-            .ignoresSafeArea()
-            .overlay(Color.black.opacity(0.42))
+    private func sidebarSurface<S: Shape>(in shape: S) -> some View {
+        liquidGlassBackground(in: shape, isInteractive: true) {
+            VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
+                .overlay(Color.black.opacity(0.42))
+        }
+        .ignoresSafeArea()
     }
 
     private var topTrailingCornerRadius: CGFloat {
         config.workspaceSidebar.menuBarReserveHeight == 0 ? 0 : workspaceSidebarOuterCornerRadius
+    }
+}
+
+// MARK: - Project Selector
+
+struct WorkspaceSidebarProjectSelector: View {
+    let projects: [WorkspaceSidebarProjectViewModel]
+    let selectedProjectId: String
+    let expansionProgress: CGFloat
+
+    @State private var isHovered = false
+
+    private var sectionWidth: CGFloat { workspaceSidebarSectionWidth(expansionProgress) }
+    private var selectedProject: WorkspaceSidebarProjectViewModel? {
+        projects.first { $0.id == selectedProjectId } ?? projects.first
+    }
+
+    var body: some View {
+        Menu {
+            ForEach(projects) { project in
+                Button {
+                    selectWorkspaceSidebarProject(project.id)
+                } label: {
+                    if project.id == selectedProjectId {
+                        Label(project.displayName, systemImage: "checkmark")
+                    } else {
+                        Text(project.displayName)
+                    }
+                }
+            }
+            Divider()
+            Button {
+                createWorkspaceSidebarProject()
+            } label: {
+                Label("New Project", systemImage: "plus")
+            }
+        } label: {
+            projectDropdownLabel
+        }
+        .frame(width: sectionWidth, height: 30, alignment: .leading)
+        .menuStyle(.borderlessButton)
+        .buttonStyle(.plain)
+        .accessibilityLabel("Project")
+        .contextMenu {
+            if let selectedProject {
+                Button("Rename Project") {
+                    renameWorkspaceSidebarProject(selectedProject)
+                }
+                Button(role: .destructive) {
+                    deleteWorkspaceSidebarProject(selectedProject)
+                } label: {
+                    Text("Delete Project")
+                }
+                .disabled(!canDeleteWorkspaceProject(selectedProject.id))
+            }
+        }
+        .onHover { isHovered = $0 }
+    }
+
+    private var projectDropdownLabel: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "rectangle.3.group.fill")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.76))
+                .frame(width: 13, height: 13)
+            Text(selectedProject?.displayName ?? "Project")
+                .font(.system(size: 11.5, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.88))
+                .lineLimit(1)
+            Spacer(minLength: 0)
+            if selectedProject?.isActiveOnSelectedMonitor == true {
+                Circle()
+                    .fill(Color.accentColor.opacity(0.92))
+                    .frame(width: 4, height: 4)
+            }
+            Image(systemName: "chevron.down")
+                .font(.system(size: 8.5, weight: .bold))
+                .foregroundStyle(Color.white.opacity(0.52))
+        }
+        .padding(.leading, 8)
+        .padding(.trailing, 7)
+        .frame(width: sectionWidth, height: 28, alignment: .leading)
+        .background(
+            Capsule(style: .continuous)
+                .fill(projectDropdownFill)
+                .overlay {
+                    Capsule(style: .continuous)
+                        .strokeBorder(projectDropdownBorder, lineWidth: 0.5)
+                }
+        )
+        .contentShape(Capsule(style: .continuous))
+    }
+
+    private var projectDropdownFill: Color {
+        if isHovered {
+            return Color.white.opacity(0.075)
+        }
+        return Color.white.opacity(0.045)
+    }
+
+    private var projectDropdownBorder: Color {
+        Color.white.opacity(isHovered ? 0.12 : 0.07)
     }
 }
 
@@ -828,6 +1113,369 @@ struct WorkspaceSidebarMonitorSelector: View {
     }
 }
 
+// MARK: - Workspace Pager
+
+struct WorkspaceSidebarProjectPager: View {
+    let projects: [WorkspaceSidebarProjectViewModel]
+    let selectedProjectId: String
+    let expansionProgress: CGFloat
+
+    @State private var isHovered = false
+    @State private var pressedProjectId: String? = nil
+    @State private var dragOffset: CGFloat = 0
+    @State private var dragTranslation: CGFloat = 0
+    @State private var editingProjectId: String? = nil
+    @State private var editingProjectDraft = ""
+    @FocusState private var isRenameFieldFocused: Bool
+
+    private var sectionWidth: CGFloat { workspaceSidebarSectionWidth(expansionProgress) }
+    private var isCompact: Bool { expansionProgress < workspaceSidebarRowsRevealProgress }
+    private var pagerControlWidth: CGFloat { 34 }
+    private var pagerControlHeight: CGFloat { 34 }
+    private var currentIndex: Int? {
+        projects.firstIndex { $0.id == selectedProjectId }
+            ?? projects.firstIndex(where: \.isActiveOnSelectedMonitor)
+            ?? projects.indices.first
+    }
+
+    var body: some View {
+        if !projects.isEmpty {
+            pagerContent
+                .frame(width: sectionWidth, height: workspaceSidebarPagerHeight, alignment: .center)
+                .background(pagerBackground)
+                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .onHover { hovering in
+                    isHovered = hovering
+                }
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 12)
+                        .onChanged { value in
+                            dragTranslation = value.translation.width
+                            dragOffset = resistedDragOffset(for: value.translation.width)
+                        }
+                        .onEnded { value in
+                            defer {
+                                withAnimation(.interactiveSpring(response: 0.22, dampingFraction: 0.86)) {
+                                    dragOffset = 0
+                                    dragTranslation = 0
+                                }
+                            }
+                            handlePagerDragEnd(value.translation.width)
+                        },
+                )
+                .animation(.interactiveSpring(response: 0.24, dampingFraction: 0.86), value: isHovered)
+                .animation(.interactiveSpring(response: 0.24, dampingFraction: 0.86), value: currentIndex)
+                .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .bottom)))
+        }
+    }
+
+    private var pagerContent: some View {
+        HStack(spacing: isCompact ? 2 : 6) {
+            if !isCompact {
+                pagerControl(systemImage: "plus", accessibilityLabel: "New Project Left", controlId: "new-left") {
+                    createWorkspaceSidebarProject()
+                }
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: isHovered ? 7 : 5) {
+                    if leadingNewProjectProgress > 0 {
+                        formingProjectDot(progress: leadingNewProjectProgress)
+                            .transition(.scale(scale: 0.45).combined(with: .opacity))
+                    }
+                    ForEach(Array(projects.enumerated()), id: \.element.id) { index, project in
+                        projectDot(project, index: index)
+                    }
+                    if trailingNewProjectProgress > 0 {
+                        formingProjectDot(progress: trailingNewProjectProgress)
+                            .transition(.scale(scale: 0.45).combined(with: .opacity))
+                    }
+                }
+                .padding(.horizontal, isCompact ? 2 : 5)
+                .frame(minWidth: projectDotsMinWidth, alignment: .center)
+                .offset(x: dragOffset)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+
+            if !isCompact {
+                pagerControl(systemImage: "plus", accessibilityLabel: "New Project Right", controlId: "new-right") {
+                    createWorkspaceSidebarProject()
+                }
+            }
+        }
+        .padding(.horizontal, isCompact ? 2 : 4)
+        .background {
+            WorkspaceSidebarProjectPagerScrollWheelCapture { delta in
+                guard editingProjectId == nil else { return }
+                navigateProjectPager(direction: delta > 0 ? 1 : -1)
+            }
+        }
+    }
+
+    private var projectDotsMinWidth: CGFloat {
+        if isCompact {
+            return max(sectionWidth - 4, 12)
+        }
+        return max(sectionWidth - (pagerControlWidth * 2) - 24, 24)
+    }
+
+    private var pagerBackground: some View {
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .fill(pagerFill)
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(Color.white.opacity(isHovered ? 0.10 : 0.055), lineWidth: 0.5)
+            }
+    }
+
+    private var pagerFill: Color {
+        Color.white.opacity(isHovered ? 0.055 : 0.032)
+    }
+
+    private var leadingNewProjectProgress: CGFloat {
+        newProjectProgress(edgeDirection: -1)
+    }
+
+    private var trailingNewProjectProgress: CGFloat {
+        newProjectProgress(edgeDirection: 1)
+    }
+
+    private func newProjectProgress(edgeDirection: Int) -> CGFloat {
+        guard let currentIndex else { return 0 }
+        let isPullingBeforeFirst = edgeDirection < 0 && currentIndex == 0 && dragTranslation > 0
+        let isPullingAfterLast = edgeDirection > 0 && currentIndex == projects.count - 1 && dragTranslation < 0
+        guard isPullingBeforeFirst || isPullingAfterLast else { return 0 }
+        return min(max((abs(dragTranslation) - 24) / 58, 0), 1)
+    }
+
+    private func resistedDragOffset(for translation: CGFloat) -> CGFloat {
+        guard let currentIndex else { return max(-18, min(18, translation / 4)) }
+        let isPullingBeforeFirst = currentIndex == 0 && translation > 0
+        let isPullingAfterLast = currentIndex == projects.count - 1 && translation < 0
+        let divisor: CGFloat = isPullingBeforeFirst || isPullingAfterLast ? 6 : 3
+        let limit: CGFloat = isPullingBeforeFirst || isPullingAfterLast ? 30 : 18
+        return max(-limit, min(limit, translation / divisor))
+    }
+
+    private func handlePagerDragEnd(_ translation: CGFloat) {
+        guard abs(translation) >= 32 else { return }
+        let direction = translation < 0 ? 1 : -1
+        if shouldCreateProjectAfterDrag(direction: direction, translation: translation) {
+            createWorkspaceSidebarProject()
+        } else {
+            navigateProjectPager(direction: direction)
+        }
+    }
+
+    private func shouldCreateProjectAfterDrag(direction: Int, translation: CGFloat) -> Bool {
+        guard let currentIndex else { return false }
+        let pulledPastStart = direction < 0 && currentIndex == 0
+        let pulledPastEnd = direction > 0 && currentIndex == projects.count - 1
+        return (pulledPastStart || pulledPastEnd) && abs(translation) >= 82
+    }
+
+    private func navigateProjectPager(direction: Int) {
+        guard !projects.isEmpty, let currentIndex else { return }
+        let nextIndex = (currentIndex + direction + projects.count) % projects.count
+        selectWorkspaceSidebarProject(projects[nextIndex].id)
+    }
+
+    private func beginInlineRename(_ project: WorkspaceSidebarProjectViewModel) {
+        editingProjectId = project.id
+        editingProjectDraft = project.displayName
+        DispatchQueue.main.async {
+            isRenameFieldFocused = true
+        }
+    }
+
+    private func commitInlineRename(_ project: WorkspaceSidebarProjectViewModel) {
+        guard editingProjectId == project.id else { return }
+        let trimmed = editingProjectDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        editingProjectId = nil
+        isRenameFieldFocused = false
+        guard !trimmed.isEmpty, trimmed != project.displayName else { return }
+        renameWorkspaceSidebarProject(project, displayName: trimmed)
+    }
+
+    private func pagerControl(
+        systemImage: String,
+        accessibilityLabel: String,
+        controlId: String,
+        action: @escaping () -> Void,
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 10.5, weight: .bold))
+                .foregroundStyle(Color.white.opacity(isHovered ? 0.72 : 0.52))
+                .frame(width: pagerControlWidth, height: pagerControlHeight)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color.white.opacity(isHovered ? 0.075 : 0.04))
+                        .overlay {
+                            Capsule(style: .continuous)
+                                .strokeBorder(Color.white.opacity(isHovered ? 0.10 : 0.05), lineWidth: 0.5)
+                        }
+                )
+                .scaleEffect(pressedProjectId == controlId ? 0.96 : 1)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
+        .help(accessibilityLabel)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in pressedProjectId = controlId }
+                .onEnded { _ in pressedProjectId = nil },
+        )
+        .animation(.easeOut(duration: 0.14), value: pressedProjectId == controlId)
+    }
+
+    @ViewBuilder
+    private func formingProjectDot(progress: CGFloat) -> some View {
+        let clampedProgress = min(max(progress, 0), 1)
+        Capsule(style: .continuous)
+            .fill(Color.accentColor.opacity(0.26 + 0.52 * clampedProgress))
+            .frame(
+                width: 8 + 16 * clampedProgress,
+                height: 7 + 2 * clampedProgress,
+            )
+            .overlay {
+                Capsule(style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.08 + 0.18 * clampedProgress), lineWidth: 0.5)
+            }
+            .shadow(
+                color: Color.accentColor.opacity(0.18 * clampedProgress),
+                radius: 3 + 5 * clampedProgress,
+                y: 1,
+            )
+            .scaleEffect(0.72 + 0.28 * clampedProgress)
+            .frame(width: 22, height: 30)
+            .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.78), value: clampedProgress)
+    }
+
+    @ViewBuilder
+    private func projectDot(_ project: WorkspaceSidebarProjectViewModel, index: Int) -> some View {
+        let isCurrent = index == currentIndex
+        let isPressed = pressedProjectId == project.id
+        if editingProjectId == project.id {
+            TextField("", text: $editingProjectDraft)
+                .textFieldStyle(.plain)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color.white)
+                .multilineTextAlignment(.center)
+                .focused($isRenameFieldFocused)
+                .lineLimit(1)
+                .frame(width: 86, height: 24)
+                .padding(.horizontal, 8)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(Color.accentColor.opacity(0.26))
+                        .overlay {
+                            Capsule(style: .continuous)
+                                .strokeBorder(Color.white.opacity(0.20), lineWidth: 0.5)
+                        }
+                )
+                .onSubmit {
+                    commitInlineRename(project)
+                }
+                .onChange(of: isRenameFieldFocused) { focused in
+                    if !focused, editingProjectId == project.id {
+                        commitInlineRename(project)
+                    }
+                }
+                .onAppear {
+                    isRenameFieldFocused = true
+                }
+        } else {
+            Button {
+                selectWorkspaceSidebarProject(project.id)
+            } label: {
+                Capsule(style: .continuous)
+                    .fill(dotFill(isCurrent: isCurrent))
+                    .frame(
+                        width: dotWidth(isCurrent: isCurrent),
+                        height: dotHeight(isCurrent: isCurrent),
+                    )
+                    .overlay {
+                        Capsule(style: .continuous)
+                            .strokeBorder(dotBorder(isCurrent: isCurrent), lineWidth: 0.5)
+                    }
+                    .shadow(
+                        color: isCurrent ? Color.accentColor.opacity(0.24) : Color.clear,
+                        radius: isCurrent ? 5 : 0,
+                        y: isCurrent ? 1 : 0,
+                    )
+                    .scaleEffect(isPressed ? 0.96 : 1)
+                    .frame(width: dotHitWidth(isCurrent: isCurrent), height: dotHitHeight)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(project.displayName)
+            .help(project.displayName)
+            .contextMenu {
+                Button("Rename Project") {
+                    beginInlineRename(project)
+                }
+                Button(role: .destructive) {
+                    deleteWorkspaceSidebarProject(project)
+                } label: {
+                    Text("Delete Project")
+                }
+                .disabled(!canDeleteWorkspaceProject(project.id))
+            }
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in pressedProjectId = project.id }
+                    .onEnded { _ in pressedProjectId = nil },
+            )
+            .onTapGesture(count: 2) {
+                beginInlineRename(project)
+            }
+            .animation(.interactiveSpring(response: 0.24, dampingFraction: 0.84), value: isCurrent)
+            .animation(.easeOut(duration: 0.14), value: isPressed)
+        }
+    }
+
+    private func dotWidth(isCurrent: Bool) -> CGFloat {
+        if isCurrent {
+            return isHovered ? 22 : 16
+        }
+        return isHovered && !isCompact ? 11 : 7
+    }
+
+    private func dotHeight(isCurrent: Bool) -> CGFloat {
+        if isCurrent {
+            return isHovered ? 8 : 7
+        }
+        return isHovered && !isCompact ? 8 : 7
+    }
+
+    private func dotHitWidth(isCurrent: Bool) -> CGFloat {
+        if isCompact {
+            return max(dotWidth(isCurrent: isCurrent), 18)
+        }
+        return max(dotWidth(isCurrent: isCurrent) + 18, 34)
+    }
+
+    private var dotHitHeight: CGFloat {
+        isCompact ? 28 : 34
+    }
+
+    private func dotFill(isCurrent: Bool) -> Color {
+        if isCurrent {
+            return Color.accentColor.opacity(0.92)
+        }
+        return Color.white.opacity(isHovered ? 0.42 : 0.28)
+    }
+
+    private func dotBorder(isCurrent: Bool) -> Color {
+        if isCurrent {
+            return Color.white.opacity(0.22)
+        }
+        return Color.white.opacity(isHovered ? 0.12 : 0.06)
+    }
+}
+
 struct VisualEffectView: NSViewRepresentable {
     let material: NSVisualEffectView.Material
     let blendingMode: NSVisualEffectView.BlendingMode
@@ -845,6 +1493,69 @@ struct VisualEffectView: NSViewRepresentable {
         nsView.material = material
         nsView.blendingMode = blendingMode
         nsView.appearance = NSAppearance(named: .darkAqua)
+    }
+}
+
+private struct WorkspaceSidebarProjectPagerScrollWheelCapture: NSViewRepresentable {
+    let onStep: (CGFloat) -> Void
+
+    func makeNSView(context: Context) -> ScrollWheelCaptureView {
+        let view = ScrollWheelCaptureView()
+        view.onStep = onStep
+        return view
+    }
+
+    func updateNSView(_ nsView: ScrollWheelCaptureView, context: Context) {
+        nsView.onStep = onStep
+    }
+
+    final class ScrollWheelCaptureView: NSView {
+        var onStep: ((CGFloat) -> Void)?
+        private var eventMonitor: Any?
+        private var accumulatedDelta: CGFloat = 0
+        private let threshold: CGFloat = 14
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if window == nil {
+                removeEventMonitor()
+            } else {
+                installEventMonitor()
+            }
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            nil
+        }
+
+        private func installEventMonitor() {
+            guard eventMonitor == nil else { return }
+            eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+                self?.handleScrollWheel(event)
+                return event
+            }
+        }
+
+        private func removeEventMonitor() {
+            if let eventMonitor {
+                NSEvent.removeMonitor(eventMonitor)
+            }
+            eventMonitor = nil
+        }
+
+        private func handleScrollWheel(_ event: NSEvent) {
+            guard let window, event.window === window else { return }
+            let localPoint = convert(event.locationInWindow, from: nil)
+            guard bounds.insetBy(dx: -6, dy: -6).contains(localPoint) else { return }
+
+            let dominantDelta = abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY)
+                ? event.scrollingDeltaX
+                : -event.scrollingDeltaY
+            accumulatedDelta += dominantDelta
+            guard abs(accumulatedDelta) >= threshold else { return }
+            onStep?(accumulatedDelta)
+            accumulatedDelta = 0
+        }
     }
 }
 
@@ -877,6 +1588,16 @@ struct WorkspaceSidebarWorkspaceSection: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .clipped()
             .contentShape(Rectangle())
+            .contextMenu {
+                Button("Rename Workspace") {
+                    renameWorkspaceFromSidebar(workspace)
+                }
+                Button(role: .destructive) {
+                    deleteWorkspaceFromSidebar(workspace)
+                } label: {
+                    Text("Delete Workspace")
+                }
+            }
             .onHover { hover in
                 isHovered = hover
                 TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName = nextWorkspaceSidebarHoveredWorkspaceName(
@@ -1172,8 +1893,8 @@ struct WorkspaceSidebarWorkspaceSection: View {
     private var workspaceBadge: some View {
         Group {
             if workspace.isGeneratedName, workspace.sidebarLabel.isEmpty {
-                Image(systemName: "plus")
-                    .font(.system(size: 9, weight: .medium))
+                Text(generatedWorkspaceBadgeText)
+                    .font(.system(size: 9, weight: .semibold))
             } else if workspace.isGeneratedName, let initial = workspace.displayName.first {
                 Text(String(initial).uppercased())
                     .font(.system(size: 9, weight: .semibold))
@@ -1191,8 +1912,19 @@ struct WorkspaceSidebarWorkspaceSection: View {
                 .overlay {
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
                         .strokeBorder(workspaceBadgeBorder, lineWidth: 0.5)
-                }
+            }
         )
+    }
+
+    private var generatedWorkspaceBadgeText: String {
+        let prefix = "Workspace "
+        if workspace.displayName.hasPrefix(prefix) {
+            let suffix = String(workspace.displayName.dropFirst(prefix.count))
+            if !suffix.isEmpty {
+                return suffix
+            }
+        }
+        return workspace.displayName.first.map { String($0).uppercased() } ?? "W"
     }
 
     private var workspaceBadgeFill: Color {
