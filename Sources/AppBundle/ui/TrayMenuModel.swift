@@ -68,9 +68,7 @@ public final class TrayMenuModel: ObservableObject {
 @MainActor func updateTrayText() {
     let focus = focus
     TrayMenuModel.shared.trayText = activeMode?.takeIf { $0 != mainModeId }?.first.map { "(\($0.uppercased()))" } ?? "A"
-    TrayMenuModel.shared.workspaces = userFacingWorkspaces(Workspace.all, focusedWorkspace: focus.workspace).map {
-        $0
-    }.filter {
+    TrayMenuModel.shared.workspaces = userFacingWorkspaces(Workspace.all, focusedWorkspace: focus.workspace).filter {
         $0.projectId == activeWorkspaceProjectId(for: $0.workspaceMonitor)
     }.map {
         let apps = $0.allLeafWindowsRecursive.map { $0.app.name?.takeIf { !$0.isEmpty } }.filterNotNil().toSet()
@@ -124,7 +122,6 @@ struct WorkspaceSidebarWorkspaceViewModel: Hashable, Identifiable {
 struct WorkspaceSidebarProjectViewModel: Hashable, Identifiable {
     let id: String
     let displayName: String
-    let isActiveOnSelectedMonitor: Bool
 }
 
 struct WorkspaceSidebarMonitorScopeViewModel: Hashable, Identifiable {

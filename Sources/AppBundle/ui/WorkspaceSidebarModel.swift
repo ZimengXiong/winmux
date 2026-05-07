@@ -1,20 +1,15 @@
 import AppKit
 
-struct WorkspaceSidebarTransientState: Equatable {
-    let hoveredWorkspaceName: String?
-}
-
-func sanitizedWorkspaceSidebarTransientState(
+func sanitizedWorkspaceSidebarHoveredWorkspaceName(
     visibleWorkspaceNames: Set<String>,
-    state: WorkspaceSidebarTransientState,
-) -> WorkspaceSidebarTransientState {
-    let hoveredWorkspaceName =
-        state.hoveredWorkspaceName != nil && visibleWorkspaceNames.contains(state.hoveredWorkspaceName.orDie())
-            ? state.hoveredWorkspaceName
-            : nil
-    return WorkspaceSidebarTransientState(
-        hoveredWorkspaceName: hoveredWorkspaceName,
-    )
+    hoveredWorkspaceName: String?,
+) -> String? {
+    guard let hoveredWorkspaceName,
+          visibleWorkspaceNames.contains(hoveredWorkspaceName)
+    else {
+        return nil
+    }
+    return hoveredWorkspaceName
 }
 
 @MainActor
@@ -54,7 +49,7 @@ func updateWorkspaceSidebarModel() async {
     let selectedMonitorScopeId = validScopeIds.contains(TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId)
         ? TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId
         : workspaceSidebarFocusedScopeId
-    let projects = buildWorkspaceSidebarProjectViewModels(selectedMonitor: projectMonitor)
+    let projects = buildWorkspaceSidebarProjectViewModels()
     let validProjectIds = Set(projects.map(\.id))
     let selectedProjectId = validProjectIds.contains(TrayMenuModel.shared.workspaceSidebarSelectedProjectId)
         ? TrayMenuModel.shared.workspaceSidebarSelectedProjectId
@@ -100,14 +95,12 @@ func updateWorkspaceSidebarModel() async {
         )
     }.map(\.name))
 
-    let sanitizedTransientState = sanitizedWorkspaceSidebarTransientState(
+    let sanitizedHoveredWorkspaceName = sanitizedWorkspaceSidebarHoveredWorkspaceName(
         visibleWorkspaceNames: visibleSidebarWorkspaceNames,
-        state: WorkspaceSidebarTransientState(
-            hoveredWorkspaceName: TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName,
-        ),
+        hoveredWorkspaceName: TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName,
     )
-    if TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName != sanitizedTransientState.hoveredWorkspaceName {
-        TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName = sanitizedTransientState.hoveredWorkspaceName
+    if TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName != sanitizedHoveredWorkspaceName {
+        TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName = sanitizedHoveredWorkspaceName
     }
     let didMonitorScopeChange =
         TrayMenuModel.shared.workspaceSidebarMonitorScopes != monitorScopes ||
@@ -116,7 +109,7 @@ func updateWorkspaceSidebarModel() async {
         TrayMenuModel.shared.workspaceSidebarShowsMonitorSelector != (availableMonitors.count > 1)
     let didProjectChange =
         TrayMenuModel.shared.workspaceSidebarProjects != projects ||
-        TrayMenuModel.shared.workspaceSidebarSelectedProjectId != selectedProjectId
+            TrayMenuModel.shared.workspaceSidebarSelectedProjectId != selectedProjectId
     if TrayMenuModel.shared.workspaceSidebarProjects != projects {
         TrayMenuModel.shared.workspaceSidebarProjects = projects
     }
@@ -204,13 +197,11 @@ private func workspaceSidebarMonitorDisplayName(_ monitor: Monitor, fallbackInde
 }
 
 @MainActor
-private func buildWorkspaceSidebarProjectViewModels(selectedMonitor: Monitor) -> [WorkspaceSidebarProjectViewModel] {
-    let activeProjectId = activeWorkspaceProjectId(for: selectedMonitor)
+private func buildWorkspaceSidebarProjectViewModels() -> [WorkspaceSidebarProjectViewModel] {
     return workspaceProjects().map {
         WorkspaceSidebarProjectViewModel(
             id: $0.id,
             displayName: $0.name,
-            isActiveOnSelectedMonitor: $0.id == activeProjectId,
         )
     }
 }

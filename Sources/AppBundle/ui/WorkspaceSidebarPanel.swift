@@ -511,10 +511,21 @@ final class WorkspaceSidebarPanel: NSPanelHud {
 
 @MainActor
 private func focusWorkspaceFromSidebar(_ workspaceName: String) {
+    runWorkspaceSidebarSession {
+        _ = Workspace.existing(byName: workspaceName)?.focusWorkspace()
+    }
+}
+
+@MainActor
+private func runWorkspaceSidebarSession(_ body: @escaping @MainActor () async throws -> Void) {
     guard let token: RunSessionGuard = .isServerEnabled else { return }
-    Task {
-        try await runLightSession(.menuBarButton, token) {
-            _ = Workspace.existing(byName: workspaceName)?.focusWorkspace()
+    Task { @MainActor in
+        do {
+            try await runLightSession(.menuBarButton, token) {
+                try await body()
+            }
+        } catch {
+            showWorkspaceSidebarError(error.localizedDescription)
         }
     }
 }
@@ -572,35 +583,26 @@ private func selectWorkspaceSidebarMonitorScope(_ scopeId: String) {
     guard TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId != scopeId else { return }
     TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId = scopeId
     let visibleWorkspaceNames = Set(TrayMenuModel.shared.visibleWorkspaceSidebarWorkspaces.map(\.name))
-    let sanitizedTransientState = sanitizedWorkspaceSidebarTransientState(
+    let sanitizedHoveredWorkspaceName = sanitizedWorkspaceSidebarHoveredWorkspaceName(
         visibleWorkspaceNames: visibleWorkspaceNames,
-        state: WorkspaceSidebarTransientState(
-            hoveredWorkspaceName: TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName,
-        ),
+        hoveredWorkspaceName: TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName,
     )
-    if TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName != sanitizedTransientState.hoveredWorkspaceName {
-        TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName = sanitizedTransientState.hoveredWorkspaceName
+    if TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName != sanitizedHoveredWorkspaceName {
+        TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName = sanitizedHoveredWorkspaceName
     }
 }
 
 @MainActor
 private func createWorkspaceFromSidebarButton() {
-    guard let token: RunSessionGuard = .isServerEnabled else { return }
-    Task { @MainActor in
-        do {
-            try await runLightSession(.menuBarButton, token) {
-                let targetMonitor = sidebarWorkspaceTargetMonitor()
-                let projectId = sidebarWorkspaceTargetProjectId(targetMonitor: targetMonitor)
-                let workspaceName = nextSidebarCreatedWorkspaceName(projectId: projectId, monitor: targetMonitor)
-                let workspace = Workspace.get(byName: workspaceName)
-                workspace.markAsSidebarManaged()
-                workspace.assignProject(projectId)
-                workspace.seedMonitorIfNeeded(targetMonitor)
-                _ = workspace.focusWorkspace()
-            }
-        } catch {
-            showWorkspaceSidebarError(error.localizedDescription)
-        }
+    runWorkspaceSidebarSession {
+        let targetMonitor = sidebarWorkspaceTargetMonitor()
+        let projectId = sidebarWorkspaceTargetProjectId(targetMonitor: targetMonitor)
+        let workspaceName = nextSidebarCreatedWorkspaceName(projectId: projectId, monitor: targetMonitor)
+        let workspace = Workspace.get(byName: workspaceName)
+        workspace.markAsSidebarManaged()
+        workspace.assignProject(projectId)
+        workspace.seedMonitorIfNeeded(targetMonitor)
+        _ = workspace.focusWorkspace()
     }
 }
 
@@ -634,62 +636,39 @@ private func sidebarWorkspaceTargetProjectId(targetMonitor: Monitor) -> String {
 
 @MainActor
 private func selectWorkspaceSidebarProject(_ projectId: String) {
-    guard let token: RunSessionGuard = .isServerEnabled else { return }
-    TrayMenuModel.shared.workspaceSidebarSelectedProjectId = projectId
-    Task {
-        try await runLightSession(.menuBarButton, token) {
-            if let workspace = switchWorkspaceProject(projectId, on: sidebarWorkspaceTargetMonitor()) {
-                _ = workspace.focusWorkspace()
-            }
+    runWorkspaceSidebarSession {
+        TrayMenuModel.shared.workspaceSidebarSelectedProjectId = projectId
+        if let workspace = switchWorkspaceProject(projectId, on: sidebarWorkspaceTargetMonitor()) {
+            _ = workspace.focusWorkspace()
         }
     }
 }
 
 @MainActor
 private func createWorkspaceSidebarProject() {
-    guard let token: RunSessionGuard = .isServerEnabled else { return }
-    let project = createWorkspaceProject()
-    TrayMenuModel.shared.workspaceSidebarSelectedProjectId = project.id
-    Task {
-        do {
-            try await runLightSession(.menuBarButton, token) {
-                if let workspace = switchWorkspaceProject(project.id, on: sidebarWorkspaceTargetMonitor()) {
-                    _ = workspace.focusWorkspace()
-                }
-            }
-        } catch {
-            showWorkspaceSidebarError(error.localizedDescription)
+    runWorkspaceSidebarSession {
+        let project = createWorkspaceProject()
+        TrayMenuModel.shared.workspaceSidebarSelectedProjectId = project.id
+        if let workspace = switchWorkspaceProject(project.id, on: sidebarWorkspaceTargetMonitor()) {
+            _ = workspace.focusWorkspace()
         }
     }
 }
 
 @MainActor
 private func renameWorkspaceSidebarProject(_ project: WorkspaceSidebarProjectViewModel, displayName: String) {
-    guard let token: RunSessionGuard = .isServerEnabled else { return }
-    Task {
-        do {
-            try await runLightSession(.menuBarButton, token) {
-                try renameWorkspaceProject(project.id, displayName: displayName)
-                await updateWorkspaceSidebarModel()
-            }
-        } catch {
-            showWorkspaceSidebarError(error.localizedDescription)
-        }
+    runWorkspaceSidebarSession {
+        try renameWorkspaceProject(project.id, displayName: displayName)
+        await updateWorkspaceSidebarModel()
     }
 }
 
 @MainActor
 private func deleteWorkspaceSidebarProject(_ project: WorkspaceSidebarProjectViewModel) {
-    guard canDeleteWorkspaceProject(project.id), let token: RunSessionGuard = .isServerEnabled else { return }
-    Task {
-        do {
-            try await runLightSession(.menuBarButton, token) {
-                try deleteWorkspaceProject(project.id)
-                await updateWorkspaceSidebarModel()
-            }
-        } catch {
-            showWorkspaceSidebarError(error.localizedDescription)
-        }
+    guard canDeleteWorkspaceProject(project.id) else { return }
+    runWorkspaceSidebarSession {
+        try deleteWorkspaceProject(project.id)
+        await updateWorkspaceSidebarModel()
     }
 }
 
@@ -701,48 +680,31 @@ private func renameWorkspaceFromSidebar(_ workspace: WorkspaceSidebarWorkspaceVi
 
 @MainActor
 private func renameWorkspaceFromSidebar(_ workspace: WorkspaceSidebarWorkspaceViewModel, displayName: String) {
-    guard let token: RunSessionGuard = .isServerEnabled else { return }
-    Task {
-        do {
-            try await runLightSession(.menuBarButton, token) {
-                try renameWorkspaceForSidebar(workspaceName: workspace.name, displayName: displayName)
-                await updateWorkspaceSidebarModel()
-            }
-        } catch {
-            showWorkspaceSidebarError(error.localizedDescription)
-        }
+    runWorkspaceSidebarSession {
+        try renameWorkspaceForSidebar(workspaceName: workspace.name, displayName: displayName)
+        await updateWorkspaceSidebarModel()
     }
 }
 
 @MainActor
 private func deleteWorkspaceFromSidebar(_ workspace: WorkspaceSidebarWorkspaceViewModel) {
-    guard let token: RunSessionGuard = .isServerEnabled else { return }
-    Task {
-        do {
-            try await runLightSession(.menuBarButton, token) {
-                try deleteWorkspaceForSidebar(workspaceName: workspace.name)
-                await updateWorkspaceSidebarModel()
-            }
-        } catch {
-            showWorkspaceSidebarError(error.localizedDescription)
-        }
+    runWorkspaceSidebarSession {
+        try deleteWorkspaceForSidebar(workspaceName: workspace.name)
+        await updateWorkspaceSidebarModel()
     }
 }
 
 @MainActor
 private func focusWindowFromSidebar(_ windowId: UInt32, fallbackWorkspace: String) {
-    guard let token: RunSessionGuard = .isServerEnabled else { return }
-    Task {
-        try await runLightSession(.menuBarButton, token) {
-            guard let window = Window.get(byId: windowId),
-                  let liveFocus = window.toLiveFocusOrNil()
-            else {
-                _ = Workspace.existing(byName: fallbackWorkspace)?.focusWorkspace()
-                return
-            }
-            _ = setFocus(to: liveFocus)
-            window.nativeFocus()
+    runWorkspaceSidebarSession {
+        guard let window = Window.get(byId: windowId),
+              let liveFocus = window.toLiveFocusOrNil()
+        else {
+            _ = Workspace.existing(byName: fallbackWorkspace)?.focusWorkspace()
+            return
         }
+        _ = setFocus(to: liveFocus)
+        window.nativeFocus()
     }
 }
 
@@ -1007,7 +969,6 @@ struct WorkspaceSidebarProjectPager: View {
     private var pagerControlHeight: CGFloat { 34 }
     private var currentIndex: Int? {
         projects.firstIndex { $0.id == selectedProjectId }
-            ?? projects.firstIndex(where: \.isActiveOnSelectedMonitor)
             ?? projects.indices.first
     }
 

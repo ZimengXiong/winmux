@@ -17,26 +17,22 @@ private struct WorkspaceNamingTestMonitor: Monitor {
 final class WorkspaceNamingTest: XCTestCase {
     override func setUp() async throws { setUpWorkspacesForTests() }
 
-    func testSanitizedWorkspaceSidebarTransientStateClearsDeadWorkspaceReferences() {
-        let sanitized = sanitizedWorkspaceSidebarTransientState(
+    func testSanitizedWorkspaceSidebarHoveredWorkspaceNameClearsDeadWorkspaceReferences() {
+        let sanitized = sanitizedWorkspaceSidebarHoveredWorkspaceName(
             visibleWorkspaceNames: ["live"],
-            state: WorkspaceSidebarTransientState(
-                hoveredWorkspaceName: "dead",
-            ),
+            hoveredWorkspaceName: "dead",
         )
 
-        XCTAssertNil(sanitized.hoveredWorkspaceName)
+        XCTAssertNil(sanitized)
     }
 
-    func testSanitizedWorkspaceSidebarTransientStateKeepsLiveHoverState() {
-        let sanitized = sanitizedWorkspaceSidebarTransientState(
+    func testSanitizedWorkspaceSidebarHoveredWorkspaceNameKeepsLiveHoverState() {
+        let sanitized = sanitizedWorkspaceSidebarHoveredWorkspaceName(
             visibleWorkspaceNames: ["live"],
-            state: WorkspaceSidebarTransientState(
-                hoveredWorkspaceName: "live",
-            ),
+            hoveredWorkspaceName: "live",
         )
 
-        XCTAssertEqual(sanitized.hoveredWorkspaceName, "live")
+        XCTAssertEqual(sanitized, "live")
     }
 
     func testTrayItemDisablesRawWorkspaceIconWhenDisplayNameIsCustom() {
