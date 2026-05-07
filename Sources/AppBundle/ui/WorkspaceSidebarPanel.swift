@@ -664,12 +664,6 @@ private func createWorkspaceSidebarProject() {
 }
 
 @MainActor
-private func renameWorkspaceSidebarProject(_ project: WorkspaceSidebarProjectViewModel) {
-    guard let newName = promptWorkspaceSidebarName(title: "Rename Project", currentName: project.displayName) else { return }
-    renameWorkspaceSidebarProject(project, displayName: newName)
-}
-
-@MainActor
 private func renameWorkspaceSidebarProject(_ project: WorkspaceSidebarProjectViewModel, displayName: String) {
     guard let token: RunSessionGuard = .isServerEnabled else { return }
     Task {
@@ -733,25 +727,6 @@ private func deleteWorkspaceFromSidebar(_ workspace: WorkspaceSidebarWorkspaceVi
             showWorkspaceSidebarError(error.localizedDescription)
         }
     }
-}
-
-@MainActor
-private func currentWorkspaceSidebarPagerIndex(in workspaces: [WorkspaceSidebarWorkspaceViewModel]) -> Int? {
-    workspaces.firstIndex(where: \.isFocused)
-        ?? workspaces.firstIndex(where: \.isVisible)
-        ?? workspaces.indices.first
-}
-
-@MainActor
-private func navigateWorkspaceSidebarPager(
-    workspaces: [WorkspaceSidebarWorkspaceViewModel],
-    direction: Int,
-) {
-    guard !workspaces.isEmpty,
-          let currentIndex = currentWorkspaceSidebarPagerIndex(in: workspaces)
-    else { return }
-    let nextIndex = (currentIndex + direction + workspaces.count) % workspaces.count
-    focusWorkspaceFromSidebar(workspaces[nextIndex].name)
 }
 
 @MainActor
@@ -923,108 +898,6 @@ struct WorkspaceSidebarView: View {
     }
 }
 
-// MARK: - Project Selector
-
-struct WorkspaceSidebarProjectSelector: View {
-    let projects: [WorkspaceSidebarProjectViewModel]
-    let selectedProjectId: String
-    let expansionProgress: CGFloat
-
-    @State private var isHovered = false
-
-    private var sectionWidth: CGFloat { workspaceSidebarSectionWidth(expansionProgress) }
-    private var selectedProject: WorkspaceSidebarProjectViewModel? {
-        projects.first { $0.id == selectedProjectId } ?? projects.first
-    }
-
-    var body: some View {
-        Menu {
-            ForEach(projects) { project in
-                Button {
-                    selectWorkspaceSidebarProject(project.id)
-                } label: {
-                    if project.id == selectedProjectId {
-                        Label(project.displayName, systemImage: "checkmark")
-                    } else {
-                        Text(project.displayName)
-                    }
-                }
-            }
-            Divider()
-            Button {
-                createWorkspaceSidebarProject()
-            } label: {
-                Label("New Project", systemImage: "plus")
-            }
-        } label: {
-            projectDropdownLabel
-        }
-        .frame(width: sectionWidth, height: 30, alignment: .leading)
-        .menuStyle(.borderlessButton)
-        .buttonStyle(.plain)
-        .accessibilityLabel("Project")
-        .contextMenu {
-            if let selectedProject {
-                Button("Rename Project") {
-                    renameWorkspaceSidebarProject(selectedProject)
-                }
-                Button(role: .destructive) {
-                    deleteWorkspaceSidebarProject(selectedProject)
-                } label: {
-                    Text("Delete Project")
-                }
-                .disabled(!canDeleteWorkspaceProject(selectedProject.id))
-            }
-        }
-        .onHover { isHovered = $0 }
-    }
-
-    private var projectDropdownLabel: some View {
-        HStack(spacing: 7) {
-            Image(systemName: "rectangle.3.group.fill")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.76))
-                .frame(width: 13, height: 13)
-            Text(selectedProject?.displayName ?? "Project")
-                .font(.system(size: 11.5, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.88))
-                .lineLimit(1)
-            Spacer(minLength: 0)
-            if selectedProject?.isActiveOnSelectedMonitor == true {
-                Circle()
-                    .fill(Color.accentColor.opacity(0.92))
-                    .frame(width: 4, height: 4)
-            }
-            Image(systemName: "chevron.down")
-                .font(.system(size: 8.5, weight: .bold))
-                .foregroundStyle(Color.white.opacity(0.52))
-        }
-        .padding(.leading, 8)
-        .padding(.trailing, 7)
-        .frame(width: sectionWidth, height: 28, alignment: .leading)
-        .background(
-            Capsule(style: .continuous)
-                .fill(projectDropdownFill)
-                .overlay {
-                    Capsule(style: .continuous)
-                        .strokeBorder(projectDropdownBorder, lineWidth: 0.5)
-                }
-        )
-        .contentShape(Capsule(style: .continuous))
-    }
-
-    private var projectDropdownFill: Color {
-        if isHovered {
-            return Color.white.opacity(0.075)
-        }
-        return Color.white.opacity(0.045)
-    }
-
-    private var projectDropdownBorder: Color {
-        Color.white.opacity(isHovered ? 0.12 : 0.07)
-    }
-}
-
 // MARK: - Monitor Selector
 
 struct WorkspaceSidebarMonitorSelector: View {
@@ -1113,7 +986,7 @@ struct WorkspaceSidebarMonitorSelector: View {
     }
 }
 
-// MARK: - Workspace Pager
+// MARK: - Project Pager
 
 struct WorkspaceSidebarProjectPager: View {
     let projects: [WorkspaceSidebarProjectViewModel]

@@ -235,7 +235,7 @@ func isUserFacingWorkspace(_ workspace: Workspace, focusedWorkspace: Workspace? 
     !workspace.isSystemStub &&
         (
             workspaceIsBaseUserFacing(workspace, focusedWorkspace: focusedWorkspace) ||
-                workspaceIsRequiredActiveProjectWorkspace(workspace, focusedWorkspace: focusedWorkspace)
+                workspaceIsMinimumActiveProjectWorkspace(workspace, focusedWorkspace: focusedWorkspace)
         )
 }
 
@@ -247,10 +247,10 @@ private func workspaceIsBaseUserFacing(_ workspace: Workspace, focusedWorkspace:
 }
 
 @MainActor
-private func workspaceIsRequiredActiveProjectWorkspace(_ workspace: Workspace, focusedWorkspace: Workspace?) -> Bool {
+private func workspaceIsMinimumActiveProjectWorkspace(_ workspace: Workspace, focusedWorkspace: Workspace?) -> Bool {
     guard workspace.isVisible,
           !workspace.isSystemStub,
-          workspace.projectId != workspaceProjectDefaultId,
+          workspaceProjectRequiresMinimumWorkspace(workspace.projectId),
           activeWorkspaceProjectId(for: workspace.workspaceMonitor) == workspace.projectId
     else {
         return false
@@ -261,6 +261,10 @@ private func workspaceIsRequiredActiveProjectWorkspace(_ workspace: Workspace, f
             !$0.isSystemStub &&
             workspaceIsBaseUserFacing($0, focusedWorkspace: focusedWorkspace)
     }
+}
+
+private func workspaceProjectRequiresMinimumWorkspace(_ projectId: String) -> Bool {
+    projectId != workspaceProjectDefaultId
 }
 
 @MainActor
@@ -636,7 +640,7 @@ private func ensureVisibleActiveProjectWorkspaces() {
     for (point, workspace) in screenPointToVisibleWorkspace where workspace.isSystemStub {
         let monitor = point.monitorApproximation
         let projectId = activeWorkspaceProjectIdByScreenPoint[point] ?? workspaceProjectDefaultId
-        guard projectId != workspaceProjectDefaultId,
+        guard workspaceProjectRequiresMinimumWorkspace(projectId),
               workspaceProjectIdToProject[projectId] != nil
         else { continue }
         let replacement = preferredWorkspace(projectId: projectId, monitor: monitor)
@@ -649,6 +653,23 @@ private func ensureVisibleActiveProjectWorkspaces() {
             _ = setFocus(to: replacement.toLiveFocus())
         }
     }
+}
+
+@MainActor
+private func workspaceShouldBecomeSystemStub(_ workspace: Workspace, focusedWorkspace: Workspace?) -> Bool {
+    workspace.isVisible &&
+        !workspaceHasLifecycleWindows(workspace) &&
+        !workspace.isSystemStub &&
+        !workspace.shouldPersistWhenEmpty(focusedWorkspace: focusedWorkspace) &&
+        !workspaceIsMinimumActiveProjectWorkspace(workspace, focusedWorkspace: focusedWorkspace)
+}
+
+@MainActor
+private func workspaceShouldSurviveGarbageCollection(_ workspace: Workspace, focusedWorkspace: Workspace?) -> Bool {
+    workspaceHasLifecycleWindows(workspace) ||
+        workspace.shouldPersistWhenEmpty(focusedWorkspace: focusedWorkspace) ||
+        workspaceIsMinimumActiveProjectWorkspace(workspace, focusedWorkspace: focusedWorkspace) ||
+        (workspace.isSystemStub && workspace.isVisible)
 }
 
 final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
@@ -720,11 +741,7 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
 
         let focusedWorkspaceBeforeGc = focus.workspace
         let visibleEmptyWorkspacesToReplace = workspaceNameToWorkspace.values.filter {
-            $0.isVisible &&
-                !workspaceHasLifecycleWindows($0) &&
-                !$0.isSystemStub &&
-                !$0.shouldPersistWhenEmpty(focusedWorkspace: focusedWorkspaceBeforeGc) &&
-                !workspaceIsRequiredActiveProjectWorkspace($0, focusedWorkspace: focusedWorkspaceBeforeGc)
+            workspaceShouldBecomeSystemStub($0, focusedWorkspace: focusedWorkspaceBeforeGc)
         }
         var focusedReplacement: Workspace? = nil
         for workspace in visibleEmptyWorkspacesToReplace {
@@ -742,11 +759,7 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
         }
 
         workspaceNameToWorkspace = workspaceNameToWorkspace.filter { (_, workspace: Workspace) in
-            let shouldKeep =
-                workspaceHasLifecycleWindows(workspace) ||
-                workspace.shouldPersistWhenEmpty(focusedWorkspace: focus.workspace) ||
-                workspaceIsRequiredActiveProjectWorkspace(workspace, focusedWorkspace: focus.workspace) ||
-                (workspace.isSystemStub && workspace.isVisible)
+            let shouldKeep = workspaceShouldSurviveGarbageCollection(workspace, focusedWorkspace: focus.workspace)
             if !shouldKeep {
                 clearWorkspaceSidebarLabelIfNeeded(workspace.name)
             }
