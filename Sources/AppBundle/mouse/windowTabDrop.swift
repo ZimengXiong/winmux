@@ -33,6 +33,7 @@ private struct PendingWindowDragIntent {
     let previewStyle: WindowTabDropPreviewStyle
     let previewGeometry: WindowTabDropPreviewGeometry
     let isGroup: Bool
+    let isPointerSettled: Bool
 }
 
 @MainActor
@@ -148,6 +149,7 @@ private struct WindowDragIntentDestination {
     let previewGeometry: WindowTabDropPreviewGeometry
     let isGroup: Bool
 
+    @MainActor
     func preview(sourceWindowId: UInt32) -> WindowTabDropPreviewViewModel {
         WindowTabDropPreviewViewModel(
             containerFrame: previewContainerRect.toAppKitScreenRect,
@@ -158,6 +160,7 @@ private struct WindowDragIntentDestination {
             geometry: previewGeometry,
             isGroup: isGroup,
             referenceWindowId: previewReferenceWindowId(sourceWindowId: sourceWindowId),
+            isPointerSettled: WindowDragFrameGate.shared.state(for: sourceWindowId)?.isSettled ?? false,
         )
     }
 
@@ -1240,6 +1243,10 @@ func refreshPendingWindowDragIntentFromGlobalMouseDrag() {
         cancelManipulatedWithMouseState()
         return
     }
+    let currentMouseLocation = mouseLocation
+    guard WindowDragFrameGate.shared.shouldProcess(windowId: sourceWindow.windowId, point: currentMouseLocation) else {
+        return
+    }
     if !config.enableWindowManagement &&
         !getCurrentMouseDragStartedInSidebar() &&
         getCurrentMouseDragSubject() == .window &&
@@ -1247,7 +1254,7 @@ func refreshPendingWindowDragIntentFromGlobalMouseDrag() {
     {
         let didUpdateIntent = updatePendingWindowDragIntent(
             sourceWindow: sourceWindow,
-            mouseLocation: mouseLocation,
+            mouseLocation: currentMouseLocation,
             subject: .window,
             detachOrigin: .window,
         )
@@ -1255,14 +1262,14 @@ func refreshPendingWindowDragIntentFromGlobalMouseDrag() {
             clearPendingUnmanagedWindowSnap()
         } else {
             clearPendingWindowDragIntent()
-            refreshPendingUnmanagedWindowSnap(sourceWindow: sourceWindow, mouseLocation: mouseLocation)
+            refreshPendingUnmanagedWindowSnap(sourceWindow: sourceWindow, mouseLocation: currentMouseLocation)
         }
         return
     }
     clearPendingUnmanagedWindowSnap()
     _ = updatePendingWindowDragIntent(
         sourceWindow: sourceWindow,
-        mouseLocation: mouseLocation,
+        mouseLocation: currentMouseLocation,
         subject: getCurrentMouseDragSubject(),
         detachOrigin: getCurrentMouseTabDetachOrigin(),
     )
@@ -1270,6 +1277,7 @@ func refreshPendingWindowDragIntentFromGlobalMouseDrag() {
 
 @MainActor
 private func setPendingWindowDragIntent(sourceWindowId: UInt32, sourceSubject: WindowDragSubject, destination: WindowDragIntentDestination) -> Bool {
+    let isPointerSettled = WindowDragFrameGate.shared.state(for: sourceWindowId)?.isSettled ?? false
     if let pendingWindowDragIntent,
        pendingWindowDragIntent.sourceWindowId == sourceWindowId,
        pendingWindowDragIntent.sourceSubject == sourceSubject,
@@ -1279,6 +1287,7 @@ private func setPendingWindowDragIntent(sourceWindowId: UInt32, sourceSubject: W
        pendingWindowDragIntent.previewStyle == destination.previewStyle,
        pendingWindowDragIntent.previewGeometry == destination.previewGeometry,
        pendingWindowDragIntent.isGroup == destination.isGroup,
+       pendingWindowDragIntent.isPointerSettled == isPointerSettled,
        pendingWindowDragIntent.previewRect.isEqual(to: destination.previewRect),
        pendingWindowDragIntent.interactionRect.isEqual(to: destination.interactionRect)
     {
@@ -1297,6 +1306,7 @@ private func setPendingWindowDragIntent(sourceWindowId: UInt32, sourceSubject: W
         previewStyle: destination.previewStyle,
         previewGeometry: destination.previewGeometry,
         isGroup: destination.isGroup,
+        isPointerSettled: isPointerSettled,
     )
     let signature =
         "intent:source=\(sourceWindowId):subject=\(debugDescribe(sourceSubject)):kind=\(debugDescribe(destination.kind)):preview=\(debugDescribe(destination.previewRect)):interaction=\(debugDescribe(destination.interactionRect))"

@@ -38,7 +38,7 @@ private func moveWithMouse(_ window: Window) async throws { // todo cover with t
             nativeAnchorRect ??
             window.lastKnownActualRect ??
             window.lastAppliedLayoutPhysicalRect
-        _ = beginWindowMoveWithMouseSessionIfNeeded(
+        let didStartSession = beginWindowMoveWithMouseSessionIfNeeded(
             windowId: window.windowId,
             subject: subject,
             detachOrigin: .window,
@@ -46,6 +46,13 @@ private func moveWithMouse(_ window: Window) async throws { // todo cover with t
             anchorRect: anchorRect,
         )
         let mouseLocation = mouseLocation
+        guard WindowDragFrameGate.shared.shouldProcess(
+            windowId: window.windowId,
+            point: mouseLocation,
+            force: didStartSession,
+        ) else {
+            return
+        }
         let didUpdateIntent = updatePendingWindowDragIntent(
             sourceWindow: window,
             mouseLocation: mouseLocation,
@@ -97,6 +104,13 @@ private func moveTilingWindow(_ window: Window) {
         window.lastAppliedLayoutPhysicalRect = nil
     }
     let mouseLocation = mouseLocation
+    guard WindowDragFrameGate.shared.shouldProcess(
+        windowId: window.windowId,
+        point: mouseLocation,
+        force: didStartSession,
+    ) else {
+        return
+    }
     _ = updatePendingWindowDragIntent(
         sourceWindow: window,
         mouseLocation: mouseLocation,

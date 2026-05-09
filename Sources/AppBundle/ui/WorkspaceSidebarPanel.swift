@@ -445,7 +445,8 @@ final class WorkspaceSidebarPanel: NSPanelHud {
     private var pendingExpand: DispatchWorkItem?
     private var pendingCollapse: DispatchWorkItem?
     private var pendingCollapseFinalize: DispatchWorkItem?
-    private var hoverMonitorTimer: Timer?
+    private var isHoverMonitoring = false
+    private var lastHoverMonitorTimestamp: CFTimeInterval = 0
     private var menuTrackingDepth = 0
     private var inlineTextEditingActive = false
     private var menuTrackingObservers: [NSObjectProtocol] = []
@@ -579,14 +580,14 @@ final class WorkspaceSidebarPanel: NSPanelHud {
     }
 
     private func startHoverMonitoring() {
-        guard hoverMonitorTimer == nil else { return }
-        hoverMonitorTimer = Timer.scheduledTimer(withTimeInterval: hoverPollInterval, repeats: true) { [weak self] _ in
+        guard !isHoverMonitoring else { return }
+        isHoverMonitoring = true
+        DisplayRefreshDriver.shared.add(owner: self) { [weak self] timestamp in
             guard let self else { return }
-            Task { @MainActor in
-                self.updateHoverStateFromMousePosition()
-            }
+            guard timestamp - self.lastHoverMonitorTimestamp >= self.hoverPollInterval else { return }
+            self.lastHoverMonitorTimestamp = timestamp
+            self.updateHoverStateFromMousePosition()
         }
-        RunLoop.main.add(hoverMonitorTimer!, forMode: .common)
     }
 
     private func stopHoverMonitoring() {
@@ -596,8 +597,9 @@ final class WorkspaceSidebarPanel: NSPanelHud {
         pendingCollapse = nil
         pendingCollapseFinalize?.cancel()
         pendingCollapseFinalize = nil
-        hoverMonitorTimer?.invalidate()
-        hoverMonitorTimer = nil
+        isHoverMonitoring = false
+        lastHoverMonitorTimestamp = 0
+        DisplayRefreshDriver.shared.remove(owner: self)
     }
 
     private func resetHiddenSidebarState() {
@@ -1088,14 +1090,22 @@ private func updateSidebarWindowDrag(_ windowId: UInt32, subject: WindowDragSubj
         cancelManipulatedWithMouseState()
         return
     }
-    _ = beginWindowMoveWithMouseSessionIfNeeded(
+    let didStartSession = beginWindowMoveWithMouseSessionIfNeeded(
         windowId: window.windowId,
         subject: subject,
         detachOrigin: .window,
         startedInSidebar: true,
         anchorRect: resolvedDraggedWindowAnchorRect(for: window, subject: subject),
     )
-    _ = updatePendingWindowDragIntent(sourceWindow: window, mouseLocation: mouseLocation, subject: subject, detachOrigin: .window)
+    let currentMouseLocation = mouseLocation
+    guard WindowDragFrameGate.shared.shouldProcess(
+        windowId: window.windowId,
+        point: currentMouseLocation,
+        force: didStartSession,
+    ) else {
+        return
+    }
+    _ = updatePendingWindowDragIntent(sourceWindow: window, mouseLocation: currentMouseLocation, subject: subject, detachOrigin: .window)
 }
 
 @MainActor
@@ -1261,10 +1271,16 @@ struct WorkspaceSidebarView: View {
     }
 
     private func sidebarSurface<S: Shape>(in shape: S) -> some View {
-        liquidGlassBackground(in: shape, isInteractive: true) {
-            VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
-                .overlay(Color.black.opacity(0.42))
-        }
+        LiquidGlassSurface(
+            shape: shape,
+            tint: workspaceSidebarActiveWorkspaceTint,
+            tintOpacity: 0.055,
+            scrimOpacity: 0.36,
+            highlightOpacity: 0.08,
+            borderOpacity: 0.10,
+            glowOpacity: 0,
+            isInteractive: true,
+        )
         .ignoresSafeArea()
     }
 
@@ -2695,26 +2711,6 @@ private final class WorkspaceSidebarRenameTextField: NSTextField {
 
     override func resignFirstResponder() -> Bool {
         super.resignFirstResponder()
-    }
-}
-
-struct VisualEffectView: NSViewRepresentable {
-    let material: NSVisualEffectView.Material
-    let blendingMode: NSVisualEffectView.BlendingMode
-
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = material
-        view.blendingMode = blendingMode
-        view.state = .active
-        view.appearance = NSAppearance(named: .darkAqua)
-        return view
-    }
-
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
-        nsView.material = material
-        nsView.blendingMode = blendingMode
-        nsView.appearance = NSAppearance(named: .darkAqua)
     }
 }
 

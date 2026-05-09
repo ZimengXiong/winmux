@@ -8,7 +8,6 @@ private let windowDragCursorProxyPanelId = "WinMux.windowTabs.cursorProxy"
 private let windowPreviewCornerAlphaThreshold: CGFloat = 0.3
 private let windowPreviewCornerScanLimit = 48
 private let windowTabDropPreviewTransitionDuration: TimeInterval = 0.16
-private let windowDragCursorProxyFollowInterval: TimeInterval = 1.0 / 60.0
 
 @MainActor
 var windowPreviewCornerRadiusCache: [UInt32: CGFloat] = [:]
@@ -247,6 +246,11 @@ final class WindowTabDropPreviewPanel: NSPanelHud {
     private var hasShownPreview = false
     private var pendingHide: DispatchWorkItem? = nil
     private let hideDebounce: TimeInterval = 0.07
+    private var animationStartTime: CFTimeInterval = 0
+    private var animationStartFrame: CGRect = .zero
+    private var animationTargetFrame: CGRect = .zero
+    private var animationStartAlpha: CGFloat = 1
+    private var animationTargetAlpha: CGFloat = 1
 
     override private init() {
         super.init()
@@ -280,13 +284,9 @@ final class WindowTabDropPreviewPanel: NSPanelHud {
             if didChangeContent {
                 alphaValue = 0.92
             }
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = windowTabDropPreviewTransitionDuration
-                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                animator().setFrame(targetFrame, display: true)
-                animator().alphaValue = 1
-            }
+            animateFrame(to: targetFrame, alpha: 1, duration: windowTabDropPreviewTransitionDuration)
         } else {
+            DisplayRefreshDriver.shared.remove(owner: self)
             setFrame(targetFrame, display: true, animate: false)
             alphaValue = 1
             hasShownPreview = true
@@ -299,6 +299,7 @@ final class WindowTabDropPreviewPanel: NSPanelHud {
         let hideWorkItem = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.pendingHide = nil
+            DisplayRefreshDriver.shared.remove(owner: self)
             self.state.model = nil
             self.currentContent = nil
             self.hasShownPreview = false
@@ -307,6 +308,29 @@ final class WindowTabDropPreviewPanel: NSPanelHud {
         }
         pendingHide = hideWorkItem
         DispatchQueue.main.asyncAfter(deadline: .now() + hideDebounce, execute: hideWorkItem)
+    }
+
+    private func animateFrame(to targetFrame: CGRect, alpha targetAlpha: CGFloat, duration: TimeInterval) {
+        animationStartTime = CACurrentMediaTime()
+        animationStartFrame = frame
+        animationTargetFrame = targetFrame
+        animationStartAlpha = alphaValue
+        animationTargetAlpha = targetAlpha
+        DisplayRefreshDriver.shared.add(owner: self) { [weak self] timestamp in
+            self?.updateFrameAnimation(timestamp: timestamp, duration: duration)
+        }
+    }
+
+    private func updateFrameAnimation(timestamp: CFTimeInterval, duration: TimeInterval) {
+        let rawProgress = duration > 0 ? CGFloat((timestamp - animationStartTime) / duration) : 1
+        let progress = displayRefreshEaseInOut(rawProgress)
+        let nextFrame = displayRefreshInterpolate(animationStartFrame, animationTargetFrame, progress: progress).alignedToBackingPixels()
+        setFrame(nextFrame, display: true, animate: false)
+        alphaValue = displayRefreshInterpolate(animationStartAlpha, animationTargetAlpha, progress: progress)
+        guard rawProgress >= 1 else { return }
+        setFrame(animationTargetFrame, display: true, animate: false)
+        alphaValue = animationTargetAlpha
+        DisplayRefreshDriver.shared.remove(owner: self)
     }
 }
 
@@ -318,7 +342,6 @@ final class WindowDragCursorProxyPanel: NSPanelHud {
 
     private let hostingView = NSHostingView(rootView: AnyView(EmptyView()))
     private var currentContent: WindowDragCursorProxyContent? = nil
-    private var followMouseTimer: Timer? = nil
     private var proxySize: CGSize = .zero
 
     override private init() {
@@ -358,19 +381,13 @@ final class WindowDragCursorProxyPanel: NSPanelHud {
     }
 
     private func startFollowingMouseIfNeeded() {
-        guard followMouseTimer == nil else { return }
-        let timer = Timer(timeInterval: windowDragCursorProxyFollowInterval, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.updateFrame(mouseScreenPoint: NSEvent.mouseLocation)
-            }
+        DisplayRefreshDriver.shared.add(owner: self) { [weak self] _ in
+            self?.updateFrame(mouseScreenPoint: NSEvent.mouseLocation)
         }
-        followMouseTimer = timer
-        RunLoop.main.add(timer, forMode: .common)
     }
 
     private func stopFollowingMouse() {
-        followMouseTimer?.invalidate()
-        followMouseTimer = nil
+        DisplayRefreshDriver.shared.remove(owner: self)
     }
 
     private func updateFrame(mouseScreenPoint: CGPoint) {
@@ -450,6 +467,7 @@ private struct WindowTabDropPreviewContent: Equatable {
     let style: WindowTabDropPreviewStyle
     let geometry: WindowTabDropPreviewGeometry
     let isGroup: Bool
+    let isPointerSettled: Bool
 
     init(model: WindowTabDropPreviewViewModel) {
         title = model.title
@@ -457,6 +475,7 @@ private struct WindowTabDropPreviewContent: Equatable {
         style = model.style
         geometry = model.geometry
         isGroup = model.isGroup
+        isPointerSettled = model.isPointerSettled
     }
 }
 
@@ -474,6 +493,7 @@ struct WindowTabDropPreviewViewModel: Equatable {
     let geometry: WindowTabDropPreviewGeometry
     let isGroup: Bool
     let referenceWindowId: UInt32?
+    let isPointerSettled: Bool
 }
 
 enum WindowTabDropPreviewStyle: Equatable {
@@ -570,14 +590,22 @@ private func updateDetachedTabFromTabStrip(_ windowId: UInt32) {
         cancelManipulatedWithMouseState()
         return
     }
-    _ = beginWindowMoveWithMouseSessionIfNeeded(
+    let didStartSession = beginWindowMoveWithMouseSessionIfNeeded(
         windowId: window.windowId,
         subject: .window,
         detachOrigin: .tabStrip,
         startedInSidebar: false,
         anchorRect: resolvedDraggedWindowAnchorRect(for: window, subject: .window),
     )
-    _ = updatePendingDetachedTabIntent(sourceWindow: window, mouseLocation: mouseLocation, origin: .tabStrip)
+    let currentMouseLocation = mouseLocation
+    guard WindowDragFrameGate.shared.shouldProcess(
+        windowId: window.windowId,
+        point: currentMouseLocation,
+        force: didStartSession,
+    ) else {
+        return
+    }
+    _ = updatePendingDetachedTabIntent(sourceWindow: window, mouseLocation: currentMouseLocation, origin: .tabStrip)
 }
 
 @MainActor
@@ -622,14 +650,22 @@ private func updateMoveFromTabStrip(_ windowId: UInt32) {
     if shouldDeferWindowTabStripGroupDragToDetachedTabDrag() {
         return
     }
-    _ = beginWindowMoveWithMouseSessionIfNeeded(
+    let didStartSession = beginWindowMoveWithMouseSessionIfNeeded(
         windowId: window.windowId,
         subject: .group,
         detachOrigin: .window,
         startedInSidebar: false,
         anchorRect: resolvedDraggedWindowAnchorRect(for: window, subject: .group),
     )
-    _ = updatePendingWindowDragIntent(sourceWindow: window, mouseLocation: mouseLocation, subject: .group, detachOrigin: .window)
+    let currentMouseLocation = mouseLocation
+    guard WindowDragFrameGate.shared.shouldProcess(
+        windowId: window.windowId,
+        point: currentMouseLocation,
+        force: didStartSession,
+    ) else {
+        return
+    }
+    _ = updatePendingWindowDragIntent(sourceWindow: window, mouseLocation: currentMouseLocation, subject: .group, detachOrigin: .window)
 }
 
 @MainActor
@@ -721,14 +757,17 @@ private struct WindowTabGroupFrameView: View {
         let outerShape = WindowTabDropOutlineShape(cornerRadii: outerRadii)
 
         ZStack(alignment: .topLeading) {
-            // Solid unibody surface
-            shellShape
-                .fill(Color.black.opacity(0.20), style: FillStyle(eoFill: true))
-            shellShape
-                .fill(.ultraThinMaterial, style: FillStyle(eoFill: true))
-                .environment(\.colorScheme, .dark)
-            shellShape
-                .fill(Color.black.opacity(0.06), style: FillStyle(eoFill: true))
+            LiquidGlassSurface(
+                shape: shellShape,
+                tint: windowIntentPreviewTint,
+                tintOpacity: 0.045,
+                scrimOpacity: 0.16,
+                highlightOpacity: 0.08,
+                borderOpacity: 0.12,
+                lineWidth: 0.5,
+                isInteractive: false,
+                usesEvenOddFill: true,
+            )
 
             // Outer edge definition
             outerShape
@@ -1089,7 +1128,7 @@ private struct WindowTabDropPreviewView: View {
                     let shape = WindowTabDropOutlineShape(cornerRadii: model.geometry.cornerRadii(radius: cornerRadius))
                     let localFrame = localPreviewFrame(for: model)
 
-                    previewSurface(shape: shape, config: cfg)
+                    previewSurface(shape: shape, config: cfg, model: model)
                         .frame(width: localFrame.width, height: localFrame.height)
                         .offset(x: localFrame.minX, y: localFrame.minY)
                     .opacity(isPresented ? 1 : 0.84)
@@ -1183,15 +1222,26 @@ private struct WindowTabDropPreviewView: View {
         }
     }
 
-    private func previewSurface(shape: WindowTabDropOutlineShape, config: BorderConfig) -> some View {
-        ZStack {
+    private func previewSurface(
+        shape: WindowTabDropOutlineShape,
+        config: BorderConfig,
+        model: WindowTabDropPreviewViewModel,
+    ) -> some View {
+        let settledMultiplier = model.isPointerSettled ? 1.16 : 1
+        return ZStack {
+            LiquidGlassSurface(
+                shape: shape,
+                tint: config.color,
+                tintOpacity: config.fillOpacity * 0.9 * settledMultiplier,
+                scrimOpacity: 0.10,
+                highlightOpacity: 0.13 * settledMultiplier,
+                borderOpacity: 0.18 * settledMultiplier,
+                glowOpacity: config.glowOpacity * 0.65 * settledMultiplier,
+                glowRadius: config.glowRadius,
+                lineWidth: 0.7,
+            )
             shape
-                .fill(.ultraThinMaterial)
-                .environment(\.colorScheme, .dark)
-            shape
-                .fill(Color.black.opacity(0.08))
-            shape
-                .fill(config.color.opacity(isPresented ? config.fillOpacity : 0))
+                .fill(config.color.opacity(isPresented ? config.fillOpacity * 0.55 * settledMultiplier : 0))
             shape
                 .fill(
                     LinearGradient(
@@ -1205,18 +1255,90 @@ private struct WindowTabDropPreviewView: View {
                     ),
                 )
                 .blendMode(.screen)
+            splitGuide(for: model.geometry, color: config.color)
             shape
                 .strokeBorder(Color.white.opacity(isPresented ? 0.18 : 0), lineWidth: 0.7)
             shape
                 .strokeBorder(
-                    config.color.opacity(isPresented ? config.borderOpacity : 0.10),
+                    config.color.opacity(isPresented ? min(config.borderOpacity * settledMultiplier, 0.92) : 0.10),
                     style: config.strokeStyle,
                 )
+            candidateGlyph(for: model.style, isGroup: model.isGroup, isPointerSettled: model.isPointerSettled)
         }
         .shadow(
-            color: config.color.opacity(isPresented ? config.glowOpacity : 0),
-            radius: isPresented ? config.glowRadius : 0
+            color: config.color.opacity(isPresented ? config.glowOpacity * settledMultiplier : 0),
+            radius: isPresented ? config.glowRadius * settledMultiplier : 0
         )
+    }
+
+    @ViewBuilder
+    private func splitGuide(for geometry: WindowTabDropPreviewGeometry, color: Color) -> some View {
+        switch geometry {
+            case .splitLeft, .splitRight, .splitAbove, .splitBelow, .tabStrip:
+                GeometryReader { proxy in
+                    let size = proxy.size
+                    Path { path in
+                        switch geometry {
+                            case .splitLeft:
+                                path.move(to: CGPoint(x: size.width - 1, y: 8))
+                                path.addLine(to: CGPoint(x: size.width - 1, y: max(size.height - 8, 8)))
+                            case .splitRight:
+                                path.move(to: CGPoint(x: 1, y: 8))
+                                path.addLine(to: CGPoint(x: 1, y: max(size.height - 8, 8)))
+                            case .splitAbove:
+                                path.move(to: CGPoint(x: 8, y: size.height - 1))
+                                path.addLine(to: CGPoint(x: max(size.width - 8, 8), y: size.height - 1))
+                            case .splitBelow:
+                                path.move(to: CGPoint(x: 8, y: 1))
+                                path.addLine(to: CGPoint(x: max(size.width - 8, 8), y: 1))
+                            case .tabStrip:
+                                path.move(to: CGPoint(x: 10, y: max(size.height - 1, 1)))
+                                path.addLine(to: CGPoint(x: max(size.width - 10, 10), y: max(size.height - 1, 1)))
+                            case .rounded:
+                                break
+                        }
+                    }
+                    .stroke(
+                        color.opacity(isPresented ? 0.40 : 0),
+                        style: StrokeStyle(lineWidth: 1.4, lineCap: .round, dash: [5, 5]),
+                    )
+                }
+            case .rounded:
+                EmptyView()
+        }
+    }
+
+    private func candidateGlyph(
+        for style: WindowTabDropPreviewStyle,
+        isGroup: Bool,
+        isPointerSettled: Bool,
+    ) -> some View {
+        let symbolName: String = switch style {
+            case .tabInsert:
+                "square.stack.3d.up"
+            case .detach:
+                "arrow.up.left.and.arrow.down.right"
+            case .stackSplit:
+                "rectangle.split.2x1"
+            case .swap:
+                "arrow.left.arrow.right"
+            case .workspaceMove, .sidebarWorkspaceMove:
+                isGroup ? "rectangle.stack.badge.plus" : "macwindow.badge.plus"
+        }
+        return Image(systemName: symbolName)
+            .font(.system(size: isGroup ? 17 : 16, weight: .semibold))
+            .foregroundStyle(Color.white.opacity(isPresented ? 0.72 : 0))
+            .frame(width: 34, height: 34)
+            .background {
+                Circle()
+                    .fill(Color.black.opacity(isPresented ? 0.18 : 0))
+                    .overlay {
+                        Circle()
+                            .strokeBorder(Color.white.opacity(isPresented ? 0.12 : 0), lineWidth: 0.6)
+                    }
+            }
+            .scaleEffect(isPointerSettled ? 1.04 : 1)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.10), value: isPointerSettled)
     }
 
     private func localPreviewFrame(for model: WindowTabDropPreviewViewModel) -> CGRect {

@@ -183,6 +183,9 @@ func beginWindowMoveWithMouseSessionIfNeeded(
 
     if previousWindowId != windowId {
         clearDraggedWindowAnchorRect(for: previousWindowId)
+        if let previousWindowId {
+            WindowDragFrameGate.shared.reset(windowId: previousWindowId)
+        }
     }
 
     currentlyManipulatedWithMouseWindowId = windowId
@@ -201,6 +204,7 @@ func cancelManipulatedWithMouseState() {
     cancelWindowDragActualRectRefresh()
     clearPendingUnmanagedWindowSnap()
     clearDraggedWindowAnchorRect(for: currentlyManipulatedWithMouseWindowId)
+    WindowDragFrameGate.shared.resetAll()
     setCurrentMouseManipulationKind(.none)
     setCurrentMouseDragSubject(.window)
     setCurrentMouseTabDetachOrigin(.window)
