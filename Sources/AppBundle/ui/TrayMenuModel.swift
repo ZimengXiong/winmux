@@ -202,6 +202,8 @@ struct WindowTabStripViewModel: Identifiable, Equatable {
     let id: ObjectIdentifier
     let workspaceName: String
     let frame: CGRect
+    let groupFrame: CGRect
+    let activeWindowId: UInt32?
     let tabs: [WindowTabItemViewModel]
 }
 

@@ -179,13 +179,17 @@ extension TilingContainer {
     fileprivate func layoutAccordion(_ point: CGPoint, width: CGFloat, height: CGFloat, virtual: Rect, _ context: LayoutContext) async throws {
         if usesWindowTabBehavior {
             let tabBarHeight = showsWindowTabs ? windowTabBarHeight : 0
-            let contentPoint = point + CGPoint(x: 0, y: tabBarHeight)
-            let contentHeight = max(height - tabBarHeight, 0)
+            let shellHorizontalInset = showsWindowTabs ? windowTabGroupShellHorizontalInset() : 0
+            let shellTopInset = showsWindowTabs ? windowTabGroupShellTopInset() : 0
+            let shellBottomInset = showsWindowTabs ? windowTabGroupShellBottomInset() : 0
+            let contentPoint = point + CGPoint(x: shellHorizontalInset, y: tabBarHeight + shellTopInset)
+            let contentWidth = max(width - shellHorizontalInset * 2, 0)
+            let contentHeight = max(height - tabBarHeight - shellTopInset - shellBottomInset, 0)
             let contentVirtual = Rect(
-                topLeftX: virtual.topLeftX,
-                topLeftY: virtual.topLeftY + tabBarHeight,
-                width: virtual.width,
-                height: max(virtual.height - tabBarHeight, 0),
+                topLeftX: virtual.topLeftX + shellHorizontalInset,
+                topLeftY: virtual.topLeftY + tabBarHeight + shellTopInset,
+                width: max(virtual.width - shellHorizontalInset * 2, 0),
+                height: max(virtual.height - tabBarHeight - shellTopInset - shellBottomInset, 0),
             )
             guard let activeChild = mostRecentChild else { return }
 
@@ -194,7 +198,7 @@ extension TilingContainer {
             }
             try await activeChild.layoutRecursive(
                 contentPoint,
-                width: width,
+                width: contentWidth,
                 height: contentHeight,
                 virtual: contentVirtual,
                 context,

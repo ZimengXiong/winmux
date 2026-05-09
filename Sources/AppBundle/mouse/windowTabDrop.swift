@@ -1698,13 +1698,19 @@ private func currentWindowDragIntentDestination(
     let sourceNode = dragSubjectNode(for: sourceWindow, subject: subject)
     let targetWorkspace = mouseLocation.monitorApproximation.activeWorkspace
     let isOptionPressed = currentSessionModifierFlags().contains(.maskAlternate)
-    if targetWorkspace == sourceNode.nodeWorkspace,
-       shouldAllowSameWorkspaceWindowSurfaceIntent(
-           enableWindowManagement: config.enableWindowManagement,
-           subject: subject,
-           detachOrigin: detachOrigin,
-           isOptionPressed: isOptionPressed,
-       ),
+    let sourceWorkspace = sourceNode.nodeWorkspace
+    let canOfferWindowSurfaceIntent = if targetWorkspace == sourceWorkspace {
+        shouldAllowSameWorkspaceWindowSurfaceIntent(
+            enableWindowManagement: config.enableWindowManagement,
+            subject: subject,
+            detachOrigin: detachOrigin,
+            isOptionPressed: isOptionPressed,
+        )
+    } else {
+        config.enableWindowManagement
+    }
+
+    if canOfferWindowSurfaceIntent,
        let surfaceDestination = currentWindowSurfaceDestination(
            sourceWindow: sourceWindow,
            mouseLocation: mouseLocation,
@@ -1731,7 +1737,7 @@ private func currentWindowDragIntentDestination(
         return detachDestination
     }
 
-    if targetWorkspace != sourceNode.nodeWorkspace {
+    if targetWorkspace != sourceWorkspace {
         let previewRect = targetWorkspace.workspaceMonitor.visibleRectPaddedByOuterGaps
         return WindowDragIntentDestination(
             kind: .moveToWorkspace(workspaceName: targetWorkspace.name),

@@ -348,10 +348,16 @@ final class WindowTabsTest: XCTestCase {
         active.markAsMostRecentChild()
 
         let tabBarRect = accordion.windowTabBarRect.orDie()
+        let groupFrameRect = accordion.windowTabGroupFrameRect.orDie()
         let tabDropZone = accordion.windowTabDropZoneRect.orDie()
         let tabInteractionZone = accordion.windowTabDropInteractionRect.orDie()
         let swapDropZone = accordion.swapDropZoneRect.orDie()
+        let accordionFrame = accordion.lastAppliedLayoutPhysicalRect.orDie()
 
+        XCTAssertEqual(groupFrameRect.topLeftX, accordionFrame.topLeftX)
+        XCTAssertEqual(groupFrameRect.topLeftY, accordionFrame.topLeftY)
+        XCTAssertEqual(groupFrameRect.width, accordionFrame.width)
+        XCTAssertEqual(groupFrameRect.height, accordionFrame.height)
         XCTAssertGreaterThan(tabDropZone.height, tabBarRect.height)
         XCTAssertGreaterThan(tabInteractionZone.height, tabDropZone.height)
         XCTAssertGreaterThan(swapDropZone.minY, tabDropZone.maxY)
@@ -417,11 +423,40 @@ final class WindowTabsTest: XCTestCase {
         active.markAsMostRecentChild()
 
         let tabBarRect = accordion.windowTabBarRect.orDie()
+        let groupFrameRect = accordion.windowTabGroupFrameRect.orDie()
 
         XCTAssertEqual(tabBarRect.topLeftX, 40)
         XCTAssertEqual(tabBarRect.topLeftY, 60)
         XCTAssertEqual(tabBarRect.width, 500)
         XCTAssertEqual(tabBarRect.height, CGFloat(config.windowTabs.height))
+        XCTAssertEqual(groupFrameRect.topLeftX, 40)
+        XCTAssertEqual(groupFrameRect.topLeftY, 60)
+        XCTAssertEqual(groupFrameRect.width, 500)
+        XCTAssertEqual(groupFrameRect.height, 300)
+    }
+
+    @MainActor
+    func testManagedAccordionLayoutInsetsActiveWindowInsideTabShell() async throws {
+        setUpWorkspacesForTests()
+        cancelManipulatedWithMouseState()
+        clearPendingWindowDragIntent()
+        let workspace = Workspace.get(byName: "tabs")
+        let accordion = workspace.rootTilingContainer
+        accordion.layout = .accordion
+        let active = TestWindow.new(id: 1, parent: accordion)
+        _ = TestWindow.new(id: 2, parent: accordion)
+        XCTAssertTrue(active.focusWindow())
+
+        try await workspace.layoutWorkspace()
+
+        let groupFrame = try XCTUnwrap(accordion.lastAppliedLayoutPhysicalRect)
+        let activeFrame = try XCTUnwrap(active.lastAppliedLayoutPhysicalRect)
+        let tabBarHeight = CGFloat(config.windowTabs.height)
+
+        XCTAssertEqual(activeFrame.topLeftX, groupFrame.topLeftX + windowTabGroupShellHorizontalInset())
+        XCTAssertEqual(activeFrame.topLeftY, groupFrame.topLeftY + tabBarHeight + windowTabGroupShellTopInset())
+        XCTAssertEqual(activeFrame.width, groupFrame.width - windowTabGroupShellHorizontalInset() * 2)
+        XCTAssertEqual(activeFrame.height, groupFrame.height - tabBarHeight - windowTabGroupShellTopInset() - windowTabGroupShellBottomInset())
     }
 
     @MainActor
@@ -1534,6 +1569,34 @@ final class WindowTabsTest: XCTestCase {
         ))
 
         XCTAssertEqual(debugPendingWindowDragIntentSummary()?.kind, .moveToWorkspace(workspaceName: targetWorkspace.name))
+    }
+
+    @MainActor
+    func testCrossWorkspaceDragOverTargetWindowOffersSurfaceIntent() {
+        setUpWorkspacesForTests()
+        clearPendingWindowDragIntent()
+        defer { clearPendingWindowDragIntent() }
+
+        let sourceWorkspace = Workspace.get(byName: "source")
+        let source = TestWindow.new(id: 1, parent: sourceWorkspace.rootTilingContainer)
+        source.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 220, height: 180)
+
+        let targetWorkspace = Workspace.get(byName: "target")
+        let target = TestWindow.new(id: 2, parent: targetWorkspace.rootTilingContainer)
+        target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 120, topLeftY: 80, width: 420, height: 300)
+        XCTAssertTrue(targetWorkspace.focusWorkspace())
+
+        XCTAssertTrue(updatePendingWindowDragIntent(
+            sourceWindow: source,
+            mouseLocation: target.stackSplitDropZoneRect(position: .left).orDie().center,
+            subject: .window,
+            detachOrigin: .window,
+        ))
+
+        XCTAssertEqual(
+            debugPendingWindowDragIntentSummary()?.kind,
+            .stackSplit(targetWindowId: target.windowId, position: .left)
+        )
     }
 
     @MainActor

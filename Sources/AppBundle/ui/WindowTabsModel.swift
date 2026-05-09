@@ -1,5 +1,21 @@
 import AppKit
 
+private let windowTabGroupShellHorizontalInsetValue: CGFloat = 3
+private let windowTabGroupShellTopInsetValue: CGFloat = 3
+private let windowTabGroupShellBottomInsetValue: CGFloat = 3
+
+func windowTabGroupShellHorizontalInset() -> CGFloat {
+    windowTabGroupShellHorizontalInsetValue
+}
+
+func windowTabGroupShellTopInset() -> CGFloat {
+    windowTabGroupShellTopInsetValue
+}
+
+func windowTabGroupShellBottomInset() -> CGFloat {
+    windowTabGroupShellBottomInsetValue
+}
+
 @MainActor
 func updateWindowTabModel() async {
     guard TrayMenuModel.shared.isEnabled, config.windowTabs.enabled else {
@@ -16,10 +32,12 @@ func updateWindowTabModel() async {
             continue
         }
         for container in workspace.rootTilingContainer.allTabbedContainersRecursive {
-            guard let tabBarRect = container.windowTabBarRect else { continue }
+            guard let tabBarRect = container.windowTabBarRect,
+                  let groupFrameRect = container.windowTabGroupFrameRect
+            else { continue }
             let referenceRectSource = container.windowTabBarReferenceRectSource
             debugFocusLog(
-                "updateWindowTabModel container=\(ObjectIdentifier(container)) workspace=\(workspace.name) containerRect=\(String(describing: container.lastAppliedLayoutPhysicalRect)) tabBarRect=\(tabBarRect) activeWindowId=\(String(describing: container.tabActiveWindow?.windowId)) referenceRectSource=\(referenceRectSource)"
+                "updateWindowTabModel container=\(ObjectIdentifier(container)) workspace=\(workspace.name) containerRect=\(String(describing: container.lastAppliedLayoutPhysicalRect)) tabBarRect=\(tabBarRect) groupFrameRect=\(groupFrameRect) activeWindowId=\(String(describing: container.tabActiveWindow?.windowId)) referenceRectSource=\(referenceRectSource)"
             )
 
             let activeWindowId = container.tabActiveWindow?.windowId
@@ -41,6 +59,8 @@ func updateWindowTabModel() async {
                     id: ObjectIdentifier(container),
                     workspaceName: workspace.name,
                     frame: tabBarRect.toAppKitScreenRect,
+                    groupFrame: groupFrameRect.toAppKitScreenRect,
+                    activeWindowId: activeWindowId,
                     tabs: tabs,
                 ),
             )
@@ -83,6 +103,12 @@ extension TilingContainer {
     var windowTabBarRect: Rect? {
         guard showsWindowTabs, let rect = windowTabBarReferenceRect else { return nil }
         return Rect(topLeftX: rect.topLeftX, topLeftY: rect.topLeftY, width: rect.width, height: windowTabBarHeight)
+    }
+
+    @MainActor
+    var windowTabGroupFrameRect: Rect? {
+        guard showsWindowTabs else { return nil }
+        return windowTabBarReferenceRect
     }
 
     @MainActor

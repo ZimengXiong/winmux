@@ -3028,16 +3028,6 @@ struct WorkspaceSidebarWorkspaceSection: View {
                 sectionShape
                     .strokeBorder(sectionBorderColor, lineWidth: sectionBorderWidth)
             }
-            .overlay(alignment: .leading) {
-                if isDropTarget {
-                    Capsule(style: .continuous)
-                        .fill(Color.accentColor.opacity(0.72))
-                        .frame(width: 3)
-                        .padding(.vertical, 8)
-                        .padding(.leading, 1)
-                        .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .leading)))
-                }
-            }
     }
 
     // MARK: - Header
@@ -3225,15 +3215,6 @@ struct WorkspaceSidebarCreateWorkspaceSection: View {
                                     isDropTarget ? Color.accentColor.opacity(0.46) : Color.white.opacity(isHovered ? 0.06 : 0),
                                     lineWidth: isDropTarget ? 1.5 : 0.5
                                 )
-                        }
-                        .overlay(alignment: .leading) {
-                            if isDropTarget {
-                                Capsule(style: .continuous)
-                                    .fill(Color.accentColor.opacity(0.72))
-                                    .frame(width: 3)
-                                    .padding(.vertical, 7)
-                                    .padding(.leading, 1)
-                            }
                         }
                 )
                 .contentShape(sectionShape)

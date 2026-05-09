@@ -14,6 +14,14 @@ private struct WorkspaceSidebarDragTestMonitor: Monitor {
 }
 
 final class WorkspaceSidebarDragTest: XCTestCase {
+    @MainActor
+    func testWindowIntentPreviewRendersBelowWorkspaceSidebar() {
+        XCTAssertLessThan(
+            WindowTabDropPreviewPanel.shared.level.rawValue,
+            WorkspaceSidebarPanel.shared.level.rawValue,
+        )
+    }
+
     func testLeftMouseButtonPressedUsesBitmask() {
         XCTAssertTrue(isLeftMouseButtonPressed(mask: 0b1))
         XCTAssertTrue(isLeftMouseButtonPressed(mask: 0b11))
