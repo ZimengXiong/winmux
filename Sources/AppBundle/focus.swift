@@ -118,18 +118,21 @@ func replaceWorkspaceNameInFocusState(oldName: String, newName: String) {
 @MainActor var focus: LiveFocus { _focus.live }
 
 @MainActor func setFocus(to newFocus: LiveFocus) -> Bool {
-    if _focus == newFocus.frozen { return true }
+    if _focus == newFocus.frozen {
+        return newFocus.workspace.isVisible || newFocus.workspace.workspaceMonitor.setActiveWorkspace(newFocus.workspace)
+    }
     let oldFocus = focus
+    let status = newFocus.workspace.workspaceMonitor.setActiveWorkspace(newFocus.workspace)
+    guard status else { return false }
+
     // Normalize mruWindow when focus away from a workspace
     if oldFocus.workspace != newFocus.workspace {
         oldFocus.windowOrNil?.markAsMostRecentChild()
     }
 
     _focus = newFocus.frozen
-    let status = newFocus.workspace.workspaceMonitor.setActiveWorkspace(newFocus.workspace)
-
     newFocus.windowOrNil?.markAsMostRecentChild()
-    return status
+    return true
 }
 extension Window {
     @MainActor func focusWindow() -> Bool {

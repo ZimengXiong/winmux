@@ -236,6 +236,44 @@ private func unmanagedTopEdgeAction(mouseLocation: CGPoint, detectionRect: Rect)
     return (centerMinX ... centerMaxX).contains(mouseLocation.x) ? .maximize : .topHalf
 }
 
+private func unmanagedVerticalEdgeAction(mouseLocation: CGPoint, detectionRect: Rect, fallback: UnmanagedWindowSnapAction) -> UnmanagedWindowSnapAction {
+    let firstThirdMaxY = detectionRect.minY + detectionRect.height / 3
+    let lastThirdMinY = detectionRect.minY + detectionRect.height * 2 / 3
+    if mouseLocation.y < firstThirdMaxY {
+        return .topHalf
+    }
+    if mouseLocation.y > lastThirdMinY {
+        return .bottomHalf
+    }
+    return fallback
+}
+
+private func unmanagedBottomEdgeAction(
+    mouseLocation: CGPoint,
+    detectionRect: Rect,
+    priorAction: UnmanagedWindowSnapAction?,
+) -> UnmanagedWindowSnapAction {
+    if detectionRect.height > detectionRect.width {
+        let centerX = detectionRect.minX + detectionRect.width / 2
+        return mouseLocation.x < centerX ? .leftHalf : .rightHalf
+    }
+
+    let firstThirdMaxX = detectionRect.minX + detectionRect.width / 3
+    let lastThirdMinX = detectionRect.minX + detectionRect.width * 2 / 3
+    if mouseLocation.x < firstThirdMaxX {
+        return .firstThird
+    }
+    if mouseLocation.x > lastThirdMinX {
+        return .lastThird
+    }
+
+    return switch priorAction {
+        case .firstThird: .firstTwoThirds
+        case .lastThird: .lastTwoThirds
+        default: .centerThird
+    }
+}
+
 func unmanagedSnapAction(
     at mouseLocation: CGPoint,
     in detectionRect: Rect,
@@ -251,13 +289,13 @@ func unmanagedSnapAction(
         case .topRight:
             return .topRight
         case .left:
-            return .leftHalf
+            return unmanagedVerticalEdgeAction(mouseLocation: mouseLocation, detectionRect: detectionRect, fallback: .leftHalf)
         case .right:
-            return .rightHalf
+            return unmanagedVerticalEdgeAction(mouseLocation: mouseLocation, detectionRect: detectionRect, fallback: .rightHalf)
         case .bottomLeft:
             return .bottomLeft
         case .bottom:
-            return .bottomHalf
+            return unmanagedBottomEdgeAction(mouseLocation: mouseLocation, detectionRect: detectionRect, priorAction: priorAction)
         case .bottomRight:
             return .bottomRight
     }

@@ -67,6 +67,16 @@ final class MoveNodeToWorkspaceCommandTest: XCTestCase {
         XCTAssertEqual(Workspace.get(byName: "b").preferredMonitorPointForTesting, workspaceA.workspaceMonitor.rect.topLeftCorner)
     }
 
+    func testNewWorkspaceInheritsSourceProject() async throws {
+        let project = createWorkspaceProject()
+        let sourceWorkspace = try XCTUnwrap(switchWorkspaceProject(project.id, on: mainMonitor))
+        _ = TestWindow.new(id: 1, parent: sourceWorkspace.rootTilingContainer).focusWindow()
+
+        try await MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "b")).run(.defaultEnv, .emptyStdin)
+
+        XCTAssertEqual(Workspace.get(byName: "b").projectId, project.id)
+    }
+
     func testMoveWindowToWorkspaceWrapsRootAccordionInsteadOfTabbingIntoIt() async throws {
         let sourceWorkspace = Workspace.get(byName: "a")
         let window = TestWindow.new(id: 1, parent: sourceWorkspace.rootTilingContainer)

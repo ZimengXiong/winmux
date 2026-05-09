@@ -21,7 +21,11 @@ struct MoveNodeToWorkspaceCommand: Command {
                 guard let ws else { return io.err("Can't resolve next or prev workspace") }
                 targetWorkspace = ws
             case .direct(let name):
+                let existedBefore = Workspace.existing(byName: name.raw) != nil
                 targetWorkspace = Workspace.get(byName: name.raw)
+                if !existedBefore {
+                    targetWorkspace.assignProject(subjectWs?.projectId ?? target.workspace.projectId)
+                }
                 targetWorkspace.seedMonitorIfNeeded(window.nodeMonitor ?? target.workspace.workspaceMonitor)
         }
         return moveWindowToWorkspace(window, targetWorkspace, io, focusFollowsWindow: args.focusFollowsWindow, failIfNoop: args.failIfNoop)

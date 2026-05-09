@@ -1,5 +1,17 @@
 @testable import AppBundle
+import CoreGraphics
 import XCTest
+
+private struct WindowTabsTestMonitor: Monitor {
+    let monitorAppKitNsScreenScreensId: Int
+    let name: String
+    let rect: Rect
+    let visibleRect: Rect
+    let isMain: Bool
+
+    var width: CGFloat { rect.width }
+    var height: CGFloat { rect.height }
+}
 
 final class WindowTabsTest: XCTestCase {
     @MainActor
@@ -1482,6 +1494,21 @@ final class WindowTabsTest: XCTestCase {
     func testUnmanagedCrossWorkspaceMoveHintStillWorks() {
         setUpWorkspacesForTests()
         clearPendingWindowDragIntent()
+        let main = WindowTabsTestMonitor(
+            monitorAppKitNsScreenScreensId: 1,
+            name: "Main",
+            rect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            isMain: true,
+        )
+        let secondary = WindowTabsTestMonitor(
+            monitorAppKitNsScreenScreensId: 2,
+            name: "Secondary",
+            rect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            isMain: false,
+        )
+        setMonitorsForTests([main, secondary])
         let previousValue = config.enableWindowManagement
         config.enableWindowManagement = false
         defer {
@@ -1495,6 +1522,8 @@ final class WindowTabsTest: XCTestCase {
         source.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 220, height: 180)
 
         let targetWorkspace = Workspace.get(byName: "target")
+        targetWorkspace.seedMonitorIfNeeded(secondary)
+        XCTAssertTrue(secondary.setActiveWorkspace(targetWorkspace))
         let mouseLocation = targetWorkspace.workspaceMonitor.visibleRectPaddedByOuterGaps.center
 
         XCTAssertTrue(updatePendingWindowDragIntent(

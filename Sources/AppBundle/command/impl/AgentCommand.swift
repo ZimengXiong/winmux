@@ -743,12 +743,20 @@ enum AgentOperation: Decodable {
                 _ = Workspace.existing(byName: workspace)?.focusWorkspace()
             case .moveWindowToWorkspace(let windowId, let workspace, let shouldFocus):
                 guard let window = Window.get(byId: windowId) else { return }
+                let existedBefore = Workspace.existing(byName: workspace) != nil
                 let targetWorkspace = Workspace.get(byName: workspace)
+                if !existedBefore {
+                    targetWorkspace.assignProject(window.nodeWorkspace?.projectId ?? focus.workspace.projectId)
+                }
                 targetWorkspace.seedMonitorIfNeeded(window.nodeMonitor ?? focus.workspace.workspaceMonitor)
                 _ = agentMoveWindowToWorkspace(window, targetWorkspace, focusFollowsWindow: shouldFocus ?? false)
             case .moveTabGroupToWorkspace(let tabGroupId, let workspace, let shouldFocus):
                 guard let group = resolveAgentTabGroup(tabGroupId, context: context) else { return }
+                let existedBefore = Workspace.existing(byName: workspace) != nil
                 let targetWorkspace = Workspace.get(byName: workspace)
+                if !existedBefore {
+                    targetWorkspace.assignProject(group.nodeWorkspace?.projectId ?? focus.workspace.projectId)
+                }
                 targetWorkspace.seedMonitorIfNeeded(group.nodeMonitor ?? focus.workspace.workspaceMonitor)
                 let binding = workspaceAppendBindingData(targetWorkspace: targetWorkspace, index: INDEX_BIND_LAST)
                 group.bind(to: binding.parent, adaptiveWeight: binding.adaptiveWeight, index: binding.index)
@@ -762,7 +770,12 @@ enum AgentOperation: Decodable {
             case .createTabGroup(let tabGroupId, let workspace, let tabs, let activeWindowId):
                 let windows = tabs.compactMap { Window.get(byId: $0) }
                 guard let first = windows.first else { return }
-                let targetWorkspace = Workspace.get(byName: workspace ?? first.nodeWorkspace?.name ?? focus.workspace.name)
+                let workspaceName = workspace ?? first.nodeWorkspace?.name ?? focus.workspace.name
+                let existedBefore = Workspace.existing(byName: workspaceName) != nil
+                let targetWorkspace = Workspace.get(byName: workspaceName)
+                if !existedBefore {
+                    targetWorkspace.assignProject(first.nodeWorkspace?.projectId ?? focus.workspace.projectId)
+                }
                 for window in windows where window.nodeWorkspace != targetWorkspace {
                     _ = agentMoveWindowToWorkspace(window, targetWorkspace, focusFollowsWindow: false)
                 }
@@ -819,7 +832,12 @@ enum AgentOperation: Decodable {
                 }
             case .parkWindow(let pane, let workspace):
                 guard let node = pane.resolveNode(context: context), let sourceWindow = node.mostRecentWindowRecursive ?? node.anyLeafWindowRecursive else { return }
-                let targetWorkspace = Workspace.get(byName: workspace ?? "__agent_parked")
+                let workspaceName = workspace ?? "__agent_parked"
+                let existedBefore = Workspace.existing(byName: workspaceName) != nil
+                let targetWorkspace = Workspace.get(byName: workspaceName)
+                if !existedBefore {
+                    targetWorkspace.assignProject(node.nodeWorkspace?.projectId ?? focus.workspace.projectId)
+                }
                 targetWorkspace.seedMonitorIfNeeded(node.nodeMonitor ?? focus.workspace.workspaceMonitor)
                 if node is Window, sourceWindow.isFloating {
                     node.bind(to: targetWorkspace, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
@@ -1015,7 +1033,11 @@ struct AgentWorkspaceLayout: Codable {
 
     @MainActor
     func apply() async throws {
+        let existedBefore = Workspace.existing(byName: name) != nil
         let workspace = Workspace.get(byName: name)
+        if !existedBefore {
+            workspace.assignProject(focus.workspace.projectId)
+        }
         workspace.seedMonitorIfNeeded(focusPane?.resolveNode()?.nodeMonitor ?? focus.workspace.workspaceMonitor)
         let oldWindows = workspace.allLeafWindowsRecursive
         var referenced: Set<UInt32> = []

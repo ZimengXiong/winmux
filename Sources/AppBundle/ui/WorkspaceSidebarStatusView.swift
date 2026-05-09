@@ -4,6 +4,8 @@ import SwiftUI
 
 private let workspaceSidebarStatusCornerRadius: CGFloat = 8
 private let workspaceSidebarStatusRefreshInterval: Duration = .seconds(5)
+private let workspaceSidebarExpandedStatusLeadingPadding: CGFloat = 7
+private let workspaceSidebarExpandedStatusTrailingPadding: CGFloat = 12
 
 struct WorkspaceSidebarStatusView: View {
     let sectionWidth: CGFloat
@@ -57,27 +59,20 @@ private struct WorkspaceSidebarCompactClockCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .center, spacing: 5) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(components.hour)
                 .foregroundStyle(Color.white.opacity(0.86))
 
-            Capsule()
-                .fill(Color.white.opacity(0.18))
-                .frame(width: 12, height: 1)
-
             Text(components.minute)
                 .foregroundStyle(Color.white.opacity(0.86))
-
-            Capsule()
-                .fill(Color.white.opacity(0.18))
-                .frame(width: 12, height: 1)
 
             Text(components.second)
                 .foregroundStyle(Color.white.opacity(0.62))
         }
         .font(.system(size: 16, weight: .semibold))
         .monospacedDigit()
-        .frame(width: sectionWidth, alignment: .center)
+        .padding(.leading, 7)
+        .frame(width: sectionWidth, alignment: .leading)
         .frame(minHeight: 84)
         .background(
             RoundedRectangle(cornerRadius: workspaceSidebarStatusCornerRadius, style: .continuous)
@@ -117,7 +112,7 @@ private struct WorkspaceSidebarExpandedStatusCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
-            VStack(alignment: .trailing, spacing: 4) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(date, format: .dateTime.hour().minute().second())
                     .font(.system(size: 31, weight: .bold, design: .rounded))
                     .monospacedDigit()
@@ -132,30 +127,34 @@ private struct WorkspaceSidebarExpandedStatusCard: View {
                         .lineLimit(1)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .trailing)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             if showsStatusPills {
-                HStack(alignment: .center, spacing: 12) {
+                HStack(alignment: .center, spacing: 11) {
                     WorkspaceSidebarStatusInlineItem(
                         symbolName: systemStatus.battery.symbolName,
                         label: systemStatus.battery.label,
+                        tint: systemStatus.battery.tintColor,
                         accessibilityDescription: systemStatus.battery.accessibilityDescription,
                     )
                     WorkspaceSidebarStatusInlineItem(
                         symbolName: systemStatus.audio.symbolName,
                         label: systemStatus.audio.label,
+                        tint: systemStatus.audio.tintColor,
                         accessibilityDescription: systemStatus.audio.accessibilityDescription,
                     )
                     WorkspaceSidebarStatusInlineItem(
                         symbolName: systemStatus.network.symbolName,
                         label: systemStatus.network.label,
+                        tint: systemStatus.network.tintColor,
                         accessibilityDescription: systemStatus.network.accessibilityDescription,
                     )
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.leading, workspaceSidebarExpandedStatusLeadingPadding)
+        .padding(.trailing, workspaceSidebarExpandedStatusTrailingPadding)
         .padding(.vertical, 10)
         .frame(width: sectionWidth, alignment: .leading)
         .background(
@@ -174,18 +173,19 @@ private struct WorkspaceSidebarExpandedStatusCard: View {
 private struct WorkspaceSidebarStatusInlineItem: View {
     let symbolName: String
     let label: String
+    let tint: Color
     let accessibilityDescription: String
 
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: symbolName)
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.56))
+                .foregroundStyle(tint.opacity(0.82))
                 .frame(width: 12, alignment: .center)
 
             Text(label)
                 .font(.system(size: 10.5, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.70))
+                .foregroundStyle(tint.opacity(0.90))
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
         }
@@ -272,7 +272,7 @@ private extension WorkspaceSidebarBatterySnapshot {
             case .charging:
                 return Color(nsColor: .systemGreen)
             case .ac:
-                return Color(nsColor: .systemGray)
+                return Color(nsColor: .systemGreen)
             case .discharging:
                 return Color(nsColor: .systemOrange)
             case .unavailable:

@@ -319,11 +319,19 @@ func resetWorkspaceTopologyForTests() {
     screenPointToPrevVisibleWorkspace = [:]
     screenPointToVisibleWorkspace = [:]
     visibleWorkspaceToScreenPoint = [:]
+    activeWorkspaceProjectIdByScreenPoint = [:]
     for workspace in Workspace.all {
         workspace.assignedMonitorPoint = nil
         workspace.retainsFocusedEmptyWorkspace = false
         workspace.isSystemStub = false
     }
+}
+
+@MainActor
+func replaceActiveWorkspaceWithSystemStubForTests(on monitor: Monitor) -> Workspace {
+    let stub = getStubWorkspace(for: monitor)
+    check(monitor.setActiveWorkspace(stub))
+    return stub
 }
 
 @MainActor
@@ -650,6 +658,9 @@ private func removeWorkspaceFromRegistry(_ workspace: Workspace) {
     }
     if let point = visibleWorkspaceToScreenPoint.removeValue(forKey: workspace) {
         screenPointToVisibleWorkspace.removeValue(forKey: point)
+        if !workspace.isSystemStub, activeWorkspaceProjectIdByScreenPoint[point] == workspace.projectId {
+            activeWorkspaceProjectIdByScreenPoint[point] = workspaceProjectDefaultId
+        }
     }
     workspaceNameToWorkspace.removeValue(forKey: workspace.name)
 }
@@ -1026,7 +1037,8 @@ extension Monitor {
 
 @MainActor
 func gcMonitors() {
-    if screenPointToVisibleWorkspace.count != monitors.count {
+    let currentScreenPoints = monitors.map(\.rect.topLeftCorner).toSet()
+    if screenPointToVisibleWorkspace.keys.toSet() != currentScreenPoints {
         rearrangeWorkspacesOnMonitors()
     }
 }
@@ -1053,7 +1065,9 @@ extension CGPoint {
         visibleWorkspaceToScreenPoint[workspace] = self
         screenPointToVisibleWorkspace[self] = workspace
         workspace.assignedMonitorPoint = self
-        if !workspace.isSystemStub {
+        if workspace.isSystemStub {
+            activeWorkspaceProjectIdByScreenPoint[self] = activeWorkspaceProjectIdByScreenPoint[self] ?? workspaceProjectDefaultId
+        } else {
             activeWorkspaceProjectIdByScreenPoint[self] = workspace.projectId
         }
         checkWorkspaceHierarchyInvariants()
@@ -1095,10 +1109,17 @@ private func rearrangeWorkspacesOnMonitors() {
     }
 
     let oldScreenPointToVisibleWorkspace = screenPointToVisibleWorkspace
+    let oldActiveWorkspaceProjectIdByScreenPoint = activeWorkspaceProjectIdByScreenPoint
     screenPointToVisibleWorkspace = [:]
     visibleWorkspaceToScreenPoint = [:]
+    activeWorkspaceProjectIdByScreenPoint = [:]
 
     for newScreen in newScreens {
+        if let oldScreen = newScreenToOldScreenMapping[newScreen],
+           let activeProjectId = oldActiveWorkspaceProjectIdByScreenPoint[oldScreen]
+        {
+            activeWorkspaceProjectIdByScreenPoint[newScreen] = activeProjectId
+        }
         if let existingVisibleWorkspace = newScreenToOldScreenMapping[newScreen].flatMap({ oldScreenPointToVisibleWorkspace[$0] }),
            newScreen.setActiveWorkspace(existingVisibleWorkspace)
         {

@@ -329,6 +329,88 @@ final class WorkspaceNamingTest: XCTestCase {
         XCTAssertEqual(activeWorkspaceProjectId(for: secondary), project.id)
     }
 
+    func testWorkspaceToMonitorForceAssignmentRejectsWrongMonitor() {
+        let main = WorkspaceNamingTestMonitor(
+            monitorAppKitNsScreenScreensId: 1,
+            name: "Main",
+            rect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            isMain: true,
+        )
+        let secondary = WorkspaceNamingTestMonitor(
+            monitorAppKitNsScreenScreensId: 2,
+            name: "Secondary",
+            rect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            isMain: false,
+        )
+        setMonitorsForTests([main, secondary])
+        config.workspaceToMonitorForceAssignment["forced"] = [.sequenceNumber(2)]
+        let workspace = Workspace.get(byName: "forced")
+
+        XCTAssertFalse(main.setActiveWorkspace(workspace))
+        XCTAssertTrue(secondary.setActiveWorkspace(workspace))
+        XCTAssertTrue(secondary.activeWorkspace === workspace)
+    }
+
+    func testGcMonitorsReconcilesChangedMonitorPointsWithSameMonitorCount() {
+        let oldMain = WorkspaceNamingTestMonitor(
+            monitorAppKitNsScreenScreensId: 1,
+            name: "Main",
+            rect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            isMain: true,
+        )
+        let oldSecondary = WorkspaceNamingTestMonitor(
+            monitorAppKitNsScreenScreensId: 2,
+            name: "Secondary",
+            rect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            isMain: false,
+        )
+        setMonitorsForTests([oldMain, oldSecondary])
+        let workspace = Workspace.get(byName: "visible")
+        _ = TestWindow.new(id: 21, parent: workspace.rootTilingContainer)
+        XCTAssertTrue(oldMain.setActiveWorkspace(workspace))
+
+        let newMain = WorkspaceNamingTestMonitor(
+            monitorAppKitNsScreenScreensId: 1,
+            name: "Main",
+            rect: Rect(topLeftX: 100, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 100, topLeftY: 0, width: 1920, height: 1080),
+            isMain: true,
+        )
+        let newSecondary = WorkspaceNamingTestMonitor(
+            monitorAppKitNsScreenScreensId: 2,
+            name: "Secondary",
+            rect: Rect(topLeftX: 2020, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 2020, topLeftY: 0, width: 1920, height: 1080),
+            isMain: false,
+        )
+        setMonitorsForTests([newMain, newSecondary])
+
+        gcMonitors()
+
+        XCTAssertTrue(newMain.activeWorkspace === workspace)
+    }
+
+    func testSystemStubDoesNotForgetActiveProject() throws {
+        let project = createWorkspaceProject()
+        let projectWorkspace = try XCTUnwrap(switchWorkspaceProject(project.id, on: mainMonitor))
+        XCTAssertTrue(projectWorkspace.isVisible)
+
+        let stub = replaceActiveWorkspaceWithSystemStubForTests(on: mainMonitor)
+        XCTAssertTrue(stub.isSystemStub)
+        XCTAssertEqual(activeWorkspaceProjectId(for: mainMonitor), project.id)
+
+        Workspace.garbageCollectUnusedWorkspaces()
+
+        XCTAssertEqual(activeWorkspaceProjectId(for: mainMonitor), project.id)
+        XCTAssertFalse(mainMonitor.activeWorkspace.isSystemStub)
+        XCTAssertEqual(mainMonitor.activeWorkspace.projectId, project.id)
+        XCTAssertTrue(userFacingWorkspaces(Workspace.all, focusedWorkspace: focus.workspace).contains(mainMonitor.activeWorkspace))
+    }
+
     func testClosingLastWindowKeepsOneWorkspaceInActiveProject() throws {
         let defaultWorkspace = Workspace.get(byName: "1")
         defaultWorkspace.markAsAutomaticallyNamed()
