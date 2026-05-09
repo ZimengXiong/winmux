@@ -598,9 +598,9 @@ private func shouldAllowTabStripChromeGroupDrag(windowId: UInt32) -> Bool {
 // MARK: - Constants
 
 private let windowTabPreviewCornerRadius: CGFloat = 8
-private let windowTabStripContentHorizontalPadding: CGFloat = 8
-private let windowTabStripGroupHandleWidth: CGFloat = 30
-private let windowTabActivePillAnimation: Animation = .easeOut(duration: 0.07)
+private let windowTabStripContentHorizontalPadding: CGFloat = 6
+private let windowTabStripGroupHandleWidth: CGFloat = 24
+private let windowTabActivePillAnimation: Animation = .easeOut(duration: 0.09)
 
 func windowTabStripContentPadding() -> CGFloat {
     windowTabStripContentHorizontalPadding
@@ -640,7 +640,7 @@ private struct WindowTabStripView: View {
         let count = max(strip.tabs.count, 1)
         let stripWidth = strip.frame.width
         let tabWidth = windowTabStripTabWidth(stripWidth: stripWidth, count: count)
-        let itemHeight = max(strip.frame.height - 8, 18)
+        let itemHeight = max(strip.frame.height - 10, 18)
         let effectiveTabWidth = tabWidth + 2 // include HStack spacing
         let groupDragWindowId = strip.tabs.first(where: \.isActive)?.windowId ?? strip.tabs.first?.windowId
 
@@ -654,7 +654,7 @@ private struct WindowTabStripView: View {
             windowTabStripGroupHandle(windowId: groupDragWindowId, showsCloseControl: true)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                HStack(spacing: 5) {
                     ForEach(strip.tabs) { tab in
                         WindowTabItemView(
                             tab: tab,
@@ -747,7 +747,7 @@ private struct WindowTabStripView: View {
 
             windowTabStripGroupHandle(windowId: groupDragWindowId, showsCloseControl: false)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 5)
         .frame(width: stripWidth, height: strip.frame.height)
         .clipped()
         .background {
@@ -757,28 +757,38 @@ private struct WindowTabStripView: View {
             }
         }
         .overlay {
-            if !usesNativeLiquidGlass {
-                Capsule()
-                    .strokeBorder(Color.white.opacity(0.22), lineWidth: 0.6)
-            }
+            Capsule()
+                .strokeBorder(Color.white.opacity(usesNativeLiquidGlass ? 0.10 : 0.16), lineWidth: 0.6)
         }
         .shadow(
-            color: Color.black.opacity(usesNativeLiquidGlass ? 0 : 0.24),
-            radius: usesNativeLiquidGlass ? 0 : 4,
-            y: usesNativeLiquidGlass ? 0 : 1.5
+            color: Color.black.opacity(usesNativeLiquidGlass ? 0.10 : 0.18),
+            radius: usesNativeLiquidGlass ? 2 : 3,
+            y: 1
         )
         .animation(windowTabActivePillAnimation, value: strip.tabs.first(where: \.isActive)?.windowId)
     }
 
     private var tabStripSurface: some View {
-        liquidGlassBackground(in: Capsule(), isInteractive: true) {
+        ZStack {
+            liquidGlassBackground(in: Capsule(), isInteractive: true) {
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .environment(\.colorScheme, .dark)
+            }
             Capsule()
-                .fill(.thinMaterial)
-                .environment(\.colorScheme, .dark)
-                .overlay {
-                    Capsule()
-                        .fill(Color.black.opacity(0.28))
-                }
+                .fill(Color.black.opacity(usesNativeLiquidGlass ? 0.08 : 0.16))
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.16),
+                            Color.white.opacity(0.05),
+                            Color.clear,
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom,
+                    ),
+                )
         }
     }
 
@@ -857,16 +867,16 @@ private struct WindowTabStripView: View {
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 7, weight: .bold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.white.opacity(0.64))
                         .frame(width: 13, height: 13)
                         .background {
                             Circle()
-                                .fill(Color.black.opacity(0.2))
+                                .fill(Color.white.opacity(0.075))
                                 .background(.thinMaterial, in: Circle())
                                 .environment(\.colorScheme, .dark)
                                 .overlay {
                                     Circle()
-                                        .strokeBorder(Color.white.opacity(0.18), lineWidth: 0.6)
+                                        .strokeBorder(Color.white.opacity(0.12), lineWidth: 0.6)
                                 }
                         }
                 }
@@ -909,7 +919,7 @@ private struct WindowTabItemView: View {
                 .font(.system(size: 10.8, weight: tab.isActive ? .semibold : .medium))
                 .lineLimit(1)
                 .foregroundStyle(foregroundColor)
-                .shadow(color: Color.black.opacity(0.55), radius: 1, y: 0.5)
+                .shadow(color: Color.black.opacity(0.24), radius: 0.8, y: 0.4)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.horizontal, 8)
                 .frame(width: width, height: height)
@@ -948,31 +958,39 @@ private struct WindowTabItemView: View {
     private var background: some View {
         if isDragSource {
             Capsule()
-                .fill(Color.white.opacity(0.2))
+                .fill(Color.white.opacity(0.16))
                 .overlay {
                     Capsule()
-                        .strokeBorder(Color.white.opacity(0.14), lineWidth: 0.5)
+                        .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.5)
                 }
         } else if tab.isActive {
             Capsule()
-                .fill(Color.white.opacity(0.18))
+                .fill(Color.white.opacity(0.13))
                 .overlay {
                     Capsule()
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    Color.white.opacity(0.18),
-                                    Color.clear,
+                                    Color.white.opacity(0.24),
+                                    Color.white.opacity(0.07),
                                 ],
                                 startPoint: .top,
                                 endPoint: .bottom,
                             ),
                         )
                 }
+                .overlay {
+                    Capsule()
+                        .strokeBorder(Color.white.opacity(0.14), lineWidth: 0.5)
+                }
                 .matchedGeometryEffect(id: "window-tab-active-pill", in: activeTabNamespace)
         } else if isHovered, !tab.isActive {
             Capsule()
-                .fill(Color.white.opacity(0.08))
+                .fill(Color.white.opacity(0.06))
+                .overlay {
+                    Capsule()
+                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
+                }
         }
     }
 }

@@ -9,7 +9,6 @@ struct WorkspaceCommand: Command {
     func run(_ env: CmdEnv, _ io: CmdIo) -> Bool { // todo refactor
         guard let target = args.resolveTargetOrReportError(env, io) else { return false }
         let focusedWs = target.workspace
-        let workspaceName: String
         switch args.target.val {
             case .relative(let nextPrev):
                 let workspace = getNextPrevWorkspace(
@@ -25,36 +24,42 @@ struct WorkspaceCommand: Command {
                         usesStdin: args.useStdin,
                     )
                 guard let workspace else { return false }
-                workspaceName = workspace.name
+                return focusOrReportNoop(workspace, focusedWorkspace: focusedWs, io: io, failIfNoop: args.failIfNoop)
             case .direct(let name):
-                workspaceName = name.raw
-                if args.autoBackAndForth && focusedWs.name == workspaceName {
+                if let workspace = resolveDirectWorkspaceTarget(named: name.raw, from: focusedWs) {
+                    if args.autoBackAndForth && workspace == focusedWs {
+                        return WorkspaceBackAndForthCommand(args: WorkspaceBackAndForthCmdArgs(rawArgs: [])).run(env, io)
+                    }
+                    return focusOrReportNoop(workspace, focusedWorkspace: focusedWs, io: io, failIfNoop: args.failIfNoop)
+                }
+                if args.autoBackAndForth && focusedWs.name == name.raw {
                     return WorkspaceBackAndForthCommand(args: WorkspaceBackAndForthCmdArgs(rawArgs: [])).run(env, io)
                 }
-        }
-        if focusedWs.name == workspaceName {
-            if !args.failIfNoop {
-                io.err("Workspace '\(workspaceName)' is already focused. Tip: use --fail-if-noop to exit with non-zero code")
-            }
-            return !args.failIfNoop
-        } else {
-            if let workspace = Workspace.existing(byName: workspaceName),
-               (
-                   isUserFacingWorkspace(workspace, focusedWorkspace: focus.workspace) ||
-                       workspace.shouldRetainEmptyWorkspace(focusedWorkspace: workspace)
-               )
-            {
-                return workspace.focusWorkspace()
-            }
             guard let workspace = createTransientBlankWorkspaceIfAllowed(
-                named: workspaceName,
+                named: name.raw,
                 from: focusedWs,
             ) else {
-                return io.err("Workspace '\(workspaceName)' doesn't exist")
+                return io.err("Workspace '\(name.raw)' doesn't exist")
             }
             return workspace.focusWorkspace()
         }
     }
+}
+
+@MainActor
+private func focusOrReportNoop(
+    _ workspace: Workspace,
+    focusedWorkspace: Workspace,
+    io: CmdIo,
+    failIfNoop: Bool,
+) -> Bool {
+    if focusedWorkspace == workspace {
+        if !failIfNoop {
+            io.err("Workspace '\(workspaceDisplayName(workspace.name))' is already focused. Tip: use --fail-if-noop to exit with non-zero code")
+        }
+        return !failIfNoop
+    }
+    return workspace.focusWorkspace()
 }
 
 @MainActor
@@ -65,34 +70,69 @@ private func createNextTransientBlankWorkspaceIfAllowed(
     usesStdin: Bool,
 ) -> Workspace? {
     guard isNext, !wrapAround, !usesStdin else { return nil }
-    let nextWorkspaceIndex = userFacingWorkspaces(Workspace.all, focusedWorkspace: current)
-        .filter { $0.scope == current.scope }
-        .compactMap { Int($0.name) }
-        .max()
-        .map { $0 + 1 } ?? 1
+    let nextWorkspaceIndex = scopedAutomaticDisplayWorkspaces(current: current).count + 1
     return createTransientBlankWorkspaceIfAllowed(named: String(nextWorkspaceIndex), from: current)
 }
 
 @MainActor
 private func createTransientBlankWorkspaceIfAllowed(named workspaceName: String, from current: Workspace) -> Workspace? {
-    guard Workspace.existing(byName: workspaceName) == nil,
-          let targetIndex = Int(workspaceName),
+    guard let targetIndex = parsePositiveWorkspaceDisplayIndex(workspaceName)
+    else {
+        return nil
+    }
+    let automaticDisplayWorkspaces = scopedAutomaticDisplayWorkspaces(current: current)
+    guard targetIndex == automaticDisplayWorkspaces.count + 1 else { return nil }
+
+    let workspace = Workspace.get(byName: nextSidebarCreatedWorkspaceName(projectId: current.projectId, monitor: current.workspaceMonitor))
+    workspace.markAsTransientBlank()
+    workspace.assignProject(current.projectId)
+    workspace.seedMonitorIfNeeded(current.workspaceMonitor)
+    return workspace
+}
+
+@MainActor
+private func resolveDirectWorkspaceTarget(named workspaceName: String, from current: Workspace) -> Workspace? {
+    if let targetIndex = parsePositiveWorkspaceDisplayIndex(workspaceName) {
+        if let workspace = scopedAutomaticDisplayWorkspaces(current: current).getOrNil(atIndex: targetIndex - 1) {
+            return workspace
+        }
+        guard let workspace = Workspace.existing(byName: workspaceName),
+              workspace.scope == current.scope,
+              isUserFacingWorkspace(workspace, focusedWorkspace: current) ||
+                  workspace.shouldRetainEmptyWorkspace(focusedWorkspace: workspace)
+        else {
+            return nil
+        }
+        return workspace
+    }
+
+    guard let workspace = Workspace.existing(byName: workspaceName),
+          isUserFacingWorkspace(workspace, focusedWorkspace: current) ||
+              workspace.shouldRetainEmptyWorkspace(focusedWorkspace: workspace)
+    else {
+        return nil
+    }
+    return workspace
+}
+
+private func parsePositiveWorkspaceDisplayIndex(_ workspaceName: String) -> Int? {
+    guard let targetIndex = Int(workspaceName),
           targetIndex > 0,
           String(targetIndex) == workspaceName
     else {
         return nil
     }
-    let currentMaxIndex = userFacingWorkspaces(Workspace.all, focusedWorkspace: current)
-        .filter { $0.scope == current.scope }
-        .compactMap { Int($0.name) }
-        .max() ?? 0
-    guard targetIndex == currentMaxIndex + 1 else { return nil }
+    return targetIndex
+}
 
-    let workspace = Workspace.get(byName: workspaceName)
-    workspace.markAsTransientBlank()
-    workspace.assignProject(current.projectId)
-    workspace.seedMonitorIfNeeded(current.workspaceMonitor)
-    return workspace
+@MainActor
+private func scopedAutomaticDisplayWorkspaces(current: Workspace) -> [Workspace] {
+    userFacingWorkspaces(
+        Workspace.all.filter { $0.scope == current.scope },
+        focusedWorkspace: current,
+    )
+        .filter(\.usesAutomaticDisplayName)
+        .sorted()
 }
 
 private struct RelativeWorkspaceNavigation {

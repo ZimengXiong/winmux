@@ -198,6 +198,39 @@ final class WorkspaceNamingTest: XCTestCase {
         XCTAssertEqual(workspaceDisplayName(second.name), "Workspace 1")
     }
 
+    func testDeletingFocusedWorkspaceFocusesNextClosestWorkspace() throws {
+        let first = Workspace.get(byName: "1")
+        first.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 115, parent: first.rootTilingContainer)
+        let deleted = Workspace.get(byName: "2")
+        deleted.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 116, parent: deleted.rootTilingContainer)
+        let next = Workspace.get(byName: "3")
+        next.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 117, parent: next.rootTilingContainer)
+        _ = deleted.focusWorkspace()
+
+        try deleteWorkspaceForSidebar(workspaceName: deleted.name)
+
+        XCTAssertTrue(focus.workspace === next)
+        XCTAssertTrue(Workspace.existing(byName: "2") === next)
+    }
+
+    func testDeletingLastFocusedWorkspaceFocusesPreviousClosestWorkspace() throws {
+        let previous = Workspace.get(byName: "1")
+        previous.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 118, parent: previous.rootTilingContainer)
+        let deleted = Workspace.get(byName: "2")
+        deleted.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 119, parent: deleted.rootTilingContainer)
+        _ = deleted.focusWorkspace()
+
+        try deleteWorkspaceForSidebar(workspaceName: deleted.name)
+
+        XCTAssertTrue(focus.workspace === previous)
+        XCTAssertTrue(Workspace.existing(byName: "1") === previous)
+    }
+
     func testRenamingAndDeletingProjectKeepsFallbackWorkspaces() throws {
         let defaultWorkspace = Workspace.get(byName: "1")
         defaultWorkspace.markAsAutomaticallyNamed()
@@ -224,9 +257,11 @@ final class WorkspaceNamingTest: XCTestCase {
         XCTAssertEqual(config.workspaceSidebar.projectLabels[project.id], "Project 1")
         try renameWorkspaceProject(project.id, displayName: "Work")
         XCTAssertEqual(config.workspaceSidebar.projectLabels[project.id], "Work")
+        config.workspaceSidebar.projectColors[project.id] = "#60A5FA"
         try deleteWorkspaceProject(project.id)
 
         XCTAssertNil(config.workspaceSidebar.projectLabels[project.id])
+        XCTAssertNil(config.workspaceSidebar.projectColors[project.id])
         XCTAssertFalse(workspaceProjects().contains { $0.id == project.id })
     }
 
@@ -247,6 +282,25 @@ final class WorkspaceNamingTest: XCTestCase {
         XCTAssertEqual(first.id, "project-1")
         XCTAssertEqual(second.id, "project-2")
         XCTAssertEqual(workspaceProjects().map(\.id).filter { $0.hasPrefix("project-") }.sorted(), ["project-1", "project-2"])
+    }
+
+    func testDeletingProjectFallsBackToClosestProject() throws {
+        let first = createWorkspaceProject()
+        let second = createWorkspaceProject()
+
+        XCTAssertEqual(workspaceProjectFallbackForDeletion(excluding: first.id), second.id)
+        XCTAssertEqual(workspaceProjectFallbackForDeletion(excluding: second.id), first.id)
+    }
+
+    func testDeletingActiveProjectSwitchesToClosestProject() throws {
+        let first = createWorkspaceProject()
+        let second = createWorkspaceProject()
+        XCTAssertNotNil(switchWorkspaceProject(first.id, on: mainMonitor))
+
+        try deleteWorkspaceProject(first.id)
+
+        XCTAssertEqual(activeWorkspaceProjectId(for: mainMonitor), second.id)
+        XCTAssertFalse(workspaceProjects().contains { $0.id == first.id })
     }
 
     func testSwitchingProjectMovesProjectOffPreviousDisplay() {

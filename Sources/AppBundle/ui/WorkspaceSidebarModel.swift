@@ -12,6 +12,19 @@ func sanitizedWorkspaceSidebarHoveredWorkspaceName(
     return hoveredWorkspaceName
 }
 
+func resolvedWorkspaceSidebarSelectedProjectId(
+    validProjectIds: Set<String>,
+    activeProjectId: String,
+) -> String {
+    if validProjectIds.contains(activeProjectId) {
+        return activeProjectId
+    }
+    if validProjectIds.contains(workspaceProjectDefaultId) {
+        return workspaceProjectDefaultId
+    }
+    return validProjectIds.sorted().first ?? workspaceProjectDefaultId
+}
+
 @MainActor
 func updateWorkspaceSidebarModel() async {
     guard TrayMenuModel.shared.isEnabled, config.workspaceSidebar.enabled else {
@@ -46,14 +59,18 @@ func updateWorkspaceSidebarModel() async {
         focusedMonitorScopeId: focusedMonitorScopeId,
     )
     let validScopeIds = Set(monitorScopes.map(\.id))
+    let defaultMonitorScopeId = availableMonitors.count > 1
+        ? workspaceSidebarAllScopeId
+        : workspaceSidebarFocusedScopeId
     let selectedMonitorScopeId = validScopeIds.contains(TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId)
         ? TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId
-        : workspaceSidebarFocusedScopeId
+        : defaultMonitorScopeId
     let projects = buildWorkspaceSidebarProjectViewModels()
     let validProjectIds = Set(projects.map(\.id))
-    let selectedProjectId = validProjectIds.contains(TrayMenuModel.shared.workspaceSidebarSelectedProjectId)
-        ? TrayMenuModel.shared.workspaceSidebarSelectedProjectId
-        : activeWorkspaceProjectId(for: projectMonitor)
+    let selectedProjectId = resolvedWorkspaceSidebarSelectedProjectId(
+        validProjectIds: validProjectIds,
+        activeProjectId: activeWorkspaceProjectId(for: projectMonitor),
+    )
 
     let gaps = ResolvedGaps(gaps: config.gaps, monitor: workspaceSidebarResolvedPanelMonitor())
     TrayMenuModel.shared.workspaceSidebarTopPadding = CGFloat(gaps.outer.top)
@@ -153,7 +170,10 @@ private func workspaceSidebarSelectedProjectMonitor(
 
 @MainActor
 func workspaceSidebarResolvedPanelMonitor() -> Monitor {
-    config.workspaceSidebar.resolvedMonitor(sortedMonitors: sortedMonitors) ?? mainMonitor
+    if isMouseWindowDragInProgress() {
+        return mouseLocation.monitorApproximation
+    }
+    return config.workspaceSidebar.resolvedMonitor(sortedMonitors: sortedMonitors) ?? mainMonitor
 }
 
 @MainActor
@@ -202,6 +222,7 @@ private func buildWorkspaceSidebarProjectViewModels() -> [WorkspaceSidebarProjec
         WorkspaceSidebarProjectViewModel(
             id: $0.id,
             displayName: $0.name,
+            colorHex: config.workspaceSidebar.projectColors[$0.id].flatMap(normalizedWorkspaceSidebarColorHex),
         )
     }
 }

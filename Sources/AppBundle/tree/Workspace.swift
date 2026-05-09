@@ -458,6 +458,21 @@ func canDeleteWorkspaceProject(_ projectId: String) -> Bool {
 }
 
 @MainActor
+func workspaceProjectFallbackForDeletion(excluding projectId: String) -> String {
+    let projects = workspaceProjects()
+    guard let deletedIndex = projects.firstIndex(where: { $0.id == projectId }) else {
+        return projects.first { $0.id != projectId }?.id ?? workspaceProjectDefaultId
+    }
+    if let next = projects.getOrNil(atIndex: deletedIndex + 1) {
+        return next.id
+    }
+    if deletedIndex > 0 {
+        return projects[deletedIndex - 1].id
+    }
+    return workspaceProjectDefaultId
+}
+
+@MainActor
 func deleteWorkspaceForSidebar(workspaceName: String) throws {
     guard let workspace = Workspace.existing(byName: workspaceName) else {
         throw WorkspaceMutationError.workspaceNotFound(workspaceName)
@@ -475,7 +490,7 @@ func deleteWorkspaceProject(_ projectId: String) throws {
         throw WorkspaceMutationError.projectCannotBeDeleted(project.name)
     }
 
-    let fallbackId = workspaceProjects().first { $0.id != projectId }?.id ?? workspaceProjectDefaultId
+    let fallbackId = workspaceProjectFallbackForDeletion(excluding: projectId)
     let activePoints = activeWorkspaceProjectIdByScreenPoint
         .filter { _, activeProjectId in activeProjectId == projectId }
         .map(\.key)
@@ -495,8 +510,10 @@ func deleteWorkspaceProject(_ projectId: String) throws {
 
     workspaceProjectIdToProject.removeValue(forKey: projectId)
     config.workspaceSidebar.projectLabels.removeValue(forKey: projectId)
+    config.workspaceSidebar.projectColors.removeValue(forKey: projectId)
     if !isUnitTest {
         try persistWorkspaceSidebarProjectLabel(projectId: projectId, label: nil)
+        try persistWorkspaceSidebarProjectColor(projectId: projectId, colorHex: nil)
     }
     compactAutomaticWorkspaceNames()
     checkWorkspaceHierarchyInvariants()
@@ -561,14 +578,37 @@ private func workspaceFallbackForDeletion(
     projectId: String,
     monitor: Monitor,
 ) -> Workspace {
-    preferredWorkspace(projectId: projectId, monitor: monitor)?.takeIf { $0 != workspace }
-        ?? userFacingWorkspaces(
-            Workspace.all.filter {
-                $0 != workspace && $0.scope == workspaceScope(projectId: projectId, monitor: monitor)
-            },
-            focusedWorkspace: focus.workspace,
-        ).sorted().first
+    closestWorkspaceForDeletion(
+        excluding: workspace,
+        projectId: projectId,
+        monitor: monitor,
+    )
         ?? createBlankWorkspace(projectId: projectId, monitor: monitor)
+}
+
+@MainActor
+private func closestWorkspaceForDeletion(
+    excluding workspace: Workspace,
+    projectId: String,
+    monitor: Monitor,
+) -> Workspace? {
+    let candidates = userFacingWorkspaces(
+        Workspace.all.filter {
+            $0.scope == workspaceScope(projectId: projectId, monitor: monitor)
+        },
+        focusedWorkspace: focus.workspace,
+    ).sorted()
+
+    guard let deletedIndex = candidates.firstIndex(where: { $0 === workspace }) else {
+        return candidates.first { $0 !== workspace }
+    }
+    if let next = candidates.getOrNil(atIndex: deletedIndex + 1) {
+        return next
+    }
+    if deletedIndex > 0 {
+        return candidates[deletedIndex - 1]
+    }
+    return nil
 }
 
 @MainActor

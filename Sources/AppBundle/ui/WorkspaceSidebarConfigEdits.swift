@@ -79,6 +79,19 @@ func updateWorkspaceSidebarProjectLabelConfig(
     )
 }
 
+func updateWorkspaceSidebarProjectColorConfig(
+    in configText: String,
+    projectId: String,
+    colorHex: String?,
+) -> String {
+    updateWorkspaceSidebarKeyValueSectionConfig(
+        in: configText,
+        sectionHeader: "[workspace-sidebar.project-colors]",
+        key: projectId,
+        value: colorHex,
+    )
+}
+
 private func updateWorkspaceSidebarKeyValueSectionConfig(
     in configText: String,
     sectionHeader: String,
@@ -161,6 +174,21 @@ func persistWorkspaceSidebarProjectLabel(projectId: String, label: String?) thro
         in: currentText,
         projectId: projectId,
         label: label,
+    )
+    if let parent = targetUrl.deletingLastPathComponent().takeIf({ $0.path != targetUrl.path }) {
+        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+    }
+    try updatedText.write(to: targetUrl, atomically: true, encoding: .utf8)
+}
+
+@MainActor
+func persistWorkspaceSidebarProjectColor(projectId: String, colorHex: String?) throws {
+    let targetUrl = preferredWorkspaceSidebarConfigUrl()
+    let currentText = (try? String(contentsOf: targetUrl, encoding: .utf8)) ?? ""
+    let updatedText = updateWorkspaceSidebarProjectColorConfig(
+        in: currentText,
+        projectId: projectId,
+        colorHex: colorHex,
     )
     if let parent = targetUrl.deletingLastPathComponent().takeIf({ $0.path != targetUrl.path }) {
         try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)

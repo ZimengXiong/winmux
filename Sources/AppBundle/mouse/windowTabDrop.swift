@@ -832,6 +832,8 @@ func isActionableSidebarWorkspaceDropTarget(
     switch targetKind {
         case .workspace(let workspaceName):
             return sourceWorkspaceName != workspaceName
+        case .monitor:
+            return true
         case .newWorkspace:
             return true
         case nil:
@@ -848,6 +850,21 @@ private func currentSidebarWorkspaceDropDestination(sourceWindow: Window, mouseL
        isActionableSidebarWorkspaceDropTarget(sourceWorkspaceName: sourceWorkspaceName, targetKind: target.kind)
     {
         switch target.kind {
+            case .monitor(let scopeId):
+                guard let monitor = workspaceSidebarMonitor(forScopeId: scopeId) else { return nil }
+                let workspace = monitor.activeWorkspace
+                guard workspace.name != sourceWorkspaceName else { return nil }
+                return WindowDragIntentDestination(
+                    kind: .moveToWorkspace(workspaceName: workspace.name),
+                    previewContainerRect: workspaceSidebarCursorPreviewRect(at: mouseLocation),
+                    previewRect: workspaceSidebarCursorPreviewRect(at: mouseLocation),
+                    interactionRect: target.rect.expanded(left: 14, right: 14, top: 12, bottom: 12),
+                    title: sourceLabel,
+                    subtitle: "Drop to send this item to \(workspaceSidebarMonitorDisplayName(monitor))",
+                    previewStyle: .sidebarWorkspaceMove,
+                    previewGeometry: .rounded,
+                    isGroup: isGroup,
+                )
             case .workspace(let workspaceName):
                 return WindowDragIntentDestination(
                     kind: .moveToWorkspace(workspaceName: workspaceName),
@@ -875,6 +892,14 @@ private func currentSidebarWorkspaceDropDestination(sourceWindow: Window, mouseL
         }
     }
     return nil
+}
+
+private func workspaceSidebarMonitorDisplayName(_ monitor: Monitor) -> String {
+    let name = monitor.name.trimmingCharacters(in: .whitespacesAndNewlines)
+    if monitor.isMain {
+        return "Main Display"
+    }
+    return name.isEmpty ? "Display \(monitor.monitorId_oneBased ?? 0)" : name
 }
 
 @MainActor
@@ -1179,6 +1204,7 @@ func updatePendingDetachedTabIntent(sourceWindow: Window, mouseLocation: CGPoint
 
 @MainActor
 func refreshPendingWindowDragIntentFromGlobalMouseDrag() {
+    WorkspaceSidebarPanel.shared.refreshForCurrentDragIfNeeded()
     guard isLeftMouseButtonDown, getCurrentMouseManipulationKind() == .move else {
         clearPendingWindowDragIntent()
         clearPendingUnmanagedWindowSnap()

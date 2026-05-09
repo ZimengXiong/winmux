@@ -2,6 +2,17 @@ import AppKit
 @testable import AppBundle
 import XCTest
 
+private struct WorkspaceSidebarDragTestMonitor: Monitor {
+    let monitorAppKitNsScreenScreensId: Int
+    let name: String
+    let rect: Rect
+    let visibleRect: Rect
+    let isMain: Bool
+
+    var width: CGFloat { rect.width }
+    var height: CGFloat { rect.height }
+}
+
 final class WorkspaceSidebarDragTest: XCTestCase {
     func testLeftMouseButtonPressedUsesBitmask() {
         XCTAssertTrue(isLeftMouseButtonPressed(mask: 0b1))
@@ -37,6 +48,206 @@ final class WorkspaceSidebarDragTest: XCTestCase {
                 editingWorkspaceName: nil,
                 isSidebarDragInProgress: false,
             ),
+        )
+    }
+
+    func testProjectSwipeDirectionRequiresHorizontalIntent() {
+        XCTAssertEqual(
+            workspaceSidebarProjectSwipeDirection(horizontalTranslation: -40, verticalTranslation: 4),
+            1,
+        )
+        XCTAssertEqual(
+            workspaceSidebarProjectSwipeDirection(horizontalTranslation: 40, verticalTranslation: 4),
+            -1,
+        )
+        XCTAssertNil(
+            workspaceSidebarProjectSwipeDirection(horizontalTranslation: -40, verticalTranslation: 38),
+        )
+        XCTAssertNil(
+            workspaceSidebarProjectSwipeDirection(horizontalTranslation: -4, verticalTranslation: 0),
+        )
+    }
+
+    func testProjectSwipeNavigatesWithoutWrapping() {
+        XCTAssertEqual(
+            workspaceSidebarProjectIndexAfterSwipe(currentIndex: 1, projectCount: 3, direction: 1),
+            2,
+        )
+        XCTAssertEqual(
+            workspaceSidebarProjectIndexAfterSwipe(currentIndex: 1, projectCount: 3, direction: -1),
+            0,
+        )
+        XCTAssertNil(
+            workspaceSidebarProjectIndexAfterSwipe(currentIndex: 2, projectCount: 3, direction: 1),
+        )
+        XCTAssertNil(
+            workspaceSidebarProjectIndexAfterSwipe(currentIndex: 0, projectCount: 3, direction: -1),
+        )
+    }
+
+    func testProjectSwipeCreatesOnlyPastEdgesAfterBreakPoint() {
+        XCTAssertFalse(
+            shouldCreateWorkspaceSidebarProjectAfterSwipe(
+                currentIndex: 1,
+                projectCount: 3,
+                direction: 1,
+                distance: 120,
+            ),
+        )
+        XCTAssertFalse(
+            shouldCreateWorkspaceSidebarProjectAfterSwipe(
+                currentIndex: 2,
+                projectCount: 3,
+                direction: 1,
+                distance: 96,
+            ),
+        )
+        XCTAssertTrue(
+            shouldCreateWorkspaceSidebarProjectAfterSwipe(
+                currentIndex: 2,
+                projectCount: 3,
+                direction: 1,
+                distance: 110,
+            ),
+        )
+        XCTAssertTrue(
+            shouldCreateWorkspaceSidebarProjectAfterSwipe(
+                currentIndex: 0,
+                projectCount: 3,
+                direction: -1,
+                distance: 110,
+            ),
+        )
+    }
+
+    func testProjectSwipeFormationProgressOnlyAtEdges() {
+        XCTAssertEqual(
+            workspaceSidebarProjectEdgeCreationProgress(
+                currentIndex: 1,
+                projectCount: 3,
+                direction: 1,
+                distance: 100,
+            ),
+            0,
+        )
+        XCTAssertEqual(
+            workspaceSidebarProjectEdgeCreationProgress(
+                currentIndex: 2,
+                projectCount: 3,
+                direction: 1,
+                distance: 22,
+            ),
+            0,
+        )
+        XCTAssertEqual(
+            workspaceSidebarProjectEdgeCreationProgress(
+                currentIndex: 2,
+                projectCount: 3,
+                direction: 1,
+                distance: 104,
+            ),
+            1,
+        )
+    }
+
+    func testProjectSwipeSwitchProgressReachesOneAtNavigationThreshold() {
+        XCTAssertEqual(workspaceSidebarProjectSwipeSwitchProgress(distance: 0), 0)
+        XCTAssertEqual(workspaceSidebarProjectSwipeSwitchProgress(distance: 22), 0.5)
+        XCTAssertEqual(workspaceSidebarProjectSwipeSwitchProgress(distance: 44), 1)
+        XCTAssertEqual(workspaceSidebarProjectSwipeSwitchProgress(distance: 64), 1)
+    }
+
+    func testProjectPagerDragTracksRealAdjacentPagesDirectly() {
+        XCTAssertEqual(
+            workspaceSidebarProjectPagerDragOffset(
+                horizontalTranslation: -60,
+                currentIndex: 0,
+                projectCount: 2,
+                pageWidth: 200,
+            ),
+            -60,
+        )
+        XCTAssertEqual(
+            workspaceSidebarProjectPagerDragOffset(
+                horizontalTranslation: -240,
+                currentIndex: 0,
+                projectCount: 2,
+                pageWidth: 200,
+            ),
+            -200,
+        )
+    }
+
+    func testProjectPagerDragUsesResistanceAtProjectEdges() {
+        XCTAssertEqual(
+            workspaceSidebarProjectPagerDragOffset(
+                horizontalTranslation: 120,
+                currentIndex: 0,
+                projectCount: 1,
+                pageWidth: 200,
+            ),
+            52,
+        )
+        XCTAssertEqual(
+            workspaceSidebarProjectPagerDragOffset(
+                horizontalTranslation: -120,
+                currentIndex: 0,
+                projectCount: 1,
+                pageWidth: 200,
+            ),
+            -52,
+        )
+    }
+
+    func testProjectHueIsStableAndNormalized() {
+        let firstHue = workspaceSidebarProjectHue(projectId: "project-alpha")
+        let secondHue = workspaceSidebarProjectHue(projectId: "project-alpha")
+
+        XCTAssertEqual(firstHue, secondHue)
+        XCTAssertGreaterThanOrEqual(firstHue, 0)
+        XCTAssertLessThan(firstHue, 1)
+    }
+
+    func testProjectColorHexNormalizes() {
+        XCTAssertEqual(normalizedWorkspaceSidebarColorHex("#60a5fa"), "#60A5FA")
+        XCTAssertEqual(normalizedWorkspaceSidebarColorHex("f87171"), "#F87171")
+        XCTAssertNil(normalizedWorkspaceSidebarColorHex("#12345"))
+        XCTAssertNil(normalizedWorkspaceSidebarColorHex("tomato"))
+    }
+
+    func testProjectColorUsesConfiguredHexWhenPresent() {
+        XCTAssertNotNil(workspaceSidebarColor(hex: "#60A5FA"))
+        XCTAssertNil(workspaceSidebarColor(hex: "not-a-color"))
+    }
+
+    func testProjectSwipeScrollDeltaUsesDragDirection() {
+        XCTAssertEqual(
+            workspaceSidebarProjectSwipeTranslationAfterScroll(currentTranslation: 0, scrollingDeltaX: 24),
+            -24,
+        )
+        XCTAssertEqual(
+            workspaceSidebarProjectSwipeTranslationAfterScroll(currentTranslation: -24, scrollingDeltaX: -10),
+            -14,
+        )
+    }
+
+    func testSidebarSelectedProjectFollowsActiveProject() {
+        XCTAssertEqual(
+            resolvedWorkspaceSidebarSelectedProjectId(
+                validProjectIds: [workspaceProjectDefaultId, "project-1", "project-2"],
+                activeProjectId: "project-2",
+            ),
+            "project-2",
+        )
+    }
+
+    func testSidebarSelectedProjectFallsBackAfterDeletedProject() {
+        XCTAssertEqual(
+            resolvedWorkspaceSidebarSelectedProjectId(
+                validProjectIds: [workspaceProjectDefaultId, "project-1"],
+                activeProjectId: "project-2",
+            ),
+            workspaceProjectDefaultId,
         )
     }
 
@@ -236,5 +447,95 @@ final class WorkspaceSidebarDragTest: XCTestCase {
                 targetKind: nil,
             ),
         )
+    }
+
+    func testMonitorSidebarDropTargetIsActionable() {
+        XCTAssertTrue(
+            isActionableSidebarWorkspaceDropTarget(
+                sourceWorkspaceName: "1",
+                targetKind: .monitor("monitor:1920.0,0.0"),
+            ),
+        )
+    }
+
+    @MainActor
+    func testSidebarNewWorkspaceTargetUsesDropPointMonitorBeforeSourceMonitor() {
+        let main = WorkspaceSidebarDragTestMonitor(
+            monitorAppKitNsScreenScreensId: 1,
+            name: "Main",
+            rect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            isMain: true,
+        )
+        let secondary = WorkspaceSidebarDragTestMonitor(
+            monitorAppKitNsScreenScreensId: 2,
+            name: "Secondary",
+            rect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            isMain: false,
+        )
+        setMonitorsForTests([main, secondary])
+        defer { setMonitorsForTests(nil) }
+
+        let target = workspaceSidebarTargetMonitor(
+            selectedMonitor: nil,
+            fallbackPoint: CGPoint(x: 2000, y: 20),
+            fallbackWindowMonitor: main,
+            focusedMonitor: main,
+        )
+
+        XCTAssertEqual(target.rect.topLeftCorner, secondary.rect.topLeftCorner)
+    }
+
+    @MainActor
+    func testSidebarNewWorkspaceTargetHonorsExplicitMonitorSelection() {
+        let main = WorkspaceSidebarDragTestMonitor(
+            monitorAppKitNsScreenScreensId: 1,
+            name: "Main",
+            rect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            isMain: true,
+        )
+        let secondary = WorkspaceSidebarDragTestMonitor(
+            monitorAppKitNsScreenScreensId: 2,
+            name: "Secondary",
+            rect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            isMain: false,
+        )
+        setMonitorsForTests([main, secondary])
+        defer { setMonitorsForTests(nil) }
+
+        let target = workspaceSidebarTargetMonitor(
+            selectedMonitor: main,
+            fallbackPoint: CGPoint(x: 2000, y: 20),
+            fallbackWindowMonitor: secondary,
+            focusedMonitor: secondary,
+        )
+
+        XCTAssertEqual(target.rect.topLeftCorner, main.rect.topLeftCorner)
+    }
+
+    @MainActor
+    func testSecondaryMonitorWindowsAreManaged() {
+        XCTAssertTrue(shouldWinMuxManageWindow(at: CGPoint(x: 2000, y: 20)))
+    }
+
+    @MainActor
+    func testMonitorScopeResolvesMonitorPoint() {
+        let secondary = WorkspaceSidebarDragTestMonitor(
+            monitorAppKitNsScreenScreensId: 2,
+            name: "Secondary",
+            rect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            isMain: false,
+        )
+        setMonitorsForTests([secondary])
+        defer { setMonitorsForTests(nil) }
+
+        let scopeId = workspaceSidebarMonitorScopeId(for: secondary)
+
+        XCTAssertEqual(workspaceSidebarMonitorScopePoint(scopeId), secondary.rect.topLeftCorner)
+        XCTAssertEqual(workspaceSidebarMonitor(forScopeId: scopeId)?.rect.topLeftCorner, secondary.rect.topLeftCorner)
     }
 }

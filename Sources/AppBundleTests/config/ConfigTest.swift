@@ -418,6 +418,9 @@ final class ConfigTest: XCTestCase {
 
             [workspace-sidebar.project-labels]
                 default = 'Personal'
+
+            [workspace-sidebar.project-colors]
+                default = '#ff8844'
             """,
         )
         assertEquals(errors, [])
@@ -433,6 +436,7 @@ final class ConfigTest: XCTestCase {
                 menuBarReserveHeight: 30,
                 workspaceLabels: ["1": "Code", "2": "Web"],
                 projectLabels: ["default": "Personal"],
+                projectColors: ["default": "#FF8844"],
             ),
         )
 
@@ -448,6 +452,16 @@ final class ConfigTest: XCTestCase {
             "workspace-sidebar.collapsed-width: Must be greater than 0",
             "workspace-sidebar.menu-bar-reserve-height: Must be greater than or equal to 0",
             "workspace-sidebar.width: Must be greater than 0",
+        ])
+
+        let (_, colorErrors) = parseConfig(
+            """
+            [workspace-sidebar.project-colors]
+                default = 'not-a-color'
+            """,
+        )
+        assertEquals(colorErrors.descriptions, [
+            "workspace-sidebar.project-colors.default: Must be a hex color like '#RRGGBB'",
         ])
     }
 
@@ -771,6 +785,46 @@ final class ConfigTest: XCTestCase {
         )
 
         XCTAssertFalse(updated.contains("[workspace-sidebar.workspace-labels]"))
+        XCTAssertTrue(updated.contains("[mode.main.binding]"))
+    }
+
+    func testUpdateWorkspaceSidebarProjectColorConfigAddsAndReplacesColor() {
+        let added = updateWorkspaceSidebarProjectColorConfig(
+            in: """
+            [workspace-sidebar]
+                enabled = true
+            """,
+            projectId: "project-1",
+            colorHex: "#60A5FA",
+        )
+
+        XCTAssertTrue(added.contains("[workspace-sidebar.project-colors]"))
+        XCTAssertTrue(added.contains("\"project-1\" = \"#60A5FA\""))
+
+        let replaced = updateWorkspaceSidebarProjectColorConfig(
+            in: added,
+            projectId: "project-1",
+            colorHex: "#F87171",
+        )
+
+        XCTAssertTrue(replaced.contains("\"project-1\" = \"#F87171\""))
+        XCTAssertFalse(replaced.contains("\"project-1\" = \"#60A5FA\""))
+    }
+
+    func testUpdateWorkspaceSidebarProjectColorConfigRemovesLastColorSection() {
+        let updated = updateWorkspaceSidebarProjectColorConfig(
+            in: """
+            [workspace-sidebar.project-colors]
+            "project-1" = "#60A5FA"
+
+            [mode.main.binding]
+                alt-h = 'focus left'
+            """,
+            projectId: "project-1",
+            colorHex: nil,
+        )
+
+        XCTAssertFalse(updated.contains("[workspace-sidebar.project-colors]"))
         XCTAssertTrue(updated.contains("[mode.main.binding]"))
     }
 

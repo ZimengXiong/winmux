@@ -113,6 +113,66 @@ final class WorkspaceCommandTest: XCTestCase {
         XCTAssertEqual(workspaceDisplayName("1"), "Workspace 1")
     }
 
+    func testDirectWorkspaceShortcutPrefersActiveProjectDisplayIndex() async throws {
+        let defaultWorkspace = Workspace.get(byName: "1")
+        defaultWorkspace.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 51, parent: defaultWorkspace.rootTilingContainer)
+        let project = createWorkspaceProject()
+        let projectWorkspace = try XCTUnwrap(switchWorkspaceProject(project.id, on: mainMonitor))
+        XCTAssertTrue(TestWindow.new(id: 56, parent: projectWorkspace.rootTilingContainer).focusWindow())
+
+        let result = try await WorkspaceCommand(
+            args: WorkspaceCmdArgs(target: .direct(.parse("1").getOrDie())),
+        ).run(.defaultEnv, .emptyStdin)
+
+        assertEquals(result.exitCode, 0)
+        XCTAssertTrue(focus.workspace === projectWorkspace)
+        XCTAssertEqual(focus.workspace.projectId, project.id)
+        XCTAssertEqual(workspaceDisplayName(focus.workspace.name), "Workspace 1")
+    }
+
+    func testDirectWorkspaceShortcutCreatesNextWorkspaceInsideActiveProject() async throws {
+        let defaultWorkspace1 = Workspace.get(byName: "1")
+        defaultWorkspace1.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 52, parent: defaultWorkspace1.rootTilingContainer)
+        let defaultWorkspace2 = Workspace.get(byName: "2")
+        defaultWorkspace2.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 53, parent: defaultWorkspace2.rootTilingContainer)
+        let project = createWorkspaceProject()
+        let firstProjectWorkspace = try XCTUnwrap(switchWorkspaceProject(project.id, on: mainMonitor))
+        XCTAssertTrue(TestWindow.new(id: 57, parent: firstProjectWorkspace.rootTilingContainer).focusWindow())
+
+        let result = try await WorkspaceCommand(
+            args: WorkspaceCmdArgs(target: .direct(.parse("2").getOrDie())),
+        ).run(.defaultEnv, .emptyStdin)
+
+        assertEquals(result.exitCode, 0)
+        XCTAssertEqual(focus.workspace.projectId, project.id)
+        XCTAssertFalse(focus.workspace === defaultWorkspace2)
+        XCTAssertEqual(workspaceDisplayName(focus.workspace.name), "Workspace 2")
+    }
+
+    func testWorkspaceNextCreatesWorkspaceInsideActiveProject() async throws {
+        let defaultWorkspace1 = Workspace.get(byName: "1")
+        defaultWorkspace1.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 54, parent: defaultWorkspace1.rootTilingContainer)
+        let defaultWorkspace2 = Workspace.get(byName: "2")
+        defaultWorkspace2.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 55, parent: defaultWorkspace2.rootTilingContainer)
+        let project = createWorkspaceProject()
+        let firstProjectWorkspace = try XCTUnwrap(switchWorkspaceProject(project.id, on: mainMonitor))
+        XCTAssertTrue(TestWindow.new(id: 58, parent: firstProjectWorkspace.rootTilingContainer).focusWindow())
+
+        let result = try await WorkspaceCommand(
+            args: WorkspaceCmdArgs(target: .relative(.next)),
+        ).run(.defaultEnv, .emptyStdin)
+
+        assertEquals(result.exitCode, 0)
+        XCTAssertEqual(focus.workspace.projectId, project.id)
+        XCTAssertFalse(focus.workspace === defaultWorkspace2)
+        XCTAssertEqual(workspaceDisplayName(focus.workspace.name), "Workspace 2")
+    }
+
     func testWorkspaceNextDoesNotCreateBlankWorkspaceWhenWrapping() async throws {
         let workspace1 = Workspace.get(byName: "1")
         workspace1.markAsAutomaticallyNamed()

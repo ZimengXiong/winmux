@@ -57,7 +57,7 @@ private struct WorkspaceSidebarCompactClockCard: View {
     }
 
     var body: some View {
-        VStack(spacing: 5) {
+        VStack(alignment: .center, spacing: 5) {
             Text(components.hour)
                 .foregroundStyle(Color.white.opacity(0.86))
 
@@ -75,7 +75,8 @@ private struct WorkspaceSidebarCompactClockCard: View {
             Text(components.second)
                 .foregroundStyle(Color.white.opacity(0.62))
         }
-        .font(.system(size: 11, weight: .semibold))
+        .font(.system(size: 16, weight: .semibold))
+        .monospacedDigit()
         .frame(width: sectionWidth, alignment: .center)
         .frame(minHeight: 84)
         .background(
@@ -115,35 +116,47 @@ private struct WorkspaceSidebarExpandedStatusCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 9) {
+            VStack(alignment: .trailing, spacing: 4) {
                 Text(date, format: .dateTime.hour().minute().second())
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 31, weight: .bold, design: .rounded))
+                    .monospacedDigit()
                     .foregroundStyle(Color.white.opacity(0.94))
                     .lineLimit(1)
+                    .minimumScaleFactor(0.74)
+                    .allowsTightening(true)
                 if showsDate {
-                    Text(date, format: .dateTime.weekday(.abbreviated))
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.64))
-                        .textCase(.uppercase)
-                    Text(date, format: .dateTime.month(.abbreviated).day().year())
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.86))
+                    Text(date, format: .dateTime.month(.wide).day())
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.white.opacity(0.88))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.8)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .trailing)
 
             if showsStatusPills {
-                HStack(alignment: .center, spacing: 6) {
-                    WorkspaceSidebarBatteryPill(snapshot: systemStatus.battery)
-                    WorkspaceSidebarAudioPill(snapshot: systemStatus.audio)
-                    WorkspaceSidebarNetworkPill(snapshot: systemStatus.network)
+                HStack(alignment: .center, spacing: 12) {
+                    WorkspaceSidebarStatusInlineItem(
+                        symbolName: systemStatus.battery.symbolName,
+                        label: systemStatus.battery.label,
+                        accessibilityDescription: systemStatus.battery.accessibilityDescription,
+                    )
+                    WorkspaceSidebarStatusInlineItem(
+                        symbolName: systemStatus.audio.symbolName,
+                        label: systemStatus.audio.label,
+                        accessibilityDescription: systemStatus.audio.accessibilityDescription,
+                    )
+                    WorkspaceSidebarStatusInlineItem(
+                        symbolName: systemStatus.network.symbolName,
+                        label: systemStatus.network.label,
+                        accessibilityDescription: systemStatus.network.accessibilityDescription,
+                    )
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
         .frame(width: sectionWidth, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: workspaceSidebarStatusCornerRadius, style: .continuous)
@@ -155,6 +168,29 @@ private struct WorkspaceSidebarExpandedStatusCard: View {
         )
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text(accessibilitySummary))
+    }
+}
+
+private struct WorkspaceSidebarStatusInlineItem: View {
+    let symbolName: String
+    let label: String
+    let accessibilityDescription: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: symbolName)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.56))
+                .frame(width: 12, alignment: .center)
+
+            Text(label)
+                .font(.system(size: 10.5, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.70))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityDescription)
     }
 }
 

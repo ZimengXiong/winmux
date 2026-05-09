@@ -13,6 +13,23 @@ func workspaceSidebarMonitorScopeId(for point: CGPoint) -> String {
     "\(workspaceSidebarMonitorScopePrefix)\(point.x),\(point.y)"
 }
 
+func workspaceSidebarMonitorScopePoint(_ scopeId: String) -> CGPoint? {
+    guard scopeId.hasPrefix(workspaceSidebarMonitorScopePrefix) else { return nil }
+    let rawPoint = scopeId.dropFirst(workspaceSidebarMonitorScopePrefix.count)
+    let parts = rawPoint.split(separator: ",", maxSplits: 1).compactMap { Double($0) }
+    guard parts.count == 2 else { return nil }
+    return CGPoint(x: parts[0], y: parts[1])
+}
+
+@MainActor
+func workspaceSidebarMonitor(forScopeId scopeId: String) -> Monitor? {
+    if scopeId == workspaceSidebarFocusedScopeId {
+        return focus.workspace.workspaceMonitor
+    }
+    guard let point = workspaceSidebarMonitorScopePoint(scopeId) else { return nil }
+    return sortedMonitors.first { $0.rect.topLeftCorner == point }
+}
+
 func workspaceSidebarWorkspaceMatchesScope(
     workspaceMonitorScopeId: String,
     selectedScopeId: String,
@@ -42,7 +59,7 @@ public final class TrayMenuModel: ObservableObject {
     @Published var workspaceSidebarProjects: [WorkspaceSidebarProjectViewModel] = []
     @Published var workspaceSidebarSelectedProjectId: String = workspaceProjectDefaultId
     @Published var workspaceSidebarMonitorScopes: [WorkspaceSidebarMonitorScopeViewModel] = []
-    @Published var workspaceSidebarSelectedMonitorScopeId: String = workspaceSidebarFocusedScopeId
+    @Published var workspaceSidebarSelectedMonitorScopeId: String = workspaceSidebarAllScopeId
     @Published var workspaceSidebarFocusedMonitorScopeId: String = ""
     @Published var workspaceSidebarShowsMonitorSelector: Bool = false
     @Published var workspaceSidebarDropPreview: WorkspaceSidebarDropPreviewViewModel? = nil
@@ -122,6 +139,7 @@ struct WorkspaceSidebarWorkspaceViewModel: Hashable, Identifiable {
 struct WorkspaceSidebarProjectViewModel: Hashable, Identifiable {
     let id: String
     let displayName: String
+    let colorHex: String?
 }
 
 struct WorkspaceSidebarMonitorScopeViewModel: Hashable, Identifiable {

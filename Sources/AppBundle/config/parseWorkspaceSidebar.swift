@@ -1,3 +1,4 @@
+import Foundation
 import TOMLKit
 
 private let workspaceSidebarParser: [String: any ParserProtocol<WorkspaceSidebarConfig>] = [
@@ -12,6 +13,7 @@ private let workspaceSidebarParser: [String: any ParserProtocol<WorkspaceSidebar
     "menu-bar-reserve-height": Parser(\.menuBarReserveHeight, parseWorkspaceSidebarMenuBarReserveHeight),
     "workspace-labels": Parser(\.workspaceLabels, parseWorkspaceSidebarLabels),
     "project-labels": Parser(\.projectLabels, parseWorkspaceSidebarLabels),
+    "project-colors": Parser(\.projectColors, parseWorkspaceSidebarProjectColors),
 ]
 
 func parseWorkspaceSidebar(
@@ -46,6 +48,40 @@ private func parseWorkspaceSidebarLabels(
         if let label = parseString(rawLabel, backtrace + .key(workspaceName)).getOrNil(appendErrorTo: &errors) {
             result[workspaceName] = label
         }
+    }
+    return result
+}
+
+func normalizedWorkspaceSidebarColorHex(_ raw: String) -> String? {
+    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    let hex = trimmed.hasPrefix("#") ? String(trimmed.dropFirst()) : trimmed
+    let allowedCharacters = Set("0123456789abcdefABCDEF")
+    guard hex.count == 6,
+          hex.allSatisfy({ allowedCharacters.contains($0) })
+    else {
+        return nil
+    }
+    return "#\(hex.uppercased())"
+}
+
+private func parseWorkspaceSidebarProjectColors(
+    _ raw: TOMLValueConvertible,
+    _ backtrace: TomlBacktrace,
+    _ errors: inout [TomlParseError],
+) -> [String: String] {
+    guard let rawTable = raw.table else {
+        errors += [expectedActualTypeError(expected: .table, actual: raw.type, backtrace)]
+        return [:]
+    }
+    var result: [String: String] = [:]
+    for (projectId, rawColor) in rawTable {
+        let colorBacktrace = backtrace + .key(projectId)
+        guard let color = parseString(rawColor, colorBacktrace).getOrNil(appendErrorTo: &errors) else { continue }
+        guard let normalized = normalizedWorkspaceSidebarColorHex(color) else {
+            errors.append(.semantic(colorBacktrace, "Must be a hex color like '#RRGGBB'"))
+            continue
+        }
+        result[projectId] = normalized
     }
     return result
 }
