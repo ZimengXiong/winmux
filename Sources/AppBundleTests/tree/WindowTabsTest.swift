@@ -454,9 +454,9 @@ final class WindowTabsTest: XCTestCase {
         let tabBarHeight = CGFloat(config.windowTabs.height)
 
         XCTAssertEqual(activeFrame.topLeftX, groupFrame.topLeftX + windowTabGroupShellHorizontalInset())
-        XCTAssertEqual(activeFrame.topLeftY, groupFrame.topLeftY + tabBarHeight + windowTabGroupShellTopInset())
+        XCTAssertEqual(activeFrame.topLeftY, groupFrame.topLeftY + tabBarHeight)
         XCTAssertEqual(activeFrame.width, groupFrame.width - windowTabGroupShellHorizontalInset() * 2)
-        XCTAssertEqual(activeFrame.height, groupFrame.height - tabBarHeight - windowTabGroupShellTopInset() - windowTabGroupShellBottomInset())
+        XCTAssertEqual(activeFrame.height, groupFrame.height - tabBarHeight - windowTabGroupShellBottomInset())
     }
 
     @MainActor

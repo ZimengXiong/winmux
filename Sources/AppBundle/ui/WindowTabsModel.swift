@@ -1,7 +1,7 @@
 import AppKit
 
 private let windowTabGroupShellHorizontalInsetValue: CGFloat = 3
-private let windowTabGroupShellTopInsetValue: CGFloat = 3
+private let windowTabGroupShellTopInsetValue: CGFloat = 0
 private let windowTabGroupShellBottomInsetValue: CGFloat = 3
 
 func windowTabGroupShellHorizontalInset() -> CGFloat {
