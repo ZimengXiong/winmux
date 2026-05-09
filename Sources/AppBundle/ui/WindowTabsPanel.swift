@@ -599,11 +599,12 @@ private func shouldAllowTabStripChromeGroupDrag(windowId: UInt32) -> Bool {
 
 private let windowTabPreviewCornerRadius: CGFloat = 8
 private let windowTabStripContentHorizontalPadding: CGFloat = 5
-private let windowTabStripGroupHandleWidth: CGFloat = 34
+private let windowTabStripGroupHandleWidth: CGFloat = 24
 private let windowTabStripCornerRadius: CGFloat = 11
 private let windowTabStripInnerCornerRadius: CGFloat = 8
 private let windowTabStripTabSpacing: CGFloat = 4
 private let windowTabActivePillAnimation: Animation = .easeOut(duration: 0.12)
+private let windowIntentPreviewTint = Color(nsColor: .systemBlue)
 
 func windowTabStripContentPadding() -> CGFloat {
     windowTabStripContentHorizontalPadding
@@ -656,9 +657,7 @@ private struct WindowTabStripView: View {
         HStack(spacing: 0) {
             WindowTabGroupHandleView(
                 windowId: groupDragWindowId,
-                workspaceName: strip.workspaceName,
-                tabCount: strip.tabs.count,
-                role: .group
+                workspaceName: strip.workspaceName
             )
 
             ScrollView(.horizontal, showsIndicators: false) {
@@ -755,9 +754,7 @@ private struct WindowTabStripView: View {
 
             WindowTabGroupHandleView(
                 windowId: groupDragWindowId,
-                workspaceName: strip.workspaceName,
-                tabCount: strip.tabs.count,
-                role: .grip
+                workspaceName: strip.workspaceName
             )
         }
         .padding(.horizontal, 4)
@@ -876,37 +873,22 @@ private struct WindowTabStripView: View {
     }
 }
 
-private enum WindowTabGroupHandleRole {
-    case group
-    case grip
-}
-
 private struct WindowTabGroupHandleView: View {
     let windowId: UInt32?
     let workspaceName: String
-    let tabCount: Int
-    let role: WindowTabGroupHandleRole
-
-    @State private var isHovered = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Button {
             guard let windowId, !isWindowTabStripDragInProgress() else { return }
             focusWindowFromTabStrip(windowId, fallbackWorkspace: workspaceName)
         } label: {
-            handleContent
-                .frame(width: windowTabStripReservedGroupHandleWidth() - 4, height: 26)
-                .background(handleBackground)
-                .contentShape(RoundedRectangle(cornerRadius: windowTabStripInnerCornerRadius, style: .continuous))
+            Color.clear
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(role == .group ? "Focus Tab Group" : "Drag Tab Group")
+        .accessibilityLabel("Focus Tab Group")
         .frame(width: windowTabStripReservedGroupHandleWidth())
         .contentShape(Rectangle())
-        .onHover { hovering in
-            isHovered = hovering
-        }
         .gesture(
             DragGesture(minimumDistance: 10)
                 .onChanged { _ in
@@ -917,51 +899,6 @@ private struct WindowTabGroupHandleView: View {
                     finishMoveFromTabStrip()
                 },
         )
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: isHovered)
-    }
-
-    @ViewBuilder
-    private var handleContent: some View {
-        switch role {
-            case .group:
-                ZStack(alignment: .bottomTrailing) {
-                    Image(systemName: "square.stack.3d.up.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(isHovered ? 0.88 : 0.68))
-                        .frame(width: 21, height: 21)
-                    if tabCount > 1 {
-                        Text("\(min(tabCount, 99))")
-                            .font(.system(size: 7.5, weight: .bold))
-                            .foregroundStyle(Color.black.opacity(0.78))
-                            .monospacedDigit()
-                            .frame(minWidth: 10, minHeight: 10)
-                            .padding(.horizontal, 2)
-                            .background(
-                                Capsule(style: .continuous)
-                                    .fill(Color.white.opacity(isHovered ? 0.84 : 0.68))
-                            )
-                            .offset(x: 3, y: 2)
-                    }
-                }
-            case .grip:
-                VStack(spacing: 2.5) {
-                    ForEach(0 ..< 3, id: \.self) { _ in
-                        Capsule(style: .continuous)
-                            .fill(Color.white.opacity(isHovered ? 0.48 : 0.28))
-                            .frame(width: 13, height: 1.5)
-                    }
-                }
-                .frame(width: 21, height: 21)
-        }
-    }
-
-    private var handleBackground: some View {
-        RoundedRectangle(cornerRadius: windowTabStripInnerCornerRadius, style: .continuous)
-            .fill(Color.white.opacity(isHovered ? 0.075 : 0.025))
-            .overlay {
-                RoundedRectangle(cornerRadius: windowTabStripInnerCornerRadius, style: .continuous)
-                    .strokeBorder(Color.white.opacity(isHovered ? 0.11 : 0.045), lineWidth: 0.5)
-            }
     }
 }
 
@@ -983,8 +920,7 @@ private struct WindowTabItemView: View {
                 guard !isWindowTabStripDragInProgress() else { return }
                 focusWindowFromTabStrip(tab.windowId, fallbackWorkspace: tab.workspaceName)
             } label: {
-                HStack(spacing: 6) {
-                    activeIndicator
+                HStack(spacing: 0) {
                     Text(tab.title)
                         .font(.system(size: 11, weight: tab.isActive ? .semibold : .medium))
                         .lineLimit(1)
@@ -1053,23 +989,6 @@ private struct WindowTabItemView: View {
         isHovered || tab.isActive
     }
 
-    private var activeIndicator: some View {
-        Circle()
-            .fill(indicatorColor)
-            .frame(width: tab.isActive ? 6 : 5, height: tab.isActive ? 6 : 5)
-            .shadow(color: indicatorColor.opacity(tab.isActive ? 0.36 : 0), radius: 3)
-    }
-
-    private var indicatorColor: Color {
-        if tab.isActive {
-            return Color.accentColor.opacity(0.95)
-        }
-        if isHovered {
-            return Color.white.opacity(0.36)
-        }
-        return Color.white.opacity(0.18)
-    }
-
     private var foregroundColor: Color {
         if tab.isActive { return Color.white.opacity(0.98) }
         if isDragSource { return Color.white.opacity(0.94) }
@@ -1133,31 +1052,10 @@ private struct WindowTabDropPreviewView: View {
                     let shape = WindowTabDropOutlineShape(cornerRadii: model.geometry.cornerRadii(radius: cornerRadius))
                     let localFrame = localPreviewFrame(for: model)
 
-                    ZStack(alignment: .topLeading) {
-                        shape
-                            .fill(cfg.color.opacity(isPresented ? cfg.fillOpacity : 0))
-                            .overlay {
-                                shape
-                                    .strokeBorder(Color.white.opacity(isPresented ? 0.18 : 0), lineWidth: 0.7)
-                            }
-                            .overlay {
-                                shape
-                                    .strokeBorder(
-                                        cfg.color.opacity(isPresented ? cfg.borderOpacity : 0.10),
-                                        style: cfg.strokeStyle,
-                                    )
-                            }
-                            .shadow(
-                                color: cfg.color.opacity(isPresented ? cfg.glowOpacity : 0),
-                                radius: isPresented ? cfg.glowRadius : 0
-                            )
-                            .frame(width: localFrame.width, height: localFrame.height)
-                            .offset(x: localFrame.minX, y: localFrame.minY)
-
-                        previewIntentBadge(model: model, config: cfg, localFrame: localFrame)
-                    }
+                    previewSurface(shape: shape, config: cfg)
+                        .frame(width: localFrame.width, height: localFrame.height)
+                        .offset(x: localFrame.minX, y: localFrame.minY)
                     .opacity(isPresented ? 1 : 0.84)
-                    .scaleEffect(isPresented ? 1 : 0.985, anchor: .center)
                 }
             }
         }
@@ -1193,148 +1091,108 @@ private struct WindowTabDropPreviewView: View {
         let glowOpacity: Double
         let glowRadius: CGFloat
         let strokeStyle: StrokeStyle
-        let iconName: String
     }
 
     private func borderConfig(for style: WindowTabDropPreviewStyle) -> BorderConfig {
         switch style {
             case .tabInsert:
                 return BorderConfig(
-                    color: Color(nsColor: .systemCyan),
+                    color: windowIntentPreviewTint,
                     cornerRadius: windowTabPreviewCornerRadius,
-                    fillOpacity: 0.10,
-                    borderOpacity: 0.92,
-                    glowOpacity: 0.22,
-                    glowRadius: 12,
-                    strokeStyle: StrokeStyle(lineWidth: 2.6),
-                    iconName: "plus.rectangle.on.rectangle",
+                    fillOpacity: 0.20,
+                    borderOpacity: 0.70,
+                    glowOpacity: 0.18,
+                    glowRadius: 10,
+                    strokeStyle: StrokeStyle(lineWidth: 2.2),
                 )
             case .detach:
                 return BorderConfig(
-                    color: Color(nsColor: .systemOrange),
+                    color: windowIntentPreviewTint,
                     cornerRadius: windowTabPreviewCornerRadius,
-                    fillOpacity: 0.10,
-                    borderOpacity: 0.92,
-                    glowOpacity: 0.22,
-                    glowRadius: 12,
-                    strokeStyle: StrokeStyle(lineWidth: 2.6),
-                    iconName: "arrow.up.left.and.arrow.down.right",
+                    fillOpacity: 0.18,
+                    borderOpacity: 0.68,
+                    glowOpacity: 0.16,
+                    glowRadius: 10,
+                    strokeStyle: StrokeStyle(lineWidth: 2.2),
                 )
             case .stackSplit:
                 return BorderConfig(
-                    color: Color(nsColor: .systemBlue),
+                    color: windowIntentPreviewTint,
                     cornerRadius: windowTabPreviewCornerRadius,
-                    fillOpacity: 0.10,
-                    borderOpacity: 0.92,
-                    glowOpacity: 0.22,
-                    glowRadius: 12,
-                    strokeStyle: StrokeStyle(lineWidth: 2.6),
-                    iconName: "rectangle.split.2x1",
+                    fillOpacity: 0.18,
+                    borderOpacity: 0.68,
+                    glowOpacity: 0.16,
+                    glowRadius: 10,
+                    strokeStyle: StrokeStyle(lineWidth: 2.2),
                 )
             case .swap:
                 return BorderConfig(
-                    color: Color(nsColor: .systemPurple),
+                    color: windowIntentPreviewTint,
                     cornerRadius: windowTabPreviewCornerRadius,
-                    fillOpacity: 0.09,
-                    borderOpacity: 0.92,
-                    glowOpacity: 0.20,
-                    glowRadius: 11,
-                    strokeStyle: StrokeStyle(lineWidth: 2.6, dash: [7, 4]),
-                    iconName: "arrow.left.arrow.right",
+                    fillOpacity: 0.16,
+                    borderOpacity: 0.68,
+                    glowOpacity: 0.14,
+                    glowRadius: 9,
+                    strokeStyle: StrokeStyle(lineWidth: 2.2, dash: [7, 4]),
                 )
             case .workspaceMove:
                 return BorderConfig(
-                    color: Color(nsColor: .systemGreen),
+                    color: windowIntentPreviewTint,
                     cornerRadius: windowTabPreviewCornerRadius,
-                    fillOpacity: 0.10,
-                    borderOpacity: 0.92,
-                    glowOpacity: 0.22,
-                    glowRadius: 12,
-                    strokeStyle: StrokeStyle(lineWidth: 2.6),
-                    iconName: "rectangle.portrait.and.arrow.right",
+                    fillOpacity: 0.18,
+                    borderOpacity: 0.68,
+                    glowOpacity: 0.16,
+                    glowRadius: 10,
+                    strokeStyle: StrokeStyle(lineWidth: 2.2),
                 )
             case .sidebarWorkspaceMove:
                 return BorderConfig(
-                    color: Color(nsColor: .systemGreen),
+                    color: windowIntentPreviewTint,
                     cornerRadius: windowTabPreviewCornerRadius,
-                    fillOpacity: 0.10,
-                    borderOpacity: 0.92,
-                    glowOpacity: 0.22,
-                    glowRadius: 12,
-                    strokeStyle: StrokeStyle(lineWidth: 2.6),
-                    iconName: "sidebar.left",
+                    fillOpacity: 0.18,
+                    borderOpacity: 0.68,
+                    glowOpacity: 0.16,
+                    glowRadius: 10,
+                    strokeStyle: StrokeStyle(lineWidth: 2.2),
                 )
         }
     }
 
-    private func previewIntentBadge(
-        model: WindowTabDropPreviewViewModel,
-        config: BorderConfig,
-        localFrame: CGRect,
-    ) -> some View {
-        let badgeFrame = previewBadgeFrame(for: localFrame)
-        let showsSubtitle = localFrame.width >= 210 && localFrame.height >= 92
-        return HStack(spacing: 8) {
-            ZStack {
-                Circle()
-                    .fill(config.color.opacity(0.22))
-                Image(systemName: config.iconName)
-                    .font(.system(size: 11.5, weight: .semibold))
-                    .foregroundStyle(config.color.opacity(0.95))
-            }
-            .frame(width: 24, height: 24)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(model.title)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.94))
-                    .lineLimit(1)
-                if showsSubtitle {
-                    Text(model.subtitle)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.62))
-                        .lineLimit(1)
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.leading, 7)
-        .padding(.trailing, 10)
-        .frame(width: badgeFrame.width, height: badgeFrame.height, alignment: .leading)
-        .background(previewBadgeBackground(color: config.color))
-        .offset(x: badgeFrame.minX, y: badgeFrame.minY)
-        .opacity(isPresented ? 1 : 0)
-        .scaleEffect(isPresented ? 1 : 0.96, anchor: .topLeading)
-        .allowsHitTesting(false)
-    }
-
-    private func previewBadgeBackground(color: Color) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
-        return ZStack {
+    private func previewSurface(shape: WindowTabDropOutlineShape, config: BorderConfig) -> some View {
+        ZStack {
             liquidGlassBackground(in: shape, isInteractive: false) {
                 shape
                     .fill(.ultraThinMaterial)
                     .environment(\.colorScheme, .dark)
             }
             shape
-                .fill(Color.black.opacity(usesNativeLiquidGlass ? 0.26 : 0.46))
+                .fill(Color.black.opacity(usesNativeLiquidGlass ? 0.08 : 0.18))
             shape
-                .strokeBorder(color.opacity(0.28), lineWidth: 0.7)
+                .fill(config.color.opacity(isPresented ? config.fillOpacity : 0))
+            shape
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(isPresented ? 0.16 : 0),
+                            Color.white.opacity(isPresented ? 0.035 : 0),
+                            Color.clear,
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom,
+                    ),
+                )
+                .blendMode(.screen)
+            shape
+                .strokeBorder(Color.white.opacity(isPresented ? 0.18 : 0), lineWidth: 0.7)
+            shape
+                .strokeBorder(
+                    config.color.opacity(isPresented ? config.borderOpacity : 0.10),
+                    style: config.strokeStyle,
+                )
         }
-        .shadow(color: Color.black.opacity(0.24), radius: 10, y: 4)
-    }
-
-    private func previewBadgeFrame(for localFrame: CGRect) -> CGRect {
-        let badgeWidth = min(max(localFrame.width - 24, 120), min(300, localFrame.width))
-        let showsSubtitle = localFrame.width >= 210 && localFrame.height >= 92
-        let badgeHeight: CGFloat = showsSubtitle ? 42 : 32
-        let preferredY = localFrame.minY + 12
-        let maxY = localFrame.maxY - badgeHeight - 8
-        return CGRect(
-            x: localFrame.midX - badgeWidth / 2,
-            y: max(localFrame.minY + 4, min(preferredY, maxY)),
-            width: badgeWidth,
-            height: badgeHeight,
+        .shadow(
+            color: config.color.opacity(isPresented ? config.glowOpacity : 0),
+            radius: isPresented ? config.glowRadius : 0
         )
     }
 

@@ -352,7 +352,7 @@ final class WindowTabsTest: XCTestCase {
         let tabInteractionZone = accordion.windowTabDropInteractionRect.orDie()
         let swapDropZone = accordion.swapDropZoneRect.orDie()
 
-        XCTAssertGreaterThan(tabDropZone.height, tabBarRect.height)
+        XCTAssertEqual(tabDropZone.height, tabBarRect.height)
         XCTAssertGreaterThan(tabInteractionZone.height, tabDropZone.height)
         XCTAssertGreaterThan(swapDropZone.minY, tabDropZone.maxY)
     }
@@ -485,14 +485,14 @@ final class WindowTabsTest: XCTestCase {
         let topPreview = window.stackSplitPreviewRect(position: .above).orDie()
         let bottomPreview = window.stackSplitPreviewRect(position: .below).orDie()
 
-        XCTAssertEqual(leftPreview.minX, fullRect.minX + 1)
+        XCTAssertEqual(leftPreview.minX, fullRect.minX)
         XCTAssertEqual(leftPreview.maxX, fullRect.minX + fullRect.width / 2)
         XCTAssertEqual(rightPreview.minX, fullRect.minX + fullRect.width / 2)
-        XCTAssertEqual(rightPreview.maxX, fullRect.maxX - 1)
-        XCTAssertEqual(topPreview.minY, fullRect.minY + 1)
+        XCTAssertEqual(rightPreview.maxX, fullRect.maxX)
+        XCTAssertEqual(topPreview.minY, fullRect.minY)
         XCTAssertEqual(topPreview.maxY, fullRect.minY + fullRect.height / 2)
         XCTAssertEqual(bottomPreview.minY, fullRect.minY + fullRect.height / 2)
-        XCTAssertEqual(bottomPreview.maxY, fullRect.maxY - 1)
+        XCTAssertEqual(bottomPreview.maxY, fullRect.maxY)
     }
 
     @MainActor
@@ -514,9 +514,9 @@ final class WindowTabsTest: XCTestCase {
 
         XCTAssertEqual(preview.geometry, .splitRight)
         XCTAssertEqual(preview.rect.minX, 100)
-        XCTAssertEqual(preview.rect.maxX, 199)
-        XCTAssertEqual(preview.rect.minY, 1)
-        XCTAssertEqual(preview.rect.maxY, 219)
+        XCTAssertEqual(preview.rect.maxX, 200)
+        XCTAssertEqual(preview.rect.minY, 0)
+        XCTAssertEqual(preview.rect.maxY, 220)
         XCTAssertGreaterThan(preview.rect.height, target.lastAppliedLayoutPhysicalRect.orDie().height)
     }
 
@@ -541,9 +541,9 @@ final class WindowTabsTest: XCTestCase {
 
         XCTAssertEqual(preview.geometry, .splitRight)
         XCTAssertEqual(preview.rect.minX, 130)
-        XCTAssertEqual(preview.rect.maxX, 259)
-        XCTAssertEqual(preview.rect.minY, 1)
-        XCTAssertEqual(preview.rect.maxY, 219)
+        XCTAssertEqual(preview.rect.maxX, 260)
+        XCTAssertEqual(preview.rect.minY, 0)
+        XCTAssertEqual(preview.rect.maxY, 220)
     }
 
     @MainActor
@@ -585,11 +585,11 @@ final class WindowTabsTest: XCTestCase {
 
         let fullRect = window.lastAppliedLayoutPhysicalRect.orDie()
         let tabPreview = window.tabDropZoneRect.orDie()
-        let expectedTabBandHeight = min(max(CGFloat(config.windowTabs.height) + 18, 56), fullRect.height)
+        let expectedTabBandHeight = min(max(CGFloat(config.windowTabs.height), 1), fullRect.height)
 
-        XCTAssertEqual(tabPreview.minX, fullRect.minX + 1)
-        XCTAssertEqual(tabPreview.maxX, fullRect.maxX - 1)
-        XCTAssertEqual(tabPreview.minY, fullRect.minY + 1)
+        XCTAssertEqual(tabPreview.minX, fullRect.minX)
+        XCTAssertEqual(tabPreview.maxX, fullRect.maxX)
+        XCTAssertEqual(tabPreview.minY, fullRect.minY)
         XCTAssertEqual(tabPreview.maxY, fullRect.minY + expectedTabBandHeight)
     }
 

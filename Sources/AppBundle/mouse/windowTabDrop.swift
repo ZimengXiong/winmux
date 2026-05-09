@@ -1,9 +1,7 @@
 import AppKit
 import Common
 
-private let windowDropPreviewInset: CGFloat = 1
-private let windowTabInsertPreviewExtraHeight: CGFloat = 18
-private let windowTabInsertPreviewMinHeight: CGFloat = 56
+private let windowDropPreviewInset: CGFloat = 0
 private let windowTabInsertInteractionHorizontalInset: CGFloat = 24
 private let windowTabInsertInteractionTopInset: CGFloat = 12
 private let windowTabInsertInteractionBottomInset: CGFloat = 26
@@ -520,15 +518,14 @@ private func setWorkspaceSidebarDropPreviewIfChanged(_ preview: WorkspaceSidebar
 @MainActor
 private func tabStackDestination(targetWindow: Window, mouseLocation: CGPoint? = nil) -> WindowDragIntentDestination? {
     guard isWindowDragIntentKindEnabled(.tabStack(targetWindowId: targetWindow.windowId)),
-          let dropRect = targetWindow.tabDropZoneRect,
-          let interactionRect = targetWindow.tabDropInteractionRect,
-          mouseLocation.map(interactionRect.contains) ?? true
+          let rects = targetWindow.tabStackTargetRects,
+          mouseLocation.map(rects.interactionRect.contains) ?? true
     else { return nil }
     return WindowDragIntentDestination(
         kind: .tabStack(targetWindowId: targetWindow.windowId),
-        previewContainerRect: targetWindow.windowDragVisibleRect ?? dropRect,
-        previewRect: dropRect,
-        interactionRect: interactionRect,
+        previewContainerRect: rects.containerRect,
+        previewRect: rects.previewRect,
+        interactionRect: rects.interactionRect,
         title: "Insert Into Tabs",
         subtitle: "Drop near the top edge to add this window",
         previewStyle: .tabInsert,
@@ -990,6 +987,29 @@ extension TreeNode {
 
 extension Window {
     @MainActor
+    fileprivate var tabStackTargetRects: (containerRect: Rect, previewRect: Rect, interactionRect: Rect)? {
+        if let parent = parent as? TilingContainer,
+           parent.layout == .accordion,
+           let previewRect = parent.windowTabDropZoneRect,
+           let interactionRect = parent.windowTabDropInteractionRect
+        {
+            return (
+                containerRect: parent.windowDragVisibleRect ?? previewRect,
+                previewRect: previewRect,
+                interactionRect: interactionRect,
+            )
+        }
+        guard let previewRect = tabDropZoneRect,
+              let interactionRect = tabDropInteractionRect
+        else { return nil }
+        return (
+            containerRect: windowDragVisibleRect ?? previewRect,
+            previewRect: previewRect,
+            interactionRect: interactionRect,
+        )
+    }
+
+    @MainActor
     var tabDropZoneRect: Rect? {
         guard let rect = windowDragVisibleRect else { return nil }
         return rect.tabInsertPreviewRect(barHeight: CGFloat(config.windowTabs.height))
@@ -1007,9 +1027,9 @@ extension Window {
            parent.layout == .accordion,
            let rect = parent.lastAppliedLayoutPhysicalRect
         {
-            return rect.insetBy(left: 2, right: 2, top: 2, bottom: 2)
+            return rect
         }
-        return lastAppliedLayoutPhysicalRect?.insetBy(left: 2, right: 2, top: 2, bottom: 2)
+        return lastAppliedLayoutPhysicalRect
     }
 
     @MainActor
@@ -2038,10 +2058,8 @@ extension TreeNode {
 
 extension Rect {
     fileprivate func tabInsertPreviewRect(barHeight: CGFloat) -> Rect {
-        // Reserve a visibly taller top strip so the tab-insert affordance
-        // wins reliably over body intents, even on angled approaches.
         let effectiveHeight = min(
-            max(barHeight + windowTabInsertPreviewExtraHeight, windowTabInsertPreviewMinHeight),
+            max(barHeight, 1),
             max(height, 0)
         )
         return insetBy(
