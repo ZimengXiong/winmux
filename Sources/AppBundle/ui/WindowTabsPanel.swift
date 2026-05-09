@@ -53,35 +53,45 @@ private func estimateTopCornerRadius(in image: CGImage) -> CGFloat? {
         return bitmap.colorAt(x: x, y: bitmapY)?.alphaComponent ?? 0
     }
 
-    func leadingOpaqueInset(yFromTop: Int, leftToRight: Bool) -> Int? {
+    var samples: [Int] = []
+
+    // Scan horizontal insets at multiple rows from top (both edges)
+    for row in 0 ..< min(4, maxScan) {
         for step in 0 ..< maxScan {
-            let x = leftToRight ? step : width - 1 - step
-            if alphaAt(x: x, yFromTop: yFromTop) > windowPreviewCornerAlphaThreshold {
-                return step
+            if alphaAt(x: step, yFromTop: row) > windowPreviewCornerAlphaThreshold {
+                samples.append(step)
+                break
             }
         }
-        return nil
+        for step in 0 ..< maxScan {
+            if alphaAt(x: width - 1 - step, yFromTop: row) > windowPreviewCornerAlphaThreshold {
+                samples.append(step)
+                break
+            }
+        }
     }
 
-    func trailingOpaqueInset(xFromEdge: Int, topToBottom: Bool) -> Int? {
-        let x = topToBottom ? xFromEdge : width - 1 - xFromEdge
+    // Scan vertical insets at leftmost and rightmost columns from top
+    for x in [0, width - 1] {
         for step in 0 ..< maxScan {
             if alphaAt(x: x, yFromTop: step) > windowPreviewCornerAlphaThreshold {
-                return step
+                samples.append(step)
+                break
             }
         }
+    }
+
+    guard samples.count >= 6 else { return nil }
+
+    let sorted = samples.sorted()
+    let median = sorted[sorted.count / 2]
+
+    let consistent = samples.filter { abs($0 - median) <= 2 }
+    guard Double(consistent.count) >= Double(samples.count) * 0.6 else {
         return nil
     }
 
-    let samples = [
-        leadingOpaqueInset(yFromTop: 0, leftToRight: true),
-        leadingOpaqueInset(yFromTop: 0, leftToRight: false),
-        trailingOpaqueInset(xFromEdge: 0, topToBottom: true),
-        trailingOpaqueInset(xFromEdge: 0, topToBottom: false),
-    ].compactMap { $0 }
-
-    guard !samples.isEmpty else { return nil }
-    return CGFloat(samples.max() ?? 0)
+    return CGFloat(median)
 }
 
 @MainActor
@@ -703,12 +713,12 @@ private func shouldAllowTabStripChromeGroupDrag(windowId: UInt32) -> Bool {
 private let windowTabPreviewCornerRadius: CGFloat = 8
 private let windowTabStripContentHorizontalPadding: CGFloat = 2
 private let windowTabStripGroupHandleWidth: CGFloat = 2
-private let windowTabStripCornerRadius: CGFloat = 8
-private let windowTabStripInnerCornerRadius: CGFloat = 5
+private let windowTabStripCornerRadius: CGFloat = 12
+private let windowTabStripInnerCornerRadius: CGFloat = 6
 private let windowTabStripTabSpacing: CGFloat = 4
 private let windowTabGroupFrameStrokeWidth: CGFloat = 0.5
 private let windowTabGroupFrameInnerStrokeWidth: CGFloat = 0.5
-private let windowTabGroupFrameMaxInnerCornerRadius: CGFloat = 24
+private let windowTabGroupFrameMaxInnerCornerRadius: CGFloat = 20
 private let windowTabActivePillAnimation: Animation = .easeOut(duration: 0.12)
 private let windowIntentPreviewTint = Color(nsColor: .systemBlue)
 
@@ -746,9 +756,24 @@ private struct WindowTabGroupFrameView: View {
         let tabHeight = min(strip.frame.height, groupSize.height)
         let innerFrame = windowTabGroupInnerAppFrame(groupSize: groupSize, tabHeight: tabHeight)
         let appCornerRadius = windowTabGroupAppCornerRadius(activeWindowId: strip.activeWindowId)
-        let outerCornerRadius = windowTabGroupOuterCornerRadius(innerCornerRadius: appCornerRadius)
-        let outerRadii = PreviewCornerRadii.uniform(outerCornerRadius)
-        let innerRadii = PreviewCornerRadii.uniform(appCornerRadius)
+
+        let topRadius = windowTabStripCornerRadius
+        let bottomOuterRadius = appCornerRadius + windowTabGroupShellHorizontalInset()
+        let outerRadii = PreviewCornerRadii(
+            topLeft: topRadius,
+            topRight: topRadius,
+            bottomRight: bottomOuterRadius,
+            bottomLeft: bottomOuterRadius
+        )
+
+        // Inner corners match outer so the shell fills uniformly, without gaps.
+        let innerRadii = PreviewCornerRadii(
+            topLeft: topRadius,
+            topRight: topRadius,
+            bottomRight: appCornerRadius,
+            bottomLeft: appCornerRadius
+        )
+
         let shellShape = WindowTabGroupShellShape(
             outerRadii: outerRadii,
             innerRect: innerFrame,
@@ -769,13 +794,13 @@ private struct WindowTabGroupFrameView: View {
                 usesEvenOddFill: true,
             )
 
-            // Outer edge definition
+            // Outer edge
             outerShape
-                .strokeBorder(Color.black.opacity(0.18), lineWidth: 0.5)
+                .strokeBorder(Color.black.opacity(0.16), lineWidth: 0.5)
 
             // Inner window boundary
             WindowTabDropOutlineShape(cornerRadii: innerRadii)
-                .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
+                .strokeBorder(Color.white.opacity(0.09), lineWidth: 0.5)
                 .frame(width: innerFrame.width, height: innerFrame.height)
                 .offset(x: innerFrame.minX, y: innerFrame.minY)
         }
@@ -788,7 +813,7 @@ private struct WindowTabGroupFrameView: View {
 @MainActor
 private func windowTabGroupAppCornerRadius(activeWindowId: UInt32?) -> CGFloat {
     let radius = activeWindowId.map(estimatedWindowPreviewCornerRadius) ?? windowTabPreviewCornerRadius
-    return min(max(radius, 0), windowTabGroupFrameMaxInnerCornerRadius)
+    return min(max(radius, 4), windowTabGroupFrameMaxInnerCornerRadius)
 }
 
 private func windowTabGroupOuterCornerRadius(innerCornerRadius: CGFloat) -> CGFloat {
@@ -833,7 +858,7 @@ private struct WindowTabStripView: View {
         let count = max(strip.tabs.count, 1)
         let stripWidth = strip.frame.width
         let tabWidth = windowTabStripTabWidth(stripWidth: stripWidth, count: count)
-        let itemHeight = max(strip.frame.height - 6, 24)
+        let itemHeight = max(strip.frame.height - 4, 18)
         let effectiveTabWidth = tabWidth + windowTabStripTabSpacing
         let groupDragWindowId = strip.tabs.first(where: \.isActive)?.windowId ?? strip.tabs.first?.windowId
 
@@ -850,13 +875,15 @@ private struct WindowTabStripView: View {
             )
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: windowTabStripTabSpacing) {
-                    ForEach(strip.tabs) { tab in
+                HStack(spacing: 0) {
+                    let tabs = strip.tabs
+                    ForEach(Array(tabs.enumerated()), id: \.element.id) { index, tab in
                         WindowTabItemView(
                             tab: tab,
                             width: tabWidth,
                             height: itemHeight,
-                            isDragSource: draggingTabId == tab.windowId
+                            isDragSource: draggingTabId == tab.windowId,
+                            showDivider: index < tabs.count - 1
                         )
                         .offset(x: tabVisualOffset(
                             for: tab,
@@ -953,12 +980,9 @@ private struct WindowTabStripView: View {
     }
 
     private var tabStripShape: WindowTabDropOutlineShape {
-        let outerRadius = windowTabGroupOuterCornerRadius(
-            innerCornerRadius: windowTabGroupAppCornerRadius(activeWindowId: strip.activeWindowId)
-        )
-        return WindowTabDropOutlineShape(cornerRadii: PreviewCornerRadii(
-            topLeft: outerRadius,
-            topRight: outerRadius,
+        WindowTabDropOutlineShape(cornerRadii: PreviewCornerRadii(
+            topLeft: windowTabStripCornerRadius,
+            topRight: windowTabStripCornerRadius,
             bottomRight: 0,
             bottomLeft: 0
         ))
@@ -1055,46 +1079,42 @@ private struct WindowTabItemView: View {
     let width: CGFloat
     let height: CGFloat
     let isDragSource: Bool
+    let showDivider: Bool
 
     @State private var isHovered = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        Button {
-            guard !isWindowTabStripDragInProgress() else { return }
-            focusWindowFromTabStrip(tab.windowId, fallbackWorkspace: tab.workspaceName)
-        } label: {
-            ZStack(alignment: .bottom) {
-                // Subtle hover fill
-                if isHovered, !tab.isActive {
-                    Rectangle()
-                        .fill(Color.white.opacity(0.04))
-                }
+        ZStack(alignment: .trailing) {
+            // Active tab subtle blue fill
+            if tab.isActive {
+                Rectangle()
+                    .fill(Color(red: 0.15, green: 0.40, blue: 0.85).opacity(0.12))
+            }
 
-                // Active bottom accent
-                if tab.isActive {
-                    Rectangle()
-                        .fill(Color.white.opacity(0.45))
-                        .frame(height: 1.5)
-                        .padding(.horizontal, 10)
-                        .padding(.bottom, 3)
-                }
-
+            Button {
+                guard !isWindowTabStripDragInProgress() else { return }
+                focusWindowFromTabStrip(tab.windowId, fallbackWorkspace: tab.workspaceName)
+            } label: {
                 Text(tab.title)
                     .font(.system(size: 11, weight: tab.isActive ? .semibold : .medium))
                     .lineLimit(1)
                     .foregroundStyle(foregroundColor)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .padding(.horizontal, 8)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             }
-            .frame(width: width, height: height)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+
+            if showDivider {
+                Rectangle()
+                    .fill(Color.white.opacity(0.10))
+                    .frame(width: 0.5)
+                    .padding(.vertical, 6)
+            }
         }
-        .buttonStyle(.plain)
+        .frame(width: width, height: height)
         .opacity(isDragSource ? 0.55 : 1.0)
         .scaleEffect(isDragSource ? 1.02 : 1.0)
         .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isDragSource)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.10), value: isHovered)
         .onHover { hovering in
             isHovered = hovering
         }
@@ -1106,9 +1126,9 @@ private struct WindowTabItemView: View {
     }
 
     private var foregroundColor: Color {
-        if tab.isActive { return Color.white.opacity(0.92) }
-        if isDragSource { return Color.white.opacity(0.85) }
-        return isHovered ? Color.white.opacity(0.75) : Color.white.opacity(0.50)
+        if tab.isActive { return Color.white.opacity(0.95) }
+        if isDragSource { return Color.white.opacity(0.80) }
+        return isHovered ? Color.white.opacity(0.70) : Color.white.opacity(0.45)
     }
 }
 
