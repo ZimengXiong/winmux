@@ -598,8 +598,8 @@ private func shouldAllowTabStripChromeGroupDrag(windowId: UInt32) -> Bool {
 // MARK: - Constants
 
 private let windowTabPreviewCornerRadius: CGFloat = 8
-private let windowTabStripContentHorizontalPadding: CGFloat = 5
-private let windowTabStripGroupHandleWidth: CGFloat = 24
+private let windowTabStripContentHorizontalPadding: CGFloat = 2
+private let windowTabStripGroupHandleWidth: CGFloat = 4
 private let windowTabStripCornerRadius: CGFloat = 11
 private let windowTabStripInnerCornerRadius: CGFloat = 8
 private let windowTabStripTabSpacing: CGFloat = 4
@@ -757,7 +757,7 @@ private struct WindowTabStripView: View {
                 workspaceName: strip.workspaceName
             )
         }
-        .padding(.horizontal, 4)
+        .padding(.horizontal, 2)
         .padding(.vertical, 4)
         .frame(width: stripWidth, height: strip.frame.height)
         .background {
@@ -765,15 +765,15 @@ private struct WindowTabStripView: View {
         }
         .overlay {
             RoundedRectangle(cornerRadius: windowTabStripCornerRadius, style: .continuous)
-                .strokeBorder(Color.white.opacity(usesNativeLiquidGlass ? 0.12 : 0.16), lineWidth: 0.6)
+                .strokeBorder(Color.white.opacity(usesNativeLiquidGlass ? 0.10 : 0.13), lineWidth: 0.6)
         }
         .overlay(alignment: .top) {
             RoundedRectangle(cornerRadius: windowTabStripCornerRadius, style: .continuous)
                 .strokeBorder(
                     LinearGradient(
                         colors: [
-                            Color.white.opacity(0.18),
-                            Color.white.opacity(0.02),
+                            Color.white.opacity(0.15),
+                            Color.white.opacity(0.01),
                         ],
                         startPoint: .top,
                         endPoint: .bottom,
@@ -783,9 +783,9 @@ private struct WindowTabStripView: View {
                 .blendMode(.screen)
         }
         .shadow(
-            color: Color.black.opacity(usesNativeLiquidGlass ? 0.12 : 0.22),
-            radius: usesNativeLiquidGlass ? 2 : 5,
-            y: 2
+            color: Color.black.opacity(usesNativeLiquidGlass ? 0.08 : 0.14),
+            radius: usesNativeLiquidGlass ? 1.5 : 4,
+            y: 1
         )
         .clipShape(RoundedRectangle(cornerRadius: windowTabStripCornerRadius, style: .continuous))
         .animation(windowTabActivePillAnimation, value: strip.tabs.first(where: \.isActive)?.windowId)
@@ -802,14 +802,14 @@ private struct WindowTabStripView: View {
                     .environment(\.colorScheme, .dark)
             }
             RoundedRectangle(cornerRadius: windowTabStripCornerRadius, style: .continuous)
-                .fill(Color.black.opacity(usesNativeLiquidGlass ? 0.10 : 0.20))
+                .fill(Color.black.opacity(usesNativeLiquidGlass ? 0.025 : 0.09))
             RoundedRectangle(cornerRadius: windowTabStripCornerRadius, style: .continuous)
                 .fill(
                     LinearGradient(
                         colors: [
-                            Color.white.opacity(0.15),
-                            Color.white.opacity(0.045),
-                            Color.black.opacity(0.05),
+                            Color.white.opacity(0.12),
+                            Color.white.opacity(0.025),
+                            Color.clear,
                         ],
                         startPoint: .top,
                         endPoint: .bottom,
@@ -1061,26 +1061,14 @@ private struct WindowTabDropPreviewView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.clear)
-        .compositingGroup()
-        .animation(previewAnimation, value: state.model?.frame)
-        .animation(previewAnimation, value: state.model?.containerFrame)
-        .animation(previewAnimation, value: state.model?.style)
-        .animation(previewAnimation, value: state.model?.geometry)
-        .animation(previewAnimation, value: state.model?.referenceWindowId)
         .onAppear {
             isPresented = state.model != nil
         }
         .onChange(of: state.model != nil) { isVisible in
-            withAnimation(reduceMotion ? .easeOut(duration: 0.08) : .easeOut(duration: 0.12)) {
+            withAnimation(reduceMotion ? .easeOut(duration: 0.05) : .easeOut(duration: 0.07)) {
                 isPresented = isVisible
             }
         }
-    }
-
-    private var previewAnimation: Animation {
-        reduceMotion
-            ? .easeOut(duration: 0.08)
-            : .interactiveSpring(response: 0.18, dampingFraction: 0.86)
     }
 
     private struct BorderConfig {
@@ -1160,21 +1148,19 @@ private struct WindowTabDropPreviewView: View {
 
     private func previewSurface(shape: WindowTabDropOutlineShape, config: BorderConfig) -> some View {
         ZStack {
-            liquidGlassBackground(in: shape, isInteractive: false) {
-                shape
-                    .fill(.ultraThinMaterial)
-                    .environment(\.colorScheme, .dark)
-            }
             shape
-                .fill(Color.black.opacity(usesNativeLiquidGlass ? 0.08 : 0.18))
+                .fill(.ultraThinMaterial)
+                .environment(\.colorScheme, .dark)
+            shape
+                .fill(Color.black.opacity(0.08))
             shape
                 .fill(config.color.opacity(isPresented ? config.fillOpacity : 0))
             shape
                 .fill(
                     LinearGradient(
                         colors: [
-                            Color.white.opacity(isPresented ? 0.16 : 0),
-                            Color.white.opacity(isPresented ? 0.035 : 0),
+                            Color.white.opacity(isPresented ? 0.13 : 0),
+                            Color.white.opacity(isPresented ? 0.025 : 0),
                             Color.clear,
                         ],
                         startPoint: .top,

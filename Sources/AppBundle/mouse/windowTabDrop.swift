@@ -2,9 +2,11 @@ import AppKit
 import Common
 
 private let windowDropPreviewInset: CGFloat = 0
+private let windowTabInsertPreviewExtraHeight: CGFloat = 18
+private let windowTabInsertPreviewMinHeight: CGFloat = 52
 private let windowTabInsertInteractionHorizontalInset: CGFloat = 24
 private let windowTabInsertInteractionTopInset: CGFloat = 12
-private let windowTabInsertInteractionBottomInset: CGFloat = 26
+private let windowTabInsertInteractionBottomInset: CGFloat = 32
 private let windowTabInsertStickyTrackingHorizontalInset: CGFloat = 24
 private let windowTabInsertStickyTrackingTopInset: CGFloat = 20
 private let windowTabInsertStickyTrackingBottomInset: CGFloat = 36
@@ -2059,7 +2061,7 @@ extension TreeNode {
 extension Rect {
     fileprivate func tabInsertPreviewRect(barHeight: CGFloat) -> Rect {
         let effectiveHeight = min(
-            max(barHeight, 1),
+            max(barHeight + windowTabInsertPreviewExtraHeight, windowTabInsertPreviewMinHeight),
             max(height, 0)
         )
         return insetBy(

@@ -352,7 +352,7 @@ final class WindowTabsTest: XCTestCase {
         let tabInteractionZone = accordion.windowTabDropInteractionRect.orDie()
         let swapDropZone = accordion.swapDropZoneRect.orDie()
 
-        XCTAssertEqual(tabDropZone.height, tabBarRect.height)
+        XCTAssertGreaterThan(tabDropZone.height, tabBarRect.height)
         XCTAssertGreaterThan(tabInteractionZone.height, tabDropZone.height)
         XCTAssertGreaterThan(swapDropZone.minY, tabDropZone.maxY)
     }
@@ -585,7 +585,7 @@ final class WindowTabsTest: XCTestCase {
 
         let fullRect = window.lastAppliedLayoutPhysicalRect.orDie()
         let tabPreview = window.tabDropZoneRect.orDie()
-        let expectedTabBandHeight = min(max(CGFloat(config.windowTabs.height), 1), fullRect.height)
+        let expectedTabBandHeight = min(max(CGFloat(config.windowTabs.height) + 18, 52), fullRect.height)
 
         XCTAssertEqual(tabPreview.minX, fullRect.minX)
         XCTAssertEqual(tabPreview.maxX, fullRect.maxX)
