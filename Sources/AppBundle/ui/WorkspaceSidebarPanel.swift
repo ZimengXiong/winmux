@@ -1854,6 +1854,11 @@ struct WorkspaceSidebarProjectPager: View {
             pagerContent
                 .frame(width: sectionWidth, height: workspaceSidebarPagerHeight, alignment: .center)
                 .contentShape(Rectangle())
+                .contextMenu {
+                    Button("New") {
+                        createWorkspaceSidebarProject()
+                    }
+                }
                 .onHover { hovering in
                     isHovered = hovering
                 }
@@ -2457,19 +2462,6 @@ private struct WorkspaceSidebarProjectMenuButton: NSViewRepresentable {
             newItem.target = self
             menu.addItem(newItem)
 
-            let renameItem = NSMenuItem(title: "Rename", action: #selector(renameProject(_:)), keyEquivalent: "")
-            renameItem.target = self
-            menu.addItem(renameItem)
-
-            let colorItem = NSMenuItem(title: "Color", action: nil, keyEquivalent: "")
-            colorItem.submenu = colorMenu()
-            menu.addItem(colorItem)
-
-            let deleteItem = NSMenuItem(title: "Delete", action: #selector(deleteProject(_:)), keyEquivalent: "")
-            deleteItem.target = self
-            deleteItem.isEnabled = parent.canDeleteSelectedProject
-            menu.addItem(deleteItem)
-
             menu.update()
             let menuSize = menu.size
             let x = min(0, sender.bounds.width - menuSize.width)
@@ -2579,6 +2571,7 @@ private struct WorkspaceSidebarProjectRenameField: NSViewRepresentable {
         context.coordinator.parent = self
         context.coordinator.onCommit = onCommit
         context.coordinator.onCancel = onCancel
+        context.coordinator.field = field
         context.coordinator.installOutsideInteractionMonitor(for: field)
         field.onCommit = {
             context.coordinator.commit()
@@ -2616,6 +2609,7 @@ private struct WorkspaceSidebarProjectRenameField: NSViewRepresentable {
         var didResolve = false
         var onCommit: (() -> Void)?
         var onCancel: (() -> Void)?
+        weak var field: WorkspaceSidebarRenameTextField?
         private var outsideInteractionMonitor: Any?
 
         init(_ parent: WorkspaceSidebarProjectRenameField) {
@@ -2662,6 +2656,10 @@ private struct WorkspaceSidebarProjectRenameField: NSViewRepresentable {
         func commit() {
             guard !didResolve else { return }
             didResolve = true
+            if let field {
+                parent.text = field.stringValue
+                field.window?.makeFirstResponder(nil)
+            }
             removeOutsideInteractionMonitor()
             onCommit?()
         }
@@ -2669,6 +2667,7 @@ private struct WorkspaceSidebarProjectRenameField: NSViewRepresentable {
         func cancel() {
             guard !didResolve else { return }
             didResolve = true
+            field?.window?.makeFirstResponder(nil)
             removeOutsideInteractionMonitor()
             onCancel?()
         }
