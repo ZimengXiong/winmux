@@ -3029,6 +3029,16 @@ struct WorkspaceSidebarWorkspaceSection: View {
                 sectionShape
                     .strokeBorder(sectionBorderColor, lineWidth: sectionBorderWidth)
             }
+            .overlay(alignment: .leading) {
+                if isDropTarget {
+                    Capsule(style: .continuous)
+                        .fill(Color.accentColor.opacity(0.72))
+                        .frame(width: 3)
+                        .padding(.vertical, 8)
+                        .padding(.leading, 1)
+                        .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .leading)))
+                }
+            }
     }
 
     // MARK: - Header
@@ -3088,7 +3098,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
 
     private var sectionBackgroundFill: Color {
         if isDropTarget {
-            return Color.accentColor.opacity(0.16)
+            return Color.accentColor.opacity(0.13)
         } else if workspace.isFocused {
             return workspaceSidebarActiveWorkspaceTint.opacity(isCompact ? 0.32 : 0.17)
         } else if isCompact {
@@ -3105,7 +3115,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
 
     private var sectionBorderColor: Color {
         if isDropTarget {
-            return Color.accentColor.opacity(0.35)
+            return Color.accentColor.opacity(0.46)
         }
         if workspace.isFocused {
             return workspaceSidebarActiveWorkspaceTint.opacity(isCompact ? 0.70 : 0.42)
@@ -3213,9 +3223,18 @@ struct WorkspaceSidebarCreateWorkspaceSection: View {
                         .overlay {
                             sectionShape
                                 .strokeBorder(
-                                    isDropTarget ? Color.accentColor.opacity(0.35) : Color.white.opacity(isHovered ? 0.06 : 0),
+                                    isDropTarget ? Color.accentColor.opacity(0.46) : Color.white.opacity(isHovered ? 0.06 : 0),
                                     lineWidth: isDropTarget ? 1.5 : 0.5
                                 )
+                        }
+                        .overlay(alignment: .leading) {
+                            if isDropTarget {
+                                Capsule(style: .continuous)
+                                    .fill(Color.accentColor.opacity(0.72))
+                                    .frame(width: 3)
+                                    .padding(.vertical, 7)
+                                    .padding(.leading, 1)
+                            }
                         }
                 )
                 .contentShape(sectionShape)
@@ -3263,7 +3282,7 @@ struct WorkspaceSidebarCreateWorkspaceSection: View {
 
     private var createSectionFill: Color {
         if isDropTarget {
-            return Color.accentColor.opacity(0.16)
+            return Color.accentColor.opacity(0.13)
         }
         if isHovered {
             return Color.white.opacity(isCompact ? 0.08 : 0.06)
@@ -3372,25 +3391,52 @@ struct WorkspaceSidebarPreviewRow: View {
     let expandedContentWidth: CGFloat
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 7) {
+            ZStack {
+                Circle()
+                    .fill(Color.accentColor.opacity(0.20))
+                Image(systemName: preview.isTabGroup ? "square.stack.3d.up.fill" : "macwindow")
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .foregroundStyle(Color.accentColor.opacity(0.92))
+            }
+            .frame(width: 18, height: 18)
+            .opacity(0.92)
+
             Text(preview.label)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Color.white.opacity(0.74))
+                .font(.system(size: 11.2, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.82))
                 .lineLimit(1)
-                .opacity(expansionProgress)
+                .opacity(max(expansionProgress, 0.12))
             Spacer(minLength: 0)
+            if preview.isTabGroup, preview.windowCount > 1, expansionProgress > 0.72 {
+                Text("\(preview.windowCount)")
+                    .font(.system(size: 9.5, weight: .bold))
+                    .foregroundStyle(Color.white.opacity(0.68))
+                    .monospacedDigit()
+                    .padding(.horizontal, 5)
+                    .frame(height: 15)
+                    .background(
+                        Capsule(style: .continuous)
+                            .fill(Color.white.opacity(0.09))
+                    )
+            }
         }
         .padding(.horizontal, workspaceSidebarRowHorizontalPadding)
         .padding(.vertical, 1.5)
-        .frame(height: rowHeight + 2)
+        .frame(height: rowHeight + 4)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: workspaceSidebarRowCornerRadius, style: .continuous)
-                .strokeBorder(
-                    Color.accentColor.opacity(0.2),
-                    style: StrokeStyle(lineWidth: 1, dash: [4, 3])
-                )
+                .fill(Color.accentColor.opacity(0.105))
+                .overlay {
+                    RoundedRectangle(cornerRadius: workspaceSidebarRowCornerRadius, style: .continuous)
+                        .strokeBorder(
+                            Color.accentColor.opacity(0.32),
+                            style: StrokeStyle(lineWidth: 1, dash: [5, 3])
+                        )
+                }
         )
+        .shadow(color: Color.accentColor.opacity(0.12), radius: 9, y: 2)
         .contentShape(Rectangle())
         .allowsHitTesting(false)
     }
