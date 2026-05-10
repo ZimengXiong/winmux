@@ -58,6 +58,7 @@ final class WindowMouseInteractionDriver {
             WindowDragFrameGate.shared.reset(windowId: windowId)
         }
         moveSession = session
+        WindowMouseInteractionOpacityController.shared.update(activeWindowId: windowId)
         if isNewSession {
             if subject == .group {
                 WindowTabStripPanelController.shared.hideChromeDuringMouseInteraction(showFrameOnly: false)
@@ -89,6 +90,7 @@ final class WindowMouseInteractionDriver {
         }
         resizeSession = session
         currentlyManipulatedWithMouseWindowId = windowId
+        WindowMouseInteractionOpacityController.shared.update(activeWindowId: windowId)
         setCurrentMouseManipulationKind(.resize)
         clearPendingWindowDragIntent()
         clearPendingUnmanagedWindowSnap()
@@ -155,6 +157,7 @@ final class WindowMouseInteractionDriver {
         isMouseUpResetScheduled = false
         WindowResizePreviewPanel.shared.endStableFrame()
         WindowResizePreviewPanel.shared.hide()
+        WindowMouseInteractionOpacityController.shared.restore()
         WindowTabStripPanelController.shared.showChromeDuringMouseInteraction()
     }
 

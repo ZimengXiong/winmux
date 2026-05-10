@@ -517,7 +517,10 @@ final class WindowTabDropPreviewPanel: NSPanelHud {
         alphaValue = 1
         let previewKey = WindowIntentPreviewContentKey(model: preview)
         if currentPreviewKey != previewKey || !hasShownPreview {
-            compositorView.update(preview)
+            let shouldMorph = hasShownPreview
+                && currentPreviewKey?.canMorph(to: previewKey) == true
+                && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+            compositorView.update(preview, animatingPathChanges: shouldMorph)
             currentPreviewKey = previewKey
         }
         if !isVisible || !hasShownPreview {
@@ -803,10 +806,10 @@ private final class WindowIntentPreviewCompositorView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func update(_ model: WindowTabDropPreviewViewModel) {
+    func update(_ model: WindowTabDropPreviewViewModel, animatingPathChanges: Bool) {
         currentModel = model
         isHidden = false
-        render(model)
+        render(model, animatingPathChanges: animatingPathChanges)
     }
 
     func clear() {
@@ -826,7 +829,7 @@ private final class WindowIntentPreviewCompositorView: NSView {
     override func layout() {
         super.layout()
         if let currentModel {
-            render(currentModel)
+            render(currentModel, animatingPathChanges: false)
         }
     }
 
@@ -866,7 +869,7 @@ private final class WindowIntentPreviewCompositorView: NSView {
         }
     }
 
-    private func render(_ model: WindowTabDropPreviewViewModel) {
+    private func render(_ model: WindowTabDropPreviewViewModel, animatingPathChanges: Bool) {
         let scale = updateContentsScale()
         let zones = localZones(for: model, scale: scale)
         let surfacePath = combinedSurfacePath(for: zones, inset: 0)
@@ -883,20 +886,38 @@ private final class WindowIntentPreviewCompositorView: NSView {
             layer.contentsScale = scale
             layer.isHidden = false
         }
-        surfaceLayer.path = surfacePath
+        setPath(surfacePath, on: surfaceLayer, animating: animatingPathChanges, key: "surfacePath")
         surfaceLayer.fillColor = WindowIntentPreviewPalette.fill
-        highlightLayer.path = surfacePath
+        setPath(surfacePath, on: highlightLayer, animating: animatingPathChanges, key: "highlightPath")
         highlightLayer.fillColor = WindowIntentPreviewPalette.highlight(alpha: style.highlightAlpha)
-        innerStrokeLayer.path = insetPath
-        accentStrokeLayer.path = surfacePath
+        setPath(insetPath, on: innerStrokeLayer, animating: animatingPathChanges, key: "innerStrokePath")
+        setPath(surfacePath, on: accentStrokeLayer, animating: animatingPathChanges, key: "accentPath")
         accentStrokeLayer.strokeColor = WindowIntentPreviewPalette.accent(alpha: style.inactiveStrokeAlpha)
-        activeStrokeLayer.path = activeSurfacePath
+        setPath(activeSurfacePath, on: activeStrokeLayer, animating: animatingPathChanges, key: "activeStrokePath")
         activeStrokeLayer.strokeColor = WindowIntentPreviewPalette.accent(alpha: style.strokeAlpha)
-        guideLayer.path = guidePath
+        setPath(guidePath, on: guideLayer, animating: animatingPathChanges, key: "guidePath")
         guideLayer.strokeColor = WindowIntentPreviewPalette.accent(alpha: style.inactiveGuideAlpha)
-        activeGuideLayer.path = activeGuidePath
+        setPath(activeGuidePath, on: activeGuideLayer, animating: animatingPathChanges, key: "activeGuidePath")
         activeGuideLayer.strokeColor = WindowIntentPreviewPalette.accent(alpha: style.guideAlpha)
         CATransaction.commit()
+    }
+
+    private func setPath(_ path: CGPath?, on layer: CAShapeLayer, animating: Bool, key: String) {
+        let currentPresentationPath = layer.presentation()?.path
+        let currentModelPath = layer.path
+        layer.removeAnimation(forKey: key)
+        layer.path = path
+        guard animating,
+              let fromPath = currentPresentationPath ?? currentModelPath,
+              let path
+        else { return }
+
+        let animation = CABasicAnimation(keyPath: "path")
+        animation.fromValue = fromPath
+        animation.toValue = path
+        animation.duration = 0.145
+        animation.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0, 0, 1)
+        layer.add(animation, forKey: key)
     }
 
     private func updateContentsScale() -> CGFloat {
@@ -983,6 +1004,7 @@ private struct WindowIntentPreviewLocalZone {
 
 private struct WindowIntentPreviewContentKey: Equatable {
     let containerSize: CGSize
+    let referenceWindowId: UInt32?
     let frame: CGRect
     let style: WindowTabDropPreviewStyle
     let geometry: WindowTabDropPreviewGeometry
@@ -990,10 +1012,23 @@ private struct WindowIntentPreviewContentKey: Equatable {
 
     init(model: WindowTabDropPreviewViewModel) {
         containerSize = model.containerFrame.size
+        referenceWindowId = model.referenceWindowId
         frame = model.frame
         style = model.style
         geometry = model.geometry
         zones = model.zones
+    }
+
+    func canMorph(to next: WindowIntentPreviewContentKey) -> Bool {
+        referenceWindowId == next.referenceWindowId
+            && containerSize.isNearlyEqual(to: next.containerSize, tolerance: 1)
+    }
+}
+
+private extension CGSize {
+    func isNearlyEqual(to other: CGSize, tolerance: CGFloat) -> Bool {
+        abs(width - other.width) <= tolerance
+            && abs(height - other.height) <= tolerance
     }
 }
 
