@@ -176,7 +176,7 @@ func migrateAerospaceConfigForWinMux(_ rawToml: String) throws -> String {
 
 private extension String {
     func replacingRegex(_ pattern: String, with replacement: String) -> String {
-        let regex = try! NSRegularExpression(pattern: pattern)
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return self }
         let range = NSRange(startIndex ..< endIndex, in: self)
         return regex.stringByReplacingMatches(in: self, range: range, withTemplate: replacement)
     }

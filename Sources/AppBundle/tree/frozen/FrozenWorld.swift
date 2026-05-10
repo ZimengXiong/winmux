@@ -23,8 +23,8 @@ func restorableWorkspaces(_ workspaces: [Workspace]) -> [Workspace] {
 func collectAllWindowIds(workspace: Workspace) -> [UInt32] {
     workspace.floatingWindows.map { $0.windowId } +
         workspaceOwnedMinimizedWindows(workspace).map { $0.windowId } +
-        (workspace.existingMacOsNativeFullscreenWindowsContainer?.children.map { ($0 as! Window).windowId } ?? []) +
-        (workspace.existingMacOsNativeHiddenAppsWindowsContainer?.children.map { ($0 as! Window).windowId } ?? []) +
+        (workspace.existingMacOsNativeFullscreenWindowsContainer?.children.filterIsInstance(of: Window.self).map { $0.windowId } ?? []) +
+        (workspace.existingMacOsNativeHiddenAppsWindowsContainer?.children.filterIsInstance(of: Window.self).map { $0.windowId } ?? []) +
         collectAllWindowIdsRecursive(workspace.rootTilingContainer)
 }
 

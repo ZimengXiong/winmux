@@ -46,7 +46,7 @@ public func dieT<T>(
         \(getStringStacktrace())
         """
     if !isUnitTest && isServer {
-        showMessageInGui(
+        showDiagnosticMessage(
             filenameIfConsoleApp: recursionDetectorDuringTermination
                 ? "winmux-runtime-error-recursion.txt"
                 : "winmux-runtime-error.txt",

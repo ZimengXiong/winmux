@@ -52,7 +52,7 @@ private func parseEnvVariables(_ raw: TOMLValueConvertible, _ backtrace: TomlBac
         }
         switch rawStr.interpolate(with: env) {
             case .success(let interpolated): result[key] = interpolated
-            case .failure(let _errros): errors += _errros.map { .semantic(backtrace, $0) }
+            case .failure(let interpolationErrors): errors += interpolationErrors.map { .semantic(backtrace, $0) }
         }
     }
     return result

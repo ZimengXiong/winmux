@@ -80,7 +80,7 @@ extension ShellParser.CmdsContext {
                 }
         }
         if let x = self as? ShellParser.IfElseContext {
-            return Result { try parseIfElse(x) }.mapError { $0 as! String }
+            return Result { try parseIfElse(x) }.mapError { String(describing: $0) }
         }
         return .failure("Unknown node type: \(self)")
     }

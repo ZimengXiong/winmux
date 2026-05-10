@@ -43,7 +43,11 @@ extension CmdArgs {
     public var description: String {
         switch Self.info.kind {
             case .execAndForget:
-                CmdKind.execAndForget.rawValue + " " + (self as! ExecAndForgetCmdArgs).bashScript
+                if let args = self as? ExecAndForgetCmdArgs {
+                    CmdKind.execAndForget.rawValue + " " + args.bashScript
+                } else {
+                    ([Self.info.kind.rawValue] + commonState.rawArgsForStrRepr.value.toArray()).joinArgs()
+                }
             default:
                 ([Self.info.kind.rawValue] + commonState.rawArgsForStrRepr.value.toArray()).joinArgs()
         }

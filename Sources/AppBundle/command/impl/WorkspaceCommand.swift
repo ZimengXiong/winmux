@@ -6,12 +6,30 @@ struct WorkspaceCommand: Command {
     let args: WorkspaceCmdArgs
     /*conforms*/ let shouldResetClosedWindowsCache = true
 
-    func run(_ env: CmdEnv, _ io: CmdIo) -> Bool { // todo refactor
+    func run(_ env: CmdEnv, _ io: CmdIo) -> Bool {
         guard let target = args.resolveTargetOrReportError(env, io) else { return false }
         let focusedWs = target.workspace
+        switch resolveWorkspaceTarget(from: focusedWs, io: io) {
+            case .focus(let workspace):
+                return focusOrReportNoop(workspace, focusedWorkspace: focusedWs, io: io, failIfNoop: args.failIfNoop)
+            case .backAndForth:
+                return WorkspaceBackAndForthCommand(args: WorkspaceBackAndForthCmdArgs(rawArgs: [])).run(env, io)
+            case .error:
+                return false
+        }
+    }
+
+    private enum ResolvedWorkspaceTarget {
+        case focus(Workspace)
+        case backAndForth
+        case error
+    }
+
+    @MainActor
+    private func resolveWorkspaceTarget(from focusedWs: Workspace, io: CmdIo) -> ResolvedWorkspaceTarget {
         switch args.target.val {
             case .relative(let nextPrev):
-                let workspace = getNextPrevWorkspace(
+                guard let workspace = getNextPrevWorkspace(
                     current: focusedWs,
                     isNext: nextPrev == .next,
                     wrapAround: args.wrapAround,
@@ -22,27 +40,28 @@ struct WorkspaceCommand: Command {
                         isNext: nextPrev == .next,
                         wrapAround: args.wrapAround,
                         usesStdin: args.useStdin,
-                    )
-                guard let workspace else { return false }
-                return focusOrReportNoop(workspace, focusedWorkspace: focusedWs, io: io, failIfNoop: args.failIfNoop)
+                    ) else {
+                    return .error
+                }
+                return .focus(workspace)
             case .direct(let name):
-                if let workspace = resolveDirectWorkspaceTarget(named: name.raw, from: focusedWs) {
-                    if args.autoBackAndForth && workspace == focusedWs {
-                        return WorkspaceBackAndForthCommand(args: WorkspaceBackAndForthCmdArgs(rawArgs: [])).run(env, io)
-                    }
-                    return focusOrReportNoop(workspace, focusedWorkspace: focusedWs, io: io, failIfNoop: args.failIfNoop)
-                }
-                if args.autoBackAndForth && focusedWs.name == name.raw {
-                    return WorkspaceBackAndForthCommand(args: WorkspaceBackAndForthCmdArgs(rawArgs: [])).run(env, io)
-                }
-            guard let workspace = createAdjacentTransientBlankWorkspaceIfAllowed(
-                named: name.raw,
-                from: focusedWs,
-            ) else {
-                return io.err("Workspace '\(name.raw)' doesn't exist")
-            }
-            return workspace.focusWorkspace()
+                return resolveDirectWorkspaceTarget(named: name.raw, from: focusedWs, io: io)
         }
+    }
+
+    @MainActor
+    private func resolveDirectWorkspaceTarget(named workspaceName: String, from focusedWs: Workspace, io: CmdIo) -> ResolvedWorkspaceTarget {
+        if let workspace = findDirectWorkspaceTarget(named: workspaceName, from: focusedWs) {
+            return args.autoBackAndForth && workspace == focusedWs ? .backAndForth : .focus(workspace)
+        }
+        if args.autoBackAndForth && focusedWs.name == workspaceName {
+            return .backAndForth
+        }
+        guard let workspace = createAdjacentTransientBlankWorkspaceIfAllowed(named: workspaceName, from: focusedWs) else {
+            _ = io.err("Workspace '\(workspaceName)' doesn't exist")
+            return .error
+        }
+        return .focus(workspace)
     }
 }
 
@@ -75,7 +94,7 @@ private func createNextTransientBlankWorkspaceIfAllowed(
 }
 
 @MainActor
-private func resolveDirectWorkspaceTarget(named workspaceName: String, from current: Workspace) -> Workspace? {
+private func findDirectWorkspaceTarget(named workspaceName: String, from current: Workspace) -> Workspace? {
     if let targetIndex = parsePositiveWorkspaceDisplayIndex(workspaceName) {
         if let workspace = scopedAutomaticDisplayWorkspaces(current: current).getOrNil(atIndex: targetIndex - 1) {
             return workspace
@@ -124,14 +143,7 @@ private func resolveRelativeWorkspaceCandidates(current: Workspace, stdin: Strin
             }
     }
 
-    let currentMonitor = current.workspaceMonitor
-    return userFacingWorkspaces(
-        Workspace.all.filter { $0.scope == workspaceScope(projectId: current.projectId, monitor: currentMonitor) },
-        focusedWorkspace: current,
-    )
-        .toSet()
-        .union([current])
-        .sorted()
+    return orderedUserFacingWorkspaces(in: current.scope, focusedWorkspace: current)
 }
 
 @MainActor

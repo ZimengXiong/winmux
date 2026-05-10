@@ -49,8 +49,8 @@ func optionalTrueBoolFlag<T>(_ keyPath: SendableWritableKeyPath<T, Bool?>) -> Su
     ArgParser(keyPath) { _ in .succ(true, advanceBy: 0) }
 }
 
-func optionalFalseBoolFlag<T>(_ KeyPath: SendableWritableKeyPath<T, Bool?>) -> SubArgParser<T, Bool?> {
-    ArgParser(KeyPath) { _ in .succ(false, advanceBy: 0) }
+func optionalFalseBoolFlag<T>(_ keyPath: SendableWritableKeyPath<T, Bool?>) -> SubArgParser<T, Bool?> {
+    ArgParser(keyPath) { _ in .succ(false, advanceBy: 0) }
 }
 
 func parseWorkspaceNameSubArg(i: SubArgParserInput) -> ParsedCliArgs<WorkspaceName> {

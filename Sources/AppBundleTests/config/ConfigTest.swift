@@ -33,8 +33,8 @@ final class ConfigTest: XCTestCase {
         assertEquals(i3Config.enableNormalizationOppositeOrientationForNestedContainers, false)
     }
 
-    func testParseDefaultConfig() {
-        let toml = try! String(contentsOf: projectRoot.appending(component: "resources/default-config.toml"), encoding: .utf8)
+    func testParseDefaultConfig() throws {
+        let toml = try String(contentsOf: projectRoot.appending(component: "resources/default-config.toml"), encoding: .utf8)
         let (_, errors) = parseConfig(toml)
         assertEquals(errors, [])
     }
@@ -332,8 +332,11 @@ final class ConfigTest: XCTestCase {
 
     func testParseTiles() {
         let command = parseCommand("layout tiles h_tiles v_tiles tab-group h_tab_group v_tab_group").cmdOrNil
-        XCTAssertTrue(command is LayoutCommand)
-        assertEquals((command as! LayoutCommand).args.toggleBetween.val, [.tiles, .h_tiles, .v_tiles, .tabGroup, .hTabGroup, .vTabGroup])
+        guard let command = command as? LayoutCommand else {
+            XCTFail("Expected layout command")
+            return
+        }
+        assertEquals(command.args.toggleBetween.val, [.tiles, .h_tiles, .v_tiles, .tabGroup, .hTabGroup, .vTabGroup])
 
         guard case .help = parseCommand("layout tiles -h") else {
             XCTFail()

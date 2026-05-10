@@ -1,4 +1,21 @@
-public struct ListAppsCmdArgs: CmdArgs {
+protocol JsonFormattableListCmdArgs: Sendable {
+    var _format: [StringInterToken] { get }
+    var json: Bool { get }
+}
+
+extension ParsedCmd where T: JsonFormattableListCmdArgs {
+    func validateJsonFormat() -> ParsedCmd<T> {
+        flatMap { args in
+            if args.json, let msg = getErrorIfFormatIsIncompatibleWithJson(args._format) {
+                .failure(msg)
+            } else {
+                .cmd(args)
+            }
+        }
+    }
+}
+
+public struct ListAppsCmdArgs: CmdArgs, JsonFormattableListCmdArgs {
     /*conforms*/ public var commonState: CmdArgsCommonState
     public init(rawArgs: StrArrSlice) { self.commonState = .init(rawArgs) }
     public static let parser: CmdParser<Self> = .init(
@@ -40,7 +57,7 @@ extension ListAppsCmdArgs {
 
 func parseListAppsCmdArgs(_ args: StrArrSlice) -> ParsedCmd<ListAppsCmdArgs> {
     parseSpecificCmdArgs(ListAppsCmdArgs(rawArgs: args), args)
-        .flatMap { if $0.json, let msg = getErrorIfFormatIsIncompatibleWithJson($0._format) { .failure(msg) } else { .cmd($0) } }
+        .validateJsonFormat()
 }
 
 func getErrorIfFormatIsIncompatibleWithJson(_ format: [StringInterToken]) -> String? {

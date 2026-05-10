@@ -52,8 +52,8 @@ struct Main {
 
         let parsedArgs: any CmdArgs
         switch parseCmdArgs(args) {
-            case .cmd(let _parsedArgs):
-                parsedArgs = _parsedArgs
+            case .cmd(let commandArgs):
+                parsedArgs = commandArgs
             case .help(let help):
                 exit(0, out: help)
             case .failure(let e):
@@ -67,13 +67,8 @@ struct Main {
         }
 
         var stdin = ""
-        if (parsedArgs is WorkspaceCmdArgs && (parsedArgs as! WorkspaceCmdArgs).target.val.isRelatve
-            || parsedArgs is MoveNodeToWorkspaceCmdArgs && (parsedArgs as! MoveNodeToWorkspaceCmdArgs).target.val.isRelatve)
-            && hasStdin()
-        {
-            if parsedArgs is WorkspaceCmdArgs && (parsedArgs as! WorkspaceCmdArgs).explicitStdinFlag == nil ||
-                parsedArgs is MoveNodeToWorkspaceCmdArgs && (parsedArgs as! MoveNodeToWorkspaceCmdArgs).explicitStdinFlag == nil
-            {
+        if shouldReadRelativeWorkspaceStdin(parsedArgs), hasStdin() {
+            if !hasExplicitRelativeWorkspaceStdinFlag(parsedArgs) {
                 exit(
                     1,
                     err: """
@@ -84,11 +79,11 @@ struct Main {
                         """,
                 )
             }
-            var index = 0
+            var lineCount = 0
             while let line = readLine(strippingNewline: false) {
                 stdin += line
-                index += 1
-                if index > 1000 {
+                lineCount += 1
+                if lineCount > 1000 {
                     exit(1, err: "stdin number of lines limit is exceeded")
                 }
             }
@@ -121,6 +116,28 @@ struct Main {
             )
         }
         exit(ans.exitCode)
+    }
+}
+
+private func shouldReadRelativeWorkspaceStdin(_ args: any CmdArgs) -> Bool {
+    switch args {
+        case let args as WorkspaceCmdArgs:
+            args.target.val.isRelative
+        case let args as MoveNodeToWorkspaceCmdArgs:
+            args.target.val.isRelative
+        default:
+            false
+    }
+}
+
+private func hasExplicitRelativeWorkspaceStdinFlag(_ args: any CmdArgs) -> Bool {
+    switch args {
+        case let args as WorkspaceCmdArgs:
+            args.explicitStdinFlag != nil
+        case let args as MoveNodeToWorkspaceCmdArgs:
+            args.explicitStdinFlag != nil
+        default:
+            true
     }
 }
 

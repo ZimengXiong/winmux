@@ -3,7 +3,7 @@ import OrderedCollections
 let onitor = "<monitor>"
 let _monitors = "\(onitor)..."
 
-public struct ListWorkspacesCmdArgs: CmdArgs {
+public struct ListWorkspacesCmdArgs: CmdArgs, JsonFormattableListCmdArgs {
     /*conforms*/ public var commonState: CmdArgsCommonState
     public static let parser: CmdParser<Self> = .init(
         kind: .listWorkspaces,
@@ -72,7 +72,7 @@ func parseListWorkspacesCmdArgs(_ args: StrArrSlice) -> ParsedCmd<ListWorkspaces
                     .copy(\.focused, false)
                 : raw
         }
-        .flatMap { if $0.json, let msg = getErrorIfFormatIsIncompatibleWithJson($0._format) { .failure(msg) } else { .cmd($0) } }
+        .validateJsonFormat()
 }
 
 func parseMonitorIds(input: SubArgParserInput) -> ParsedCliArgs<[MonitorId]> {

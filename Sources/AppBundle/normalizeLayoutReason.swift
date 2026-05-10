@@ -11,7 +11,7 @@ func normalizeLayoutReason() async throws {
 @MainActor
 private func validateStillPopups() async throws {
     for node in macosPopupWindowsContainer.children {
-        let popup = (node as! MacWindow)
+        guard let popup = node as? MacWindow else { continue }
         let windowLevel = getWindowLevel(for: popup.windowId)
         if try await popup.isWindowHeuristic(windowLevel) {
             try await popup.relayoutWindow(on: focus.workspace)

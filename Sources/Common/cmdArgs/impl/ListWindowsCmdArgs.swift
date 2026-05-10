@@ -3,7 +3,7 @@ import OrderedCollections
 private let workspace = "<workspace>"
 private let workspaces = "\(workspace)..."
 
-public struct ListWindowsCmdArgs: CmdArgs {
+public struct ListWindowsCmdArgs: CmdArgs, JsonFormattableListCmdArgs {
     /*conforms*/ public var commonState: CmdArgsCommonState
     public static let parser: CmdParser<Self> = .init(
         kind: .listWindows,
@@ -76,7 +76,7 @@ func parseListWindowsCmdArgs(_ args: StrArrSlice) -> ParsedCmd<ListWindowsCmdArg
         .map { raw in
             raw.allAlias ? raw.copy(\.filteringOptions.monitors, [.all]).copy(\.allAlias, false) : raw // Normalize alias
         }
-        .flatMap { if $0.json, let msg = getErrorIfFormatIsIncompatibleWithJson($0._format) { .failure(msg) } else { .cmd($0) } }
+        .validateJsonFormat()
 }
 
 func formatParser<Root>(

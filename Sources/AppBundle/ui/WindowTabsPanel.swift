@@ -340,18 +340,8 @@ private final class WindowTabGroupVisualPanel: NSPanelHud {
     override var canBecomeMain: Bool { false }
 
     func update(with strip: WindowTabStripViewModel, drawsMockTabs: Bool) {
-        let panelFrame = strip.groupFrame.alignedToBackingPixels()
-        let tabFrame = strip.frame.alignedToBackingPixels()
-        let displayStrip = WindowTabStripViewModel(
-            id: strip.id,
-            workspaceName: strip.workspaceName,
-            frame: tabFrame,
-            groupFrame: panelFrame,
-            activeWindowId: strip.activeWindowId,
-            activeWindowCornerRadius: strip.activeWindowCornerRadius,
-            tabs: strip.tabs,
-            occludingFloatingWindowFrames: strip.occludingFloatingWindowFrames,
-        )
+        let displayStrip = strip.alignedForWindowTabChrome()
+        let panelFrame = displayStrip.groupFrame
         let nextContent = WindowTabGroupChromeContent(strip: displayStrip, drawsMockTabs: drawsMockTabs)
         let contentChanged = currentContent != nextContent
         let frameChanged = currentPanelFrame != panelFrame
@@ -400,18 +390,8 @@ private final class WindowTabStripPanel: NSPanelHud {
     override var canBecomeMain: Bool { false }
 
     func update(with strip: WindowTabStripViewModel) {
-        let panelFrame = strip.groupFrame.alignedToBackingPixels()
-        let tabFrame = strip.frame.alignedToBackingPixels()
-        let displayStrip = WindowTabStripViewModel(
-            id: strip.id,
-            workspaceName: strip.workspaceName,
-            frame: tabFrame,
-            groupFrame: panelFrame,
-            activeWindowId: strip.activeWindowId,
-            activeWindowCornerRadius: strip.activeWindowCornerRadius,
-            tabs: strip.tabs,
-            occludingFloatingWindowFrames: strip.occludingFloatingWindowFrames,
-        )
+        let displayStrip = strip.alignedForWindowTabChrome()
+        let tabFrame = displayStrip.frame
         let nextContent = WindowTabGroupChromeContent(strip: displayStrip)
         let contentChanged = currentContent != nextContent
         let frameChanged = currentPanelFrame != tabFrame
@@ -448,6 +428,21 @@ private final class WindowTabStripPanel: NSPanelHud {
 private final class WindowTabStripHostingView: NSHostingView<AnyView> {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
         true
+    }
+}
+
+private extension WindowTabStripViewModel {
+    func alignedForWindowTabChrome() -> WindowTabStripViewModel {
+        WindowTabStripViewModel(
+            id: id,
+            workspaceName: workspaceName,
+            frame: frame.alignedToBackingPixels(),
+            groupFrame: groupFrame.alignedToBackingPixels(),
+            activeWindowId: activeWindowId,
+            activeWindowCornerRadius: activeWindowCornerRadius,
+            tabs: tabs,
+            occludingFloatingWindowFrames: occludingFloatingWindowFrames,
+        )
     }
 }
 

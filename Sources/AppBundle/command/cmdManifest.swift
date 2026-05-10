@@ -2,90 +2,49 @@ import Common
 
 extension CmdArgs {
     func toCommand() -> any Command {
-        let command: any Command
-        switch Self.info.kind {
-            case .agent:
-                command = AgentCommand(args: self as! AgentCmdArgs)
-            case .balanceSizes:
-                command = BalanceSizesCommand(args: self as! BalanceSizesCmdArgs)
-            case .close:
-                command = CloseCommand(args: self as! CloseCmdArgs)
-            case .closeAllWindowsButCurrent:
-                command = CloseAllWindowsButCurrentCommand(args: self as! CloseAllWindowsButCurrentCmdArgs)
-            case .config:
-                command = ConfigCommand(args: self as! ConfigCmdArgs)
-            case .debugWindows:
-                command = DebugWindowsCommand(args: self as! DebugWindowsCmdArgs)
-            case .enable:
-                command = EnableCommand(args: self as! EnableCmdArgs)
-            case .execAndForget:
-                die("exec-and-forget is parsed separately")
-            case .flattenWorkspaceTree:
-                command = FlattenWorkspaceTreeCommand(args: self as! FlattenWorkspaceTreeCmdArgs)
-            case .focus:
-                command = FocusCommand(args: self as! FocusCmdArgs)
-            case .focusBackAndForth:
-                command = FocusBackAndForthCommand(args: self as! FocusBackAndForthCmdArgs)
-            case .focusMonitor:
-                command = FocusMonitorCommand(args: self as! FocusMonitorCmdArgs)
-            case .fullscreen:
-                command = FullscreenCommand(args: self as! FullscreenCmdArgs)
-            case .joinWith:
-                command = JoinWithCommand(args: self as! JoinWithCmdArgs)
-            case .layout:
-                command = LayoutCommand(args: self as! LayoutCmdArgs)
-            case .listApps:
-                command = ListAppsCommand(args: self as! ListAppsCmdArgs)
-            case .listExecEnvVars:
-                command = ListExecEnvVarsCommand(args: self as! ListExecEnvVarsCmdArgs)
-            case .listModes:
-                command = ListModesCommand(args: self as! ListModesCmdArgs)
-            case .listMonitors:
-                command = ListMonitorsCommand(args: self as! ListMonitorsCmdArgs)
-            case .listWindows:
-                command = ListWindowsCommand(args: self as! ListWindowsCmdArgs)
-            case .listWorkspaces:
-                command = ListWorkspacesCommand(args: self as! ListWorkspacesCmdArgs)
-            case .macosNativeFullscreen:
-                command = MacosNativeFullscreenCommand(args: self as! MacosNativeFullscreenCmdArgs)
-            case .macosNativeMinimize:
-                command = MacosNativeMinimizeCommand(args: self as! MacosNativeMinimizeCmdArgs)
-            case .mode:
-                command = ModeCommand(args: self as! ModeCmdArgs)
-            case .move:
-                command = MoveCommand(args: self as! MoveCmdArgs)
-            case .moveMouse:
-                command = MoveMouseCommand(args: self as! MoveMouseCmdArgs)
-            case .moveNodeToMonitor:
-                command = MoveNodeToMonitorCommand(args: self as! MoveNodeToMonitorCmdArgs)
-            case .moveNodeToWorkspace:
-                command = MoveNodeToWorkspaceCommand(args: self as! MoveNodeToWorkspaceCmdArgs)
-            case .moveWorkspaceToMonitor:
-                command = MoveWorkspaceToMonitorCommand(args: self as! MoveWorkspaceToMonitorCmdArgs)
-            case .reloadConfig:
-                command = ReloadConfigCommand(args: self as! ReloadConfigCmdArgs)
-            case .resize:
-                command = ResizeCommand(args: self as! ResizeCmdArgs)
-            case .snap:
-                command = SnapCommand(args: self as! SnapCmdArgs)
-            case .split:
-                command = SplitCommand(args: self as! SplitCmdArgs)
-            case .stackWith:
-                command = StackWithCommand(args: self as! StackWithCmdArgs)
-            case .subscribe:
-                die("subscribe is handled separately")
-            case .summonWorkspace:
-                command = SummonWorkspaceCommand(args: self as! SummonWorkspaceCmdArgs)
-            case .swap:
-                command = SwapCommand(args: self as! SwapCmdArgs)
-            case .triggerBinding:
-                command = TriggerBindingCommand(args: self as! TriggerBindingCmdArgs)
-            case .volume:
-                command = VolumeCommand(args: self as! VolumeCmdArgs)
-            case .workspace:
-                command = WorkspaceCommand(args: self as! WorkspaceCmdArgs)
-            case .workspaceBackAndForth:
-                command = WorkspaceBackAndForthCommand(args: self as! WorkspaceBackAndForthCmdArgs)
+        let command: any Command = switch self {
+            case let args as AgentCmdArgs: AgentCommand(args: args)
+            case let args as BalanceSizesCmdArgs: BalanceSizesCommand(args: args)
+            case let args as CloseCmdArgs: CloseCommand(args: args)
+            case let args as CloseAllWindowsButCurrentCmdArgs: CloseAllWindowsButCurrentCommand(args: args)
+            case let args as ConfigCmdArgs: ConfigCommand(args: args)
+            case let args as DebugWindowsCmdArgs: DebugWindowsCommand(args: args)
+            case let args as EnableCmdArgs: EnableCommand(args: args)
+            case is ExecAndForgetCmdArgs: die("exec-and-forget is parsed separately")
+            case let args as FlattenWorkspaceTreeCmdArgs: FlattenWorkspaceTreeCommand(args: args)
+            case let args as FocusCmdArgs: FocusCommand(args: args)
+            case let args as FocusBackAndForthCmdArgs: FocusBackAndForthCommand(args: args)
+            case let args as FocusMonitorCmdArgs: FocusMonitorCommand(args: args)
+            case let args as FullscreenCmdArgs: FullscreenCommand(args: args)
+            case let args as JoinWithCmdArgs: JoinWithCommand(args: args)
+            case let args as LayoutCmdArgs: LayoutCommand(args: args)
+            case let args as ListAppsCmdArgs: ListAppsCommand(args: args)
+            case let args as ListExecEnvVarsCmdArgs: ListExecEnvVarsCommand(args: args)
+            case let args as ListModesCmdArgs: ListModesCommand(args: args)
+            case let args as ListMonitorsCmdArgs: ListMonitorsCommand(args: args)
+            case let args as ListWindowsCmdArgs: ListWindowsCommand(args: args)
+            case let args as ListWorkspacesCmdArgs: ListWorkspacesCommand(args: args)
+            case let args as MacosNativeFullscreenCmdArgs: MacosNativeFullscreenCommand(args: args)
+            case let args as MacosNativeMinimizeCmdArgs: MacosNativeMinimizeCommand(args: args)
+            case let args as ModeCmdArgs: ModeCommand(args: args)
+            case let args as MoveCmdArgs: MoveCommand(args: args)
+            case let args as MoveMouseCmdArgs: MoveMouseCommand(args: args)
+            case let args as MoveNodeToMonitorCmdArgs: MoveNodeToMonitorCommand(args: args)
+            case let args as MoveNodeToWorkspaceCmdArgs: MoveNodeToWorkspaceCommand(args: args)
+            case let args as MoveWorkspaceToMonitorCmdArgs: MoveWorkspaceToMonitorCommand(args: args)
+            case let args as ReloadConfigCmdArgs: ReloadConfigCommand(args: args)
+            case let args as ResizeCmdArgs: ResizeCommand(args: args)
+            case let args as SnapCmdArgs: SnapCommand(args: args)
+            case let args as SplitCmdArgs: SplitCommand(args: args)
+            case let args as StackWithCmdArgs: StackWithCommand(args: args)
+            case is SubscribeCmdArgs: die("subscribe is handled separately")
+            case let args as SummonWorkspaceCmdArgs: SummonWorkspaceCommand(args: args)
+            case let args as SwapCmdArgs: SwapCommand(args: args)
+            case let args as TriggerBindingCmdArgs: TriggerBindingCommand(args: args)
+            case let args as VolumeCmdArgs: VolumeCommand(args: args)
+            case let args as WorkspaceCmdArgs: WorkspaceCommand(args: args)
+            case let args as WorkspaceBackAndForthCmdArgs: WorkspaceBackAndForthCommand(args: args)
+            default: die("No command implementation for \(Self.info.kind.rawValue)")
         }
         check(command.info == Self.info)
         return command

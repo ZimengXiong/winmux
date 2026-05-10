@@ -72,7 +72,9 @@ struct DebugWindowsCommand: Command {
 
 @MainActor
 private func dumpWindowDebugInfo(_ window: Window) async throws -> String {
-    let window = window as! MacWindow
+    guard let window = window as? MacWindow else {
+        return "Window \(window.windowId) isn't a macOS-backed window"
+    }
     let appInfoDic = window.macApp.nsApp.bundleURL.flatMap { Bundle.init(url: $0) }?.infoDictionary ?? [:]
 
     var result: [String: Json] = try await window.dumpAxInfo()

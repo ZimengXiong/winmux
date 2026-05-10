@@ -145,6 +145,55 @@ final class WorkspaceCommandTest: XCTestCase {
         XCTAssertEqual(workspaceDisplayName("2"), "Workspace 3")
     }
 
+    func testWorkspaceNextPrevFollowDisplayOrderWhenRawNamesSortDifferently() async throws {
+        let first = Workspace.get(byName: "1")
+        first.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 27, parent: first.rootTilingContainer)
+        let secondDisplay = Workspace.get(byName: "__internal_auto_workspace_1")
+        secondDisplay.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 28, parent: secondDisplay.rootTilingContainer)
+        let third = Workspace.get(byName: "3")
+        third.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 29, parent: third.rootTilingContainer)
+        _ = first.focusWorkspace()
+
+        XCTAssertEqual(workspaceDisplayName(first.name), "Workspace 1")
+        XCTAssertEqual(workspaceDisplayName(secondDisplay.name), "Workspace 2")
+        XCTAssertEqual(workspaceDisplayName(third.name), "Workspace 3")
+
+        assertEquals(
+            try await WorkspaceCommand(args: WorkspaceCmdArgs(target: .relative(.next)))
+                .run(.defaultEnv, .emptyStdin)
+                .exitCode,
+            0,
+        )
+        XCTAssertTrue(focus.workspace === secondDisplay)
+
+        assertEquals(
+            try await WorkspaceCommand(args: WorkspaceCmdArgs(target: .relative(.next)))
+                .run(.defaultEnv, .emptyStdin)
+                .exitCode,
+            0,
+        )
+        XCTAssertTrue(focus.workspace === third)
+
+        assertEquals(
+            try await WorkspaceCommand(args: WorkspaceCmdArgs(target: .relative(.prev)))
+                .run(.defaultEnv, .emptyStdin)
+                .exitCode,
+            0,
+        )
+        XCTAssertTrue(focus.workspace === secondDisplay)
+
+        assertEquals(
+            try await WorkspaceCommand(args: WorkspaceCmdArgs(target: .relative(.prev)))
+                .run(.defaultEnv, .emptyStdin)
+                .exitCode,
+            0,
+        )
+        XCTAssertTrue(focus.workspace === first)
+    }
+
     func testBlankNumericWorkspaceIsDeletedAfterLeavingItEmpty() async throws {
         let workspace1 = Workspace.get(byName: "1")
         workspace1.markAsAutomaticallyNamed()

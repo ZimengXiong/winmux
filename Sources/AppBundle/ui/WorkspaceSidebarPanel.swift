@@ -359,19 +359,13 @@ func workspaceSidebarNSColor(hex: String) -> NSColor? {
 
 func workspaceSidebarProjectColorSwatchImage(hex: String, isSelected: Bool) -> NSImage {
     let color = workspaceSidebarNSColor(hex: hex) ?? NSColor.white.withAlphaComponent(0.65)
-    let size = NSSize(width: 16, height: 16)
-    let image = NSImage(size: size)
-    image.lockFocus()
-
-    let circleRect = NSRect(x: 3, y: 3, width: 10, height: 10)
-    let circlePath = NSBezierPath(ovalIn: circleRect)
-    color.setFill()
-    circlePath.fill()
-    NSColor.white.withAlphaComponent(isSelected ? 0.92 : 0.26).setStroke()
-    circlePath.lineWidth = isSelected ? 1.5 : 1
-    circlePath.stroke()
-
-    if isSelected {
+    return workspaceSidebarSwatchImage {
+        drawWorkspaceSidebarSwatchCircle(
+            fill: color,
+            stroke: NSColor.white.withAlphaComponent(isSelected ? 0.92 : 0.26),
+            lineWidth: isSelected ? 1.5 : 1,
+        )
+        guard isSelected else { return }
         let checkPath = NSBezierPath()
         checkPath.move(to: NSPoint(x: 5.2, y: 8.0))
         checkPath.line(to: NSPoint(x: 7.2, y: 6.0))
@@ -382,36 +376,42 @@ func workspaceSidebarProjectColorSwatchImage(hex: String, isSelected: Bool) -> N
         NSColor.white.setStroke()
         checkPath.stroke()
     }
+}
 
+func workspaceSidebarAutomaticColorSwatchImage(isSelected: Bool) -> NSImage {
+    workspaceSidebarSwatchImage {
+        drawWorkspaceSidebarSwatchCircle(
+            fill: NSColor.white.withAlphaComponent(isSelected ? 0.20 : 0.10),
+            stroke: NSColor.white.withAlphaComponent(isSelected ? 0.75 : 0.35),
+            lineWidth: isSelected ? 1.4 : 1,
+        )
+
+        let slashPath = NSBezierPath()
+        slashPath.move(to: NSPoint(x: 4.3, y: 4.4))
+        slashPath.line(to: NSPoint(x: 11.7, y: 11.6))
+        slashPath.lineCapStyle = .round
+        slashPath.lineWidth = 1.2
+        NSColor.white.withAlphaComponent(0.72).setStroke()
+        slashPath.stroke()
+    }
+}
+
+private func workspaceSidebarSwatchImage(draw: () -> Void) -> NSImage {
+    let image = NSImage(size: NSSize(width: 16, height: 16))
+    image.lockFocus()
+    draw()
     image.unlockFocus()
     image.isTemplate = false
     return image
 }
 
-func workspaceSidebarAutomaticColorSwatchImage(isSelected: Bool) -> NSImage {
-    let size = NSSize(width: 16, height: 16)
-    let image = NSImage(size: size)
-    image.lockFocus()
-
-    let circleRect = NSRect(x: 3, y: 3, width: 10, height: 10)
-    let circlePath = NSBezierPath(ovalIn: circleRect)
-    NSColor.white.withAlphaComponent(isSelected ? 0.20 : 0.10).setFill()
+private func drawWorkspaceSidebarSwatchCircle(fill: NSColor, stroke: NSColor, lineWidth: CGFloat) {
+    let circlePath = NSBezierPath(ovalIn: NSRect(x: 3, y: 3, width: 10, height: 10))
+    fill.setFill()
     circlePath.fill()
-    NSColor.white.withAlphaComponent(isSelected ? 0.75 : 0.35).setStroke()
-    circlePath.lineWidth = isSelected ? 1.4 : 1
+    stroke.setStroke()
+    circlePath.lineWidth = lineWidth
     circlePath.stroke()
-
-    let slashPath = NSBezierPath()
-    slashPath.move(to: NSPoint(x: 4.3, y: 4.4))
-    slashPath.line(to: NSPoint(x: 11.7, y: 11.6))
-    slashPath.lineCapStyle = .round
-    slashPath.lineWidth = 1.2
-    NSColor.white.withAlphaComponent(0.72).setStroke()
-    slashPath.stroke()
-
-    image.unlockFocus()
-    image.isTemplate = false
-    return image
 }
 
 func nextWorkspaceSidebarHoveredWorkspaceName(

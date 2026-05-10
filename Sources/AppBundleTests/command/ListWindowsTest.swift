@@ -91,7 +91,10 @@ final class ListWindowsTest: XCTestCase {
         let fullscreenOnlyWorkspace = Workspace.get(byName: "fullscreen-only")
         _ = TestWindow.new(id: 2, parent: fullscreenOnlyWorkspace.macOsNativeFullscreenWindowsContainer)
 
-        let command = parseCommand("list-windows --all --count").cmdOrDie as! ListWindowsCommand
+        guard let command = parseCommand("list-windows --all --count").cmdOrNil as? ListWindowsCommand else {
+            XCTFail("Expected list-windows command")
+            return
+        }
 
         let result = try await command.run(.defaultEnv, .emptyStdin)
 

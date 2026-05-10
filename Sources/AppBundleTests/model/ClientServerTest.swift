@@ -46,7 +46,7 @@ final class ClientServerTest: XCTestCase {
         assertSucc(ClientRequest.decodeJson(data))
     }
 
-    func testClientRequestJsonCompatibility_encoding() {
+    func testClientRequestJsonCompatibility_encoding() throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         let testData = [
@@ -58,13 +58,13 @@ final class ClientServerTest: XCTestCase {
                 """),
         ]
         for (req, expectedJson) in testData {
-            let data = try! encoder.encode(req)
+            let data = try encoder.encode(req)
             let str = String.init(data: data, encoding: .utf8)!
             assertEquals(str, expectedJson)
         }
     }
 
-    func testServerEventEncoding() {
+    func testServerEventEncoding() throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         let testData: [(ServerEvent, String)] = [
@@ -87,13 +87,13 @@ final class ClientServerTest: XCTestCase {
              #"{"_event":"binding-triggered","binding":"alt-h","mode":"main"}"#),
         ]
         for (event, expectedJson) in testData {
-            let data = try! encoder.encode(event)
+            let data = try encoder.encode(event)
             let str = String(data: data, encoding: .utf8)!
             assertEquals(str, expectedJson)
         }
     }
 
-    func testServerEventDecoding() {
+    func testServerEventDecoding() throws {
         let testData: [(String, ServerEventType)] = [
             (#"{"_event":"focus-changed","windowId":123,"workspace":"1","monitorId":1}"#, .focusChanged),
             (#"{"_event":"focused-monitor-changed","workspace":"2","monitorId":1}"#, .focusedMonitorChanged),
@@ -104,7 +104,7 @@ final class ClientServerTest: XCTestCase {
         ]
         for (json, expectedEventType) in testData {
             let data = json.data(using: .utf8)!
-            let event = try! JSONDecoder().decode(ServerEvent.self, from: data)
+            let event = try JSONDecoder().decode(ServerEvent.self, from: data)
             assertEquals(event.eventType, expectedEventType)
         }
     }

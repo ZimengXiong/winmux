@@ -18,6 +18,26 @@ enum FormatObject {
 
 extension [FormatObject] {
     @MainActor
+    func writeFormattedOutput(
+        to io: CmdIo,
+        format: [StringInterToken],
+        json: Bool,
+        ignoreRightPaddingVar: Bool,
+    ) -> Bool {
+        if json {
+            return switch formatToJson(format, ignoreRightPaddingVar: ignoreRightPaddingVar) {
+                case .success(let json): io.out(json)
+                case .failure(let msg): io.err(msg)
+            }
+        } else {
+            return switch self.format(format) {
+                case .success(let lines): io.out(lines)
+                case .failure(let msg): io.err(msg)
+            }
+        }
+    }
+
+    @MainActor
     func format(_ format: [StringInterToken]) -> Result<[String], String> {
         var cellTable: [[Cell<String>]] = []
         for obj in self {

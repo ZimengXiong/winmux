@@ -46,8 +46,8 @@ struct FrozenWorkspace: Codable, Sendable {
         floatingWindows = workspace.floatingWindows.map(FrozenWindow.init)
         macosUnconventionalWindows =
             workspaceOwnedMinimizedWindows(workspace).map(FrozenWindow.init) +
-            (workspace.existingMacOsNativeHiddenAppsWindowsContainer?.children.map { FrozenWindow($0 as! Window) } ?? []) +
-            (workspace.existingMacOsNativeFullscreenWindowsContainer?.children.map { FrozenWindow($0 as! Window) } ?? [])
+            (workspace.existingMacOsNativeHiddenAppsWindowsContainer?.children.filterIsInstance(of: Window.self).map(FrozenWindow.init) ?? []) +
+            (workspace.existingMacOsNativeFullscreenWindowsContainer?.children.filterIsInstance(of: Window.self).map(FrozenWindow.init) ?? [])
     }
 
     init(from decoder: any Decoder) throws {
