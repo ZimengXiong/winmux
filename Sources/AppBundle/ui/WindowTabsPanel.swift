@@ -138,7 +138,7 @@ final class WindowTabStripPanelController {
         for strip in strips {
             let visualPanel = visualPanels[strip.id] ?? WindowTabGroupVisualPanel(id: strip.id)
             visualPanels[strip.id] = visualPanel
-            visualPanel.update(with: strip)
+            visualPanel.update(with: strip, drawsMockTabs: false)
 
             let stripPanel = stripPanels[strip.id] ?? WindowTabStripPanel(id: strip.id)
             stripPanels[strip.id] = stripPanel
@@ -187,7 +187,7 @@ final class WindowTabStripPanelController {
         transientResizeTabGroupId = id
         let visualPanel = visualPanels[id] ?? WindowTabGroupVisualPanel(id: id)
         visualPanels[id] = visualPanel
-        visualPanel.update(with: transientStrip)
+        visualPanel.update(with: transientStrip, drawsMockTabs: mouseInteractionChromeMode == .frameOnly)
 
         if mouseInteractionChromeMode != nil {
             stripPanels[id]?.orderOut(nil)
@@ -259,7 +259,7 @@ final class WindowTabStripPanelController {
         for strip in strips {
             let visualPanel = visualPanels[strip.id] ?? WindowTabGroupVisualPanel(id: strip.id)
             visualPanels[strip.id] = visualPanel
-            visualPanel.update(with: strip)
+            visualPanel.update(with: strip, drawsMockTabs: true)
             stripPanels[strip.id]?.orderOut(nil)
         }
         for staleId in visualPanels.keys where !activeIds.contains(staleId) {
@@ -312,7 +312,7 @@ private final class WindowTabGroupVisualPanel: NSPanelHud {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 
-    func update(with strip: WindowTabStripViewModel) {
+    func update(with strip: WindowTabStripViewModel, drawsMockTabs: Bool) {
         let panelFrame = strip.groupFrame.alignedToBackingPixels()
         let tabFrame = strip.frame.alignedToBackingPixels()
         let displayStrip = WindowTabStripViewModel(
@@ -325,7 +325,7 @@ private final class WindowTabGroupVisualPanel: NSPanelHud {
             tabs: strip.tabs,
             occludingFloatingWindowFrames: strip.occludingFloatingWindowFrames,
         )
-        let nextContent = WindowTabGroupChromeContent(strip: displayStrip)
+        let nextContent = WindowTabGroupChromeContent(strip: displayStrip, drawsMockTabs: drawsMockTabs)
         let contentChanged = currentContent != nextContent
         let frameChanged = currentPanelFrame != panelFrame
         if !contentChanged, !frameChanged, isVisible {
@@ -333,7 +333,10 @@ private final class WindowTabGroupVisualPanel: NSPanelHud {
             return
         }
         if contentChanged {
-            hostingView.rootView = AnyView(WindowTabGroupVisualView(strip: displayStrip))
+            hostingView.rootView = AnyView(WindowTabGroupVisualView(
+                strip: displayStrip,
+                drawsMockTabs: drawsMockTabs,
+            ))
             currentContent = nextContent
         }
         currentPanelFrame = panelFrame
@@ -466,13 +469,15 @@ private struct WindowTabGroupChromeContent: Equatable {
     let activeWindowCornerRadius: CGFloat
     let tabs: [WindowTabItemViewModel]
     let occludingFloatingWindowFrames: [CGRect]
+    let drawsMockTabs: Bool
 
-    init(strip: WindowTabStripViewModel) {
+    init(strip: WindowTabStripViewModel, drawsMockTabs: Bool = false) {
         workspaceName = strip.workspaceName
         activeWindowId = strip.activeWindowId
         activeWindowCornerRadius = strip.activeWindowCornerRadius
         tabs = strip.tabs
         occludingFloatingWindowFrames = strip.occludingFloatingWindowFrames
+        self.drawsMockTabs = drawsMockTabs
     }
 }
 
@@ -506,21 +511,17 @@ final class WindowTabDropPreviewPanel: NSPanelHud {
         if frame.size == targetFrame.size {
             setFrameOrigin(targetFrame.origin)
         } else {
-            setFrame(targetFrame, display: true, animate: false)
+            setFrame(targetFrame, display: false, animate: false)
         }
         compositorView.frame = CGRect(origin: .zero, size: targetFrame.size)
         alphaValue = 1
-        if !isVisible || !hasShownPreview {
-            orderFrontRegardless()
-        }
         let previewKey = WindowIntentPreviewContentKey(model: preview)
         if currentPreviewKey != previewKey || !hasShownPreview {
             compositorView.update(preview)
-            contentView?.layoutSubtreeIfNeeded()
-            contentView?.display()
-            display()
-            CATransaction.flush()
             currentPreviewKey = previewKey
+        }
+        if !isVisible || !hasShownPreview {
+            orderFrontRegardless()
         }
         hasShownPreview = true
     }
@@ -772,7 +773,14 @@ func windowIntentPreviewSymbolName(for style: WindowTabDropPreviewStyle, isGroup
 }
 
 @MainActor
-private final class WindowIntentPreviewCompositorView: NSImageView {
+private final class WindowIntentPreviewCompositorView: NSView {
+    private let surfaceLayer = CAShapeLayer()
+    private let highlightLayer = CAShapeLayer()
+    private let innerStrokeLayer = CAShapeLayer()
+    private let accentStrokeLayer = CAShapeLayer()
+    private let activeStrokeLayer = CAShapeLayer()
+    private let guideLayer = CAShapeLayer()
+    private let activeGuideLayer = CAShapeLayer()
     private var currentModel: WindowTabDropPreviewViewModel?
 
     override var isFlipped: Bool { true }
@@ -780,8 +788,13 @@ private final class WindowIntentPreviewCompositorView: NSImageView {
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        imageAlignment = .alignCenter
-        imageScaling = .scaleAxesIndependently
+        wantsLayer = true
+        let backingLayer = CALayer()
+        backingLayer.masksToBounds = false
+        backingLayer.isGeometryFlipped = true
+        layer = backingLayer
+        configureLayers(backingLayer)
+
         isHidden = true
     }
 
@@ -793,56 +806,68 @@ private final class WindowIntentPreviewCompositorView: NSImageView {
     func update(_ model: WindowTabDropPreviewViewModel) {
         currentModel = model
         isHidden = false
-        updateLayerContents(model)
+        render(model)
     }
 
     func clear() {
         currentModel = nil
-        image = nil
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for layer in previewLayers {
+            layer.path = nil
+            layer.isHidden = true
+        }
+        self.layer?.removeAnimation(forKey: "intentPreviewAppear")
+        self.layer?.opacity = 1
         isHidden = true
+        CATransaction.commit()
     }
 
     override func layout() {
         super.layout()
         if let currentModel {
-            updateLayerContents(currentModel)
+            render(currentModel)
         }
     }
 
-    private func updateLayerContents(_ model: WindowTabDropPreviewViewModel) {
+    private var previewLayers: [CAShapeLayer] {
+        [
+            surfaceLayer,
+            highlightLayer,
+            innerStrokeLayer,
+            accentStrokeLayer,
+            activeStrokeLayer,
+            guideLayer,
+            activeGuideLayer,
+        ]
+    }
+
+    private func configureLayers(_ backingLayer: CALayer) {
+        disableWindowIntentPreviewLayerActions(backingLayer)
+        surfaceLayer.fillColor = WindowIntentPreviewPalette.fill
+        highlightLayer.fillColor = NSColor.clear.cgColor
+        innerStrokeLayer.fillColor = NSColor.clear.cgColor
+        innerStrokeLayer.strokeColor = WindowIntentPreviewPalette.innerStroke
+        innerStrokeLayer.lineWidth = 0.55
+        accentStrokeLayer.fillColor = NSColor.clear.cgColor
+        accentStrokeLayer.lineWidth = 0.85
+        activeStrokeLayer.fillColor = NSColor.clear.cgColor
+        activeStrokeLayer.lineWidth = 1.45
+        guideLayer.fillColor = NSColor.clear.cgColor
+        guideLayer.lineWidth = 1.5
+        guideLayer.lineCap = .round
+        activeGuideLayer.fillColor = NSColor.clear.cgColor
+        activeGuideLayer.lineWidth = 1.65
+        activeGuideLayer.lineCap = .round
+        for layer in previewLayers {
+            layer.isHidden = true
+            disableWindowIntentPreviewLayerActions(layer)
+            backingLayer.addSublayer(layer)
+        }
+    }
+
+    private func render(_ model: WindowTabDropPreviewViewModel) {
         let scale = updateContentsScale()
-        if let renderedImage = renderedImage(for: model, scale: scale) {
-            image = NSImage(cgImage: renderedImage, size: bounds.size)
-        } else {
-            image = nil
-        }
-        needsDisplay = true
-        display()
-    }
-
-    private func renderedImage(for model: WindowTabDropPreviewViewModel, scale: CGFloat) -> CGImage? {
-        let pixelWidth = max(Int((bounds.width * scale).rounded()), 1)
-        let pixelHeight = max(Int((bounds.height * scale).rounded()), 1)
-        guard let context = CGContext(
-            data: nil,
-            width: pixelWidth,
-            height: pixelHeight,
-            bitsPerComponent: 8,
-            bytesPerRow: 0,
-            space: CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue,
-        ) else {
-            return nil
-        }
-        context.scaleBy(x: scale, y: scale)
-        context.translateBy(x: 0, y: bounds.height)
-        context.scaleBy(x: 1, y: -1)
-
-        drawPreview(model, in: context, scale: scale)
-        return context.makeImage()
-    }
-
-    private func drawPreview(_ model: WindowTabDropPreviewViewModel, in context: CGContext, scale: CGFloat) {
         let zones = localZones(for: model, scale: scale)
         let surfacePath = combinedSurfacePath(for: zones, inset: 0)
         let activeSurfacePath = combinedSurfacePath(for: zones.filter(\.isActive), inset: 0)
@@ -851,53 +876,27 @@ private final class WindowIntentPreviewCompositorView: NSImageView {
         let activeGuidePath = combinedGuidePath(for: zones.filter(\.isActive))
         let style = WindowIntentPreviewLayerStyle(style: model.style, isPointerSettled: model.isPointerSettled)
 
-        context.saveGState()
-        if let surfacePath {
-            context.addPath(surfacePath)
-            context.setFillColor(WindowIntentPreviewPalette.fill)
-            context.fillPath()
-
-            context.addPath(surfacePath)
-            context.setFillColor(WindowIntentPreviewPalette.highlight(alpha: style.highlightAlpha))
-            context.fillPath()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for layer in previewLayers {
+            layer.frame = bounds
+            layer.contentsScale = scale
+            layer.isHidden = false
         }
-
-        if let insetPath {
-            context.addPath(insetPath)
-            context.setStrokeColor(WindowIntentPreviewPalette.innerStroke)
-            context.setLineWidth(0.55)
-            context.strokePath()
-        }
-
-        if let surfacePath {
-            context.addPath(surfacePath)
-            context.setStrokeColor(WindowIntentPreviewPalette.accent(alpha: style.inactiveStrokeAlpha))
-            context.setLineWidth(0.85)
-            context.strokePath()
-        }
-
-        if let activeSurfacePath {
-            context.addPath(activeSurfacePath)
-            context.setStrokeColor(WindowIntentPreviewPalette.accent(alpha: style.strokeAlpha))
-            context.setLineWidth(1.45)
-            context.strokePath()
-        }
-
-        context.setLineCap(.round)
-        if let guidePath {
-            context.addPath(guidePath)
-            context.setStrokeColor(WindowIntentPreviewPalette.accent(alpha: style.inactiveGuideAlpha))
-            context.setLineWidth(1.5)
-            context.strokePath()
-        }
-
-        if let activeGuidePath {
-            context.addPath(activeGuidePath)
-            context.setStrokeColor(WindowIntentPreviewPalette.accent(alpha: style.guideAlpha))
-            context.setLineWidth(1.65)
-            context.strokePath()
-        }
-        context.restoreGState()
+        surfaceLayer.path = surfacePath
+        surfaceLayer.fillColor = WindowIntentPreviewPalette.fill
+        highlightLayer.path = surfacePath
+        highlightLayer.fillColor = WindowIntentPreviewPalette.highlight(alpha: style.highlightAlpha)
+        innerStrokeLayer.path = insetPath
+        accentStrokeLayer.path = surfacePath
+        accentStrokeLayer.strokeColor = WindowIntentPreviewPalette.accent(alpha: style.inactiveStrokeAlpha)
+        activeStrokeLayer.path = activeSurfacePath
+        activeStrokeLayer.strokeColor = WindowIntentPreviewPalette.accent(alpha: style.strokeAlpha)
+        guideLayer.path = guidePath
+        guideLayer.strokeColor = WindowIntentPreviewPalette.accent(alpha: style.inactiveGuideAlpha)
+        activeGuideLayer.path = activeGuidePath
+        activeGuideLayer.strokeColor = WindowIntentPreviewPalette.accent(alpha: style.guideAlpha)
+        CATransaction.commit()
     }
 
     private func updateContentsScale() -> CGFloat {
@@ -1054,6 +1053,27 @@ enum WindowIntentPreviewPalette {
     static func accent(alpha: CGFloat) -> CGColor {
         NSColor.white.withAlphaComponent(min(max(alpha * 0.20, 0), 0.075)).cgColor
     }
+}
+
+private final class WindowIntentPreviewDisabledLayerAction: NSObject, CAAction {
+    func run(forKey event: String, object anObject: Any, arguments dict: [AnyHashable: Any]?) {}
+}
+
+private func disableWindowIntentPreviewLayerActions(_ layer: CALayer) {
+    let action = WindowIntentPreviewDisabledLayerAction()
+    layer.actions = [
+        "backgroundColor": action,
+        "bounds": action,
+        "contents": action,
+        "frame": action,
+        "hidden": action,
+        "opacity": action,
+        "path": action,
+        "position": action,
+        "strokeColor": action,
+        "fillColor": action,
+        "sublayers": action,
+    ]
 }
 
 @MainActor
@@ -1290,10 +1310,15 @@ private let tabReorderVerticalEscapeThreshold: CGFloat = 18
 
 private struct WindowTabGroupVisualView: View {
     let strip: WindowTabStripViewModel
+    let drawsMockTabs: Bool
 
     var body: some View {
         GeometryReader { proxy in
-            WindowTabGroupFrameView(strip: strip, groupSize: proxy.size)
+            WindowTabGroupFrameView(
+                strip: strip,
+                groupSize: proxy.size,
+                drawsMockTabs: drawsMockTabs,
+            )
                 .frame(width: proxy.size.width, height: proxy.size.height)
         }
         .windowTabOcclusionMasked(
@@ -1306,6 +1331,7 @@ private struct WindowTabGroupVisualView: View {
 private struct WindowTabGroupFrameView: View {
     let strip: WindowTabStripViewModel
     let groupSize: CGSize
+    let drawsMockTabs: Bool
 
     var body: some View {
         let tabHeight = min(strip.frame.height, groupSize.height)
@@ -1347,6 +1373,15 @@ private struct WindowTabGroupFrameView: View {
             )
             .fill(mattePanelFill, style: FillStyle(eoFill: true))
 
+            if drawsMockTabs {
+                WindowTabGroupMockTabsView(
+                    strip: strip,
+                    stripWidth: groupSize.width,
+                    stripHeight: tabHeight,
+                )
+                .frame(width: groupSize.width, height: tabHeight, alignment: .topLeading)
+            }
+
             // Outer edge
             outerShape
                 .strokeBorder(mattePanelBorder, lineWidth: windowTabGroupFrameStrokeWidth)
@@ -1361,6 +1396,79 @@ private struct WindowTabGroupFrameView: View {
         .shadow(color: Color.black.opacity(0.10), radius: 6, y: 2)
         .allowsHitTesting(false)
     }
+}
+
+private struct WindowTabGroupMockTabsView: View {
+    let strip: WindowTabStripViewModel
+    let stripWidth: CGFloat
+    let stripHeight: CGFloat
+
+    var body: some View {
+        let tabCount = max(strip.tabs.count, 1)
+        let tabWidth = windowTabStripTabWidth(stripWidth: stripWidth, count: tabCount)
+        let itemHeight = max(stripHeight - 4, 18)
+        let visibleCount = windowTabGroupMockVisibleTabCount(
+            stripWidth: stripWidth,
+            tabWidth: tabWidth,
+            tabCount: tabCount,
+        )
+        let visibleTabs = Array(strip.tabs.prefix(visibleCount))
+
+        HStack(spacing: 0) {
+            Color.clear
+                .frame(width: windowTabStripReservedGroupHandleWidth())
+
+            HStack(spacing: windowTabStripTabSpacing) {
+                if visibleTabs.isEmpty {
+                    WindowTabMockPillView(isActive: true)
+                        .frame(width: tabWidth, height: itemHeight)
+                } else {
+                    ForEach(Array(visibleTabs.enumerated()), id: \.element.windowId) { index, tab in
+                        WindowTabMockPillView(isActive: tab.isActive || (strip.activeWindowId == nil && index == 0))
+                            .frame(width: tabWidth, height: itemHeight)
+                    }
+                }
+            }
+            .padding(.horizontal, windowTabStripContentHorizontalPadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .clipped()
+
+            Color.clear
+                .frame(width: windowTabStripReservedGroupHandleWidth())
+        }
+        .padding(.horizontal, 3)
+        .padding(.vertical, 2)
+        .frame(width: stripWidth, height: stripHeight, alignment: .topLeading)
+        .allowsHitTesting(false)
+        .transaction { transaction in
+            transaction.animation = nil
+        }
+    }
+}
+
+private struct WindowTabMockPillView: View {
+    let isActive: Bool
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: windowTabStripInnerCornerRadius, style: .continuous)
+                .fill(Color.white.opacity(isActive ? 0.14 : 0.07))
+                .padding(.vertical, 2)
+
+            RoundedRectangle(cornerRadius: windowTabStripInnerCornerRadius, style: .continuous)
+                .strokeBorder(Color.white.opacity(isActive ? 0.12 : 0.07), lineWidth: 0.5)
+                .padding(.vertical, 2)
+        }
+    }
+}
+
+private func windowTabGroupMockVisibleTabCount(stripWidth: CGFloat, tabWidth: CGFloat, tabCount: Int) -> Int {
+    let requestedCount = max(tabCount, 1)
+    let availableWidth = windowTabStripAvailableTabsWidth(stripWidth: stripWidth)
+    guard availableWidth > 0 else { return 1 }
+    let effectiveTabWidth = max(tabWidth + windowTabStripTabSpacing, 1)
+    let fittingCount = Int(ceil((availableWidth + windowTabStripTabSpacing) / effectiveTabWidth))
+    return max(1, min(requestedCount, fittingCount))
 }
 
 @MainActor

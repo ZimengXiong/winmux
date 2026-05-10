@@ -7,6 +7,8 @@ struct WindowResizePreviewItem: Identifiable, Equatable {
     let appName: String
     let icons: [WindowResizePreviewIcon]
     let isTabGroup: Bool
+    let drawsFrameOnly: Bool
+    let frameOnlyHeaderHeight: CGFloat
 }
 
 struct WindowResizePreviewIcon: Hashable {
@@ -239,7 +241,7 @@ private struct WindowResizePreviewLayoutContext {
 
 private extension WindowResizePreviewItem {
     @MainActor
-    init(window: Window, rect: Rect) {
+    init(window: Window, rect: Rect, drawsFrameOnly: Bool = false) {
         let icon = WindowResizePreviewIcon(window: window)
         self.init(
             id: window.windowId,
@@ -247,20 +249,25 @@ private extension WindowResizePreviewItem {
             appName: window.app.name ?? window.app.rawAppBundleId ?? "Window",
             icons: [icon],
             isTabGroup: false,
+            drawsFrameOnly: drawsFrameOnly,
+            frameOnlyHeaderHeight: 0,
         )
     }
 
     @MainActor
-    init(tabGroup container: TilingContainer, rect: Rect) {
+    init(tabGroup container: TilingContainer, rect: Rect, drawsFrameOnly: Bool = false) {
         let windows = container.childrenByMostRecentUse.compactMap(\.tabRepresentativeWindow)
         let representative = windows.first ?? container.tabRepresentativeWindow
         let icons = windows.map(WindowResizePreviewIcon.init(window:))
+        let headerHeight = drawsFrameOnly ? windowTabBarRect(forGroupFrameRect: rect).height : 0
         self.init(
             id: representative?.windowId ?? UInt32(abs(ObjectIdentifier(container).hashValue) % Int(UInt32.max)),
             frame: rect.toAppKitScreenRect.alignedToBackingPixels(),
             appName: representative?.app.name ?? representative?.app.rawAppBundleId ?? "Tab Group",
             icons: icons,
             isTabGroup: true,
+            drawsFrameOnly: drawsFrameOnly,
+            frameOnlyHeaderHeight: headerHeight,
         )
     }
 }
@@ -272,7 +279,7 @@ func windowDragSourcePreviewItem(window: Window, subject: WindowDragSubject, fra
        let tabGroup = window.moveNode as? TilingContainer,
        tabGroup.usesWindowTabBehavior
     {
-        return WindowResizePreviewItem(tabGroup: tabGroup, rect: windowTabBarRect(forGroupFrameRect: frame))
+        return WindowResizePreviewItem(tabGroup: tabGroup, rect: frame, drawsFrameOnly: true)
     }
     return WindowResizePreviewItem(window: window, rect: frame)
 }
@@ -284,9 +291,8 @@ func windowResizeSourceTabGroupPreviewItem(window: Window, activeWindowRect: Rec
           tabGroup.tabActiveWindow == window
     else { return nil }
     let groupFrame = windowTabGroupFrameRect(forActiveWindowContentRect: activeWindowRect)
-    let tabBarFrame = windowTabBarRect(forGroupFrameRect: groupFrame)
-    guard tabBarFrame.width > 0, tabBarFrame.height > 0 else { return nil }
-    return WindowResizePreviewItem(tabGroup: tabGroup, rect: tabBarFrame)
+    guard groupFrame.width > 0, groupFrame.height > 0 else { return nil }
+    return WindowResizePreviewItem(tabGroup: tabGroup, rect: groupFrame, drawsFrameOnly: true)
 }
 
 private extension WindowResizePreviewIcon {
@@ -382,6 +388,8 @@ private struct WindowResizePreviewLocalItem: Identifiable, Equatable {
     let appName: String
     let icons: [WindowResizePreviewIcon]
     let isTabGroup: Bool
+    let drawsFrameOnly: Bool
+    let frameOnlyHeaderHeight: CGFloat
 }
 
 @MainActor
@@ -462,6 +470,7 @@ private final class WindowResizePreviewCompositorView: NSView {
 private final class WindowResizePreviewItemLayer: CALayer {
     private let surfaceLayer = CAShapeLayer()
     private let topBarLayer = CAShapeLayer()
+    private let mockTabStrokeLayer = CAShapeLayer()
     private let strokeLayer = CAShapeLayer()
     private var iconLayers: [CALayer] = []
 
@@ -475,7 +484,10 @@ private final class WindowResizePreviewItemLayer: CALayer {
         strokeLayer.strokeColor = ResizePreviewPalette.stroke
         strokeLayer.lineWidth = 0.7
         topBarLayer.fillColor = ResizePreviewPalette.tabGroupBar
-        [surfaceLayer, topBarLayer, strokeLayer].forEach {
+        mockTabStrokeLayer.fillColor = NSColor.clear.cgColor
+        mockTabStrokeLayer.strokeColor = ResizePreviewPalette.sourceMockTabStroke
+        mockTabStrokeLayer.lineWidth = 0.7
+        [surfaceLayer, topBarLayer, mockTabStrokeLayer, strokeLayer].forEach {
             disableResizePreviewLayerActions($0)
             addSublayer($0)
         }
@@ -509,11 +521,21 @@ private final class WindowResizePreviewItemLayer: CALayer {
         contentsScale = scale
         frame = item.frame
         let localBounds = CGRect(origin: .zero, size: item.frame.size)
-        let radius = min(max(min(item.frame.width, item.frame.height) * 0.04, 8), 16)
+        if item.isTabGroup, item.drawsFrameOnly {
+            updateFrameOnlyShell(item: item, bounds: localBounds, scale: scale)
+            return
+        }
+        let radius = windowResizePreviewCornerRadius(for: localBounds)
         let path = CGPath(roundedRect: localBounds, cornerWidth: radius, cornerHeight: radius, transform: nil)
+        surfaceLayer.fillRule = .nonZero
+        surfaceLayer.fillColor = ResizePreviewPalette.fill
         surfaceLayer.frame = localBounds
         surfaceLayer.path = path
         surfaceLayer.contentsScale = scale
+        mockTabStrokeLayer.isHidden = true
+        mockTabStrokeLayer.path = nil
+        strokeLayer.strokeColor = ResizePreviewPalette.stroke
+        strokeLayer.lineWidth = 0.7
         strokeLayer.frame = localBounds
         strokeLayer.path = path
         strokeLayer.contentsScale = scale
@@ -521,13 +543,55 @@ private final class WindowResizePreviewItemLayer: CALayer {
         updateIcons(item: item, scale: scale, iconResolver: iconResolver)
     }
 
+    private func updateFrameOnlyShell(item: WindowResizePreviewLocalItem, bounds localBounds: CGRect, scale: CGFloat) {
+        hideIconLayers()
+
+        let shellPath = windowResizePreviewTabGroupShellPath(
+            in: localBounds,
+            headerHeight: item.frameOnlyHeaderHeight,
+        )
+        let mockTabsPath = windowResizePreviewMockTabPillsPath(
+            in: localBounds,
+            headerHeight: item.frameOnlyHeaderHeight,
+            tabCount: item.icons.count,
+        )
+        surfaceLayer.fillRule = .evenOdd
+        surfaceLayer.fillColor = ResizePreviewPalette.sourceFrameFill
+        surfaceLayer.frame = localBounds
+        surfaceLayer.path = shellPath
+        surfaceLayer.contentsScale = scale
+
+        topBarLayer.isHidden = false
+        topBarLayer.fillColor = ResizePreviewPalette.sourceMockTabFill
+        topBarLayer.frame = localBounds
+        topBarLayer.path = mockTabsPath
+        topBarLayer.contentsScale = scale
+
+        mockTabStrokeLayer.isHidden = false
+        mockTabStrokeLayer.strokeColor = ResizePreviewPalette.sourceMockTabStroke
+        mockTabStrokeLayer.lineWidth = 0.7
+        mockTabStrokeLayer.frame = localBounds
+        mockTabStrokeLayer.path = mockTabsPath
+        mockTabStrokeLayer.contentsScale = scale
+
+        strokeLayer.strokeColor = ResizePreviewPalette.sourceFrameStroke
+        strokeLayer.lineWidth = 0.8
+        strokeLayer.frame = localBounds
+        strokeLayer.path = shellPath
+        strokeLayer.contentsScale = scale
+    }
+
     private func updateTopBar(item: WindowResizePreviewLocalItem, radius: CGFloat, scale: CGFloat) {
         topBarLayer.isHidden = !item.isTabGroup
-        guard item.isTabGroup else { return }
+        guard item.isTabGroup else {
+            topBarLayer.path = nil
+            return
+        }
         let localBounds = CGRect(origin: .zero, size: item.frame.size)
         let height = min(max(item.frame.height * 0.12, 16), 30)
         let insetBounds = localBounds.insetBy(dx: 4, dy: 4)
         let barRect = CGRect(x: insetBounds.minX, y: insetBounds.minY, width: insetBounds.width, height: height)
+        topBarLayer.fillColor = ResizePreviewPalette.tabGroupBar
         topBarLayer.frame = localBounds
         topBarLayer.path = CGPath(
             roundedRect: barRect,
@@ -588,6 +652,14 @@ private final class WindowResizePreviewItemLayer: CALayer {
         }
     }
 
+    private func hideIconLayers() {
+        for iconLayer in iconLayers {
+            iconLayer.isHidden = true
+            iconLayer.contents = nil
+            iconLayer.sublayers?.forEach { $0.removeFromSuperlayer() }
+        }
+    }
+
     private func fallbackTextLayer(text: String, size: CGFloat, scale: CGFloat) -> CATextLayer {
         let textLayer = CATextLayer()
         textLayer.frame = CGRect(x: 0, y: (size - size * 0.52) / 2 - 1, width: size, height: size * 0.58)
@@ -611,6 +683,10 @@ private enum ResizePreviewPalette {
     static let stroke = NSColor.white.withAlphaComponent(0.04).cgColor
     static let tabGroupBar = NSColor.white.withAlphaComponent(0.055).cgColor
     static let fallbackIconFill = NSColor.white.withAlphaComponent(0.12).cgColor
+    static let sourceFrameFill = mattePanelNSColor.cgColor
+    static let sourceFrameStroke = NSColor.white.withAlphaComponent(0.055).cgColor
+    static let sourceMockTabFill = NSColor.white.withAlphaComponent(0.085).cgColor
+    static let sourceMockTabStroke = NSColor.white.withAlphaComponent(0.075).cgColor
 }
 
 private final class ResizePreviewDisabledLayerAction: NSObject, CAAction {
@@ -632,6 +708,177 @@ private func disableResizePreviewLayerActions(_ layer: CALayer) {
         "sublayers": action,
         "transform": action,
     ]
+}
+
+private struct ResizePreviewCornerRadii {
+    let topLeft: CGFloat
+    let topRight: CGFloat
+    let bottomRight: CGFloat
+    let bottomLeft: CGFloat
+
+    static func uniform(_ radius: CGFloat) -> ResizePreviewCornerRadii {
+        ResizePreviewCornerRadii(
+            topLeft: radius,
+            topRight: radius,
+            bottomRight: radius,
+            bottomLeft: radius
+        )
+    }
+}
+
+private func windowResizePreviewTabGroupShellPath(in bounds: CGRect, headerHeight: CGFloat) -> CGPath {
+    let path = CGMutablePath()
+    guard bounds.width > 0, bounds.height > 0 else { return path }
+
+    let shellInset = min(windowTabGroupShellHorizontalInset(), bounds.width / 2)
+    let bottomInset = min(windowTabGroupShellBottomInset(), bounds.height)
+    let tabHeight = min(max(headerHeight, 0), bounds.height)
+    let contentHeight = max(bounds.height - tabHeight - bottomInset, 0)
+    let innerRect = CGRect(
+        x: bounds.minX + shellInset,
+        y: bounds.minY + tabHeight,
+        width: max(bounds.width - shellInset * 2, 0),
+        height: contentHeight,
+    )
+    let appRadius = min(max(min(innerRect.width, innerRect.height) * 0.04, 8), 22)
+    let topInnerRadius = min(max(appRadius + shellInset + 14, 30), 40)
+    let bottomOuterRadius = appRadius + shellInset
+
+    path.addPath(windowResizePreviewRoundedRectPath(
+        in: bounds,
+        radii: ResizePreviewCornerRadii(
+            topLeft: 12,
+            topRight: 12,
+            bottomRight: bottomOuterRadius,
+            bottomLeft: bottomOuterRadius,
+        )
+    ))
+    if innerRect.width > 0, innerRect.height > 0 {
+        path.addPath(windowResizePreviewRoundedRectPath(
+            in: innerRect,
+            radii: ResizePreviewCornerRadii(
+                topLeft: topInnerRadius,
+                topRight: topInnerRadius,
+                bottomRight: appRadius,
+                bottomLeft: appRadius,
+            )
+        ))
+    }
+    return path
+}
+
+private func windowResizePreviewMockTabPillsPath(in bounds: CGRect, headerHeight: CGFloat, tabCount: Int) -> CGPath {
+    let path = CGMutablePath()
+    guard bounds.width > 0, bounds.height > 0 else { return path }
+
+    let resolvedHeaderHeight = min(max(headerHeight, 18), bounds.height)
+    let horizontalInset = min(windowTabGroupShellHorizontalInset(), bounds.width / 2)
+    let handleWidth = windowTabStripReservedGroupHandleWidth()
+    let contentPadding = windowTabStripContentPadding()
+    let minX = bounds.minX + horizontalInset + handleWidth + contentPadding
+    let maxX = bounds.maxX - horizontalInset - handleWidth - contentPadding
+    let availableWidth = max(maxX - minX, 0)
+    guard availableWidth > 0 else { return path }
+
+    let visibleCount = windowResizePreviewMockTabVisibleCount(
+        availableWidth: availableWidth,
+        tabCount: tabCount,
+        tabWidth: windowTabStripTabWidth(stripWidth: bounds.width, count: max(tabCount, 1)),
+    )
+    let tabWidth = min(windowTabStripTabWidth(stripWidth: bounds.width, count: max(tabCount, 1)), availableWidth)
+    let tabHeight = max(resolvedHeaderHeight - 8, 10)
+    let tabY = bounds.minY + (resolvedHeaderHeight - tabHeight) / 2
+    var tabX = minX
+
+    for _ in 0..<visibleCount {
+        let remainingWidth = maxX - tabX
+        guard remainingWidth >= 24 else { break }
+        let rect = CGRect(
+            x: tabX,
+            y: tabY,
+            width: min(tabWidth, remainingWidth),
+            height: tabHeight,
+        )
+        let radius = min(12, rect.height / 2)
+        path.addPath(windowResizePreviewRoundedRectPath(in: rect, radii: .uniform(radius)))
+        tabX += tabWidth + windowResizePreviewMockTabSpacing
+    }
+
+    return path
+}
+
+private let windowResizePreviewMockTabSpacing: CGFloat = 8
+
+private func windowResizePreviewMockTabVisibleCount(
+    availableWidth: CGFloat,
+    tabCount: Int,
+    tabWidth: CGFloat,
+) -> Int {
+    let requestedCount = max(tabCount, 1)
+    let effectiveWidth = max(tabWidth + windowResizePreviewMockTabSpacing, 1)
+    let fittingCount = Int(ceil((availableWidth + windowResizePreviewMockTabSpacing) / effectiveWidth))
+    return max(1, min(requestedCount, fittingCount))
+}
+
+private func windowResizePreviewCornerRadius(for rect: CGRect) -> CGFloat {
+    let minimumDimension = min(rect.width, rect.height)
+    guard minimumDimension > 0 else { return 0 }
+    return min(min(max(minimumDimension * 0.04, 8), 16), minimumDimension / 2)
+}
+
+private func windowResizePreviewRoundedRectPath(in rect: CGRect, radii: ResizePreviewCornerRadii) -> CGPath {
+    let path = CGMutablePath()
+    guard rect.width > 0, rect.height > 0 else { return path }
+
+    let maxRadius = min(rect.width, rect.height) / 2
+    let topLeft = min(radii.topLeft, maxRadius)
+    let topRight = min(radii.topRight, maxRadius)
+    let bottomRight = min(radii.bottomRight, maxRadius)
+    let bottomLeft = min(radii.bottomLeft, maxRadius)
+
+    path.move(to: CGPoint(x: rect.minX + topLeft, y: rect.minY))
+    path.addLine(to: CGPoint(x: rect.maxX - topRight, y: rect.minY))
+    if topRight > 0 {
+        path.addArc(
+            center: CGPoint(x: rect.maxX - topRight, y: rect.minY + topRight),
+            radius: topRight,
+            startAngle: -.pi / 2,
+            endAngle: 0,
+            clockwise: false,
+        )
+    }
+    path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - bottomRight))
+    if bottomRight > 0 {
+        path.addArc(
+            center: CGPoint(x: rect.maxX - bottomRight, y: rect.maxY - bottomRight),
+            radius: bottomRight,
+            startAngle: 0,
+            endAngle: .pi / 2,
+            clockwise: false,
+        )
+    }
+    path.addLine(to: CGPoint(x: rect.minX + bottomLeft, y: rect.maxY))
+    if bottomLeft > 0 {
+        path.addArc(
+            center: CGPoint(x: rect.minX + bottomLeft, y: rect.maxY - bottomLeft),
+            radius: bottomLeft,
+            startAngle: .pi / 2,
+            endAngle: .pi,
+            clockwise: false,
+        )
+    }
+    path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + topLeft))
+    if topLeft > 0 {
+        path.addArc(
+            center: CGPoint(x: rect.minX + topLeft, y: rect.minY + topLeft),
+            radius: topLeft,
+            startAngle: .pi,
+            endAngle: .pi * 1.5,
+            clockwise: false,
+        )
+    }
+    path.closeSubpath()
+    return path
 }
 
 private func windowResizePreviewStackOffset(_ index: Int, iconCount: Int, size: CGFloat) -> CGSize {
@@ -663,6 +910,8 @@ private extension WindowResizePreviewItem {
             appName: appName,
             icons: icons,
             isTabGroup: isTabGroup,
+            drawsFrameOnly: drawsFrameOnly,
+            frameOnlyHeaderHeight: frameOnlyHeaderHeight,
         )
     }
 }
