@@ -40,6 +40,7 @@ private func moveWithMouse(_ window: Window) async throws { // todo cover with t
             detachOrigin: .window,
             startedInSidebar: false,
             anchorRect: anchorRect,
+            refreshActualRects: subject == .window,
         )
         WindowMouseInteractionDriver.shared.startMove(
             windowId: window.windowId,
@@ -64,7 +65,7 @@ private func moveWithMouse(_ window: Window) async throws { // todo cover with t
 
 @MainActor
 func moveFloatingWindowWithMouse(_ window: Window) {
-    let targetWorkspace = mouseLocation.monitorApproximation.activeWorkspace
+    let targetWorkspace = MousePointerTracker.shared.currentSample.point.monitorApproximation.activeWorkspace
     guard let parent = window.parent else { return }
     if targetWorkspace != parent {
         window.bindAsFloatingWindow(to: targetWorkspace)
@@ -80,6 +81,7 @@ private func moveTilingWindow(_ window: Window) {
         detachOrigin: .window,
         startedInSidebar: false,
         anchorRect: resolvedDraggedWindowAnchorRect(for: window, subject: subject),
+        refreshActualRects: subject == .window,
     )
     if didStartSession, subject == .window {
         window.lastAppliedLayoutPhysicalRect = nil

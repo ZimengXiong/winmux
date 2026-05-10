@@ -1,4 +1,5 @@
 @testable import AppBundle
+import AppKit
 import CoreGraphics
 import XCTest
 
@@ -11,6 +12,27 @@ private struct WindowTabsTestMonitor: Monitor {
 
     var width: CGFloat { rect.width }
     var height: CGFloat { rect.height }
+}
+
+private func cgWindowBounds(windowNumber: Int) -> CGRect? {
+    guard let windows = CGWindowListCopyWindowInfo(
+        [.optionIncludingWindow],
+        CGWindowID(windowNumber),
+    ) as? [[String: Any]],
+        let bounds = windows.first?[kCGWindowBounds as String] as? [String: Any],
+        let x = bounds["X"] as? NSNumber,
+        let y = bounds["Y"] as? NSNumber,
+        let width = bounds["Width"] as? NSNumber,
+        let height = bounds["Height"] as? NSNumber
+    else {
+        return nil
+    }
+    return CGRect(
+        x: CGFloat(truncating: x),
+        y: CGFloat(truncating: y),
+        width: CGFloat(truncating: width),
+        height: CGFloat(truncating: height),
+    )
 }
 
 final class WindowTabsTest: XCTestCase {
@@ -1821,6 +1843,85 @@ final class WindowTabsTest: XCTestCase {
             windowIntentPreviewGuideLine(for: .tabStrip, in: size),
             WindowIntentPreviewGuideLine(start: CGPoint(x: 10, y: 79), end: CGPoint(x: 110, y: 79)),
         )
+    }
+
+    func testWindowIntentPreviewFillStaysGrayOverDarkContent() {
+        let fill = WindowIntentPreviewPalette.fillColor.usingColorSpace(.deviceRGB).orDie()
+        let matte = mattePanelNSColor.usingColorSpace(.deviceRGB).orDie()
+        let darkContent: CGFloat = 0.05
+        let lightContent: CGFloat = 1
+        let darkRed = fill.alphaComponent * fill.redComponent + (1 - fill.alphaComponent) * darkContent
+        let darkGreen = fill.alphaComponent * fill.greenComponent + (1 - fill.alphaComponent) * darkContent
+        let darkBlue = fill.alphaComponent * fill.blueComponent + (1 - fill.alphaComponent) * darkContent
+        let lightRed = fill.alphaComponent * fill.redComponent + (1 - fill.alphaComponent) * lightContent
+        let lightGreen = fill.alphaComponent * fill.greenComponent + (1 - fill.alphaComponent) * lightContent
+        let lightBlue = fill.alphaComponent * fill.blueComponent + (1 - fill.alphaComponent) * lightContent
+
+        XCTAssertEqual(fill.redComponent, matte.redComponent, accuracy: 0.001)
+        XCTAssertEqual(fill.greenComponent, matte.greenComponent, accuracy: 0.001)
+        XCTAssertEqual(fill.blueComponent, matte.blueComponent, accuracy: 0.001)
+        XCTAssertEqual(fill.alphaComponent, matte.alphaComponent, accuracy: 0.001)
+        XCTAssertGreaterThan(fill.alphaComponent, 0.88)
+        XCTAssertGreaterThan(min(darkRed, darkGreen, darkBlue), 0.09)
+        XCTAssertLessThan(max(darkRed, darkGreen, darkBlue), 0.16)
+        XCTAssertLessThan(max(lightRed, lightGreen, lightBlue), 0.25)
+        XCTAssertLessThan(max(fill.redComponent, fill.greenComponent, fill.blueComponent) - min(fill.redComponent, fill.greenComponent, fill.blueComponent), 0.01)
+    }
+
+    @MainActor
+    func testHudPanelBaseDoesNotPaintSystemHudBackdrop() {
+        let panel = NSPanelHud()
+
+        XCTAssertFalse(panel.styleMask.contains(.hudWindow))
+        XCTAssertFalse(panel.isOpaque)
+    }
+
+    @MainActor
+    func testWindowIntentPreviewPanelRendersGrayTranslucentSurface() throws {
+        let frame = CGRect(x: 120, y: 120, width: 240, height: 160)
+        let background = NSWindow(
+            contentRect: frame.insetBy(dx: -12, dy: -12),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false,
+        )
+        background.isOpaque = true
+        background.backgroundColor = .white
+        background.level = NSWindow.Level(rawValue: WinMuxPanelLayer.windowIntentPreview.level.rawValue - 1)
+        background.orderFrontRegardless()
+        defer { background.orderOut(nil) }
+
+        let panel = WindowTabDropPreviewPanel.shared
+        panel.show(WindowTabDropPreviewViewModel(
+            containerFrame: frame,
+            frame: frame,
+            title: "Preview",
+            subtitle: "Preview",
+            style: .stackSplit,
+            geometry: .rounded,
+            isGroup: false,
+            referenceWindowId: nil,
+            isPointerSettled: true,
+            zones: [],
+        ))
+        RunLoop.main.run(until: Date().addingTimeInterval(0.12))
+        defer { panel.hide() }
+        guard let panelBounds = cgWindowBounds(windowNumber: panel.windowNumber),
+              let cgImage = CGWindowListCreateImage(
+                  panelBounds,
+                  .optionIncludingWindow,
+                  CGWindowID(panel.windowNumber),
+                  [.nominalResolution],
+              )
+        else {
+            throw XCTSkip("Could not capture intent preview panel window")
+        }
+
+        let bitmap = NSBitmapImageRep(cgImage: cgImage)
+        let sample = bitmap.colorAt(x: bitmap.pixelsWide / 2, y: bitmap.pixelsHigh / 2).orDie()
+            .usingColorSpace(.deviceRGB).orDie()
+        XCTAssertGreaterThan(min(sample.redComponent, sample.greenComponent, sample.blueComponent), 0.12)
+        XCTAssertLessThan(max(sample.redComponent, sample.greenComponent, sample.blueComponent), 0.28)
     }
 
     @MainActor

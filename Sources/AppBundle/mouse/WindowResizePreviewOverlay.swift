@@ -265,6 +265,30 @@ private extension WindowResizePreviewItem {
     }
 }
 
+@MainActor
+func windowDragSourcePreviewItem(window: Window, subject: WindowDragSubject, frame: Rect) -> WindowResizePreviewItem? {
+    guard frame.width > 0, frame.height > 0 else { return nil }
+    if subject == .group,
+       let tabGroup = window.moveNode as? TilingContainer,
+       tabGroup.usesWindowTabBehavior
+    {
+        return WindowResizePreviewItem(tabGroup: tabGroup, rect: windowTabBarRect(forGroupFrameRect: frame))
+    }
+    return WindowResizePreviewItem(window: window, rect: frame)
+}
+
+@MainActor
+func windowResizeSourceTabGroupPreviewItem(window: Window, activeWindowRect: Rect) -> WindowResizePreviewItem? {
+    guard let tabGroup = window.nearestWindowTabGroup,
+          tabGroup.usesWindowTabBehavior,
+          tabGroup.tabActiveWindow == window
+    else { return nil }
+    let groupFrame = windowTabGroupFrameRect(forActiveWindowContentRect: activeWindowRect)
+    let tabBarFrame = windowTabBarRect(forGroupFrameRect: groupFrame)
+    guard tabBarFrame.width > 0, tabBarFrame.height > 0 else { return nil }
+    return WindowResizePreviewItem(tabGroup: tabGroup, rect: tabBarFrame)
+}
+
 private extension WindowResizePreviewIcon {
     @MainActor
     init(window: Window) {
@@ -276,12 +300,19 @@ private extension WindowResizePreviewIcon {
     }
 }
 
+func windowResizePreviewAllScreensFrame() -> CGRect? {
+    guard let first = NSScreen.screens.first?.frame else { return nil }
+    let union = NSScreen.screens.dropFirst().reduce(first) { $0.union($1.frame) }
+    return union.insetBy(dx: -128, dy: -128)
+}
+
 @MainActor
 final class WindowResizePreviewPanel: NSPanelHud {
     static let shared = WindowResizePreviewPanel()
 
     private let compositorView = WindowResizePreviewCompositorView()
     private var pendingHide: DispatchWorkItem? = nil
+    private var stableFrame: CGRect? = nil
 
     override private init() {
         super.init()
@@ -299,10 +330,18 @@ final class WindowResizePreviewPanel: NSPanelHud {
         contentView = compositorView
     }
 
+    func beginStableFrame(_ frame: CGRect) {
+        stableFrame = frame.alignedToBackingPixels()
+    }
+
+    func endStableFrame() {
+        stableFrame = nil
+    }
+
     func show(_ screenItems: [WindowResizePreviewItem]) {
         pendingHide?.cancel()
         pendingHide = nil
-        guard let panelFrame = windowResizePreviewPanelFrame(for: screenItems) else {
+        guard let panelFrame = stableFrame ?? windowResizePreviewPanelFrame(for: screenItems) else {
             hide()
             return
         }
@@ -568,8 +607,8 @@ private final class WindowResizePreviewItemLayer: CALayer {
 }
 
 private enum ResizePreviewPalette {
-    static let fill = NSColor(calibratedRed: 0.105, green: 0.108, blue: 0.114, alpha: 0.94).cgColor
-    static let stroke = NSColor.white.withAlphaComponent(0.12).cgColor
+    static let fill = mattePanelNSColor.cgColor
+    static let stroke = NSColor.white.withAlphaComponent(0.04).cgColor
     static let tabGroupBar = NSColor.white.withAlphaComponent(0.055).cgColor
     static let fallbackIconFill = NSColor.white.withAlphaComponent(0.12).cgColor
 }

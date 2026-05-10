@@ -1110,6 +1110,7 @@ private func updateSidebarWindowDrag(_ windowId: UInt32, subject: WindowDragSubj
         detachOrigin: .window,
         startedInSidebar: true,
         anchorRect: resolvedDraggedWindowAnchorRect(for: window, subject: subject),
+        refreshActualRects: subject == .window,
     )
     WindowMouseInteractionDriver.shared.startMove(
         windowId: window.windowId,

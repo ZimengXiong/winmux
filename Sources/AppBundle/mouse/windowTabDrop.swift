@@ -366,7 +366,7 @@ func refreshVisibleWindowActualRectsForCurrentDrag(sourceWindowId: UInt32) {
         else { return }
         _ = updatePendingWindowDragIntent(
             sourceWindow: sourceWindow,
-            mouseLocation: mouseLocation,
+            mouseLocation: MousePointerTracker.shared.currentSample.point,
             subject: getCurrentMouseDragSubject(),
             detachOrigin: getCurrentMouseTabDetachOrigin(),
         )
@@ -902,6 +902,17 @@ private func currentWindowSurfaceDestination(
 
     let targetWorkspace = mouseLocation.monitorApproximation.activeWorkspace
     let sourceNode = dragSubjectNode(for: sourceWindow, subject: subject)
+    if subject == .group,
+       let sourceWorkspace = sourceNode.nodeWorkspace,
+       sourceWorkspace === targetWorkspace,
+       sourceNode.windowDragVisibleRect?.contains(mouseLocation) == true
+    {
+        logWindowDragHitTestIfNeeded(
+            signature: "surface:self-group:source=\(sourceWindow.windowId)",
+            "windowDragTarget.selfGroup source=\(debugDescribe(sourceWindow)) mouse=\(debugDescribe(mouseLocation)) sourceNode=\(debugDescribe(sourceNode))"
+        )
+        return nil
+    }
     guard let targetWindow = mouseLocation.findWindowDragTarget(in: targetWorkspace.rootTilingContainer, excluding: sourceNode) else {
         logWindowDragHitTestIfNeeded(
             signature: "surface:none:source=\(sourceWindow.windowId):subject=\(debugDescribe(subject))",
@@ -1390,7 +1401,6 @@ private func setPendingWindowDragIntent(sourceWindowId: UInt32, sourceSubject: W
        pendingWindowDragIntent.previewStyle == destination.previewStyle,
        pendingWindowDragIntent.previewGeometry == destination.previewGeometry,
        pendingWindowDragIntent.isGroup == destination.isGroup,
-       pendingWindowDragIntent.isPointerSettled == isPointerSettled,
        pendingWindowDragIntent.previewRect.isEqual(to: destination.previewRect),
        pendingWindowDragIntent.interactionRect.isEqual(to: destination.interactionRect)
     {
@@ -1444,9 +1454,10 @@ func clearPendingWindowDragIntent() {
 @MainActor
 func applyPendingWindowDragIntentIfPossible() -> Bool {
     defer { clearPendingWindowDragIntent() }
+    let currentMouseLocation = MousePointerTracker.shared.currentSample.point
     guard let pendingWindowDragIntent,
           let sourceWindow = Window.get(byId: pendingWindowDragIntent.sourceWindowId),
-          pendingWindowDragIntent.interactionRect.contains(mouseLocation),
+          pendingWindowDragIntent.interactionRect.contains(currentMouseLocation),
           isWindowDragIntentKindEnabled(pendingWindowDragIntent.kind)
     else { return false }
     let sourceNode = dragSubjectNode(for: sourceWindow, subject: pendingWindowDragIntent.sourceSubject)

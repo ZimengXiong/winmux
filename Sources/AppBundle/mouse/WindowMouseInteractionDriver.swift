@@ -16,57 +16,26 @@ final class WindowMouseInteractionDriver {
         let windowId: UInt32
     }
 
-    private struct ResizePrediction {
+    private struct PendingResizeCandidate {
         let windowId: UInt32
         let baseRect: Rect
-        let edges: ResizePredictionEdges
-        let mouseOffset: ResizePredictionMouseOffset
-        var latestRect: Rect
-
-        func predictedRect(mouse: CGPoint) -> Rect {
-            let minimumWidth = CGFloat(80)
-            let minimumHeight = CGFloat(80)
-            var minX = baseRect.minX
-            var maxX = baseRect.maxX
-            var minY = baseRect.minY
-            var maxY = baseRect.maxY
-
-            if edges.left {
-                minX = min(mouse.x - mouseOffset.left, maxX - minimumWidth)
-            }
-            if edges.right {
-                maxX = max(mouse.x - mouseOffset.right, minX + minimumWidth)
-            }
-            if edges.up {
-                minY = min(mouse.y - mouseOffset.up, maxY - minimumHeight)
-            }
-            if edges.down {
-                maxY = max(mouse.y - mouseOffset.down, minY + minimumHeight)
-            }
-
-            return Rect(topLeftX: minX, topLeftY: minY, width: maxX - minX, height: maxY - minY)
-        }
+        let observedRect: Rect
+        let edges: ResizeGestureEdges
+        let mouseSample: MousePointerSample
     }
 
-    private struct ResizePredictionEdges {
-        let left: Bool
-        let right: Bool
-        let up: Bool
-        let down: Bool
-
-        var hasAny: Bool { left || right || up || down }
-    }
-
-    private struct ResizePredictionMouseOffset {
-        let left: CGFloat
-        let right: CGFloat
-        let up: CGFloat
-        let down: CGFloat
+    private struct DragSourcePreviewState {
+        let windowId: UInt32
+        let subject: WindowDragSubject
+        let anchorRect: Rect
+        let mouseOffset: CGPoint
     }
 
     private var moveSession: MoveSession?
     private var resizeSession: ResizeSession?
-    private var resizePrediction: ResizePrediction?
+    private var dragSourcePreviewState: DragSourcePreviewState?
+    private var pendingResizeCandidate: PendingResizeCandidate?
+    private var resizeGesture: ResizeGestureSessionState?
     private var isResizeSampleInFlight = false
     private var isMouseUpResetScheduled = false
 
@@ -84,19 +53,37 @@ final class WindowMouseInteractionDriver {
             detachOrigin: detachOrigin,
             startedInSidebar: startedInSidebar,
         )
-        if moveSession != session {
+        let isNewSession = moveSession != session
+        if isNewSession {
             WindowDragFrameGate.shared.reset(windowId: windowId)
         }
         moveSession = session
-        WindowTabStripPanelController.shared.showChromeDuringMouseInteraction()
+        if isNewSession {
+            if subject == .group {
+                WindowTabStripPanelController.shared.hideChromeDuringMouseInteraction(showFrameOnly: false)
+                if let sourceWindow = Window.get(byId: windowId) {
+                    beginCompositedMovePreview(sourceWindow: sourceWindow, session: session)
+                }
+            } else if detachOrigin == .tabStrip {
+                dragSourcePreviewState = nil
+                WindowResizePreviewPanel.shared.endStableFrame()
+                WindowResizePreviewPanel.shared.hide()
+                WindowTabStripPanelController.shared.hideChromeDuringMouseInteraction()
+            } else {
+                dragSourcePreviewState = nil
+                WindowResizePreviewPanel.shared.endStableFrame()
+                WindowResizePreviewPanel.shared.hide()
+                WindowTabStripPanelController.shared.showChromeDuringMouseInteraction()
+            }
+        }
         startDisplayLoop()
-        renderMoveFrame(force: true)
+        renderMoveFrame(force: isNewSession)
     }
 
     func startResize(windowId: UInt32) {
         let session = ResizeSession(windowId: windowId)
         if resizeSession != session {
-            resizePrediction = nil
+            resizeGesture = nil
             isResizeSampleInFlight = false
             isMouseUpResetScheduled = false
         }
@@ -105,11 +92,22 @@ final class WindowMouseInteractionDriver {
         setCurrentMouseManipulationKind(.resize)
         clearPendingWindowDragIntent()
         clearPendingUnmanagedWindowSnap()
-        WindowTabStripPanelController.shared.hideChromeDuringMouseInteraction()
         if let window = Window.get(byId: windowId) {
-            if let rect = window.lastAppliedLayoutPhysicalRect ?? window.lastKnownActualRect {
+            let resizesTabGroup = window.nearestWindowTabGroup?.tabActiveWindow == window
+            WindowTabStripPanelController.shared.hideChromeDuringMouseInteraction(showFrameOnly: !resizesTabGroup)
+            if resizeGesture == nil {
+                let sample = MousePointerTracker.shared.currentSample
+                resizeGesture = makeResizeGesture(window: window, observedRect: window.lastKnownActualRect, sample: sample)
+            }
+            if let rect = resizeGesture?.predictedRect(mouse: MousePointerTracker.shared.currentSample.point) ??
+                window.lastAppliedLayoutPhysicalRect ??
+                window.lastKnownActualRect
+            {
+                beginStableResizePreviewFrame(for: window)
                 updateCompositedResizePreview(window, rect: rect)
             }
+        } else {
+            WindowTabStripPanelController.shared.hideChromeDuringMouseInteraction()
         }
         startDisplayLoop()
         sampleResizeFrame(force: true)
@@ -133,8 +131,10 @@ final class WindowMouseInteractionDriver {
             if self.resizeSession == resizeSession {
                 self.resizeSession = nil
             }
-            resizePrediction = nil
+            pendingResizeCandidate = nil
+            resizeGesture = nil
             isResizeSampleInFlight = false
+            WindowResizePreviewPanel.shared.endStableFrame()
             WindowResizePreviewPanel.shared.hide()
         }
         guard let window = Window.get(byId: resizeSession.windowId) else { return }
@@ -148,11 +148,45 @@ final class WindowMouseInteractionDriver {
         DisplayRefreshDriver.shared.remove(owner: self)
         moveSession = nil
         resizeSession = nil
-        resizePrediction = nil
+        dragSourcePreviewState = nil
+        pendingResizeCandidate = nil
+        resizeGesture = nil
         isResizeSampleInFlight = false
         isMouseUpResetScheduled = false
+        WindowResizePreviewPanel.shared.endStableFrame()
         WindowResizePreviewPanel.shared.hide()
         WindowTabStripPanelController.shared.showChromeDuringMouseInteraction()
+    }
+
+    func capturePendingResizeCandidate() async {
+        guard config.enableWindowManagement,
+              getCurrentMouseManipulationKind() == .none,
+              let window = try? await getNativeFocusedWindow(),
+              window.parent is TilingContainer,
+              !window.isHiddenInCorner
+        else {
+            pendingResizeCandidate = nil
+            return
+        }
+        let sample = MousePointerTracker.shared.currentSample
+        let observedRect = (try? await window.getAxRect()) ?? window.lastKnownActualRect ?? window.lastAppliedLayoutPhysicalRect
+        guard let observedRect else {
+            pendingResizeCandidate = nil
+            return
+        }
+        let baseRect = window.lastAppliedLayoutPhysicalRect ?? observedRect
+        let edges = resizeGestureEdgesNear(mouse: sample.point, rect: observedRect, threshold: 96)
+        guard edges.hasAny else {
+            pendingResizeCandidate = nil
+            return
+        }
+        pendingResizeCandidate = PendingResizeCandidate(
+            windowId: window.windowId,
+            baseRect: baseRect,
+            observedRect: observedRect,
+            edges: edges,
+            mouseSample: sample,
+        )
     }
 
     private func startDisplayLoop() {
@@ -173,6 +207,7 @@ final class WindowMouseInteractionDriver {
     private func finishAfterMissedMouseUpIfNeeded() {
         guard resizeSession != nil || moveSession != nil else {
             DisplayRefreshDriver.shared.remove(owner: self)
+            WindowResizePreviewPanel.shared.endStableFrame()
             WindowResizePreviewPanel.shared.hide()
             return
         }
@@ -197,12 +232,14 @@ final class WindowMouseInteractionDriver {
             return
         }
 
-        let currentMouseLocation = mouseLocation
-        _ = WindowDragFrameGate.shared.shouldProcess(
+        let currentMouseLocation = MousePointerTracker.shared.currentSample.point
+        updateCompositedMovePreview(sourceWindow: sourceWindow, mouseLocation: currentMouseLocation)
+        let shouldProcessFrame = WindowDragFrameGate.shared.shouldProcess(
             windowId: sourceWindow.windowId,
             point: currentMouseLocation,
             force: force,
         )
+        guard shouldProcessFrame else { return }
 
         if config.enableWindowManagement {
             renderManagedMoveFrame(
@@ -266,6 +303,60 @@ final class WindowMouseInteractionDriver {
         }
     }
 
+    private func beginCompositedMovePreview(sourceWindow: Window, session: MoveSession) {
+        guard session.subject == .group else {
+            dragSourcePreviewState = nil
+            WindowResizePreviewPanel.shared.endStableFrame()
+            WindowResizePreviewPanel.shared.hide()
+            return
+        }
+        guard let anchorRect = draggedWindowAnchorRect(for: sourceWindow.windowId) ??
+            resolvedDraggedWindowAnchorRect(for: sourceWindow, subject: session.subject),
+            anchorRect.width > 0,
+            anchorRect.height > 0
+        else {
+            dragSourcePreviewState = nil
+            WindowResizePreviewPanel.shared.endStableFrame()
+            WindowResizePreviewPanel.shared.hide()
+            return
+        }
+        let mouseLocation = MousePointerTracker.shared.currentSample.point
+        dragSourcePreviewState = DragSourcePreviewState(
+            windowId: sourceWindow.windowId,
+            subject: session.subject,
+            anchorRect: anchorRect,
+            mouseOffset: CGPoint(
+                x: mouseLocation.x - anchorRect.topLeftX,
+                y: mouseLocation.y - anchorRect.topLeftY,
+            )
+        )
+        updateCompositedMovePreview(sourceWindow: sourceWindow, mouseLocation: mouseLocation)
+    }
+
+    private func updateCompositedMovePreview(sourceWindow: Window, mouseLocation: CGPoint) {
+        guard let state = dragSourcePreviewState,
+              state.windowId == sourceWindow.windowId,
+              state.subject == .group
+        else { return }
+        let frame = Rect(
+            topLeftX: mouseLocation.x - state.mouseOffset.x,
+            topLeftY: mouseLocation.y - state.mouseOffset.y,
+            width: state.anchorRect.width,
+            height: state.anchorRect.height,
+        )
+        guard let item = windowDragSourcePreviewItem(
+            window: sourceWindow,
+            subject: state.subject,
+            frame: frame
+        ) else { return }
+        if let stableFrame = windowResizePreviewAllScreensFrame() {
+            WindowResizePreviewPanel.shared.beginStableFrame(stableFrame)
+        } else {
+            WindowResizePreviewPanel.shared.endStableFrame()
+        }
+        WindowResizePreviewPanel.shared.show([item])
+    }
+
     private func sampleResizeFrame(force: Bool) {
         guard let session = resizeSession else { return }
         guard isLeftMouseButtonDown, getCurrentMouseManipulationKind() == .resize else { return }
@@ -274,98 +365,86 @@ final class WindowMouseInteractionDriver {
             return
         }
 
-        if var prediction = resizePrediction, prediction.windowId == session.windowId {
-            let rect = prediction.predictedRect(mouse: mouseLocation)
-            prediction.latestRect = rect
-            resizePrediction = prediction
+        let sample = MousePointerTracker.shared.currentSample
+        if var gesture = resizeGesture, gesture.windowId == session.windowId {
+            let rect = gesture.predictedRect(mouse: sample.point)
+            gesture.latestRect = rect
+            resizeGesture = gesture
             updateCompositedResizePreview(window, rect: rect)
+            if force || sample.timestamp - gesture.lastCalibrationTimestamp >= 1.0 / 20.0 {
+                calibrateResizeGesture(window: window, session: session, force: false)
+            }
             return
         }
 
         guard force || !isResizeSampleInFlight else { return }
+        calibrateResizeGesture(window: window, session: session, force: force)
+    }
+
+    private func finalResizeRect(for session: ResizeSession, window: Window) async -> Rect? {
+        if let resizeGesture, resizeGesture.windowId == session.windowId {
+            return resizeGesture.predictedRect(mouse: MousePointerTracker.shared.currentSample.point)
+        }
+        if let rect = try? await window.getAxRect() {
+            return rect
+        }
+        if let resizeGesture, resizeGesture.windowId == session.windowId {
+            return resizeGesture.latestRect
+        }
+        return window.lastKnownActualRect ?? window.lastAppliedLayoutPhysicalRect
+    }
+
+    private func calibrateResizeGesture(window: Window, session: ResizeSession, force: Bool) {
+        guard force || !isResizeSampleInFlight else { return }
         isResizeSampleInFlight = true
         let sessionWindowId = session.windowId
+        let sample = MousePointerTracker.shared.currentSample
         Task { @MainActor in
             defer { isResizeSampleInFlight = false }
             guard resizeSession?.windowId == sessionWindowId, isLeftMouseButtonDown else { return }
             guard let rect = try? await window.getAxRect() else { return }
             guard resizeSession?.windowId == sessionWindowId, isLeftMouseButtonDown else { return }
-            resizePrediction = makeResizePrediction(window: window, observedRect: rect)
-            updateCompositedResizePreview(window, rect: rect)
+            let freshSample = MousePointerTracker.shared.currentSample
+            if var gesture = resizeGesture, gesture.windowId == sessionWindowId {
+                gesture.calibrate(observedRect: rect, mouse: freshSample.point, timestamp: freshSample.timestamp)
+                resizeGesture = gesture
+                updateCompositedResizePreview(window, rect: gesture.predictedRect(mouse: freshSample.point))
+            } else if let gesture = makeResizeGesture(window: window, observedRect: rect, sample: sample) {
+                resizeGesture = gesture
+                updateCompositedResizePreview(window, rect: gesture.predictedRect(mouse: freshSample.point))
+            } else {
+                updateCompositedResizePreview(window, rect: rect)
+            }
         }
     }
 
-    private func finalResizeRect(for session: ResizeSession, window: Window) async -> Rect? {
-        if let resizePrediction, resizePrediction.windowId == session.windowId {
-            return resizePrediction.predictedRect(mouse: mouseLocation)
+    private func makeResizeGesture(window: Window, observedRect: Rect?, sample: MousePointerSample) -> ResizeGestureSessionState? {
+        guard let observedRect = observedRect ?? window.lastKnownActualRect ?? window.lastAppliedLayoutPhysicalRect else { return nil }
+        if let pendingResizeCandidate,
+           pendingResizeCandidate.windowId == window.windowId
+        {
+            return makeResizeGestureSession(
+                windowId: window.windowId,
+                baseRect: pendingResizeCandidate.baseRect,
+                observedRect: pendingResizeCandidate.observedRect,
+                mouse: pendingResizeCandidate.mouseSample.point,
+                edges: pendingResizeCandidate.edges,
+                timestamp: pendingResizeCandidate.mouseSample.timestamp,
+            )
         }
-        if let rect = try? await window.getAxRect() {
-            return rect
-        }
-        if let resizePrediction, resizePrediction.windowId == session.windowId {
-            return resizePrediction.latestRect
-        }
-        return window.lastKnownActualRect ?? window.lastAppliedLayoutPhysicalRect
-    }
-
-    private func makeResizePrediction(window: Window, observedRect: Rect) -> ResizePrediction? {
-        let mouse = mouseLocation
         let baseRect = window.lastAppliedLayoutPhysicalRect ?? observedRect
-        let edges = resizePredictionEdges(baseRect: baseRect, observedRect: observedRect, mouse: mouse)
-        guard edges.hasAny else { return nil }
-        return ResizePrediction(
+        return makeResizeGestureSession(
             windowId: window.windowId,
-            baseRect: observedRect,
-            edges: edges,
-            mouseOffset: ResizePredictionMouseOffset(
-                left: mouse.x - observedRect.minX,
-                right: mouse.x - observedRect.maxX,
-                up: mouse.y - observedRect.minY,
-                down: mouse.y - observedRect.maxY,
-            ),
-            latestRect: observedRect,
+            baseRect: baseRect,
+            observedRect: observedRect,
+            mouse: sample.point,
+            edges: resizeGestureEdges(baseRect: baseRect, observedRect: observedRect, mouse: sample.point),
+            timestamp: sample.timestamp,
         )
     }
 
-    private func resizePredictionEdges(baseRect: Rect, observedRect: Rect, mouse: CGPoint) -> ResizePredictionEdges {
-        let threshold = CGFloat(2)
-        let leftDiff = abs(baseRect.minX - observedRect.minX)
-        let rightDiff = abs(baseRect.maxX - observedRect.maxX)
-        let upDiff = abs(baseRect.minY - observedRect.minY)
-        let downDiff = abs(baseRect.maxY - observedRect.maxY)
-
-        var left = leftDiff > threshold
-        var right = rightDiff > threshold
-        var up = upDiff > threshold
-        var down = downDiff > threshold
-
-        if left, right {
-            left = leftDiff >= rightDiff
-            right = !left
-        }
-        if up, down {
-            up = upDiff >= downDiff
-            down = !up
-        }
-
-        if !left, !right {
-            let leftDistance = abs(mouse.x - observedRect.minX)
-            let rightDistance = abs(mouse.x - observedRect.maxX)
-            if min(leftDistance, rightDistance) <= 96 {
-                left = leftDistance <= rightDistance
-                right = !left
-            }
-        }
-
-        if !up, !down {
-            let upDistance = abs(mouse.y - observedRect.minY)
-            let downDistance = abs(mouse.y - observedRect.maxY)
-            if min(upDistance, downDistance) <= 96 {
-                up = upDistance <= downDistance
-                down = !up
-            }
-        }
-
-        return ResizePredictionEdges(left: left, right: right, up: up, down: down)
+    private func beginStableResizePreviewFrame(for window: Window) {
+        guard let workspace = window.nodeWorkspace else { return }
+        WindowResizePreviewPanel.shared.beginStableFrame(workspace.workspaceMonitor.rect.toAppKitScreenRect)
     }
 }

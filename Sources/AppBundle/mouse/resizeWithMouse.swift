@@ -60,20 +60,27 @@ func resizeWithMouse(_ window: Window) async throws { // todo cover with tests
 @MainActor
 func updateCompositedResizePreview(_ window: Window, rect: Rect) {
     syncClosedWindowsCacheToCurrentWorld()
-    WindowTabStripPanelController.shared.hideChromeDuringMouseInteraction()
+    let sourceTabGroupItem = windowResizeSourceTabGroupPreviewItem(window: window, activeWindowRect: rect)
+    WindowTabStripPanelController.shared.hideChromeDuringMouseInteraction(showFrameOnly: sourceTabGroupItem == nil)
     guard let workspace = window.nodeWorkspace,
           workspace.isVisible,
           let weightMap = proposedResizeWeightMap(window, rect: rect)
     else {
+        WindowResizePreviewPanel.shared.endStableFrame()
         WindowResizePreviewPanel.shared.hide()
         return
     }
-    let items = windowResizePreviewItems(
+    WindowResizePreviewPanel.shared.beginStableFrame(workspace.workspaceMonitor.rect.toAppKitScreenRect)
+    var items = windowResizePreviewItems(
         in: workspace,
         weightMap: weightMap,
         excludingActiveWindowId: window.windowId,
     )
+    if let sourceTabGroupItem {
+        items.append(sourceTabGroupItem)
+    }
     guard !items.isEmpty else {
+        WindowResizePreviewPanel.shared.endStableFrame()
         WindowResizePreviewPanel.shared.hide()
         return
     }
