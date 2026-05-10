@@ -6,7 +6,7 @@ import XCTest
 final class StackWithCommandTest: XCTestCase {
     override func setUp() async throws { setUpWorkspacesForTests() }
 
-    func testStackWithRightCreatesAccordionContainer() async throws {
+    func testStackWithRightCreatesTabGroupContainer() async throws {
         let root = Workspace.get(byName: name).rootTilingContainer.apply {
             TestWindow.new(id: 0, parent: $0)
             assertEquals(TestWindow.new(id: 1, parent: $0).focusWindow(), true)
@@ -16,7 +16,7 @@ final class StackWithCommandTest: XCTestCase {
         try await StackWithCommand(args: StackWithCmdArgs(rawArgs: [], direction: .right)).run(.defaultEnv, .emptyStdin)
         assertEquals(root.layoutDescription, .h_tiles([
             .window(0),
-            .v_accordion([
+            .v_tab_group([
                 .window(2),
                 .window(1),
             ]),

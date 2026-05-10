@@ -214,15 +214,15 @@ extension ShellParser.CmdsContext? {
     fileprivate func toTyped(_ msg: String) -> Result<RawShell, String> { orFailure(msg).toTyped() }
 }
 
-// protocol AeroShell {
+// protocol WinMuxShell {
 //     func run(_ state: CmdMutableState) -> CmdOut
 // }
-// extension [String] : AeroShell {
+// extension [String] : WinMuxShell {
 //     func run(_ state: CmdMutableState) -> CmdOut { .succ(self) }
 // }
 
 extension Shell: Equatable where T: Equatable {}
-typealias AeroShell = Shell<any Command>
+typealias WinMuxShell = Shell<any Command>
 typealias RawShell = Shell<String>
 indirect enum Shell<T> {
     case args([ShellString<T>])

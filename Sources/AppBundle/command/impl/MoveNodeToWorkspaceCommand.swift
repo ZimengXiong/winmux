@@ -18,18 +18,60 @@ struct MoveNodeToWorkspaceCommand: Command {
                     wrapAround: args.wrapAround,
                     stdin: args.useStdin ? io.readStdin() : nil,
                 )
+                    ?? createNextTransientBlankWorkspaceForMoveIfAllowed(
+                        from: subjectWs,
+                        isNext: nextPrev == .next,
+                        wrapAround: args.wrapAround,
+                        usesStdin: args.useStdin,
+                    )
                 guard let ws else { return io.err("Can't resolve next or prev workspace") }
                 targetWorkspace = ws
             case .direct(let name):
-                let existedBefore = Workspace.existing(byName: name.raw) != nil
-                targetWorkspace = Workspace.get(byName: name.raw)
-                if !existedBefore {
-                    targetWorkspace.assignProject(subjectWs?.projectId ?? target.workspace.projectId)
+                guard let ws = resolveMoveTargetWorkspace(
+                    named: name.raw,
+                    sourceWorkspace: subjectWs ?? target.workspace,
+                    sourceMonitor: window.nodeMonitor ?? target.workspace.workspaceMonitor,
+                ) else {
+                    return io.err("Workspace '\(name.raw)' doesn't exist")
                 }
-                targetWorkspace.seedMonitorIfNeeded(window.nodeMonitor ?? target.workspace.workspaceMonitor)
+                targetWorkspace = ws
         }
         return moveWindowToWorkspace(window, targetWorkspace, io, focusFollowsWindow: args.focusFollowsWindow, failIfNoop: args.failIfNoop)
     }
+}
+
+@MainActor
+private func createNextTransientBlankWorkspaceForMoveIfAllowed(
+    from current: Workspace,
+    isNext: Bool,
+    wrapAround: Bool,
+    usesStdin: Bool,
+) -> Workspace? {
+    guard isNext, !wrapAround, !usesStdin else { return nil }
+    let nextWorkspaceIndex = scopedAutomaticDisplayWorkspaces(current: current).count + 1
+    return createAdjacentTransientBlankWorkspaceIfAllowed(named: String(nextWorkspaceIndex), from: current)
+}
+
+@MainActor
+private func resolveMoveTargetWorkspace(
+    named workspaceName: String,
+    sourceWorkspace: Workspace,
+    sourceMonitor: Monitor,
+) -> Workspace? {
+    if let targetIndex = parsePositiveWorkspaceDisplayIndex(workspaceName) {
+        if let workspace = scopedAutomaticDisplayWorkspaces(current: sourceWorkspace).getOrNil(atIndex: targetIndex - 1) {
+            return workspace
+        }
+        return createAdjacentTransientBlankWorkspaceIfAllowed(named: workspaceName, from: sourceWorkspace)
+    }
+
+    let existedBefore = Workspace.existing(byName: workspaceName) != nil
+    let workspace = Workspace.get(byName: workspaceName)
+    if !existedBefore {
+        workspace.assignProject(sourceWorkspace.projectId)
+    }
+    workspace.seedMonitorIfNeeded(sourceMonitor)
+    return workspace
 }
 
 @MainActor

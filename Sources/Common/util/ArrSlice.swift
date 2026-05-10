@@ -6,7 +6,7 @@ public typealias StrArrSlice = ArrSlice<String>
 // Their Slice is not properly encapsulated
 //
 // That's why we declare our own ArrSlice
-public struct ArrSlice<Element>: Sequence, AeroAny, ExpressibleByArrayLiteral, RandomAccessCollection {
+public struct ArrSlice<Element>: Sequence, WinMuxAny, ExpressibleByArrayLiteral, RandomAccessCollection {
     fileprivate let backing: [Element]
     fileprivate let offsetInBacking: Int
     /*conforms*/ public let count: Int

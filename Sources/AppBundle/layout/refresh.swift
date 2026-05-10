@@ -256,7 +256,7 @@ struct RunSessionGuard: Sendable {
 
 @MainActor
 func refreshModel() {
-    Workspace.garbageCollectUnusedWorkspaces()
+    Workspace.reconcileWorkspaceState()
     checkOnFocusChangedCallbacks()
     normalizeContainers()
 }
@@ -280,7 +280,7 @@ private func refresh() async throws {
     finalizePersistedFrozenWorldAfterRefresh(aliveWindowIds: aliveWindowIds)
 
     // Garbage collect workspaces after apps, because workspaces contain apps.
-    Workspace.garbageCollectUnusedWorkspaces()
+    Workspace.reconcileWorkspaceState()
 }
 
 func refreshObs(_: AXObserver, _: AXUIElement, notif: CFString, _: UnsafeMutableRawPointer?) {

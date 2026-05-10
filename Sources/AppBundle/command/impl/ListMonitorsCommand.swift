@@ -19,7 +19,7 @@ struct ListMonitorsCommand: Command {
         if args.outputOnlyCount {
             return io.out("\(result.count)")
         } else {
-            let list = result.map { AeroObj.monitor($0) }
+            let list = result.map { FormatObject.monitor($0) }
             if args.json {
                 return switch list.formatToJson(args.format, ignoreRightPaddingVar: args._format.isEmpty) {
                     case .success(let json): io.out(json)

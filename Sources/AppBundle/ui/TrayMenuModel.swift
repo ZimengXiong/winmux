@@ -57,7 +57,7 @@ public final class TrayMenuModel: ObservableObject {
     @Published var workspaces: [WorkspaceViewModel] = []
     @Published var workspaceSidebarWorkspaces: [WorkspaceSidebarWorkspaceViewModel] = []
     @Published var workspaceSidebarProjects: [WorkspaceSidebarProjectViewModel] = []
-    @Published var workspaceSidebarSelectedProjectId: String = workspaceProjectDefaultId
+    @Published var workspaceSidebarSelectedProjectId: WorkspaceProjectId = workspaceProjectDefaultId
     @Published var workspaceSidebarMonitorScopes: [WorkspaceSidebarMonitorScopeViewModel] = []
     @Published var workspaceSidebarSelectedMonitorScopeId: String = workspaceSidebarAllScopeId
     @Published var workspaceSidebarFocusedMonitorScopeId: String = ""
@@ -123,7 +123,7 @@ struct WorkspaceViewModel: Hashable {
 
 struct WorkspaceSidebarWorkspaceViewModel: Hashable, Identifiable {
     let name: String
-    let projectId: String
+    let projectId: WorkspaceProjectId
     let displayName: String
     let sidebarLabel: String
     let isGeneratedName: Bool
@@ -137,7 +137,7 @@ struct WorkspaceSidebarWorkspaceViewModel: Hashable, Identifiable {
 }
 
 struct WorkspaceSidebarProjectViewModel: Hashable, Identifiable {
-    let id: String
+    let id: WorkspaceProjectId
     let displayName: String
     let colorHex: String?
 }

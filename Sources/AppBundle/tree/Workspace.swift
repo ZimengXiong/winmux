@@ -1,20 +1,16 @@
 import AppKit
 import Common
 
-@MainActor private var workspaceNameToWorkspace: [String: Workspace] = [:]
 private let sidebarDraftWorkspacePrefix = "__sidebar_draft_workspace_"
-private let internalStubWorkspacePrefix = "__internal_stub_workspace_"
 private let internalAutomaticWorkspacePrefix = "__internal_auto_workspace_"
-let workspaceProjectDefaultId = "default"
+let workspaceProjectDefaultId = WorkspaceProjectId.defaultProject
 
 struct WorkspaceProject: Hashable, Identifiable {
-    let id: String
+    let id: WorkspaceProjectId
     let name: String
-}
-
-struct WorkspaceScope: Hashable {
-    let projectId: String
-    let monitorPoint: CGPoint
+    var workspaceOrderByLane: [DisplayLaneId: [WorkspaceId]] = [:]
+    var lastActiveWorkspaceByLane: [DisplayLaneId: WorkspaceId] = [:]
+    var linkedLaneIds: Set<DisplayLaneId> = []
 }
 
 enum WorkspaceMutationError: LocalizedError {
@@ -43,19 +39,10 @@ enum WorkspaceMutationError: LocalizedError {
     }
 }
 
-@MainActor private var workspaceProjectIdToProject: [String: WorkspaceProject] = [
-    workspaceProjectDefaultId: WorkspaceProject(id: workspaceProjectDefaultId, name: "Default"),
-]
-@MainActor private var activeWorkspaceProjectIdByScreenPoint: [CGPoint: String] = [:]
-
 enum WorkspaceNamingStyle: String, Codable, Sendable {
     case explicit
     case automatic
 }
-
-@MainActor private var screenPointToPrevVisibleWorkspace: [CGPoint: String] = [:]
-@MainActor private var screenPointToVisibleWorkspace: [CGPoint: Workspace] = [:]
-@MainActor private var visibleWorkspaceToScreenPoint: [Workspace: CGPoint] = [:]
 
 private func automaticWorkspaceIndex(_ name: String) -> Int? {
     Int(name)
@@ -76,49 +63,105 @@ private func lowestUnusedPositiveIndex(_ usedIndices: Set<Int>) -> Int {
 }
 
 @MainActor
-func workspaceScope(projectId: String, monitor: Monitor) -> WorkspaceScope {
-    WorkspaceScope(projectId: projectId, monitorPoint: monitor.rect.topLeftCorner)
+func workspaceScope(projectId: WorkspaceProjectId, monitor: Monitor) -> WorkspaceScope {
+    WorkspaceScope(projectId: projectId, laneId: DisplayLaneId(monitor))
 }
 
-// The returned workspace must be invisible and it must belong to the requested monitor
-@MainActor func getStubWorkspace(for monitor: Monitor) -> Workspace {
-    getStubWorkspace(forPoint: monitor.rect.topLeftCorner)
-}
-
-@MainActor
-private func getStubWorkspace(forPoint point: CGPoint) -> Workspace {
-    if let prevName = screenPointToPrevVisibleWorkspace[point],
-       let prev = Workspace.existing(byName: prevName),
-       canReuseWorkspaceAsEmptyMonitorReplacement(prev, point: point)
-    {
-        return prev
-    }
-    if let candidate = Workspace.all.first(where: {
-        $0.isSystemStub && canReuseWorkspaceAsEmptyMonitorReplacement($0, point: point)
-    })
-    {
-        return candidate
-    }
-    let stubWorkspace = Workspace.get(byName: nextInternalStubWorkspaceName())
-    stubWorkspace.markAsSystemStub()
-    stubWorkspace.assignedMonitorPoint = point
-    return stubWorkspace
+@MainActor func getOrCreateLaneFallbackWorkspace(for monitor: Monitor) -> Workspace {
+    getOrCreateFallbackWorkspace(
+        projectId: activeWorkspaceProjectId(for: monitor),
+        laneId: DisplayLaneId(monitor),
+        monitor: monitor,
+    )
 }
 
 @MainActor
-private func canReuseWorkspaceAsEmptyMonitorReplacement(_ workspace: Workspace, point: CGPoint) -> Bool {
-    guard !workspace.isVisible,
-          workspace.workspaceMonitor.rect.topLeftCorner == point,
-          workspace.forceAssignedMonitor == nil
-    else {
-        return false
+private func getOrCreateLaneFallbackWorkspace(forPoint point: CGPoint) -> Workspace {
+    let monitor = point.monitorApproximation
+    return getOrCreateFallbackWorkspace(
+        projectId: activeWorkspaceProjectId(for: monitor),
+        laneId: DisplayLaneId(topLeftCorner: point),
+        monitor: monitor,
+    )
+}
+
+@MainActor
+private func getOrCreateFallbackWorkspace(
+    projectId: WorkspaceProjectId,
+    laneId: DisplayLaneId,
+    monitor: Monitor,
+) -> Workspace {
+    let scope = WorkspaceScope(projectId: projectId, laneId: laneId)
+    if let workspaceId = retainedEmptyWorkspaceId(in: scope),
+       let workspace = winMuxWorkspaceState.workspaceById[workspaceId]
+    {
+        return workspace
     }
-    return workspace.isSystemStub || workspaceHasLifecycleWindows(workspace)
+    if let workspace = workspaceProjectLaneWorkspaces(projectId: projectId, laneId: laneId)
+        .first(where: { $0.isEffectivelyEmpty && !$0.isArchived })
+    {
+        return workspace
+    }
+    let workspace = Workspace.get(byName: nextAutomaticWorkspaceName(projectId: projectId, monitor: monitor))
+    workspace.markAsAutomaticallyNamed()
+    workspace.assignProject(projectId)
+    workspace.assignLane(laneId)
+    return workspace
+}
+
+@MainActor
+private func workspaceProjectLaneWorkspaces(projectId: WorkspaceProjectId, laneId: DisplayLaneId) -> [Workspace] {
+    guard let project = winMuxWorkspaceState.projectsById[projectId] else { return [] }
+    let indexedWorkspaces = (project.workspaceOrderByLane[laneId] ?? [])
+        .compactMap { winMuxWorkspaceState.workspaceById[$0] }
+        .filter { $0.projectId == projectId && $0.laneId == laneId }
+    if !indexedWorkspaces.isEmpty {
+        return indexedWorkspaces
+    }
+    return Workspace.all
+        .filter { $0.projectId == projectId && $0.laneId == laneId }
+        .sorted()
+}
+
+@MainActor
+private func orderedWorkspaces(in scope: WorkspaceScope) -> [Workspace] {
+    workspaceProjectLaneWorkspaces(projectId: scope.projectId, laneId: scope.laneId)
+        .filter { !$0.isArchived }
+}
+
+@MainActor
+func orderedWorkspacesForPresentation() -> [Workspace] {
+    var seen: Set<WorkspaceId> = []
+    var result: [Workspace] = []
+    for project in workspaceProjects() {
+        let laneIds = project.workspaceOrderByLane.keys.sorted {
+            if $0.topLeftCorner.y != $1.topLeftCorner.y {
+                return $0.topLeftCorner.y < $1.topLeftCorner.y
+            }
+            return $0.topLeftCorner.x < $1.topLeftCorner.x
+        }
+        for laneId in laneIds {
+            for workspaceId in project.workspaceOrderByLane[laneId] ?? [] {
+                guard let workspace = winMuxWorkspaceState.workspaceById[workspaceId],
+                      !workspace.isArchived,
+                      seen.insert(workspaceId).inserted
+                else { continue }
+                result.append(workspace)
+            }
+        }
+    }
+    result.append(contentsOf: Workspace.all.filter { seen.insert($0.id).inserted })
+    return result
+}
+
+@MainActor
+func orderedUserFacingWorkspaces(in scope: WorkspaceScope, focusedWorkspace: Workspace? = nil) -> [Workspace] {
+    userFacingWorkspaces(orderedWorkspaces(in: scope), focusedWorkspace: focusedWorkspace)
 }
 
 @MainActor
 private func nextInternalAutomaticWorkspaceName() -> String {
-    let usedIndices = Set(workspaceNameToWorkspace.keys.compactMap(internalAutomaticWorkspaceIndex))
+    let usedIndices = Set(winMuxWorkspaceState.workspaceIdByName.keys.compactMap(internalAutomaticWorkspaceIndex))
     var candidate = 1
     while usedIndices.contains(candidate) {
         candidate += 1
@@ -127,52 +170,36 @@ private func nextInternalAutomaticWorkspaceName() -> String {
 }
 
 @MainActor
-private func nextAutomaticWorkspaceDisplayIndex(projectId: String, monitor: Monitor) -> Int {
-    let usedIndices = userFacingWorkspaces(
-        Workspace.all.filter { $0.scope == workspaceScope(projectId: projectId, monitor: monitor) },
-        focusedWorkspace: focus.workspace,
+private func nextAutomaticWorkspaceDisplayIndex(projectId: WorkspaceProjectId, monitor: Monitor) -> Int {
+    let usedIndices = orderedUserFacingWorkspaces(
+        in: workspaceScope(projectId: projectId, monitor: monitor),
+        focusedWorkspace: nil,
     )
         .filter(\.usesAutomaticDisplayName)
-        .compactMap { automaticWorkspaceDisplayIndex($0, focusedWorkspace: focus.workspace) }
+        .compactMap { automaticWorkspaceDisplayIndex($0, focusedWorkspace: nil) }
         .toSet()
     return lowestUnusedPositiveIndex(usedIndices)
 }
 
 @MainActor
-private func nextAutomaticWorkspaceName(projectId: String = workspaceProjectDefaultId, monitor: Monitor = mainMonitor) -> String {
-    let displayIndex = nextAutomaticWorkspaceDisplayIndex(projectId: projectId, monitor: monitor)
-    let preferredRawName = String(displayIndex)
-    if workspaceNameToWorkspace[preferredRawName] == nil {
+private func nextAutomaticWorkspaceName(projectId _: WorkspaceProjectId = workspaceProjectDefaultId, monitor _: Monitor = mainMonitor) -> String {
+    let usedNumericRawNames = Set(winMuxWorkspaceState.workspaceIdByName.keys.compactMap(parsePositiveWorkspaceDisplayIndex))
+    let preferredRawName = String(lowestUnusedPositiveIndex(usedNumericRawNames))
+    if winMuxWorkspaceState.workspaceIdByName[preferredRawName] == nil {
         return preferredRawName
     }
     return nextInternalAutomaticWorkspaceName()
 }
 
-private func internalStubWorkspaceIndex(_ name: String) -> Int? {
-    guard name.hasPrefix(internalStubWorkspacePrefix) else { return nil }
-    let suffix = name.replacingOccurrences(of: internalStubWorkspacePrefix, with: "")
-    return Int(suffix)
-}
-
-@MainActor
-private func nextInternalStubWorkspaceName() -> String {
-    let usedIndices = Set(workspaceNameToWorkspace.keys.compactMap(internalStubWorkspaceIndex))
-    var candidate = 1
-    while usedIndices.contains(candidate) {
-        candidate += 1
-    }
-    return "\(internalStubWorkspacePrefix)\(candidate)"
-}
-
 @MainActor
 func nextSidebarDraftWorkspaceName() -> String {
     clearOrphanedSidebarDraftWorkspaceLabels()
-    let nextIndex = lowestUnusedPositiveIndex(Set(workspaceNameToWorkspace.keys.compactMap(sidebarDraftWorkspaceIndex)))
+    let nextIndex = lowestUnusedPositiveIndex(Set(winMuxWorkspaceState.workspaceIdByName.keys.compactMap(sidebarDraftWorkspaceIndex)))
     return "\(sidebarDraftWorkspacePrefix)\(nextIndex)"
 }
 
 @MainActor
-func nextSidebarCreatedWorkspaceName(projectId: String = workspaceProjectDefaultId, monitor: Monitor = mainMonitor) -> String {
+func nextSidebarCreatedWorkspaceName(projectId: WorkspaceProjectId = workspaceProjectDefaultId, monitor: Monitor = mainMonitor) -> String {
     nextAutomaticWorkspaceName(projectId: projectId, monitor: monitor)
 }
 
@@ -203,7 +230,7 @@ private func clearSidebarDraftWorkspaceLabelIfNeeded(_ workspaceName: String) {
 @MainActor
 private func clearOrphanedSidebarDraftWorkspaceLabels() {
     for workspaceName in config.workspaceSidebar.workspaceLabels.keys
-    where isSidebarDraftWorkspaceName(workspaceName) && workspaceNameToWorkspace[workspaceName] == nil
+    where isSidebarDraftWorkspaceName(workspaceName) && winMuxWorkspaceState.workspace(named: workspaceName) == nil
     {
         clearSidebarDraftWorkspaceLabelIfNeeded(workspaceName)
     }
@@ -211,7 +238,7 @@ private func clearOrphanedSidebarDraftWorkspaceLabels() {
 
 @MainActor
 func workspaceHasSidebarVisibleWindows(_ workspace: Workspace) -> Bool {
-    workspace.children.filterIsInstance(of: TilingContainer.self).contains { !$0.isEffectivelyEmpty } ||
+    !workspace.rootTilingContainer.isEffectivelyEmpty ||
         !workspace.floatingWindows.isEmpty
 }
 
@@ -232,39 +259,60 @@ func workspaceHasLifecycleWindows(_ workspace: Workspace) -> Bool {
 
 @MainActor
 func isUserFacingWorkspace(_ workspace: Workspace, focusedWorkspace: Workspace? = nil) -> Bool {
-    !workspace.isSystemStub &&
+    !workspace.isArchived &&
         (
-            workspaceIsBaseUserFacing(workspace, focusedWorkspace: focusedWorkspace) ||
-                workspaceIsMinimumActiveProjectWorkspace(workspace, focusedWorkspace: focusedWorkspace)
+            workspaceHasSidebarVisibleWindows(workspace) ||
+                workspace.isVisible ||
+                workspace.isConfiguredPersistent ||
+                !workspaceOwnedMinimizedWindows(workspace).isEmpty ||
+                workspaceIsRetainedEmptySlot(workspace)
         )
 }
 
 @MainActor
-private func workspaceIsBaseUserFacing(_ workspace: Workspace, focusedWorkspace: Workspace?) -> Bool {
-    workspaceHasSidebarVisibleWindows(workspace) ||
-        (workspace.isVisible && !workspace.isEffectivelyEmpty) ||
-        workspace.shouldPersistWhenEmpty(focusedWorkspace: focusedWorkspace)
+private func workspaceIsRetainedEmptySlot(_ workspace: Workspace) -> Bool {
+    retainedEmptyWorkspaceIdsByScope()[workspace.scope] == workspace.id
 }
 
 @MainActor
-private func workspaceIsMinimumActiveProjectWorkspace(_ workspace: Workspace, focusedWorkspace: Workspace?) -> Bool {
-    guard workspace.isVisible,
-          !workspace.isSystemStub,
-          workspaceProjectRequiresMinimumWorkspace(workspace.projectId),
-          activeWorkspaceProjectId(for: workspace.workspaceMonitor) == workspace.projectId
-    else {
-        return false
-    }
-    return !Workspace.all.contains {
-        $0 != workspace &&
-            $0.scope == workspace.scope &&
-            !$0.isSystemStub &&
-            workspaceIsBaseUserFacing($0, focusedWorkspace: focusedWorkspace)
-    }
+private func retainedEmptyWorkspaceIdsByScope() -> [WorkspaceScope: WorkspaceId] {
+    let scopes = Set(Workspace.all.filter { !$0.isArchived }.map(\.scope))
+    return Dictionary(
+        uniqueKeysWithValues: scopes.compactMap { scope in
+            retainedEmptyWorkspaceId(in: scope).map { (scope, $0) }
+        },
+    )
 }
 
-private func workspaceProjectRequiresMinimumWorkspace(_ projectId: String) -> Bool {
-    projectId != workspaceProjectDefaultId
+@MainActor
+private func retainedEmptyWorkspaceId(in scope: WorkspaceScope) -> WorkspaceId? {
+    let orderedWorkspaces = orderedWorkspaces(in: scope)
+    let ordinaryEmptyWorkspaces = orderedWorkspaces.filter(\.isOrdinaryEmptySlot)
+    guard !ordinaryEmptyWorkspaces.isEmpty else { return nil }
+
+    let hasAnchors = orderedWorkspaces.contains(where: workspaceAnchorsEmptySlot)
+    guard hasAnchors else {
+        return ordinaryEmptyWorkspaces.first(where: \.isVisible)?.id ?? ordinaryEmptyWorkspaces.first?.id
+    }
+
+    if let visibleEmptyWorkspace = ordinaryEmptyWorkspaces.first(where: \.isVisible),
+       workspaceHasAdjacentAnchor(visibleEmptyWorkspace, in: orderedWorkspaces)
+    {
+        return visibleEmptyWorkspace.id
+    }
+    return nil
+}
+
+@MainActor
+private func workspaceAnchorsEmptySlot(_ workspace: Workspace) -> Bool {
+    workspaceHasLifecycleWindows(workspace) || workspace.isConfiguredPersistent
+}
+
+@MainActor
+private func workspaceHasAdjacentAnchor(_ workspace: Workspace, in orderedWorkspaces: [Workspace]) -> Bool {
+    guard let index = orderedWorkspaces.firstIndex(of: workspace) else { return false }
+    return orderedWorkspaces.getOrNil(atIndex: index - 1).map(workspaceAnchorsEmptySlot) == true ||
+        orderedWorkspaces.getOrNil(atIndex: index + 1).map(workspaceAnchorsEmptySlot) == true
 }
 
 @MainActor
@@ -308,36 +356,29 @@ func resetWorkspaceNameGenerationStateForTests() {
     for workspace in Workspace.all {
         workspace.projectId = workspaceProjectDefaultId
     }
-    workspaceProjectIdToProject = [
-        workspaceProjectDefaultId: WorkspaceProject(id: workspaceProjectDefaultId, name: workspaceProjectDisplayName(workspaceProjectDefaultId, fallbackName: "Default")),
-    ]
-    activeWorkspaceProjectIdByScreenPoint = [:]
+    winMuxWorkspaceState.resetProjects(defaultProjectName: workspaceProjectDisplayName(workspaceProjectDefaultId, fallbackName: "Default"))
 }
 
 @MainActor
-func resetWorkspaceTopologyForTests() {
-    screenPointToPrevVisibleWorkspace = [:]
-    screenPointToVisibleWorkspace = [:]
-    visibleWorkspaceToScreenPoint = [:]
-    activeWorkspaceProjectIdByScreenPoint = [:]
+func resetWinMuxWorkspaceStateForTests() {
     for workspace in Workspace.all {
-        workspace.assignedMonitorPoint = nil
-        workspace.retainsFocusedEmptyWorkspace = false
-        workspace.isSystemStub = false
+        workspace.lifecycle = .durable
     }
+    winMuxWorkspaceState.resetWorkspaceRegistryForTests(
+        defaultProjectName: workspaceProjectDisplayName(workspaceProjectDefaultId, fallbackName: "Default"),
+    )
 }
 
 @MainActor
-func replaceActiveWorkspaceWithSystemStubForTests(on monitor: Monitor) -> Workspace {
-    let stub = getStubWorkspace(for: monitor)
-    check(monitor.setActiveWorkspace(stub))
-    return stub
+func activateLaneFallbackWorkspaceForTests(on monitor: Monitor) -> Workspace {
+    let workspace = getOrCreateLaneFallbackWorkspace(for: monitor)
+    check(monitor.setActiveWorkspace(workspace))
+    return workspace
 }
 
 @MainActor
 private func automaticWorkspaceDisplayIndex(_ workspace: Workspace, focusedWorkspace: Workspace?) -> Int? {
-    userFacingWorkspaces(Workspace.all, focusedWorkspace: focusedWorkspace)
-        .filter { $0.scope == workspace.scope }
+    orderedUserFacingWorkspaces(in: workspace.scope, focusedWorkspace: focusedWorkspace)
         .filter(\.usesAutomaticDisplayName)
         .firstIndex(of: workspace)
         .map { $0 + 1 }
@@ -347,11 +388,55 @@ private func automaticWorkspaceDisplayIndexFallback(_ workspaceName: String) -> 
     sidebarDraftWorkspaceIndex(workspaceName) ?? automaticWorkspaceIndex(workspaceName)
 }
 
+func parsePositiveWorkspaceDisplayIndex(_ workspaceName: String) -> Int? {
+    guard let targetIndex = Int(workspaceName),
+          targetIndex > 0,
+          String(targetIndex) == workspaceName
+    else {
+        return nil
+    }
+    return targetIndex
+}
+
+@MainActor
+func scopedAutomaticDisplayWorkspaces(current: Workspace) -> [Workspace] {
+    orderedUserFacingWorkspaces(in: current.scope, focusedWorkspace: current)
+        .filter(\.usesAutomaticDisplayName)
+}
+
+@MainActor
+func createAdjacentTransientBlankWorkspaceIfAllowed(named workspaceName: String, from current: Workspace) -> Workspace? {
+    guard let targetIndex = parsePositiveWorkspaceDisplayIndex(workspaceName) else {
+        return nil
+    }
+    let automaticDisplayWorkspaces = scopedAutomaticDisplayWorkspaces(current: current)
+    guard targetIndex == automaticDisplayWorkspaces.count + 1 else { return nil }
+    if let lastWorkspace = automaticDisplayWorkspaces.last,
+       automaticDisplayWorkspaces.count > 1,
+       lastWorkspace.isOrdinaryEmptySlot {
+        return nil
+    }
+
+    let workspace = Workspace.get(byName: nextSidebarCreatedWorkspaceName(projectId: current.projectId, monitor: current.workspaceMonitor))
+    workspace.markAsTransientBlank()
+    workspace.assignProject(current.projectId)
+    workspace.assignLane(current.laneId)
+    return workspace
+}
+
 @MainActor
 func workspaceProjects() -> [WorkspaceProject] {
     materializePersistedWorkspaceProjects()
-    return workspaceProjectIdToProject.values.map {
-        WorkspaceProject(id: $0.id, name: workspaceProjectDisplayName($0.id, fallbackName: $0.name))
+    return winMuxWorkspaceState.projectsById.values.map {
+        var project = $0
+        project = WorkspaceProject(
+            id: project.id,
+            name: workspaceProjectDisplayName(project.id, fallbackName: project.name),
+            workspaceOrderByLane: project.workspaceOrderByLane,
+            lastActiveWorkspaceByLane: project.lastActiveWorkspaceByLane,
+            linkedLaneIds: project.linkedLaneIds,
+        )
+        return project
     }.sorted {
         if $0.id == workspaceProjectDefaultId { return true }
         if $1.id == workspaceProjectDefaultId { return false }
@@ -360,36 +445,36 @@ func workspaceProjects() -> [WorkspaceProject] {
 }
 
 @MainActor
-func workspaceProjectName(_ projectId: String) -> String {
+func workspaceProjectName(_ projectId: WorkspaceProjectId) -> String {
     materializePersistedWorkspaceProjects()
-    return workspaceProjectDisplayName(projectId, fallbackName: workspaceProjectIdToProject[projectId]?.name ?? "Project")
+    return workspaceProjectDisplayName(projectId, fallbackName: winMuxWorkspaceState.projectsById[projectId]?.name ?? "Project")
 }
 
 @MainActor
-private func workspaceProjectDisplayName(_ projectId: String, fallbackName: String) -> String {
-    let label = config.workspaceSidebar.projectLabels[projectId]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+private func workspaceProjectDisplayName(_ projectId: WorkspaceProjectId, fallbackName: String) -> String {
+    let label = config.workspaceSidebar.projectLabels[projectId.rawValue]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     return label.isEmpty ? fallbackName : label
 }
 
 @MainActor
-func activeWorkspaceProjectId(for monitor: Monitor) -> String {
+func activeWorkspaceProjectId(for monitor: Monitor) -> WorkspaceProjectId {
     materializePersistedWorkspaceProjects()
-    return activeWorkspaceProjectIdByScreenPoint[monitor.rect.topLeftCorner] ?? workspaceProjectDefaultId
+    return winMuxWorkspaceState.activeProjectId(for: monitor)
 }
 
 @MainActor
 func createWorkspaceProject() -> WorkspaceProject {
     materializePersistedWorkspaceProjects()
     let usedNumbers = (
-        workspaceProjectIdToProject.keys.compactMap(workspaceProjectIdIndex) +
-            workspaceProjectIdToProject.values.compactMap(workspaceProjectNameIndex)
+        winMuxWorkspaceState.projectsById.keys.compactMap(workspaceProjectIdIndex) +
+            winMuxWorkspaceState.projectsById.values.compactMap(workspaceProjectNameIndex)
     ).toSet()
     let index = lowestUnusedPositiveIndex(usedNumbers)
-    let project = WorkspaceProject(id: "project-\(index)", name: "Project \(index)")
-    workspaceProjectIdToProject[project.id] = project
-    config.workspaceSidebar.projectLabels[project.id] = project.name
+    let project = WorkspaceProject(id: WorkspaceProjectId("project-\(index)"), name: "Project \(index)")
+    winMuxWorkspaceState.projectsById[project.id] = project
+    config.workspaceSidebar.projectLabels[project.id.rawValue] = project.name
     if !isUnitTest {
-        try? persistWorkspaceSidebarProjectLabel(projectId: project.id, label: project.name)
+        try? persistWorkspaceSidebarProjectLabel(projectId: project.id.rawValue, label: project.name)
     }
     return project
 }
@@ -399,17 +484,18 @@ private func workspaceProjectNameIndex(_ project: WorkspaceProject) -> Int? {
     return Int(project.name.replacingOccurrences(of: "Project ", with: ""))
 }
 
-private func workspaceProjectIdIndex(_ projectId: String) -> Int? {
-    guard projectId.hasPrefix("project-") else { return nil }
-    return Int(projectId.replacingOccurrences(of: "project-", with: ""))
+private func workspaceProjectIdIndex(_ projectId: WorkspaceProjectId) -> Int? {
+    guard projectId.rawValue.hasPrefix("project-") else { return nil }
+    return Int(projectId.rawValue.replacingOccurrences(of: "project-", with: ""))
 }
 
 @MainActor
 private func materializePersistedWorkspaceProjects() {
-    for (projectId, label) in config.workspaceSidebar.projectLabels {
+    for (rawProjectId, label) in config.workspaceSidebar.projectLabels {
+        let projectId = WorkspaceProjectId(rawProjectId)
         let name = label.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty, workspaceProjectIdToProject[projectId] == nil else { continue }
-        workspaceProjectIdToProject[projectId] = WorkspaceProject(id: projectId, name: name)
+        guard !name.isEmpty, winMuxWorkspaceState.projectsById[projectId] == nil else { continue }
+        winMuxWorkspaceState.projectsById[projectId] = WorkspaceProject(id: projectId, name: name)
     }
 }
 
@@ -434,10 +520,21 @@ func renameWorkspaceForSidebar(workspaceName: String, displayName: String) throw
 }
 
 @MainActor
-func renameWorkspaceProject(_ projectId: String, displayName: String) throws {
+func resetWorkspaceSidebarName(workspaceName: String) throws {
+    guard Workspace.existing(byName: workspaceName) != nil else {
+        throw WorkspaceMutationError.workspaceNotFound(workspaceName)
+    }
+    config.workspaceSidebar.workspaceLabels.removeValue(forKey: workspaceName)
+    if !isUnitTest {
+        try persistWorkspaceSidebarLabel(workspaceName: workspaceName, label: nil)
+    }
+}
+
+@MainActor
+func renameWorkspaceProject(_ projectId: WorkspaceProjectId, displayName: String) throws {
     materializePersistedWorkspaceProjects()
-    guard let project = workspaceProjectIdToProject[projectId] else {
-        throw WorkspaceMutationError.projectNotFound(projectId)
+    guard var project = winMuxWorkspaceState.projectsById[projectId] else {
+        throw WorkspaceMutationError.projectNotFound(projectId.rawValue)
     }
     let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmedName.isEmpty else { throw WorkspaceMutationError.emptyName }
@@ -446,27 +543,34 @@ func renameWorkspaceProject(_ projectId: String, displayName: String) throws {
     }
     guard !duplicate else { throw WorkspaceMutationError.duplicateProjectName(trimmedName) }
 
-    workspaceProjectIdToProject[projectId] = WorkspaceProject(id: projectId, name: trimmedName)
     let defaultName = project.id == workspaceProjectDefaultId ? "Default" : project.name
+    project = WorkspaceProject(
+        id: projectId,
+        name: trimmedName,
+        workspaceOrderByLane: project.workspaceOrderByLane,
+        lastActiveWorkspaceByLane: project.lastActiveWorkspaceByLane,
+        linkedLaneIds: project.linkedLaneIds,
+    )
+    winMuxWorkspaceState.projectsById[projectId] = project
     let label = trimmedName == defaultName ? nil : trimmedName
     if let label {
-        config.workspaceSidebar.projectLabels[projectId] = label
+        config.workspaceSidebar.projectLabels[projectId.rawValue] = label
     } else {
-        config.workspaceSidebar.projectLabels.removeValue(forKey: projectId)
+        config.workspaceSidebar.projectLabels.removeValue(forKey: projectId.rawValue)
     }
     if !isUnitTest {
-        try persistWorkspaceSidebarProjectLabel(projectId: projectId, label: label)
+        try persistWorkspaceSidebarProjectLabel(projectId: projectId.rawValue, label: label)
     }
 }
 
 @MainActor
-func canDeleteWorkspaceProject(_ projectId: String) -> Bool {
+func canDeleteWorkspaceProject(_ projectId: WorkspaceProjectId) -> Bool {
     materializePersistedWorkspaceProjects()
-    return projectId != workspaceProjectDefaultId && workspaceProjectIdToProject[projectId] != nil
+    return projectId != workspaceProjectDefaultId && winMuxWorkspaceState.projectsById[projectId] != nil
 }
 
 @MainActor
-func workspaceProjectFallbackForDeletion(excluding projectId: String) -> String {
+func workspaceProjectFallbackForDeletion(excluding projectId: WorkspaceProjectId) -> WorkspaceProjectId {
     let projects = workspaceProjects()
     guard let deletedIndex = projects.firstIndex(where: { $0.id == projectId }) else {
         return projects.first { $0.id != projectId }?.id ?? workspaceProjectDefaultId
@@ -489,21 +593,24 @@ func deleteWorkspaceForSidebar(workspaceName: String) throws {
 }
 
 @MainActor
-func deleteWorkspaceProject(_ projectId: String) throws {
+func deleteWorkspaceProject(_ projectId: WorkspaceProjectId) throws {
     materializePersistedWorkspaceProjects()
-    guard let project = workspaceProjectIdToProject[projectId] else {
-        throw WorkspaceMutationError.projectNotFound(projectId)
+    guard let project = winMuxWorkspaceState.projectsById[projectId] else {
+        throw WorkspaceMutationError.projectNotFound(projectId.rawValue)
     }
     guard canDeleteWorkspaceProject(projectId) else {
         throw WorkspaceMutationError.projectCannotBeDeleted(project.name)
     }
 
     let fallbackId = workspaceProjectFallbackForDeletion(excluding: projectId)
-    let activePoints = activeWorkspaceProjectIdByScreenPoint
-        .filter { _, activeProjectId in activeProjectId == projectId }
-        .map(\.key)
-    for point in activePoints {
-        _ = switchWorkspaceProject(fallbackId, on: point.monitorApproximation)
+    let lanesShowingDeletedProject = winMuxWorkspaceState.lanesById.values.compactMap { lane -> DisplayLaneId? in
+        guard let activeWorkspaceId = lane.activeWorkspaceId,
+              winMuxWorkspaceState.workspaceById[activeWorkspaceId]?.projectId == projectId
+        else { return nil }
+        return lane.id
+    }
+    for laneId in lanesShowingDeletedProject {
+        _ = switchWorkspaceProject(fallbackId, on: laneId.topLeftCorner.monitorApproximation)
     }
 
     for workspace in Workspace.all.filter({ $0.projectId == projectId }) {
@@ -516,49 +623,59 @@ func deleteWorkspaceProject(_ projectId: String) throws {
         removeWorkspaceFromRegistry(workspace)
     }
 
-    workspaceProjectIdToProject.removeValue(forKey: projectId)
-    config.workspaceSidebar.projectLabels.removeValue(forKey: projectId)
-    config.workspaceSidebar.projectColors.removeValue(forKey: projectId)
+    winMuxWorkspaceState.projectsById.removeValue(forKey: projectId)
+    config.workspaceSidebar.projectLabels.removeValue(forKey: projectId.rawValue)
+    config.workspaceSidebar.projectColors.removeValue(forKey: projectId.rawValue)
     if !isUnitTest {
-        try persistWorkspaceSidebarProjectLabel(projectId: projectId, label: nil)
-        try persistWorkspaceSidebarProjectColor(projectId: projectId, colorHex: nil)
+        try persistWorkspaceSidebarProjectLabel(projectId: projectId.rawValue, label: nil)
+        try persistWorkspaceSidebarProjectColor(projectId: projectId.rawValue, colorHex: nil)
     }
-    compactAutomaticWorkspaceNames()
     checkWorkspaceHierarchyInvariants()
 }
 
 @MainActor
-func switchWorkspaceProject(_ projectId: String, on monitor: Monitor) -> Workspace? {
+func switchWorkspaceProject(_ projectId: WorkspaceProjectId, on monitor: Monitor) -> Workspace? {
     materializePersistedWorkspaceProjects()
-    guard workspaceProjectIdToProject[projectId] != nil else { return nil }
-    let workspace = preferredWorkspace(projectId: projectId, monitor: monitor) ?? createBlankWorkspace(projectId: projectId, monitor: monitor)
+    guard winMuxWorkspaceState.projectsById[projectId] != nil else { return nil }
+    let laneId = DisplayLaneId(monitor)
+    let rememberedWorkspace = winMuxWorkspaceState.projectsById[projectId]?
+        .lastActiveWorkspaceByLane[laneId]
+        .flatMap { winMuxWorkspaceState.workspaceById[$0] }
+    let workspace = rememberedWorkspace
+        ?? preferredWorkspace(projectId: projectId, monitor: monitor)
+        ?? createBlankWorkspace(projectId: projectId, monitor: monitor)
     return monitor.setActiveWorkspace(workspace) ? workspace : nil
 }
 
 @MainActor
-private func preferredWorkspace(projectId: String, monitor: Monitor) -> Workspace? {
-    userFacingWorkspaces(
-        Workspace.all.filter { $0.scope == workspaceScope(projectId: projectId, monitor: monitor) },
-        focusedWorkspace: focus.workspace,
-    )
-        .sorted()
+private func preferredWorkspace(projectId: WorkspaceProjectId, monitor: Monitor) -> Workspace? {
+    workspaceProjectLaneWorkspaces(projectId: projectId, laneId: DisplayLaneId(monitor))
+        .filter { !$0.isArchived }
         .first
 }
 
 @MainActor
-private func createBlankWorkspace(projectId: String, monitor: Monitor) -> Workspace {
+private func createBlankWorkspace(projectId: WorkspaceProjectId, monitor: Monitor) -> Workspace {
     let workspace = Workspace.get(byName: nextAutomaticWorkspaceName(projectId: projectId, monitor: monitor))
     workspace.markAsTransientBlank()
     workspace.assignProject(projectId)
-    workspace.seedMonitorIfNeeded(monitor)
+    workspace.assignLane(DisplayLaneId(monitor))
     return workspace
 }
 
 @MainActor
-private func deleteWorkspace(_ workspace: Workspace) throws {
-    guard !workspace.isSystemStub else {
-        throw WorkspaceMutationError.workspaceCannotBeDeleted(workspace.name)
+func getOrCreateAdjacentBlankWorkspace(projectId: WorkspaceProjectId, monitor: Monitor) -> Workspace {
+    let scope = workspaceScope(projectId: projectId, monitor: monitor)
+    if let workspaceId = retainedEmptyWorkspaceId(in: scope),
+       let workspace = winMuxWorkspaceState.workspaceById[workspaceId]
+    {
+        return workspace
     }
+    return createBlankWorkspace(projectId: projectId, monitor: monitor)
+}
+
+@MainActor
+private func deleteWorkspace(_ workspace: Workspace) throws {
     let fallback = workspaceFallbackForDeletion(
         excluding: workspace,
         projectId: workspace.projectId,
@@ -575,14 +692,13 @@ private func deleteWorkspace(_ workspace: Workspace) throws {
         _ = setFocus(to: fallback.toLiveFocus())
     }
     removeWorkspaceFromRegistry(workspace)
-    compactAutomaticWorkspaceNames()
     checkWorkspaceHierarchyInvariants()
 }
 
 @MainActor
 private func workspaceFallbackForDeletion(
     excluding workspace: Workspace,
-    projectId: String,
+    projectId: WorkspaceProjectId,
     monitor: Monitor,
 ) -> Workspace {
     closestWorkspaceForDeletion(
@@ -596,15 +712,17 @@ private func workspaceFallbackForDeletion(
 @MainActor
 private func closestWorkspaceForDeletion(
     excluding workspace: Workspace,
-    projectId: String,
+    projectId: WorkspaceProjectId,
     monitor: Monitor,
 ) -> Workspace? {
-    let candidates = userFacingWorkspaces(
-        Workspace.all.filter {
-            $0.scope == workspaceScope(projectId: projectId, monitor: monitor)
-        },
+    let scopedCandidates = userFacingWorkspaces(
+        orderedWorkspaces(in: workspaceScope(projectId: projectId, monitor: monitor)),
         focusedWorkspace: focus.workspace,
-    ).sorted()
+    )
+    let automaticCandidates = scopedCandidates.filter(\.usesAutomaticDisplayName)
+    let candidates = workspace.usesAutomaticDisplayName && automaticCandidates.contains(workspace)
+        ? automaticCandidates
+        : scopedCandidates
 
     guard let deletedIndex = candidates.firstIndex(where: { $0 === workspace }) else {
         return candidates.first { $0 !== workspace }
@@ -652,88 +770,131 @@ private func moveWorkspaceContents(from source: Workspace, to target: Workspace)
 @MainActor
 private func removeWorkspaceFromRegistry(_ workspace: Workspace) {
     clearWorkspaceSidebarLabelIfNeeded(workspace.name)
-    screenPointToPrevVisibleWorkspace = screenPointToPrevVisibleWorkspace.filter { _, workspaceName in
-        workspaceName != workspace.name
+    _ = winMuxWorkspaceState.removeWorkspace(workspace)
+}
+
+@MainActor
+private func pruneEmptyWorkspaces() {
+    let retainedEmptyWorkspaceIds = retainedEmptyWorkspaceIdsByScope()
+    let focusedWorkspaceBeforePrune = focus.workspace
+    let workspacesToRemove = Workspace.all.filter {
+        !workspaceShouldSurviveReconciliation($0, retainedEmptyWorkspaceIds: retainedEmptyWorkspaceIds)
     }
-    if let point = visibleWorkspaceToScreenPoint.removeValue(forKey: workspace) {
-        screenPointToVisibleWorkspace.removeValue(forKey: point)
-        if !workspace.isSystemStub, activeWorkspaceProjectIdByScreenPoint[point] == workspace.projectId {
-            activeWorkspaceProjectIdByScreenPoint[point] = workspaceProjectDefaultId
+    var focusedReplacement: Workspace?
+
+    for workspace in workspacesToRemove {
+        let replacement = replacementWorkspaceForPrunedWorkspace(
+            workspace,
+            retainedEmptyWorkspaceIds: retainedEmptyWorkspaceIds,
+        )
+        if workspace.isVisible, let replacement {
+            check(
+                workspace.workspaceMonitor.setActiveWorkspace(replacement),
+                "Can't replace pruned empty workspace '\(workspace.name)' with '\(replacement.name)'",
+            )
         }
+        if workspace == focusedWorkspaceBeforePrune {
+            focusedReplacement = focusReplacementForPrunedWorkspace(workspace) ?? replacement
+        }
+        removeWorkspaceFromRegistry(workspace)
     }
-    workspaceNameToWorkspace.removeValue(forKey: workspace.name)
+
+    if let focusedReplacement, focus.workspace != focusedReplacement {
+        _ = setFocus(to: focusedReplacement.toLiveFocus())
+    }
+}
+
+@MainActor
+private func focusReplacementForPrunedWorkspace(_ workspace: Workspace) -> Workspace? {
+    if !workspace.isVisible,
+       let activeWorkspaceId = winMuxWorkspaceState.lanesById[workspace.laneId]?.activeWorkspaceId,
+       activeWorkspaceId != workspace.id,
+       let activeWorkspace = winMuxWorkspaceState.workspaceById[activeWorkspaceId]
+    {
+        return activeWorkspace
+    }
+    return nil
+}
+
+@MainActor
+private func workspaceShouldSurviveReconciliation(
+    _ workspace: Workspace,
+    retainedEmptyWorkspaceIds: [WorkspaceScope: WorkspaceId],
+) -> Bool {
+    guard !workspace.isArchived else { return false }
+    return workspaceHasLifecycleWindows(workspace) ||
+        workspace.isConfiguredPersistent ||
+        retainedEmptyWorkspaceIds[workspace.scope] == workspace.id
+}
+
+@MainActor
+private func replacementWorkspaceForPrunedWorkspace(
+    _ workspace: Workspace,
+    retainedEmptyWorkspaceIds: [WorkspaceScope: WorkspaceId],
+) -> Workspace? {
+    if let retainedWorkspaceId = retainedEmptyWorkspaceIds[workspace.scope],
+       retainedWorkspaceId != workspace.id,
+       let retainedWorkspace = winMuxWorkspaceState.workspaceById[retainedWorkspaceId]
+    {
+        return retainedWorkspace
+    }
+    if let candidate = orderedWorkspaces(in: workspace.scope).first(where: {
+        $0.id != workspace.id &&
+            workspaceShouldSurviveReconciliation($0, retainedEmptyWorkspaceIds: retainedEmptyWorkspaceIds) &&
+            (workspaceHasSidebarVisibleWindows($0) || $0.isConfiguredPersistent)
+    }) {
+        return candidate
+    }
+    if workspace.isVisible {
+        return createBlankWorkspace(projectId: workspace.projectId, monitor: workspace.workspaceMonitor)
+    }
+    return nil
 }
 
 @MainActor
 private func ensureVisibleActiveProjectWorkspaces() {
-    for (point, workspace) in screenPointToVisibleWorkspace where workspace.isSystemStub {
-        let monitor = point.monitorApproximation
-        let projectId = activeWorkspaceProjectIdByScreenPoint[point] ?? workspaceProjectDefaultId
-        guard workspaceProjectRequiresMinimumWorkspace(projectId),
-              workspaceProjectIdToProject[projectId] != nil
-        else { continue }
-        let replacement = preferredWorkspace(projectId: projectId, monitor: monitor)
+    for monitor in monitors where winMuxWorkspaceState.visibleWorkspace(for: monitor) == nil {
+        let projectId = activeWorkspaceProjectId(for: monitor)
+        let workspace = preferredWorkspace(projectId: projectId, monitor: monitor)
             ?? createBlankWorkspace(projectId: projectId, monitor: monitor)
-        check(
-            point.setActiveWorkspace(replacement),
-            "Can't replace system stub workspace '\(workspace.name)' with active project workspace '\(replacement.name)'",
-        )
-        if focus.workspace == workspace {
-            _ = setFocus(to: replacement.toLiveFocus())
-        }
+        check(monitor.setActiveWorkspace(workspace))
     }
 }
 
-@MainActor
-private func workspaceShouldBecomeSystemStub(_ workspace: Workspace, focusedWorkspace: Workspace?) -> Bool {
-    workspace.isVisible &&
-        !workspaceHasLifecycleWindows(workspace) &&
-        !workspace.isSystemStub &&
-        !workspace.shouldPersistWhenEmpty(focusedWorkspace: focusedWorkspace) &&
-        !workspaceIsMinimumActiveProjectWorkspace(workspace, focusedWorkspace: focusedWorkspace)
-}
-
-@MainActor
-private func workspaceShouldSurviveGarbageCollection(_ workspace: Workspace, focusedWorkspace: Workspace?) -> Bool {
-    workspaceHasLifecycleWindows(workspace) ||
-        workspace.shouldPersistWhenEmpty(focusedWorkspace: focusedWorkspace) ||
-        workspaceIsMinimumActiveProjectWorkspace(workspace, focusedWorkspace: focusedWorkspace) ||
-        (workspace.isSystemStub && workspace.isVisible)
-}
-
 final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
+    let id: WorkspaceId
     private(set) var name: String
     nonisolated private var nameLogicalSegments: StringLogicalSegments
-    /// `assignedMonitorPoint` must be interpreted only when the workspace is invisible
-    fileprivate var assignedMonitorPoint: CGPoint? = nil
-    fileprivate var retainsFocusedEmptyWorkspace: Bool = false
-    fileprivate(set) var isSystemStub: Bool = false
     private(set) var namingStyle: WorkspaceNamingStyle = .explicit
-    fileprivate(set) var projectId: String = workspaceProjectDefaultId
+    var projectId: WorkspaceProjectId = workspaceProjectDefaultId
+    var laneId: DisplayLaneId
+    fileprivate var lifecycle: WorkspaceLifecycle = .durable
 
     @MainActor
     private init(_ name: String) {
+        self.id = winMuxWorkspaceState.nextWorkspaceId()
         self.name = name
         self.nameLogicalSegments = name.toLogicalSegments()
+        self.laneId = DisplayLaneId(mainMonitor)
         super.init(parent: NilTreeNode.instance, adaptiveWeight: 0, index: 0)
     }
 
     @MainActor static var all: [Workspace] {
-        workspaceNameToWorkspace.values.sorted()
+        winMuxWorkspaceState.workspaceById.values.sorted()
     }
 
     @MainActor static func get(byName name: String) -> Workspace {
-        if let existing = workspaceNameToWorkspace[name] {
+        if let existing = winMuxWorkspaceState.workspace(named: name) {
             return existing
         } else {
             let workspace = Workspace(name)
-            workspaceNameToWorkspace[name] = workspace
+            winMuxWorkspaceState.registerWorkspace(workspace)
             return workspace
         }
     }
 
     @MainActor static func existing(byName name: String) -> Workspace? {
-        workspaceNameToWorkspace[name]
+        winMuxWorkspaceState.workspace(named: name)
     }
 
     nonisolated static func < (lhs: Workspace, rhs: Workspace) -> Bool {
@@ -751,159 +912,68 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
     @MainActor
     var description: String {
         let description = [
+            ("id", id.rawValue),
             ("name", name),
-            ("projectId", projectId),
+            ("projectId", projectId.rawValue),
+            ("laneId", laneId.description),
+            ("lifecycle", lifecycle.rawValue),
             ("isVisible", String(isVisible)),
             ("isEffectivelyEmpty", String(isEffectivelyEmpty)),
-            ("retainFocusedEmpty", String(retainsFocusedEmptyWorkspace)),
-            ("isSystemStub", String(isSystemStub)),
             ("namingStyle", namingStyle.rawValue),
         ].map { "\($0.0): '\(String(describing: $0.1))'" }.joined(separator: ", ")
         return "Workspace(\(description))"
     }
 
     @MainActor
-    static func garbageCollectUnusedWorkspaces() {
-        for workspace in workspaceNameToWorkspace.values {
+    static func reconcileWorkspaceState() {
+        for workspace in winMuxWorkspaceState.workspaceById.values {
             workspace.refreshEmptyLifecycle()
         }
-
-        let focusedWorkspaceBeforeGc = focus.workspace
-        let visibleEmptyWorkspacesToReplace = workspaceNameToWorkspace.values.filter {
-            workspaceShouldBecomeSystemStub($0, focusedWorkspace: focusedWorkspaceBeforeGc)
-        }
-        var focusedReplacement: Workspace? = nil
-        for workspace in visibleEmptyWorkspacesToReplace {
-            let replacement = getStubWorkspace(for: workspace.workspaceMonitor)
-            check(
-                workspace.workspaceMonitor.setActiveWorkspace(replacement),
-                "Can't replace empty workspace '\(workspace.name)' on monitor '\(workspace.workspaceMonitor.name)'",
-            )
-            if workspace == focusedWorkspaceBeforeGc {
-                focusedReplacement = replacement
-            }
-        }
-        if let focusedReplacement, focus.workspace != focusedReplacement {
-            _ = setFocus(to: focusedReplacement.toLiveFocus())
-        }
-
-        workspaceNameToWorkspace = workspaceNameToWorkspace.filter { (_, workspace: Workspace) in
-            let shouldKeep = workspaceShouldSurviveGarbageCollection(workspace, focusedWorkspace: focus.workspace)
-            if !shouldKeep {
-                clearWorkspaceSidebarLabelIfNeeded(workspace.name)
-            }
-            return shouldKeep
-        }
-        screenPointToPrevVisibleWorkspace = screenPointToPrevVisibleWorkspace.filter { _, workspaceName in
-            workspaceNameToWorkspace[workspaceName] != nil
-        }
+        winMuxWorkspaceState.pruneProjectWorkspaceIndexes()
+        pruneEmptyWorkspaces()
         clearOrphanedSidebarDraftWorkspaceLabels()
         ensureVisibleActiveProjectWorkspaces()
-        compactAutomaticWorkspaceNames()
         checkWorkspaceHierarchyInvariants()
     }
 
     nonisolated static func == (lhs: Workspace, rhs: Workspace) -> Bool {
-        check((lhs === rhs) == (lhs.name == rhs.name), "lhs: \(lhs) rhs: \(rhs)")
+        check((lhs === rhs) == (lhs.id == rhs.id), "lhs: \(lhs) rhs: \(rhs)")
         return lhs === rhs
     }
 
     nonisolated func hash(into hasher: inout Hasher) { hasher.combine(ObjectIdentifier(self)) }
 
-    @MainActor
-    fileprivate func rename(to newName: String) {
-        let oldName = name
-        guard oldName != newName else { return }
-        check(workspaceNameToWorkspace[oldName] === self)
-        check(workspaceNameToWorkspace[newName] == nil)
-
-        workspaceNameToWorkspace.removeValue(forKey: oldName)
-        name = newName
-        nameLogicalSegments = newName.toLogicalSegments()
-        workspaceNameToWorkspace[newName] = self
-
-        if let sidebarLabel = config.workspaceSidebar.workspaceLabels.removeValue(forKey: oldName) {
-            config.workspaceSidebar.workspaceLabels[newName] = sidebarLabel
-            if !isUnitTest {
-                try? persistWorkspaceSidebarLabel(workspaceName: oldName, label: nil)
-                try? persistWorkspaceSidebarLabel(workspaceName: newName, label: sidebarLabel)
-            }
-        }
-        screenPointToPrevVisibleWorkspace = screenPointToPrevVisibleWorkspace.mapValues { $0 == oldName ? newName : $0 }
-        replaceWorkspaceNameInFocusState(oldName: oldName, newName: newName)
-        replaceWorkspaceNameInLayoutReasons(oldName: oldName, newName: newName)
-    }
-}
-
-@MainActor
-private func compactAutomaticWorkspaceNames() {
-    let groupedWorkspaces = Dictionary(grouping: Workspace.all.filter(\.usesAutomaticDisplayName)) { workspace in
-        workspace.scope
-    }
-    for automaticallyNamedWorkspaces in groupedWorkspaces.values {
-        var usedIndices = Set(
-            workspaceNameToWorkspace.values
-                .filter { !$0.usesAutomaticDisplayName }
-                .compactMap { automaticWorkspaceIndex($0.name) }
-        )
-        for workspace in automaticallyNamedWorkspaces.sorted() {
-            let targetIndex = lowestUnusedPositiveIndex(usedIndices)
-            usedIndices.insert(targetIndex)
-            let targetName = String(targetIndex)
-            if workspace.name == targetName {
-                continue
-            }
-            if workspaceNameToWorkspace[targetName] == nil {
-                workspace.rename(to: targetName)
-            }
-        }
-    }
-}
-
-@MainActor
-private func replaceWorkspaceNameInLayoutReasons(oldName: String, newName: String) {
-    let windows =
-        Workspace.all.flatMap(\.allLeafWindowsRecursive) +
-        macosMinimizedWindowsContainer.children.filterIsInstance(of: Window.self)
-    for window in windows {
-        switch window.layoutReason {
-            case .macos(let prevParentKind, let prevWorkspaceName) where prevWorkspaceName == oldName:
-                window.layoutReason = .macos(prevParentKind: prevParentKind, prevWorkspaceName: newName)
-            case .macos, .standard:
-                break
-        }
-    }
 }
 
 extension Workspace {
     @MainActor
     func seedMonitorIfNeeded(_ monitor: Monitor) {
-        guard !isVisible, assignedMonitorPoint == nil, forceAssignedMonitor == nil else { return }
-        assignedMonitorPoint = monitor.rect.topLeftCorner
+        guard !isVisible, forceAssignedMonitor == nil else { return }
+        assignLane(DisplayLaneId(monitor))
     }
 
     @MainActor
-    func assignProject(_ projectId: String) {
+    func assignLane(_ laneId: DisplayLaneId) {
+        guard self.laneId != laneId else { return }
+        winMuxWorkspaceState.moveWorkspace(self, to: laneId)
+    }
+
+    @MainActor
+    func assignProject(_ projectId: WorkspaceProjectId) {
         guard self.projectId != projectId else { return }
-        if workspaceProjectIdToProject[projectId] == nil {
-            workspaceProjectIdToProject[projectId] = WorkspaceProject(
-                id: projectId,
-                name: workspaceProjectDisplayName(projectId, fallbackName: "Project"),
-            )
-        }
-        self.projectId = projectId
+        winMuxWorkspaceState.assignWorkspace(self, to: projectId)
     }
 
     @MainActor
     func markAsSidebarManaged() {
         markAsAutomaticallyNamed()
-        retainsFocusedEmptyWorkspace = true
+        lifecycle = .durable
     }
 
     @MainActor
     func markAsTransientBlank() {
         markAsAutomaticallyNamed()
-        retainsFocusedEmptyWorkspace = true
+        lifecycle = .transient
     }
 
     @MainActor
@@ -917,22 +987,10 @@ extension Workspace {
     }
 
     @MainActor
-    func markAsSystemStub() {
-        isSystemStub = true
-        namingStyle = .explicit
-        retainsFocusedEmptyWorkspace = false
-    }
-
-    @MainActor
     func refreshEmptyLifecycle() {
-        guard workspaceHasLifecycleWindows(self) else { return }
-        retainsFocusedEmptyWorkspace = false
-        isSystemStub = false
-    }
-
-    @MainActor
-    func shouldRetainEmptyWorkspace(focusedWorkspace: Workspace?) -> Bool {
-        focusedWorkspace == self && retainsFocusedEmptyWorkspace
+        if workspaceHasLifecycleWindows(self), lifecycle == .transient {
+            lifecycle = .durable
+        }
     }
 
     @MainActor
@@ -941,69 +999,45 @@ extension Workspace {
     }
 
     @MainActor
-    func shouldPersistWhenEmpty(focusedWorkspace: Workspace?) -> Bool {
-        isConfiguredPersistent || shouldRetainEmptyWorkspace(focusedWorkspace: focusedWorkspace)
+    var isOrdinaryEmptySlot: Bool {
+        !workspaceHasLifecycleWindows(self) && !isConfiguredPersistent
     }
 
     var usesAutomaticDisplayName: Bool {
-        namingStyle == .automatic && !isSystemStub
+        namingStyle == .automatic
     }
 
     @MainActor
-    var isVisible: Bool { visibleWorkspaceToScreenPoint.keys.contains(self) }
+    var isVisible: Bool {
+        winMuxWorkspaceState.lanesById.values.contains { $0.activeWorkspaceId == id }
+    }
     @MainActor
     var workspaceMonitor: Monitor {
-        forceAssignedMonitor
-            ?? visibleWorkspaceToScreenPoint[self]?.monitorApproximation
-            ?? assignedMonitorPoint?.monitorApproximation
-            ?? mainMonitor
+        forceAssignedMonitor ?? laneId.topLeftCorner.monitorApproximation
     }
 
     @MainActor
     var preferredMonitorPointForTesting: CGPoint? {
-        assignedMonitorPoint
+        laneId.topLeftCorner
     }
 
     @MainActor
     var scope: WorkspaceScope {
-        workspaceScope(projectId: projectId, monitor: workspaceMonitor)
+        WorkspaceScope(projectId: projectId, laneId: laneId)
     }
-}
 
-@MainActor
-func materializeWorkspaceForUserWindowIfNeeded(_ workspace: Workspace) -> Workspace {
-    guard workspace.isSystemStub else { return workspace }
-
-    let monitor = workspace.workspaceMonitor
-    let replacement = Workspace.get(byName: nextAutomaticWorkspaceName(
-        projectId: activeWorkspaceProjectId(for: monitor),
-        monitor: monitor,
-    ))
-    replacement.markAsAutomaticallyNamed()
-    replacement.assignProject(activeWorkspaceProjectId(for: monitor))
-    replacement.seedMonitorIfNeeded(monitor)
-    if workspace.isVisible {
-        check(
-            workspace.workspaceMonitor.setActiveWorkspace(replacement),
-            "Can't materialize replacement workspace for internal stub '\(workspace.name)'",
-        )
-        if focus.workspace == workspace {
-            _ = setFocus(to: replacement.toLiveFocus())
-        }
+    var isArchived: Bool {
+        lifecycle == .archived
     }
-    return replacement
 }
 
 extension Monitor {
     @MainActor
     var activeWorkspace: Workspace {
-        if let existing = screenPointToVisibleWorkspace[rect.topLeftCorner] {
+        if let existing = winMuxWorkspaceState.visibleWorkspace(for: self) {
             return existing
         }
-        // What if monitor configuration changed? (frame.origin is changed)
         rearrangeWorkspacesOnMonitors()
-        // Normally, recursion should happen only once more because we must take the value from the cache
-        // (Unless, monitor configuration data race happens)
         return self.activeWorkspace
     }
 
@@ -1015,10 +1049,7 @@ extension Monitor {
 
 @MainActor
 func gcMonitors() {
-    let currentScreenPoints = monitors.map(\.rect.topLeftCorner).toSet()
-    if screenPointToVisibleWorkspace.keys.toSet() != currentScreenPoints {
-        rearrangeWorkspacesOnMonitors()
-    }
+    rearrangeWorkspacesOnMonitors()
 }
 
 extension CGPoint {
@@ -1027,24 +1058,8 @@ extension CGPoint {
         if !isValidAssignment(workspace: workspace, screen: self) {
             return false
         }
-        if let prevMonitorPoint = visibleWorkspaceToScreenPoint[workspace] {
-            visibleWorkspaceToScreenPoint.removeValue(forKey: workspace)
-            screenPointToPrevVisibleWorkspace[prevMonitorPoint] =
-                screenPointToVisibleWorkspace.removeValue(forKey: prevMonitorPoint)?.name
-        }
-        if let prevWorkspace = screenPointToVisibleWorkspace[self] {
-            screenPointToPrevVisibleWorkspace[self] =
-                screenPointToVisibleWorkspace.removeValue(forKey: self)?.name
-            visibleWorkspaceToScreenPoint.removeValue(forKey: prevWorkspace)
-        }
-        visibleWorkspaceToScreenPoint[workspace] = self
-        screenPointToVisibleWorkspace[self] = workspace
-        workspace.assignedMonitorPoint = self
-        if workspace.isSystemStub {
-            activeWorkspaceProjectIdByScreenPoint[self] = activeWorkspaceProjectIdByScreenPoint[self] ?? workspaceProjectDefaultId
-        } else {
-            activeWorkspaceProjectIdByScreenPoint[self] = workspace.projectId
-        }
+        let laneId = DisplayLaneId(topLeftCorner: self)
+        _ = winMuxWorkspaceState.setActiveWorkspace(workspace, on: laneId)
         checkWorkspaceHierarchyInvariants()
         return true
     }
@@ -1053,51 +1068,44 @@ extension CGPoint {
 @MainActor
 private func checkWorkspaceHierarchyInvariants() {
     for workspace in Workspace.all {
-        check(workspaceProjectIdToProject[workspace.projectId] != nil, "Workspace '\(workspace.name)' references missing project '\(workspace.projectId)'")
+        check(winMuxWorkspaceState.projectsById[workspace.projectId] != nil, "Workspace '\(workspace.name)' references missing project '\(workspace.projectId)'")
     }
 
-    for (point, workspace) in screenPointToVisibleWorkspace where !workspace.isSystemStub {
-        let activeProjectId = activeWorkspaceProjectIdByScreenPoint[point]
-        check(
-            activeProjectId == workspace.projectId,
-            "Visible workspace '\(workspace.name)' project '\(workspace.projectId)' disagrees with active project '\(activeProjectId ?? "nil")'",
-        )
+    for (laneId, lane) in winMuxWorkspaceState.lanesById {
+        if let activeWorkspaceId = lane.activeWorkspaceId {
+            check(winMuxWorkspaceState.workspaceById[activeWorkspaceId] != nil, "Display lane '\(laneId)' references missing workspace '\(activeWorkspaceId)'")
+        }
     }
 }
 
 @MainActor
 private func rearrangeWorkspacesOnMonitors() {
-    var oldVisibleScreens: Set<CGPoint> = screenPointToVisibleWorkspace.keys.toSet()
+    var oldVisibleMonitors: Set<DisplayLaneId> = winMuxWorkspaceState.lanesById.keys.toSet()
 
-    let newScreens = monitors.map(\.rect.topLeftCorner)
-    var newScreenToOldScreenMapping: [CGPoint: CGPoint] = [:]
-    for newScreen in newScreens {
-        if let oldScreen = oldVisibleScreens.minBy({ ($0 - newScreen).vectorLength }) {
-            check(oldVisibleScreens.remove(oldScreen) != nil)
-            newScreenToOldScreenMapping[newScreen] = oldScreen
+    let newMonitors = monitors.map(DisplayLaneId.init)
+    var newMonitorToOldMonitorMapping: [DisplayLaneId: DisplayLaneId] = [:]
+    for newMonitor in newMonitors {
+        if let oldMonitor = oldVisibleMonitors.minBy({ ($0.topLeftCorner - newMonitor.topLeftCorner).vectorLength }) {
+            check(oldVisibleMonitors.remove(oldMonitor) != nil)
+            newMonitorToOldMonitorMapping[newMonitor] = oldMonitor
         }
     }
 
-    let oldScreenPointToVisibleWorkspace = screenPointToVisibleWorkspace
-    let oldActiveWorkspaceProjectIdByScreenPoint = activeWorkspaceProjectIdByScreenPoint
-    screenPointToVisibleWorkspace = [:]
-    visibleWorkspaceToScreenPoint = [:]
-    activeWorkspaceProjectIdByScreenPoint = [:]
+    let oldLanesById = winMuxWorkspaceState.lanesById
+    winMuxWorkspaceState.lanesById = [:]
 
-    for newScreen in newScreens {
-        if let oldScreen = newScreenToOldScreenMapping[newScreen],
-           let activeProjectId = oldActiveWorkspaceProjectIdByScreenPoint[oldScreen]
-        {
-            activeWorkspaceProjectIdByScreenPoint[newScreen] = activeProjectId
-        }
-        if let existingVisibleWorkspace = newScreenToOldScreenMapping[newScreen].flatMap({ oldScreenPointToVisibleWorkspace[$0] }),
+    for newMonitor in newMonitors {
+        let newScreen = newMonitor.topLeftCorner
+        if let existingVisibleWorkspace = newMonitorToOldMonitorMapping[newMonitor]
+            .flatMap({ oldLanesById[$0]?.activeWorkspaceId })
+            .flatMap({ winMuxWorkspaceState.workspaceById[$0] }),
            newScreen.setActiveWorkspace(existingVisibleWorkspace)
         {
             continue
         }
-        let stubWorkspace = getStubWorkspace(forPoint: newScreen)
-        check(newScreen.setActiveWorkspace(stubWorkspace),
-              "getStubWorkspace generated incompatible stub workspace (\(stubWorkspace)) for the monitor (\(newScreen)")
+        let workspace = getOrCreateLaneFallbackWorkspace(forPoint: newScreen)
+        check(newScreen.setActiveWorkspace(workspace),
+              "Generated incompatible fallback workspace (\(workspace)) for the display lane (\(newScreen)")
     }
 }
 

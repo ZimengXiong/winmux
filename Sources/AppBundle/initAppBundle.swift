@@ -40,7 +40,7 @@ import Foundation
         startUnixSocketServer()
         GlobalObserver.initObserver()
         MonitorConfigurationObserver.shared.startObserving()
-        Workspace.garbageCollectUnusedWorkspaces() // init workspaces
+        Workspace.reconcileWorkspaceState() // init workspaces
         _ = Workspace.all.first?.focusWorkspace()
         let didLoadPersistedFrozenWorld = loadPersistedFrozenWorldForStartupIfPresent()
         try await runRefreshSessionBlocking(.startup, layoutWorkspaces: false)
@@ -65,7 +65,7 @@ private func smartLayoutAtStartup() {
     if root.children.count <= 3 {
         root.layout = .tiles
     } else {
-        root.layout = .accordion
+        root.layout = .tabGroup
     }
 }
 

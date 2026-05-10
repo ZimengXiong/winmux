@@ -433,14 +433,14 @@ private func dragIntentTargetNode(
     detachOrigin: TabDetachOrigin,
 ) -> TreeNode {
     guard let sourceParent = sourceWindow.parent as? TilingContainer,
-          sourceParent.layout == .accordion,
+          sourceParent.layout == .tabGroup,
           targetWindow.parent === sourceParent
     else { return targetWindow.moveNode }
 
     if subject == .window, detachOrigin == .tabStrip {
         logWindowDragHitTestIfNeeded(
-            signature: "self-accordion-target:source=\(sourceWindow.windowId):target=\(targetWindow.windowId)",
-            "windowDragTarget.selfAccordion source=\(debugDescribe(sourceWindow)) target=\(debugDescribe(targetWindow)) chosen=\(debugDescribe(sourceParent)) reason=tab-strip-window-drag-over-own-accordion"
+            signature: "self-tab-group-target:source=\(sourceWindow.windowId):target=\(targetWindow.windowId)",
+            "windowDragTarget.selfTabGroup source=\(debugDescribe(sourceWindow)) target=\(debugDescribe(targetWindow)) chosen=\(debugDescribe(sourceParent)) reason=tab-strip-window-drag-over-own-tab-group"
         )
         return sourceParent
     }
@@ -451,20 +451,20 @@ private func dragIntentTargetNode(
 }
 
 @MainActor
-private func allowsAccordionSelfTargeting(sourceNode: TreeNode, targetNode: TreeNode) -> Bool {
-    if let sourceAccordion = sourceNode as? TilingContainer,
-       sourceAccordion.layout == .accordion,
+private func allowsTabGroupSelfTargeting(sourceNode: TreeNode, targetNode: TreeNode) -> Bool {
+    if let sourceTabGroup = sourceNode as? TilingContainer,
+       sourceTabGroup.layout == .tabGroup,
        let targetWindow = targetNode as? Window,
-       targetWindow.parent === sourceAccordion
+       targetWindow.parent === sourceTabGroup
     {
         return true
     }
-    guard let sourceAccordion = sourceNode as? TilingContainer,
-          sourceAccordion.layout == .accordion
+    guard let sourceTabGroup = sourceNode as? TilingContainer,
+          sourceTabGroup.layout == .tabGroup
     else {
         return (sourceNode as? Window)?.parent === targetNode
     }
-    return targetNode === sourceAccordion
+    return targetNode === sourceTabGroup
 }
 
 @MainActor
@@ -472,10 +472,10 @@ private func isBlockedByDragTargetContainment(sourceNode: TreeNode, targetNode: 
     if sourceNode == targetNode {
         return true
     }
-    if sourceNode.parentsWithSelf.contains(targetNode) && !allowsAccordionSelfTargeting(sourceNode: sourceNode, targetNode: targetNode) {
+    if sourceNode.parentsWithSelf.contains(targetNode) && !allowsTabGroupSelfTargeting(sourceNode: sourceNode, targetNode: targetNode) {
         return true
     }
-    if targetNode.parentsWithSelf.contains(sourceNode) && !allowsAccordionSelfTargeting(sourceNode: sourceNode, targetNode: targetNode) {
+    if targetNode.parentsWithSelf.contains(sourceNode) && !allowsTabGroupSelfTargeting(sourceNode: sourceNode, targetNode: targetNode) {
         return true
     }
     return false
@@ -599,7 +599,7 @@ private func tabStackDestination(targetWindow: Window, mouseLocation: CGPoint? =
 }
 
 @MainActor
-private func selfAccordionTabReentryDestination(
+private func selfTabGroupTabReentryDestination(
     sourceWindow: Window,
     targetWindow: Window,
     mouseLocation: CGPoint,
@@ -610,7 +610,7 @@ private func selfAccordionTabReentryDestination(
           detachOrigin == .tabStrip,
           config.windowTabs.enabled,
           let sourceParent = sourceWindow.parent as? TilingContainer,
-          sourceParent.layout == .accordion,
+          sourceParent.layout == .tabGroup,
           targetWindow.parent === sourceParent,
           let previewRect = sourceParent.windowTabDropZoneRect,
           let interactionRect = sourceParent.windowTabDropInteractionRect,
@@ -638,7 +638,7 @@ private func swapDestination(
     subject: WindowDragSubject,
     detachOrigin: TabDetachOrigin,
 ) -> WindowDragIntentDestination? {
-    if shouldSuppressSameAccordionSwapDestination(
+    if shouldSuppressSameTabGroupSwapDestination(
         sourceWindow: sourceWindow,
         targetWindow: targetWindow,
         subject: subject,
@@ -734,7 +734,7 @@ private func windowSurfacePreviewZones(
     if subject == .window,
        config.windowTabs.enabled,
        let tabDestination = tabStackDestination(targetWindow: targetWindow),
-       !shouldSuppressSameAccordionTabDestination(
+       !shouldSuppressSameTabGroupTabDestination(
            sourceWindow: sourceWindow,
            targetWindow: targetWindow,
            detachOrigin: detachOrigin,
@@ -803,7 +803,7 @@ private func windowSurfaceDestination(
         subject: subject,
         detachOrigin: detachOrigin,
     )
-    if let reentryDestination = selfAccordionTabReentryDestination(
+    if let reentryDestination = selfTabGroupTabReentryDestination(
         sourceWindow: sourceWindow,
         targetWindow: targetWindow,
         mouseLocation: mouseLocation,
@@ -818,7 +818,7 @@ private func windowSurfaceDestination(
     {
         if case .tabStack(let targetWindowId) = tabDestination.kind,
            let targetWindow = Window.get(byId: targetWindowId),
-           shouldSuppressSameAccordionTabDestination(
+           shouldSuppressSameTabGroupTabDestination(
                sourceWindow: sourceWindow,
                targetWindow: targetWindow,
                detachOrigin: detachOrigin,
@@ -839,12 +839,12 @@ private func windowSurfaceDestination(
     if detachOrigin == .tabStrip,
        subject == .window,
        let sourceParent = sourceWindow.parent as? TilingContainer,
-       sourceParent.layout == .accordion,
+       sourceParent.layout == .tabGroup,
        targetWindow.parent === sourceParent
     {
         logWindowDragHitTestIfNeeded(
-            signature: "self-accordion-intent:source=\(sourceWindow.windowId):target=\(targetWindow.windowId):intent=\(debugDescribe(bodyIntent))",
-            "windowDragTarget.selfAccordionIntent mouse=\(debugDescribe(mouseLocation)) source=\(debugDescribe(sourceWindow)) target=\(debugDescribe(targetWindow)) targetNode=\(debugDescribe(targetNode)) visible=\(debugDescribe(targetNode.windowDragVisibleRect)) swap=\(debugDescribe(targetNode.swapDropZoneRect)) left=\(debugDescribe(targetNode.stackSplitDropZoneRect(position: .left))) right=\(debugDescribe(targetNode.stackSplitDropZoneRect(position: .right))) above=\(debugDescribe(targetNode.stackSplitDropZoneRect(position: .above))) below=\(debugDescribe(targetNode.stackSplitDropZoneRect(position: .below))) resolved=\(debugDescribe(bodyIntent))"
+            signature: "self-tab-group-intent:source=\(sourceWindow.windowId):target=\(targetWindow.windowId):intent=\(debugDescribe(bodyIntent))",
+            "windowDragTarget.selfTabGroupIntent mouse=\(debugDescribe(mouseLocation)) source=\(debugDescribe(sourceWindow)) target=\(debugDescribe(targetWindow)) targetNode=\(debugDescribe(targetNode)) visible=\(debugDescribe(targetNode.windowDragVisibleRect)) swap=\(debugDescribe(targetNode.swapDropZoneRect)) left=\(debugDescribe(targetNode.stackSplitDropZoneRect(position: .left))) right=\(debugDescribe(targetNode.stackSplitDropZoneRect(position: .right))) above=\(debugDescribe(targetNode.stackSplitDropZoneRect(position: .above))) below=\(debugDescribe(targetNode.stackSplitDropZoneRect(position: .below))) resolved=\(debugDescribe(bodyIntent))"
         )
     }
 
@@ -879,7 +879,7 @@ private func currentWindowSurfaceDestination(
     if subject == .window,
        detachOrigin == .tabStrip,
        let sourceParent = sourceWindow.parent as? TilingContainer,
-       sourceParent.layout == .accordion,
+       sourceParent.layout == .tabGroup,
        sourceParent.windowDragVisibleRect?.contains(mouseLocation) == true
     {
         let targetWindow =
@@ -888,8 +888,8 @@ private func currentWindowSurfaceDestination(
             sourceParent.anyLeafWindowRecursive ??
             sourceWindow
         logWindowDragHitTestIfNeeded(
-            signature: "surface:self-accordion-direct:source=\(sourceWindow.windowId)",
-            "windowDragTarget.selfAccordionDirect source=\(debugDescribe(sourceWindow)) mouse=\(debugDescribe(mouseLocation)) target=\(debugDescribe(targetWindow)) container=\(debugDescribe(sourceParent))"
+            signature: "surface:self-tab-group-direct:source=\(sourceWindow.windowId)",
+            "windowDragTarget.selfTabGroupDirect source=\(debugDescribe(sourceWindow)) mouse=\(debugDescribe(mouseLocation)) target=\(debugDescribe(targetWindow)) container=\(debugDescribe(sourceParent))"
         )
         return windowSurfaceDestination(
             sourceWindow: sourceWindow,
@@ -1041,7 +1041,7 @@ private func workspaceSidebarMonitorDisplayName(_ monitor: Monitor) -> String {
 @MainActor
 private func currentTabDetachDestination(sourceWindow: Window, mouseLocation: CGPoint, origin: TabDetachOrigin) -> WindowDragIntentDestination? {
     guard let parent = sourceWindow.parent as? TilingContainer,
-          parent.layout == .accordion,
+          parent.layout == .tabGroup,
           parent.children.count > 1,
           let keepRect = sourceWindow.tabDetachKeepRect(origin: origin),
           !keepRect.contains(mouseLocation),
@@ -1062,16 +1062,16 @@ private func currentTabDetachDestination(sourceWindow: Window, mouseLocation: CG
 }
 
 @MainActor
-func shouldSuppressSameAccordionTabDestination(sourceWindow: Window, targetWindow: Window, detachOrigin _: TabDetachOrigin) -> Bool {
+func shouldSuppressSameTabGroupTabDestination(sourceWindow: Window, targetWindow: Window, detachOrigin _: TabDetachOrigin) -> Bool {
     guard let sourceParent = sourceWindow.parent as? TilingContainer,
-          sourceParent.layout == .accordion,
+          sourceParent.layout == .tabGroup,
           targetWindow.parent === sourceParent
     else { return false }
     return true
 }
 
 @MainActor
-private func shouldSuppressSameAccordionSwapDestination(
+private func shouldSuppressSameTabGroupSwapDestination(
     sourceWindow: Window,
     targetWindow: Window,
     subject: WindowDragSubject,
@@ -1080,7 +1080,7 @@ private func shouldSuppressSameAccordionSwapDestination(
     guard subject == .window,
           detachOrigin == .tabStrip,
           let sourceParent = sourceWindow.parent as? TilingContainer,
-          sourceParent.layout == .accordion,
+          sourceParent.layout == .tabGroup,
           targetWindow.parent === sourceParent
     else { return false }
     return true
@@ -1111,7 +1111,7 @@ extension TreeNode {
             case let window as Window:
                 return currentWindowDragActualRect(window) ?? window.lastAppliedLayoutPhysicalRect
             case let container as TilingContainer:
-                if container.layout == .accordion {
+                if container.layout == .tabGroup {
                     let activeWindowRect = container.tabActiveWindow?.windowDragVisibleRect
                     let tabBarRect = container.windowTabBarRect
                     return Rect.union([activeWindowRect, tabBarRect].compactMap { $0 }) ?? container.lastAppliedLayoutPhysicalRect
@@ -1128,7 +1128,7 @@ extension Window {
     @MainActor
     fileprivate var tabStackTargetRects: (containerRect: Rect, previewRect: Rect, interactionRect: Rect)? {
         if let parent = parent as? TilingContainer,
-           parent.layout == .accordion,
+           parent.layout == .tabGroup,
            let previewRect = parent.windowTabDropZoneRect,
            let interactionRect = parent.windowTabDropInteractionRect
         {
@@ -1163,7 +1163,7 @@ extension Window {
     @MainActor
     var tabDetachPreviewRect: Rect? {
         if let parent = parent as? TilingContainer,
-           parent.layout == .accordion,
+           parent.layout == .tabGroup,
            let rect = parent.lastAppliedLayoutPhysicalRect
         {
             return rect
@@ -1173,7 +1173,7 @@ extension Window {
 
     @MainActor
     func tabDetachKeepRect(origin: TabDetachOrigin) -> Rect? {
-        guard let parent = parent as? TilingContainer, parent.layout == .accordion else { return nil }
+        guard let parent = parent as? TilingContainer, parent.layout == .tabGroup else { return nil }
         return switch origin {
             case .window:
                 lastAppliedLayoutPhysicalRect?.expanded(left: 8, right: 8, top: 8, bottom: 12)
@@ -1193,14 +1193,14 @@ extension CGPoint {
     @MainActor
     private func shouldExcludeDragTargetNode(_ node: TreeNode, excludedNode: TreeNode?) -> Bool {
         guard let excludedNode else { return false }
-        guard let excludedAccordion = excludedNode as? TilingContainer,
-              excludedAccordion.layout == .accordion
+        guard let excludedTabGroup = excludedNode as? TilingContainer,
+              excludedTabGroup.layout == .tabGroup
         else {
             if node === excludedNode { return true }
             return node.parentsWithSelf.contains(excludedNode)
         }
-        if node === excludedAccordion { return false }
-        if let window = node as? Window, window.parent === excludedAccordion {
+        if node === excludedTabGroup { return false }
+        if let window = node as? Window, window.parent === excludedTabGroup {
             return false
         }
         return node.parentsWithSelf.contains(excludedNode)
@@ -1239,7 +1239,7 @@ extension CGPoint {
                             }
                         }
                         return nil
-                    case .accordion:
+                    case .tabGroup:
                         if container.usesWindowTabBehavior {
                             guard let targetWindow = container.tabActiveWindow ??
                                 container.mostRecentWindowRecursive ??
@@ -1285,7 +1285,7 @@ extension CGPoint {
                             }
                         }
                         return nil
-                    case .accordion:
+                    case .tabGroup:
                         if container.usesWindowTabBehavior {
                             return nil
                         }
@@ -1630,7 +1630,7 @@ func applyWindowSwapDragIntent(
     sourceSubject: WindowDragSubject,
     targetWindow: Window,
 ) -> Bool {
-    if shouldSuppressSameAccordionSwapDestination(
+    if shouldSuppressSameTabGroupSwapDestination(
         sourceWindow: sourceWindow,
         targetWindow: targetWindow,
         subject: sourceSubject,
@@ -1655,7 +1655,7 @@ func applyWindowSwapDragIntent(
 @MainActor
 private func expectedTabbedWindowRect(targetWindow: Window, targetRect: Rect) -> Rect {
     guard config.windowTabs.enabled else { return targetRect }
-    let isAlreadyTabbed = (targetWindow.parent as? TilingContainer)?.layout == .accordion
+    let isAlreadyTabbed = (targetWindow.parent as? TilingContainer)?.layout == .tabGroup
     guard !isAlreadyTabbed else { return targetRect }
 
     let tabBarHeight = min(resolvedWindowTabBarHeight(), targetRect.height)
@@ -1705,7 +1705,7 @@ func createOrAppendWindowTabStack(sourceWindow: Window, onto targetWindow: Windo
     guard sourceWindow != targetWindow else { return }
     let targetRect = normalizeTabStackSourceWindowFrame(sourceWindow: sourceWindow, targetWindow: targetWindow)
     if let targetParent = targetWindow.parent as? TilingContainer,
-       targetParent.layout == .accordion
+       targetParent.layout == .tabGroup
     {
         if let targetRect {
             synchronizeTabbedWindowCache(targetWindow, rect: targetRect)
@@ -1732,7 +1732,7 @@ func createOrAppendWindowTabStack(sourceWindow: Window, onto targetWindow: Windo
         parent: targetBinding.parent,
         adaptiveWeight: targetBinding.adaptiveWeight,
         newOrientation,
-        .accordion,
+        .tabGroup,
         index: targetBinding.index,
     )
     sourceWindow.unbindFromParent()
@@ -1749,7 +1749,7 @@ func createOrAppendWindowTabStack(sourceWindow: Window, onto targetWindow: Windo
 @MainActor
 @discardableResult
 func removeWindowFromTabStack(_ window: Window) -> Bool {
-    guard let parent = window.parent as? TilingContainer, parent.layout == .accordion else {
+    guard let parent = window.parent as? TilingContainer, parent.layout == .tabGroup else {
         return false
     }
 
@@ -1772,24 +1772,24 @@ func removeWindowFromTabStack(_ window: Window) -> Bool {
 
     guard parent.parent is Workspace else { return false }
     let remainingChildren = parent.children.filter { $0 != window }
-    let accordionOrientation = parent.orientation
+    let tabGroupOrientation = parent.orientation
 
     window.unbindFromParent()
     let remainingMostRecentChild = parent.mostRecentChild
     parent.layout = .tiles
-    parent.changeOrientation(accordionOrientation.opposite)
+    parent.changeOrientation(tabGroupOrientation.opposite)
 
     if remainingChildren.count > 1 {
-        let nestedAccordion = TilingContainer(
+        let nestedTabGroup = TilingContainer(
             parent: parent,
             adaptiveWeight: WEIGHT_AUTO,
-            accordionOrientation,
-            .accordion,
+            tabGroupOrientation,
+            .tabGroup,
             index: 0,
         )
         for child in remainingChildren {
             child.unbindFromParent()
-            child.bind(to: nestedAccordion, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+            child.bind(to: nestedTabGroup, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
         }
         remainingMostRecentChild?.markAsMostRecentChild()
     }
@@ -1969,7 +1969,7 @@ func workspaceAppendBindingData(targetWorkspace: Workspace, index: Int) -> Bindi
 @MainActor
 private func workspaceSiblingInsertionRoot(_ workspace: Workspace) -> TilingContainer {
     let root = workspace.rootTilingContainer
-    guard root.layout == .accordion, !root.children.isEmpty else { return root }
+    guard root.layout == .tabGroup, !root.children.isEmpty else { return root }
 
     let previousRoot = root
     previousRoot.unbindFromParent()

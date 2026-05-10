@@ -46,7 +46,7 @@ final class WindowTabsTest: XCTestCase {
 
         createOrAppendWindowTabStack(sourceWindow: source, onto: target)
 
-        assertEquals(root.layoutDescription, .h_tiles([.v_accordion([.window(2), .window(1)])]))
+        assertEquals(root.layoutDescription, .h_tiles([.v_tab_group([.window(2), .window(1)])]))
     }
 
     @MainActor
@@ -54,14 +54,14 @@ final class WindowTabsTest: XCTestCase {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
         let root = workspace.rootTilingContainer
-        root.layout = .accordion
+        root.layout = .tabGroup
         let target = TestWindow.new(id: 2, parent: root)
         _ = TestWindow.new(id: 3, parent: root)
         let source = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
 
         createOrAppendWindowTabStack(sourceWindow: source, onto: target)
 
-        assertEquals(root.layoutDescription, .h_accordion([.window(2), .window(1), .window(3)]))
+        assertEquals(root.layoutDescription, .h_tab_group([.window(2), .window(1), .window(3)]))
     }
 
     @MainActor
@@ -70,7 +70,7 @@ final class WindowTabsTest: XCTestCase {
         let workspace = Workspace.get(byName: "tabs")
         let root = workspace.rootTilingContainer
         let leading = TestWindow.new(id: 0, parent: root)
-        let stack = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let stack = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
         _ = TestWindow.new(id: 1, parent: stack)
         let stackedB = TestWindow.new(id: 2, parent: stack)
 
@@ -85,11 +85,11 @@ final class WindowTabsTest: XCTestCase {
     }
 
     @MainActor
-    func testRemoveWindowFromNestedTwoTabStackFlattensDeadAccordion() {
+    func testRemoveWindowFromNestedTwoTabStackFlattensDeadTabGroup() {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
         let root = workspace.rootTilingContainer
-        let stack = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let stack = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
         let remaining = TestWindow.new(id: 1, parent: stack)
         let removed = TestWindow.new(id: 2, parent: stack)
 
@@ -105,7 +105,7 @@ final class WindowTabsTest: XCTestCase {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
         let root = workspace.rootTilingContainer
-        root.layout = .accordion
+        root.layout = .tabGroup
         let removed = TestWindow.new(id: 1, parent: root)
         let expectedActive = TestWindow.new(id: 2, parent: root)
         _ = TestWindow.new(id: 3, parent: root)
@@ -113,10 +113,10 @@ final class WindowTabsTest: XCTestCase {
 
         XCTAssertTrue(removeWindowFromTabStack(removed))
 
-        let rebuiltAccordion = root.children.first as? TilingContainer
-        XCTAssertNotNil(rebuiltAccordion)
-        XCTAssertEqual(rebuiltAccordion?.layout, .accordion)
-        XCTAssertEqual(rebuiltAccordion?.tabActiveWindow, expectedActive)
+        let rebuiltTabGroup = root.children.first as? TilingContainer
+        XCTAssertNotNil(rebuiltTabGroup)
+        XCTAssertEqual(rebuiltTabGroup?.layout, .tabGroup)
+        XCTAssertEqual(rebuiltTabGroup?.tabActiveWindow, expectedActive)
     }
 
     @MainActor
@@ -124,11 +124,11 @@ final class WindowTabsTest: XCTestCase {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
         let root = workspace.rootTilingContainer
-        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
-        let firstTab = TestWindow.new(id: 1, parent: accordion)
-        _ = TestWindow.new(id: 2, parent: accordion)
-        _ = TestWindow.new(id: 3, parent: accordion)
-        let expectedTab = TestWindow.new(id: 4, parent: accordion)
+        let tabGroup = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let firstTab = TestWindow.new(id: 1, parent: tabGroup)
+        _ = TestWindow.new(id: 2, parent: tabGroup)
+        _ = TestWindow.new(id: 3, parent: tabGroup)
+        let expectedTab = TestWindow.new(id: 4, parent: tabGroup)
         let closingWindow = TestWindow.new(id: 9, parent: workspace)
 
         XCTAssertTrue(expectedTab.focusWindow())
@@ -160,11 +160,11 @@ final class WindowTabsTest: XCTestCase {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
         let root = workspace.rootTilingContainer
-        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
-        let firstTab = TestWindow.new(id: 1, parent: accordion)
-        _ = TestWindow.new(id: 2, parent: accordion)
-        _ = TestWindow.new(id: 3, parent: accordion)
-        let expectedTab = TestWindow.new(id: 4, parent: accordion)
+        let tabGroup = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let firstTab = TestWindow.new(id: 1, parent: tabGroup)
+        _ = TestWindow.new(id: 2, parent: tabGroup)
+        _ = TestWindow.new(id: 3, parent: tabGroup)
+        let expectedTab = TestWindow.new(id: 4, parent: tabGroup)
         let closingWindow = TestWindow.new(id: 9, parent: workspace)
 
         XCTAssertTrue(expectedTab.focusWindow())
@@ -194,11 +194,11 @@ final class WindowTabsTest: XCTestCase {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
         let root = workspace.rootTilingContainer
-        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
-        let firstTab = TestWindow.new(id: 1, parent: accordion)
-        _ = TestWindow.new(id: 2, parent: accordion)
-        _ = TestWindow.new(id: 3, parent: accordion)
-        let expectedTab = TestWindow.new(id: 4, parent: accordion)
+        let tabGroup = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let firstTab = TestWindow.new(id: 1, parent: tabGroup)
+        _ = TestWindow.new(id: 2, parent: tabGroup)
+        _ = TestWindow.new(id: 3, parent: tabGroup)
+        let expectedTab = TestWindow.new(id: 4, parent: tabGroup)
         let closingWindow = TestWindow.new(id: 9, parent: workspace)
 
         XCTAssertTrue(expectedTab.focusWindow())
@@ -226,11 +226,11 @@ final class WindowTabsTest: XCTestCase {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
         let root = workspace.rootTilingContainer
-        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
-        let firstTab = TestWindow.new(id: 1, parent: accordion)
-        _ = TestWindow.new(id: 2, parent: accordion)
-        _ = TestWindow.new(id: 3, parent: accordion)
-        let expectedTab = TestWindow.new(id: 4, parent: accordion)
+        let tabGroup = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let firstTab = TestWindow.new(id: 1, parent: tabGroup)
+        _ = TestWindow.new(id: 2, parent: tabGroup)
+        _ = TestWindow.new(id: 3, parent: tabGroup)
+        let expectedTab = TestWindow.new(id: 4, parent: tabGroup)
         let closingWindow = TestWindow.new(id: 9, parent: workspace)
 
         XCTAssertTrue(expectedTab.focusWindow())
@@ -285,10 +285,10 @@ final class WindowTabsTest: XCTestCase {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
         let root = workspace.rootTilingContainer
-        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
-        let staleFallbackTab = TestWindow.new(id: 1, parent: accordion)
-        _ = TestWindow.new(id: 2, parent: accordion)
-        let expectedTab = TestWindow.new(id: 3, parent: accordion)
+        let tabGroup = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let staleFallbackTab = TestWindow.new(id: 1, parent: tabGroup)
+        _ = TestWindow.new(id: 2, parent: tabGroup)
+        let expectedTab = TestWindow.new(id: 3, parent: tabGroup)
         let closingWindow = TestWindow.new(id: 9, parent: workspace)
 
         let replacementFocus = focusAfterWindowClosure(
@@ -312,9 +312,9 @@ final class WindowTabsTest: XCTestCase {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
         let root = workspace.rootTilingContainer
-        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
-        let staleFallbackTab = TestWindow.new(id: 1, parent: accordion)
-        let expectedTab = TestWindow.new(id: 2, parent: accordion)
+        let tabGroup = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let staleFallbackTab = TestWindow.new(id: 1, parent: tabGroup)
+        let expectedTab = TestWindow.new(id: 2, parent: tabGroup)
         let closingWindow = TestWindow.new(id: 9, parent: workspace)
 
         let replacementFocus = focusAfterWindowClosure(
@@ -358,28 +358,28 @@ final class WindowTabsTest: XCTestCase {
     }
 
     @MainActor
-    func testAccordionDropAndSwapZonesDoNotOverlap() {
+    func testTabGroupDropAndSwapZonesDoNotOverlap() {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
         let root = workspace.rootTilingContainer
-        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
-        let active = TestWindow.new(id: 1, parent: accordion)
-        _ = TestWindow.new(id: 2, parent: accordion)
-        accordion.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 400, height: 260)
+        let tabGroup = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let active = TestWindow.new(id: 1, parent: tabGroup)
+        _ = TestWindow.new(id: 2, parent: tabGroup)
+        tabGroup.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 400, height: 260)
         active.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 400, height: 226)
         active.markAsMostRecentChild()
 
-        let tabBarRect = accordion.windowTabBarRect.orDie()
-        let groupFrameRect = accordion.windowTabGroupFrameRect.orDie()
-        let tabDropZone = accordion.windowTabDropZoneRect.orDie()
-        let tabInteractionZone = accordion.windowTabDropInteractionRect.orDie()
-        let swapDropZone = accordion.swapDropZoneRect.orDie()
-        let accordionFrame = accordion.lastAppliedLayoutPhysicalRect.orDie()
+        let tabBarRect = tabGroup.windowTabBarRect.orDie()
+        let groupFrameRect = tabGroup.windowTabGroupFrameRect.orDie()
+        let tabDropZone = tabGroup.windowTabDropZoneRect.orDie()
+        let tabInteractionZone = tabGroup.windowTabDropInteractionRect.orDie()
+        let swapDropZone = tabGroup.swapDropZoneRect.orDie()
+        let tabGroupFrame = tabGroup.lastAppliedLayoutPhysicalRect.orDie()
 
-        XCTAssertEqual(groupFrameRect.topLeftX, accordionFrame.topLeftX)
-        XCTAssertEqual(groupFrameRect.topLeftY, accordionFrame.topLeftY)
-        XCTAssertEqual(groupFrameRect.width, accordionFrame.width)
-        XCTAssertEqual(groupFrameRect.height, accordionFrame.height)
+        XCTAssertEqual(groupFrameRect.topLeftX, tabGroupFrame.topLeftX)
+        XCTAssertEqual(groupFrameRect.topLeftY, tabGroupFrame.topLeftY)
+        XCTAssertEqual(groupFrameRect.width, tabGroupFrame.width)
+        XCTAssertEqual(groupFrameRect.height, tabGroupFrame.height)
         XCTAssertGreaterThan(tabDropZone.height, tabBarRect.height)
         XCTAssertGreaterThan(tabInteractionZone.height, tabDropZone.height)
         XCTAssertGreaterThan(swapDropZone.minY, tabDropZone.maxY)
@@ -397,15 +397,15 @@ final class WindowTabsTest: XCTestCase {
     }
 
     @MainActor
-    func testAccordionSwapZoneKeepsBodyActive() {
+    func testTabGroupSwapZoneKeepsBodyActive() {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
-        let accordion = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
-        _ = TestWindow.new(id: 1, parent: accordion)
-        _ = TestWindow.new(id: 2, parent: accordion)
-        accordion.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
+        let tabGroup = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        _ = TestWindow.new(id: 1, parent: tabGroup)
+        _ = TestWindow.new(id: 2, parent: tabGroup)
+        tabGroup.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
 
-        let swapDropZone = accordion.swapDropZoneRect.orDie()
+        let swapDropZone = tabGroup.swapDropZoneRect.orDie()
         XCTAssertTrue(swapDropZone.contains(swapDropZone.center))
     }
 
@@ -430,22 +430,22 @@ final class WindowTabsTest: XCTestCase {
     }
 
     @MainActor
-    func testUnmanagedAccordionTabBarUsesActiveWindowFrame() {
+    func testUnmanagedTabGroupTabBarUsesActiveWindowFrame() {
         setUpWorkspacesForTests()
         config.enableWindowManagement = false
         let workspace = Workspace.get(byName: "tabs")
-        let accordion = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let tabGroup = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
         let active = TestWindow.new(
             id: 1,
-            parent: accordion,
+            parent: tabGroup,
             rect: Rect(topLeftX: 40, topLeftY: 60, width: 500, height: 300),
         )
-        _ = TestWindow.new(id: 2, parent: accordion, rect: Rect(topLeftX: 10, topLeftY: 20, width: 100, height: 100))
-        accordion.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 240, height: 180)
+        _ = TestWindow.new(id: 2, parent: tabGroup, rect: Rect(topLeftX: 10, topLeftY: 20, width: 100, height: 100))
+        tabGroup.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 240, height: 180)
         active.markAsMostRecentChild()
 
-        let tabBarRect = accordion.windowTabBarRect.orDie()
-        let groupFrameRect = accordion.windowTabGroupFrameRect.orDie()
+        let tabBarRect = tabGroup.windowTabBarRect.orDie()
+        let groupFrameRect = tabGroup.windowTabGroupFrameRect.orDie()
 
         XCTAssertEqual(tabBarRect.topLeftX, 40)
         XCTAssertEqual(tabBarRect.topLeftY, 60)
@@ -458,20 +458,20 @@ final class WindowTabsTest: XCTestCase {
     }
 
     @MainActor
-    func testManagedAccordionLayoutInsetsActiveWindowInsideTabShell() async throws {
+    func testManagedTabGroupLayoutInsetsActiveWindowInsideTabShell() async throws {
         setUpWorkspacesForTests()
         cancelManipulatedWithMouseState()
         clearPendingWindowDragIntent()
         let workspace = Workspace.get(byName: "tabs")
-        let accordion = workspace.rootTilingContainer
-        accordion.layout = .accordion
-        let active = TestWindow.new(id: 1, parent: accordion)
-        _ = TestWindow.new(id: 2, parent: accordion)
+        let tabGroup = workspace.rootTilingContainer
+        tabGroup.layout = .tabGroup
+        let active = TestWindow.new(id: 1, parent: tabGroup)
+        _ = TestWindow.new(id: 2, parent: tabGroup)
         XCTAssertTrue(active.focusWindow())
 
         try await workspace.layoutWorkspace()
 
-        let groupFrame = try XCTUnwrap(accordion.lastAppliedLayoutPhysicalRect)
+        let groupFrame = try XCTUnwrap(tabGroup.lastAppliedLayoutPhysicalRect)
         let activeFrame = try XCTUnwrap(active.lastAppliedLayoutPhysicalRect)
         let tabBarHeight = resolvedWindowTabBarHeight()
 
@@ -769,10 +769,10 @@ final class WindowTabsTest: XCTestCase {
     func testTabDetachKeepRectsDifferentiateWindowAndTabStripDrags() {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
-        let accordion = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
-        let window = TestWindow.new(id: 1, parent: accordion)
-        _ = TestWindow.new(id: 2, parent: accordion)
-        accordion.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
+        let tabGroup = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let window = TestWindow.new(id: 1, parent: tabGroup)
+        _ = TestWindow.new(id: 2, parent: tabGroup)
+        tabGroup.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
         window.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
 
         let windowKeepRect = window.tabDetachKeepRect(origin: .window).orDie()
@@ -786,19 +786,19 @@ final class WindowTabsTest: XCTestCase {
     }
 
     @MainActor
-    func testSameAccordionTabInsertTargetIsSuppressedForDetachDrags() {
+    func testSameTabGroupTabInsertTargetIsSuppressedForDetachDrags() {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
-        let accordion = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
-        let source = TestWindow.new(id: 1, parent: accordion)
-        let target = TestWindow.new(id: 2, parent: accordion)
+        let tabGroup = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let source = TestWindow.new(id: 1, parent: tabGroup)
+        let target = TestWindow.new(id: 2, parent: tabGroup)
 
-        XCTAssertTrue(shouldSuppressSameAccordionTabDestination(
+        XCTAssertTrue(shouldSuppressSameTabGroupTabDestination(
             sourceWindow: source,
             targetWindow: target,
             detachOrigin: .window,
         ))
-        XCTAssertTrue(shouldSuppressSameAccordionTabDestination(
+        XCTAssertTrue(shouldSuppressSameTabGroupTabDestination(
             sourceWindow: source,
             targetWindow: target,
             detachOrigin: .tabStrip,
@@ -806,21 +806,21 @@ final class WindowTabsTest: XCTestCase {
     }
 
     @MainActor
-    func testSameAccordionTabStripReentryPrioritizesTabTakeBackIntent() {
+    func testSameTabGroupTabStripReentryPrioritizesTabTakeBackIntent() {
         setUpWorkspacesForTests()
         clearPendingWindowDragIntent()
         config.windowTabs.enabled = true
 
         let workspace = Workspace.get(byName: "tabs")
         XCTAssertTrue(workspace.focusWorkspace())
-        let accordion = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
-        let source = TestWindow.new(id: 1, parent: accordion)
-        let target = TestWindow.new(id: 2, parent: accordion)
-        accordion.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
+        let tabGroup = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let source = TestWindow.new(id: 1, parent: tabGroup)
+        let target = TestWindow.new(id: 2, parent: tabGroup)
+        tabGroup.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
         source.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
         target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
 
-        let mouseLocation = accordion.windowTabDropInteractionRect.orDie().center
+        let mouseLocation = tabGroup.windowTabDropInteractionRect.orDie().center
 
         XCTAssertTrue(updatePendingWindowDragIntent(
             sourceWindow: source,
@@ -830,8 +830,8 @@ final class WindowTabsTest: XCTestCase {
         ))
 
         let pendingIntent = debugPendingWindowDragIntentSummary().orDie()
-        let expectedPreviewRect = accordion.windowTabDropZoneRect.orDie()
-        let expectedInteractionRect = accordion.windowTabDropInteractionRect.orDie()
+        let expectedPreviewRect = tabGroup.windowTabDropZoneRect.orDie()
+        let expectedInteractionRect = tabGroup.windowTabDropInteractionRect.orDie()
         XCTAssertEqual(pendingIntent.kind, .tabStack(targetWindowId: target.windowId))
         XCTAssertEqual(pendingIntent.previewRect.topLeftX, expectedPreviewRect.topLeftX)
         XCTAssertEqual(pendingIntent.previewRect.topLeftY, expectedPreviewRect.topLeftY)
@@ -847,13 +847,13 @@ final class WindowTabsTest: XCTestCase {
     func testResolvedDraggedWindowAnchorRectUsesWholeGroupForGroupDrag() {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
-        let accordion = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
-        let window = TestWindow.new(id: 1, parent: accordion)
-        _ = TestWindow.new(id: 2, parent: accordion)
+        let tabGroup = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let window = TestWindow.new(id: 1, parent: tabGroup)
+        _ = TestWindow.new(id: 2, parent: tabGroup)
         let windowRect = Rect(topLeftX: 12, topLeftY: 40, width: 300, height: 220)
         let groupRect = Rect(topLeftX: 0, topLeftY: 0, width: 320, height: 260)
         window.lastAppliedLayoutPhysicalRect = windowRect
-        accordion.lastAppliedLayoutPhysicalRect = groupRect
+        tabGroup.lastAppliedLayoutPhysicalRect = groupRect
 
         let resolvedWindowRect = resolvedDraggedWindowAnchorRect(for: window, subject: .window).orDie()
         XCTAssertEqual(resolvedWindowRect.topLeftX, windowRect.topLeftX)
@@ -872,13 +872,13 @@ final class WindowTabsTest: XCTestCase {
     func testPinnedDraggedWindowRectUsesWindowRectForGroupSidebarDrag() {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
-        let accordion = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
-        let window = TestWindow.new(id: 1, parent: accordion)
-        _ = TestWindow.new(id: 2, parent: accordion)
+        let tabGroup = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let window = TestWindow.new(id: 1, parent: tabGroup)
+        _ = TestWindow.new(id: 2, parent: tabGroup)
         let windowRect = Rect(topLeftX: 12, topLeftY: 40, width: 300, height: 220)
         let groupRect = Rect(topLeftX: 0, topLeftY: 0, width: 320, height: 260)
         window.lastAppliedLayoutPhysicalRect = windowRect
-        accordion.lastAppliedLayoutPhysicalRect = groupRect
+        tabGroup.lastAppliedLayoutPhysicalRect = groupRect
 
         let pinnedRect = pinnedDraggedWindowRect(
             for: window,
@@ -896,11 +896,11 @@ final class WindowTabsTest: XCTestCase {
     func testPinnedDraggedWindowRectFallsBackWhenWindowRectMissing() {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
-        let accordion = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
-        let window = TestWindow.new(id: 1, parent: accordion)
-        _ = TestWindow.new(id: 2, parent: accordion)
+        let tabGroup = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let window = TestWindow.new(id: 1, parent: tabGroup)
+        _ = TestWindow.new(id: 2, parent: tabGroup)
         let groupRect = Rect(topLeftX: 0, topLeftY: 0, width: 320, height: 260)
-        accordion.lastAppliedLayoutPhysicalRect = groupRect
+        tabGroup.lastAppliedLayoutPhysicalRect = groupRect
 
         let pinnedRect = pinnedDraggedWindowRect(
             for: window,
@@ -968,9 +968,9 @@ final class WindowTabsTest: XCTestCase {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
         let root = workspace.rootTilingContainer
-        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
-        let source = TestWindow.new(id: 1, parent: accordion)
-        _ = TestWindow.new(id: 2, parent: accordion)
+        let tabGroup = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let source = TestWindow.new(id: 1, parent: tabGroup)
+        _ = TestWindow.new(id: 2, parent: tabGroup)
         let target = TestWindow.new(id: 3, parent: root)
 
         XCTAssertTrue(target.focusWindow())
@@ -988,9 +988,9 @@ final class WindowTabsTest: XCTestCase {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
         let root = workspace.rootTilingContainer
-        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
-        let source = TestWindow.new(id: 1, parent: accordion)
-        let target = TestWindow.new(id: 2, parent: accordion)
+        let tabGroup = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let source = TestWindow.new(id: 1, parent: tabGroup)
+        let target = TestWindow.new(id: 2, parent: tabGroup)
 
         XCTAssertFalse(applyWindowSwapDragIntent(
             sourceWindow: source,
@@ -998,7 +998,7 @@ final class WindowTabsTest: XCTestCase {
             targetWindow: target,
         ))
         assertEquals(root.layoutDescription, .h_tiles([
-            .v_accordion([
+            .v_tab_group([
                 .window(1),
                 .window(2),
             ]),
@@ -1006,7 +1006,7 @@ final class WindowTabsTest: XCTestCase {
     }
 
     @MainActor
-    func testApplyWindowSwapDragIntentRejectsSelfAccordionTabStripDrags() {
+    func testApplyWindowSwapDragIntentRejectsSelfTabGroupTabStripDrags() {
         setUpWorkspacesForTests()
         let previousDetachOrigin = getCurrentMouseTabDetachOrigin()
         setCurrentMouseTabDetachOrigin(.tabStrip)
@@ -1014,9 +1014,9 @@ final class WindowTabsTest: XCTestCase {
 
         let workspace = Workspace.get(byName: "tabs")
         let root = workspace.rootTilingContainer
-        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
-        let source = TestWindow.new(id: 1, parent: accordion)
-        let target = TestWindow.new(id: 2, parent: accordion)
+        let tabGroup = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let source = TestWindow.new(id: 1, parent: tabGroup)
+        let target = TestWindow.new(id: 2, parent: tabGroup)
 
         XCTAssertFalse(applyWindowSwapDragIntent(
             sourceWindow: source,
@@ -1024,7 +1024,7 @@ final class WindowTabsTest: XCTestCase {
             targetWindow: target,
         ))
         assertEquals(root.layoutDescription, .h_tiles([
-            .v_accordion([
+            .v_tab_group([
                 .window(1),
                 .window(2),
             ]),
@@ -1091,9 +1091,9 @@ final class WindowTabsTest: XCTestCase {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
         let root = workspace.rootTilingContainer
-        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
-        let source = TestWindow.new(id: 1, parent: accordion)
-        let target = TestWindow.new(id: 2, parent: accordion)
+        let tabGroup = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let source = TestWindow.new(id: 1, parent: tabGroup)
+        let target = TestWindow.new(id: 2, parent: tabGroup)
 
         XCTAssertFalse(applyWindowStackSplitDragIntent(
             sourceWindow: source,
@@ -1102,7 +1102,7 @@ final class WindowTabsTest: XCTestCase {
             position: .left,
         ))
         assertEquals(root.layoutDescription, .h_tiles([
-            .v_accordion([
+            .v_tab_group([
                 .window(1),
                 .window(2),
             ]),
@@ -1214,11 +1214,11 @@ final class WindowTabsTest: XCTestCase {
     }
 
     @MainActor
-    func testApplyWindowStackSplitDragIntentSupportsRootAccordionSelfTarget() {
+    func testApplyWindowStackSplitDragIntentSupportsRootTabGroupSelfTarget() {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
         let root = workspace.rootTilingContainer
-        root.layout = .accordion
+        root.layout = .tabGroup
         root.changeOrientation(.v)
         let source = TestWindow.new(id: 1, parent: root)
         let target = TestWindow.new(id: 2, parent: root)
@@ -1236,7 +1236,7 @@ final class WindowTabsTest: XCTestCase {
 
         assertEquals(workspace.rootTilingContainer.layoutDescription, .h_tiles([
             .window(1),
-            .v_accordion([
+            .v_tab_group([
                 .window(2),
                 .window(3),
             ]),
@@ -1245,17 +1245,17 @@ final class WindowTabsTest: XCTestCase {
     }
 
     @MainActor
-    func testWorkspaceMoveBindingDataWrapsRootAccordionInsteadOfTargetingWorkspace() {
+    func testWorkspaceMoveBindingDataWrapsRootTabGroupInsteadOfTargetingWorkspace() {
         setUpWorkspacesForTests()
         let targetWorkspace = Workspace.get(byName: "target")
-        let rootAccordion = targetWorkspace.rootTilingContainer
-        rootAccordion.layout = .accordion
-        if rootAccordion.orientation != .h {
-            rootAccordion.changeOrientation(.h)
+        let rootTabGroup = targetWorkspace.rootTilingContainer
+        rootTabGroup.layout = .tabGroup
+        if rootTabGroup.orientation != .h {
+            rootTabGroup.changeOrientation(.h)
         }
-        let target = TestWindow.new(id: 10, parent: rootAccordion)
-        _ = TestWindow.new(id: 11, parent: rootAccordion)
-        rootAccordion.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 600, height: 400)
+        let target = TestWindow.new(id: 10, parent: rootTabGroup)
+        _ = TestWindow.new(id: 11, parent: rootTabGroup)
+        rootTabGroup.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 600, height: 400)
         target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 600, height: 366)
 
         let binding = workspaceMoveBindingData(
@@ -1267,29 +1267,29 @@ final class WindowTabsTest: XCTestCase {
         XCTAssertTrue(binding.parent === targetWorkspace.rootTilingContainer)
         XCTAssertEqual(targetWorkspace.rootTilingContainer.layout, .tiles)
         XCTAssertEqual(targetWorkspace.rootTilingContainer.children.count, 1)
-        XCTAssertTrue(targetWorkspace.rootTilingContainer.children.first === rootAccordion)
+        XCTAssertTrue(targetWorkspace.rootTilingContainer.children.first === rootTabGroup)
         XCTAssertEqual(binding.index, 1)
         XCTAssertTrue(targetWorkspace.floatingWindows.isEmpty)
     }
 
     @MainActor
-    func testWorkspaceAppendBindingDataWrapsRootAccordionInsteadOfAppendingAsTab() {
+    func testWorkspaceAppendBindingDataWrapsRootTabGroupInsteadOfAppendingAsTab() {
         setUpWorkspacesForTests()
         let sourceWorkspace = Workspace.get(byName: "source")
         let source = TestWindow.new(id: 1, parent: sourceWorkspace.rootTilingContainer)
         let targetWorkspace = Workspace.get(byName: "target")
-        let rootAccordion = targetWorkspace.rootTilingContainer
-        rootAccordion.layout = .accordion
-        _ = TestWindow.new(id: 10, parent: rootAccordion)
-        _ = TestWindow.new(id: 11, parent: rootAccordion)
+        let rootTabGroup = targetWorkspace.rootTilingContainer
+        rootTabGroup.layout = .tabGroup
+        _ = TestWindow.new(id: 10, parent: rootTabGroup)
+        _ = TestWindow.new(id: 11, parent: rootTabGroup)
 
         let binding = workspaceAppendBindingData(targetWorkspace: targetWorkspace, index: INDEX_BIND_LAST)
         source.bind(to: binding.parent, adaptiveWeight: binding.adaptiveWeight, index: binding.index)
 
         XCTAssertEqual(targetWorkspace.rootTilingContainer.layout, .tiles)
-        XCTAssertTrue(targetWorkspace.rootTilingContainer.children.first === rootAccordion)
+        XCTAssertTrue(targetWorkspace.rootTilingContainer.children.first === rootTabGroup)
         XCTAssertTrue(targetWorkspace.rootTilingContainer.children.last === source)
-        XCTAssertEqual(rootAccordion.children.count, 2)
+        XCTAssertEqual(rootTabGroup.children.count, 2)
     }
 
     @MainActor
@@ -1339,9 +1339,9 @@ final class WindowTabsTest: XCTestCase {
         setUpWorkspacesForTests()
         cancelManipulatedWithMouseState()
         let workspace = Workspace.get(byName: "tabs")
-        let accordion = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
-        let window = TestWindow.new(id: 1, parent: accordion)
-        _ = TestWindow.new(id: 2, parent: accordion)
+        let tabGroup = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let window = TestWindow.new(id: 1, parent: tabGroup)
+        _ = TestWindow.new(id: 2, parent: tabGroup)
         let groupRect = Rect(topLeftX: 5, topLeftY: 7, width: 320, height: 240)
 
         XCTAssertTrue(beginWindowMoveWithMouseSessionIfNeeded(
@@ -1442,10 +1442,10 @@ final class WindowTabsTest: XCTestCase {
         let workspace = Workspace.get(byName: "tabs")
         XCTAssertTrue(workspace.focusWorkspace())
         let root = workspace.rootTilingContainer
-        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
-        let source = TestWindow.new(id: 1, parent: accordion)
-        let target = TestWindow.new(id: 2, parent: accordion)
-        accordion.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
+        let tabGroup = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let source = TestWindow.new(id: 1, parent: tabGroup)
+        let target = TestWindow.new(id: 2, parent: tabGroup)
+        tabGroup.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
         source.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
         target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
 
@@ -1467,10 +1467,10 @@ final class WindowTabsTest: XCTestCase {
         let workspace = Workspace.get(byName: "tabs")
         XCTAssertTrue(workspace.focusWorkspace())
         let root = workspace.rootTilingContainer
-        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
-        let source = TestWindow.new(id: 1, parent: accordion)
-        let target = TestWindow.new(id: 2, parent: accordion)
-        accordion.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
+        let tabGroup = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let source = TestWindow.new(id: 1, parent: tabGroup)
+        let target = TestWindow.new(id: 2, parent: tabGroup)
+        tabGroup.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
         source.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
         target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
 
@@ -1592,16 +1592,16 @@ final class WindowTabsTest: XCTestCase {
 
         let workspace = Workspace.get(byName: "tabs")
         XCTAssertTrue(workspace.focusWorkspace())
-        let accordion = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
-        let source = TestWindow.new(id: 1, parent: accordion)
-        let target = TestWindow.new(id: 2, parent: accordion)
-        accordion.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
+        let tabGroup = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let source = TestWindow.new(id: 1, parent: tabGroup)
+        let target = TestWindow.new(id: 2, parent: tabGroup)
+        tabGroup.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
         source.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
         target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
 
         XCTAssertTrue(updatePendingWindowDragIntent(
             sourceWindow: source,
-            mouseLocation: accordion.windowTabDropInteractionRect.orDie().center,
+            mouseLocation: tabGroup.windowTabDropInteractionRect.orDie().center,
             subject: .window,
             detachOrigin: .tabStrip,
         ))
@@ -1868,6 +1868,21 @@ final class WindowTabsTest: XCTestCase {
         XCTAssertLessThan(max(fill.redComponent, fill.greenComponent, fill.blueComponent) - min(fill.redComponent, fill.greenComponent, fill.blueComponent), 0.01)
     }
 
+    func testWindowIntentPreviewAccentMatchesMatteFill() {
+        let accent = NSColor(cgColor: WindowIntentPreviewPalette.accent(alpha: 0.42))
+            .orDie()
+            .usingColorSpace(.deviceRGB)
+            .orDie()
+        let matte = mattePanelNSColor
+            .usingColorSpace(.deviceRGB)
+            .orDie()
+
+        XCTAssertEqual(accent.redComponent, matte.redComponent, accuracy: 0.001)
+        XCTAssertEqual(accent.greenComponent, matte.greenComponent, accuracy: 0.001)
+        XCTAssertEqual(accent.blueComponent, matte.blueComponent, accuracy: 0.001)
+        XCTAssertEqual(accent.alphaComponent, matte.alphaComponent, accuracy: 0.001)
+    }
+
     @MainActor
     func testHudPanelBaseDoesNotPaintSystemHudBackdrop() {
         let panel = NSPanelHud()
@@ -2054,28 +2069,28 @@ final class WindowTabsTest: XCTestCase {
     }
 
     @MainActor
-    func testWindowAndAccordionTabInsertZonesUseSameTopBarShape() {
+    func testWindowAndTabGroupTabInsertZonesUseSameTopBarShape() {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
         let root = workspace.rootTilingContainer
         let window = TestWindow.new(id: 1, parent: root)
         window.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
 
-        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
-        let accordionWindow = TestWindow.new(id: 2, parent: accordion)
-        _ = TestWindow.new(id: 3, parent: accordion)
-        accordion.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
-        accordionWindow.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
+        let tabGroup = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let tabGroupWindow = TestWindow.new(id: 2, parent: tabGroup)
+        _ = TestWindow.new(id: 3, parent: tabGroup)
+        tabGroup.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
+        tabGroupWindow.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
 
         let windowZone = window.tabDropZoneRect.orDie()
-        let accordionZone = accordionWindow.tabDropZoneRect.orDie()
-        let accordionRect = accordionWindow.lastAppliedLayoutPhysicalRect.orDie()
+        let tabGroupZone = tabGroupWindow.tabDropZoneRect.orDie()
+        let tabGroupRect = tabGroupWindow.lastAppliedLayoutPhysicalRect.orDie()
 
-        XCTAssertEqual(windowZone.height, accordionZone.height)
-        XCTAssertEqual(windowZone.minX, accordionZone.minX)
-        XCTAssertEqual(windowZone.maxX, accordionZone.maxX)
-        XCTAssertGreaterThanOrEqual(accordionZone.topLeftY, accordionRect.topLeftY)
-        XCTAssertLessThanOrEqual(accordionZone.topLeftY, accordionRect.topLeftY + 6)
+        XCTAssertEqual(windowZone.height, tabGroupZone.height)
+        XCTAssertEqual(windowZone.minX, tabGroupZone.minX)
+        XCTAssertEqual(windowZone.maxX, tabGroupZone.maxX)
+        XCTAssertGreaterThanOrEqual(tabGroupZone.topLeftY, tabGroupRect.topLeftY)
+        XCTAssertLessThanOrEqual(tabGroupZone.topLeftY, tabGroupRect.topLeftY + 6)
     }
 
     @MainActor
@@ -2094,50 +2109,50 @@ final class WindowTabsTest: XCTestCase {
     }
 
     @MainActor
-    func testAccordionTabInsertAndTopSplitIntentZonesTouchWithoutDeadBand() {
+    func testTabGroupTabInsertAndTopSplitIntentZonesTouchWithoutDeadBand() {
         setUpWorkspacesForTests()
         config.windowTabs.enabled = true
         let workspace = Workspace.get(byName: "tabs")
         let root = workspace.rootTilingContainer
-        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
-        let active = TestWindow.new(id: 1, parent: accordion)
-        let second = TestWindow.new(id: 2, parent: accordion)
-        accordion.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
+        let tabGroup = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let active = TestWindow.new(id: 1, parent: tabGroup)
+        let second = TestWindow.new(id: 2, parent: tabGroup)
+        tabGroup.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
         active.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
         second.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
 
-        let tabInteraction = accordion.windowTabDropInteractionRect.orDie()
-        let topSplitInteraction = accordion.stackSplitDropZoneRect(position: .above).orDie()
+        let tabInteraction = tabGroup.windowTabDropInteractionRect.orDie()
+        let topSplitInteraction = tabGroup.stackSplitDropZoneRect(position: .above).orDie()
 
         XCTAssertEqual(topSplitInteraction.minY, tabInteraction.maxY, accuracy: 0.001)
     }
 
     @MainActor
-    func testFullscreenActiveTabHidesTabStripWithoutDisablingAccordionBehavior() {
+    func testFullscreenActiveTabHidesTabStripWithoutDisablingTabGroupBehavior() {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
-        let accordion = workspace.rootTilingContainer
-        accordion.layout = .accordion
-        let active = TestWindow.new(id: 1, parent: accordion)
-        _ = TestWindow.new(id: 2, parent: accordion)
-        accordion.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
+        let tabGroup = workspace.rootTilingContainer
+        tabGroup.layout = .tabGroup
+        let active = TestWindow.new(id: 1, parent: tabGroup)
+        _ = TestWindow.new(id: 2, parent: tabGroup)
+        tabGroup.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
         active.isFullscreen = true
         active.markAsMostRecentChild()
 
-        XCTAssertTrue(accordion.usesWindowTabBehavior)
-        XCTAssertFalse(accordion.showsWindowTabs)
-        XCTAssertEqual(accordion.windowTabBarHeight, 0)
-        XCTAssertNil(accordion.windowTabBarRect)
+        XCTAssertTrue(tabGroup.usesWindowTabBehavior)
+        XCTAssertFalse(tabGroup.showsWindowTabs)
+        XCTAssertEqual(tabGroup.windowTabBarHeight, 0)
+        XCTAssertNil(tabGroup.windowTabBarRect)
     }
 
     @MainActor
-    func testFullscreenWindowInAccordionCoversSiblingWindows() async throws {
+    func testFullscreenWindowInTabGroupCoversSiblingWindows() async throws {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
         let root = workspace.rootTilingContainer
-        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
-        let fullscreenWindow = TestWindow.new(id: 1, parent: accordion)
-        _ = TestWindow.new(id: 2, parent: accordion)
+        let tabGroup = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let fullscreenWindow = TestWindow.new(id: 1, parent: tabGroup)
+        _ = TestWindow.new(id: 2, parent: tabGroup)
         let siblingWindow = TestWindow.new(id: 3, parent: root)
 
         fullscreenWindow.isFullscreen = true
@@ -2161,11 +2176,11 @@ final class WindowTabsTest: XCTestCase {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
         let root = workspace.rootTilingContainer
-        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let tabGroup = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
         let fullscreenWindow = TestWindow.new(id: 1, parent: root)
-        _ = TestWindow.new(id: 2, parent: accordion)
-        _ = TestWindow.new(id: 3, parent: accordion)
-        accordion.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
+        _ = TestWindow.new(id: 2, parent: tabGroup)
+        _ = TestWindow.new(id: 3, parent: tabGroup)
+        tabGroup.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
         fullscreenWindow.isFullscreen = true
         TrayMenuModel.shared.isEnabled = true
 

@@ -268,7 +268,7 @@ final class FocusCommandTest: XCTestCase {
         var lastTab: Window!
         root.apply {
             TestWindow.new(id: 1, parent: $0)
-            TilingContainer(parent: $0, adaptiveWeight: 1, .v, .accordion, index: INDEX_BIND_LAST).apply {
+            TilingContainer(parent: $0, adaptiveWeight: 1, .v, .tabGroup, index: INDEX_BIND_LAST).apply {
                 TestWindow.new(id: 2, parent: $0)
                 middleTab = TestWindow.new(id: 3, parent: $0)
                 lastTab = TestWindow.new(id: 4, parent: $0)
@@ -288,7 +288,7 @@ final class FocusCommandTest: XCTestCase {
         var firstTab: Window!
         var lastTab: Window!
         root.apply {
-            TilingContainer(parent: $0, adaptiveWeight: 1, .v, .accordion, index: INDEX_BIND_LAST).apply {
+            TilingContainer(parent: $0, adaptiveWeight: 1, .v, .tabGroup, index: INDEX_BIND_LAST).apply {
                 firstTab = TestWindow.new(id: 1, parent: $0)
                 TestWindow.new(id: 2, parent: $0)
                 lastTab = TestWindow.new(id: 3, parent: $0)
@@ -324,7 +324,7 @@ final class FocusCommandTest: XCTestCase {
         var firstTab: Window!
         var secondTab: Window!
         root.apply {
-            TilingContainer(parent: $0, adaptiveWeight: 1, .v, .accordion, index: INDEX_BIND_LAST).apply {
+            TilingContainer(parent: $0, adaptiveWeight: 1, .v, .tabGroup, index: INDEX_BIND_LAST).apply {
                 firstTab = TestWindow.new(id: 1, parent: $0)
                 secondTab = TestWindow.new(id: 2, parent: $0)
                 _ = TestWindow.new(id: 3, parent: $0)

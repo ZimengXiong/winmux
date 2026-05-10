@@ -106,7 +106,7 @@ enum ChildParentRelation: Equatable {
     case macosNativeHiddenAppWindow
     case macosNativeMinimizedWindow
     case macosPopupWindow
-    case tiling(parent: TilingContainer) // todo consider splitting it on 'tiles' and 'accordion'
+    case tiling(parent: TilingContainer) // todo consider splitting it on 'tiles' and 'tabGroup'
     case rootTilingContainer
 
     case shimContainerRelation

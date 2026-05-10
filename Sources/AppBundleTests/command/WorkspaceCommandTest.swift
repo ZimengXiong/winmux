@@ -58,6 +58,93 @@ final class WorkspaceCommandTest: XCTestCase {
         XCTAssertNil(Workspace.existing(byName: "3"))
     }
 
+    func testDirectWorkspaceFocusDoesNotCreateMultipleHopsAfterBlankIsCollected() async throws {
+        let workspace1 = Workspace.get(byName: "1")
+        workspace1.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 20, parent: workspace1.rootTilingContainer)
+        _ = workspace1.focusWorkspace()
+        assertEquals(
+            try await WorkspaceCommand(
+                args: WorkspaceCmdArgs(target: .direct(.parse("2").getOrDie())),
+            ).run(.defaultEnv, .emptyStdin).exitCode,
+            0,
+        )
+        _ = workspace1.focusWorkspace()
+        Workspace.reconcileWorkspaceState()
+        XCTAssertNil(Workspace.existing(byName: "2"))
+
+        let result = try await WorkspaceCommand(
+            args: WorkspaceCmdArgs(target: .direct(.parse("3").getOrDie())),
+        ).run(.defaultEnv, .emptyStdin)
+
+        assertEquals(result.exitCode, 1)
+        XCTAssertNil(Workspace.existing(byName: "3"))
+    }
+
+    func testDirectWorkspaceShortcutUsesProjectLaneOrderInsteadOfRawNameSort() async throws {
+        let first = Workspace.get(byName: "10")
+        first.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 21, parent: first.rootTilingContainer)
+        let second = Workspace.get(byName: "2")
+        second.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 22, parent: second.rootTilingContainer)
+        _ = second.focusWorkspace()
+
+        let focusFirst = try await WorkspaceCommand(
+            args: WorkspaceCmdArgs(target: .direct(.parse("1").getOrDie())),
+        ).run(.defaultEnv, .emptyStdin)
+        assertEquals(focusFirst.exitCode, 0)
+        XCTAssertTrue(focus.workspace === first)
+
+        let focusSecond = try await WorkspaceCommand(
+            args: WorkspaceCmdArgs(target: .direct(.parse("2").getOrDie())),
+        ).run(.defaultEnv, .emptyStdin)
+        assertEquals(focusSecond.exitCode, 0)
+        XCTAssertTrue(focus.workspace === second)
+    }
+
+    func testDirectWorkspaceFocusFillsDisplayIndexGapBeforeAppending() async throws {
+        let first = Workspace.get(byName: "1")
+        first.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 23, parent: first.rootTilingContainer)
+        let thirdRaw = Workspace.get(byName: "3")
+        thirdRaw.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 24, parent: thirdRaw.rootTilingContainer)
+        _ = first.focusWorkspace()
+
+        let result = try await WorkspaceCommand(
+            args: WorkspaceCmdArgs(target: .direct(.parse("3").getOrDie())),
+        ).run(.defaultEnv, .emptyStdin)
+
+        assertEquals(result.exitCode, 0)
+        XCTAssertEqual(focus.workspace.name, "2")
+        XCTAssertNil(Workspace.existing(byName: "4"))
+        XCTAssertEqual(workspaceDisplayName(first.name), "Workspace 1")
+        XCTAssertEqual(workspaceDisplayName(thirdRaw.name), "Workspace 2")
+        XCTAssertEqual(workspaceDisplayName("2"), "Workspace 3")
+    }
+
+    func testNextWorkspaceAfterRawNameGapCreatesRawTwoNotRawFour() async throws {
+        let first = Workspace.get(byName: "1")
+        first.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 25, parent: first.rootTilingContainer)
+        let thirdRaw = Workspace.get(byName: "3")
+        thirdRaw.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 26, parent: thirdRaw.rootTilingContainer)
+        _ = thirdRaw.focusWorkspace()
+
+        let result = try await WorkspaceCommand(
+            args: WorkspaceCmdArgs(target: .relative(.next)),
+        ).run(.defaultEnv, .emptyStdin)
+
+        assertEquals(result.exitCode, 0)
+        XCTAssertEqual(focus.workspace.name, "2")
+        XCTAssertNil(Workspace.existing(byName: "4"))
+        XCTAssertEqual(workspaceDisplayName(first.name), "Workspace 1")
+        XCTAssertEqual(workspaceDisplayName(thirdRaw.name), "Workspace 2")
+        XCTAssertEqual(workspaceDisplayName("2"), "Workspace 3")
+    }
+
     func testBlankNumericWorkspaceIsDeletedAfterLeavingItEmpty() async throws {
         let workspace1 = Workspace.get(byName: "1")
         workspace1.markAsAutomaticallyNamed()
@@ -72,7 +159,7 @@ final class WorkspaceCommandTest: XCTestCase {
         )
 
         _ = workspace1.focusWorkspace()
-        Workspace.garbageCollectUnusedWorkspaces()
+        Workspace.reconcileWorkspaceState()
 
         XCTAssertNil(Workspace.existing(byName: "2"))
         XCTAssertEqual(workspaceDisplayName("1"), "Workspace 1")
@@ -107,7 +194,7 @@ final class WorkspaceCommandTest: XCTestCase {
         )
 
         _ = workspace1.focusWorkspace()
-        Workspace.garbageCollectUnusedWorkspaces()
+        Workspace.reconcileWorkspaceState()
 
         XCTAssertNil(Workspace.existing(byName: "2"))
         XCTAssertEqual(workspaceDisplayName("1"), "Workspace 1")

@@ -1,12 +1,12 @@
 import Common
 
-enum AeroObj {
+enum FormatObject {
     case window(window: Window, title: String)
     case workspace(Workspace)
     case app(any AbstractApp)
     case monitor(Monitor)
 
-    var kind: AeroObjKind {
+    var kind: FormatObjectKind {
         switch self {
             case .window: .window
             case .workspace: .workspace
@@ -16,7 +16,7 @@ enum AeroObj {
     }
 }
 
-extension [AeroObj] {
+extension [FormatObject] {
     @MainActor
     func format(_ format: [StringInterToken]) -> Result<[String], String> {
         var cellTable: [[Cell<String>]] = []
@@ -95,21 +95,21 @@ private struct Cell<T> {
 
 extension String {
     @MainActor
-    func expandFormatVar(obj: AeroObj) -> Result<Primitive, String> {
+    func expandFormatVar(obj: FormatObject) -> Result<Primitive, String> {
         let formatVar = self.toFormatVar()
         switch (obj, formatVar) {
             case (_, .none): break
 
             case (.window(let w, _), .workspace):
-                return w.nodeWorkspace.flatMap(AeroObj.workspace).map(expandFormatVar) ?? .success(.string("NULL-WORKSPACE"))
+                return w.nodeWorkspace.flatMap(FormatObject.workspace).map(expandFormatVar) ?? .success(.string("NULL-WORKSPACE"))
             case (.window(let w, _), .monitor):
-                return w.nodeMonitor.flatMap(AeroObj.monitor).map(expandFormatVar) ?? .success(.string("NULL-MONITOR"))
+                return w.nodeMonitor.flatMap(FormatObject.monitor).map(expandFormatVar) ?? .success(.string("NULL-MONITOR"))
             case (.window(let w, _), .app):
                 return expandFormatVar(obj: .app(w.app))
             case (.window(_, _), .window): break
 
             case (.workspace(let ws), .monitor):
-                return expandFormatVar(obj: AeroObj.monitor(ws.workspaceMonitor))
+                return expandFormatVar(obj: FormatObject.monitor(ws.workspaceMonitor))
             case (.workspace, _): break
 
             case (.app(_), _): break
@@ -165,8 +165,8 @@ private func toLayoutString(tc: TilingContainer) -> String {
     switch (tc.layout, tc.orientation) {
         case (.tiles, .h): return LayoutCmdArgs.LayoutDescription.h_tiles.rawValue
         case (.tiles, .v): return LayoutCmdArgs.LayoutDescription.v_tiles.rawValue
-        case (.accordion, .h): return LayoutCmdArgs.LayoutDescription.h_accordion.rawValue
-        case (.accordion, .v): return LayoutCmdArgs.LayoutDescription.v_accordion.rawValue
+        case (.tabGroup, .h): return LayoutCmdArgs.LayoutDescription.hTabGroup.rawValue
+        case (.tabGroup, .v): return LayoutCmdArgs.LayoutDescription.vTabGroup.rawValue
     }
 }
 

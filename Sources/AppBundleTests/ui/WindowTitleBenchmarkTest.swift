@@ -29,7 +29,7 @@ final class WindowTitleBenchmarkTest: XCTestCase {
 
         for workspaceIndex in 0 ..< workspaceCount {
             let workspace = Workspace.get(byName: "bench-\(workspaceIndex)")
-            workspace.rootTilingContainer.layout = .accordion
+            workspace.rootTilingContainer.layout = .tabGroup
             for windowIndex in 0 ..< windowsPerWorkspace {
                 _ = BenchmarkTitleWindow.new(
                     id: UInt32(workspaceIndex * 100 + windowIndex + 1),

@@ -35,7 +35,7 @@ final class AgentCommandTest: XCTestCase {
         let workspace = Workspace.get(byName: "a")
         let root = workspace.rootTilingContainer
         _ = TestWindow.new(id: 1, parent: root)
-        let group = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let group = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
         _ = TestWindow.new(id: 2, parent: group)
         _ = TestWindow.new(id: 3, parent: group)
 
@@ -104,7 +104,7 @@ final class AgentCommandTest: XCTestCase {
 
     func testMoveTabGroupToWorkspaceMovesWholeGroup() async throws {
         let source = Workspace.get(byName: "a")
-        let group = TilingContainer(parent: source.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let group = TilingContainer(parent: source.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
         _ = TestWindow.new(id: 2, parent: group)
         _ = TestWindow.new(id: 3, parent: group)
 
@@ -327,7 +327,7 @@ final class AgentCommandTest: XCTestCase {
         let targetRoot = Workspace.get(byName: "coding").rootTilingContainer
         XCTAssertEqual((targetRoot.children.first as? Window)?.windowId, 1)
         let group = targetRoot.children.last as? TilingContainer
-        XCTAssertEqual(group?.layout, .accordion)
+        XCTAssertEqual(group?.layout, .tabGroup)
         XCTAssertEqual(group?.agentWindowIdsForTests, [2, 3])
         XCTAssertEqual(group?.tabActiveWindow?.windowId, 3)
         XCTAssertEqual(focus.windowOrNil?.windowId, 3)
@@ -517,7 +517,7 @@ extension TilingContainer {
         var result: [TilingContainer] = []
         func visit(_ node: TreeNode) {
             guard let container = node as? TilingContainer else { return }
-            if container.layout == .accordion, container.children.count > 1 {
+            if container.layout == .tabGroup, container.children.count > 1 {
                 result.append(container)
                 return
             }

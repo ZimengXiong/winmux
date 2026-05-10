@@ -1,5 +1,6 @@
 import Common
 import Foundation
+import TOMLKit
 
 let legacyConfigDotfileName = ".winmux.toml"
 let generatedConfigDirectoryName = "winmux"
@@ -134,11 +135,51 @@ func materializeBootstrapConfigIfNeeded(
     if let legacyUrl = existingLegacyUrls.first {
         try FileManager.default.copyItem(at: legacyUrl, to: targetUrl)
     } else if let aerospaceImportUrl {
-        try FileManager.default.copyItem(at: aerospaceImportUrl, to: targetUrl)
+        let migratedConfig = try migrateAerospaceConfigForWinMux(
+            try String(contentsOf: aerospaceImportUrl, encoding: .utf8),
+        )
+        try migratedConfig.write(to: targetUrl, atomically: true, encoding: .utf8)
     } else {
         try starterConfigText().write(to: targetUrl, atomically: true, encoding: .utf8)
     }
     return true
+}
+
+func migrateAerospaceConfigForWinMux(_ rawToml: String) throws -> String {
+    _ = try TOMLTable(string: rawToml)
+
+    var migrated = rawToml
+    let literalReplacements = [
+        ("AEROSPACE_FOCUSED_WORKSPACE", "WINMUX_FOCUSED_WORKSPACE"),
+        ("AEROSPACE_PREV_WORKSPACE", "WINMUX_PREV_WORKSPACE"),
+        ("AEROSPACE_WINDOW_ID", "WINMUX_WINDOW_ID"),
+        ("AEROSPACE_WORKSPACE", "WINMUX_WORKSPACE"),
+        ("accordion-padding", "tab-group-padding"),
+        ("h_accordion", "h_tab_group"),
+        ("v_accordion", "v_tab_group"),
+    ]
+    for (old, new) in literalReplacements {
+        migrated = migrated.replacingOccurrences(of: old, with: new)
+    }
+    migrated = migrated.replacingRegex(
+        #"(?<![A-Za-z0-9_-])accordion(?![A-Za-z0-9_-])"#,
+        with: "tab-group",
+    )
+
+    return """
+        # Migrated from AeroSpace config by WinMux.
+        # WinMux owns this file after import; the AeroSpace source is not read again.
+
+        \(migrated)
+        """
+}
+
+private extension String {
+    func replacingRegex(_ pattern: String, with replacement: String) -> String {
+        let regex = try! NSRegularExpression(pattern: pattern)
+        let range = NSRange(startIndex ..< endIndex, in: self)
+        return regex.stringByReplacingMatches(in: self, range: range, withTemplate: replacement)
+    }
 }
 
 func findCustomConfigUrl() -> ConfigFile {

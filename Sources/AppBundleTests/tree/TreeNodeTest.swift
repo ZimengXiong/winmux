@@ -87,47 +87,49 @@ final class TreeNodeTest: XCTestCase {
         XCTAssertTrue(workspace.rootTilingContainer.children.singleOrNil() is TestWindow)
     }
 
-    func testGarbageCollectUnusedWorkspacesRemovesSidebarManagedEmptyWorkspaceImmediately() {
+    func testReconcileWorkspaceStateKeepsOnlyEmptyWorkspaceInProject() {
+        let project = createWorkspaceProject()
         let workspace = Workspace.get(byName: "draft")
         workspace.markAsSidebarManaged()
+        workspace.assignProject(project.id)
 
-        Workspace.garbageCollectUnusedWorkspaces()
-
-        XCTAssertFalse(Workspace.all.contains(workspace))
-    }
-
-    func testGarbageCollectUnusedWorkspacesKeepsPersistentEmptyWorkspace() {
-        config.persistentWorkspaces = ["keep"]
-        let workspace = Workspace.get(byName: "keep")
-
-        Workspace.garbageCollectUnusedWorkspaces()
+        Workspace.reconcileWorkspaceState()
 
         XCTAssertTrue(Workspace.all.contains(workspace))
     }
 
-    func testGarbageCollectUnusedWorkspacesKeepsFreshFocusedEmptyWorkspace() {
+    func testReconcileWorkspaceStateKeepsPersistentEmptyWorkspace() {
+        config.persistentWorkspaces = ["keep"]
+        let workspace = Workspace.get(byName: "keep")
+
+        Workspace.reconcileWorkspaceState()
+
+        XCTAssertTrue(Workspace.all.contains(workspace))
+    }
+
+    func testReconcileWorkspaceStateKeepsFreshFocusedEmptyWorkspace() {
         let workspace = Workspace.get(byName: "draft")
         workspace.markAsSidebarManaged()
         _ = workspace.focusWorkspace()
 
-        Workspace.garbageCollectUnusedWorkspaces()
+        Workspace.reconcileWorkspaceState()
 
         XCTAssertTrue(Workspace.all.contains(workspace))
         XCTAssertEqual(focus.workspace, workspace)
     }
 
-    func testGarbageCollectUnusedWorkspacesDeletesFocusedEmptyWorkspaceWhenNotFresh() {
+    func testReconcileWorkspaceStateKeepsFocusedEmptyWorkspaceWhenNotFresh() {
         let workspace = Workspace.get(byName: "empty")
         _ = workspace.focusWorkspace()
 
-        Workspace.garbageCollectUnusedWorkspaces()
+        Workspace.reconcileWorkspaceState()
 
-        XCTAssertNil(Workspace.existing(byName: workspace.name))
-        XCTAssertNotEqual(focus.workspace.name, workspace.name)
-        XCTAssertFalse(isUserFacingWorkspace(focus.workspace, focusedWorkspace: focus.workspace))
+        XCTAssertTrue(Workspace.existing(byName: workspace.name) === workspace)
+        XCTAssertEqual(focus.workspace.name, workspace.name)
+        XCTAssertTrue(isUserFacingWorkspace(focus.workspace, focusedWorkspace: focus.workspace))
     }
 
-    func testGarbageCollectUnusedWorkspacesDeletesFreshEmptyWorkspaceAfterLeavingIt() {
+    func testReconcileWorkspaceStateDeletesUnfocusedEmptyWorkspaceAfterLeavingIt() {
         let occupiedWorkspace = Workspace.get(byName: "occupied")
         _ = TestWindow.new(id: 101, parent: occupiedWorkspace.rootTilingContainer)
         let draftWorkspace = Workspace.get(byName: "draft")
@@ -135,12 +137,16 @@ final class TreeNodeTest: XCTestCase {
         _ = draftWorkspace.focusWorkspace()
         _ = occupiedWorkspace.focusWorkspace()
 
-        Workspace.garbageCollectUnusedWorkspaces()
+        Workspace.reconcileWorkspaceState()
 
         XCTAssertNil(Workspace.existing(byName: draftWorkspace.name))
+        XCTAssertEqual(
+            userFacingWorkspaces(Workspace.all, focusedWorkspace: focus.workspace).filter(\.isOrdinaryEmptySlot),
+            [],
+        )
     }
 
-    func testGarbageCollectUnusedWorkspacesDeletesWorkspaceWithOnlyMinimizedWindow() {
+    func testReconcileWorkspaceStateDeletesWorkspaceWithOnlyDetachedMinimizedWindow() {
         let workspace = Workspace.get(byName: "collected")
         let window = TestWindow.new(id: 111, parent: workspace.rootTilingContainer)
         let otherWorkspace = Workspace.get(byName: "other")
@@ -150,25 +156,25 @@ final class TreeNodeTest: XCTestCase {
         window.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
         _ = otherWorkspace.focusWorkspace()
 
-        Workspace.garbageCollectUnusedWorkspaces()
+        Workspace.reconcileWorkspaceState()
 
         XCTAssertEqual(window.layoutReason, .macos(prevParentKind: .tilingContainer, prevWorkspaceName: nil))
         XCTAssertNil(Workspace.existing(byName: workspace.name))
     }
 
-    func testGarbageCollectUnusedWorkspacesDeletesFocusedSidebarWorkspaceAfterLastWindowCloses() {
+    func testReconcileWorkspaceStateKeepsFocusedSidebarWorkspaceAfterLastWindowCloses() {
         let workspace = Workspace.get(byName: "2")
         workspace.markAsSidebarManaged()
         _ = workspace.focusWorkspace()
         let window = TestWindow.new(id: 113, parent: workspace.rootTilingContainer)
 
         window.unbindFromParent()
-        Workspace.garbageCollectUnusedWorkspaces()
+        Workspace.reconcileWorkspaceState()
 
-        XCTAssertNil(Workspace.existing(byName: workspace.name))
+        XCTAssertTrue(Workspace.existing(byName: workspace.name) === workspace)
     }
 
-    func testGarbageCollectUnusedWorkspacesDeletesFocusedSidebarWorkspaceAfterLastWindowMinimizes() {
+    func testReconcileWorkspaceStateKeepsFocusedSidebarWorkspaceAfterLastWindowMinimizes() {
         let survivingWorkspace = Workspace.get(byName: "1")
         survivingWorkspace.markAsAutomaticallyNamed()
         _ = TestWindow.new(id: 115, parent: survivingWorkspace.rootTilingContainer)
@@ -180,10 +186,10 @@ final class TreeNodeTest: XCTestCase {
         window.rememberMacOsLayoutOrigin(detachFromWorkspace: true)
         window.nativeIsMacosMinimized = true
         window.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
-        Workspace.garbageCollectUnusedWorkspaces()
+        Workspace.reconcileWorkspaceState()
 
-        XCTAssertNil(Workspace.existing(byName: workspace.name))
-        XCTAssertEqual(nextSidebarCreatedWorkspaceName(), workspace.name)
+        XCTAssertTrue(Workspace.existing(byName: workspace.name) === workspace)
+        XCTAssertNotEqual(nextSidebarCreatedWorkspaceName(), workspace.name)
     }
 
     func testRestoredMinimizedWindowUsesCurrentWorkspaceWhenOriginalWorkspaceWasCollected() async throws {
@@ -195,7 +201,7 @@ final class TreeNodeTest: XCTestCase {
         window.nativeIsMacosMinimized = true
         window.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
         _ = otherWorkspace.focusWorkspace()
-        Workspace.garbageCollectUnusedWorkspaces()
+        Workspace.reconcileWorkspaceState()
         window.nativeIsMacosMinimized = false
 
         try await exitMacOsNativeUnconventionalState(
@@ -244,7 +250,7 @@ final class TreeNodeTest: XCTestCase {
         _ = Workspace.get(byName: "__sidebar_draft_workspace_1")
         _ = Workspace.get(byName: "__sidebar_draft_workspace_2")
 
-        Workspace.garbageCollectUnusedWorkspaces()
+        Workspace.reconcileWorkspaceState()
 
         XCTAssertEqual(nextSidebarDraftWorkspaceName(), "__sidebar_draft_workspace_1")
     }
@@ -256,30 +262,30 @@ final class TreeNodeTest: XCTestCase {
         XCTAssertNil(config.workspaceSidebar.workspaceLabels["__sidebar_draft_workspace_1"])
     }
 
-    func testGarbageCollectUnusedWorkspacesClearsStaleDraftWorkspaceLabel() {
+    func testReconcileWorkspaceStateClearsCollectedDraftWorkspaceLabel() {
         config.workspaceSidebar.workspaceLabels["__sidebar_draft_workspace_1"] = "Old Name"
         _ = Workspace.get(byName: "__sidebar_draft_workspace_1")
 
-        Workspace.garbageCollectUnusedWorkspaces()
+        Workspace.reconcileWorkspaceState()
 
         XCTAssertNil(config.workspaceSidebar.workspaceLabels["__sidebar_draft_workspace_1"])
         XCTAssertEqual(workspaceDisplayName("__sidebar_draft_workspace_1"), "Workspace 1")
     }
 
-    func testGarbageCollectUnusedWorkspacesClearsStaleWorkspaceLabel() {
+    func testReconcileWorkspaceStateClearsCollectedWorkspaceLabel() {
         config.workspaceSidebar.workspaceLabels["ghost"] = "Ghost Name"
         _ = Workspace.get(byName: "ghost")
 
-        Workspace.garbageCollectUnusedWorkspaces()
+        Workspace.reconcileWorkspaceState()
 
         XCTAssertNil(config.workspaceSidebar.workspaceLabels["ghost"])
         XCTAssertEqual(workspaceDisplayName("ghost"), "ghost")
     }
 
-    func testGarbageCollectUnusedWorkspacesClearsOrphanedDraftWorkspaceLabel() {
+    func testReconcileWorkspaceStateClearsOrphanedDraftWorkspaceLabel() {
         config.workspaceSidebar.workspaceLabels["__sidebar_draft_workspace_7"] = "Old Name"
 
-        Workspace.garbageCollectUnusedWorkspaces()
+        Workspace.reconcileWorkspaceState()
 
         XCTAssertNil(config.workspaceSidebar.workspaceLabels["__sidebar_draft_workspace_7"])
         XCTAssertEqual(workspaceDisplayName("__sidebar_draft_workspace_7"), "Workspace 7")
@@ -316,7 +322,7 @@ final class TreeNodeTest: XCTestCase {
         XCTAssertEqual(result, [occupiedWorkspace])
     }
 
-    func testUserFacingWorkspacesIncludeFreshFocusedEmptyWorkspace() {
+    func testUserFacingWorkspacesExcludeUnretainedSidebarManagedEmptyWorkspace() {
         let focusedWorkspace = Workspace.get(byName: "focused")
         focusedWorkspace.markAsSidebarManaged()
         let occupiedWorkspace = Workspace.get(byName: "occupied")
@@ -327,7 +333,7 @@ final class TreeNodeTest: XCTestCase {
             focusedWorkspace: focusedWorkspace,
         )
 
-        XCTAssertEqual(result, [focusedWorkspace, occupiedWorkspace])
+        XCTAssertEqual(result, [occupiedWorkspace])
     }
 
     func testUserFacingWorkspacesIncludePersistentEmptyWorkspace() {
@@ -344,33 +350,25 @@ final class TreeNodeTest: XCTestCase {
         XCTAssertEqual(result, [persistentWorkspace, occupiedWorkspace])
     }
 
-    func testMaterializeWorkspaceForUserWindowReplacesInternalStub() {
+    func testFocusedEmptyWorkspaceRemainsNativeAfterMaintenance() {
         let emptyWorkspace = Workspace.get(byName: "empty")
         _ = emptyWorkspace.focusWorkspace()
 
-        Workspace.garbageCollectUnusedWorkspaces()
+        Workspace.reconcileWorkspaceState()
 
-        let internalStub = focus.workspace
-        let materializedWorkspace = materializeWorkspaceForUserWindowIfNeeded(internalStub)
-
-        XCTAssertNotEqual(materializedWorkspace, internalStub)
-        XCTAssertFalse(materializedWorkspace.isSystemStub)
-        XCTAssertEqual(materializedWorkspace.name, "1")
-        XCTAssertEqual(materializedWorkspace.workspaceMonitor.activeWorkspace, materializedWorkspace)
+        XCTAssertTrue(Workspace.existing(byName: emptyWorkspace.name) === emptyWorkspace)
+        XCTAssertEqual(emptyWorkspace.workspaceMonitor.activeWorkspace, emptyWorkspace)
     }
 
-    func testMaterializedWorkspaceNamesReuseDeletedAutomaticName() {
-        let firstStub = Workspace.get(byName: "__internal_stub_workspace_1")
-        firstStub.markAsSystemStub()
-        let firstMaterialized = materializeWorkspaceForUserWindowIfNeeded(firstStub)
-        XCTAssertEqual(firstMaterialized.name, "1")
+    func testTransientBlankWorkspaceKeepsStableIdentityWhileEmpty() {
+        let workspace = Workspace.get(byName: "1")
+        workspace.markAsTransientBlank()
+        _ = workspace.focusWorkspace()
 
-        Workspace.garbageCollectUnusedWorkspaces()
+        Workspace.reconcileWorkspaceState()
 
-        let secondStub = Workspace.get(byName: "__internal_stub_workspace_2")
-        secondStub.markAsSystemStub()
-        let secondMaterialized = materializeWorkspaceForUserWindowIfNeeded(secondStub)
-        XCTAssertEqual(secondMaterialized.name, "1")
+        XCTAssertTrue(Workspace.existing(byName: "1") === workspace)
+        XCTAssertEqual(focus.workspace, workspace)
     }
 
     func testUserFacingWorkspacesExcludeWorkspaceWithOnlyMacosFullscreenWindows() {
@@ -462,7 +460,7 @@ final class TreeNodeTest: XCTestCase {
         window.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
         _ = workspaceB.focusWorkspace()
 
-        Workspace.garbageCollectUnusedWorkspaces()
+        Workspace.reconcileWorkspaceState()
         XCTAssertEqual(Workspace.existing(byName: workspaceA.name), workspaceA)
 
         try await exitMacOsNativeUnconventionalState(
@@ -480,9 +478,9 @@ final class TreeNodeTest: XCTestCase {
 
     func testPersistedFrozenWorldCodableRoundTrip() throws {
         let workspace = Workspace.get(byName: "1")
-        let accordion = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: 1, .h, .accordion, index: 0)
-        let fullscreenWindow = TestWindow.new(id: 11, parent: accordion, adaptiveWeight: 1)
-        TestWindow.new(id: 12, parent: accordion, adaptiveWeight: 1)
+        let tabGroup = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: 1, .h, .tabGroup, index: 0)
+        let fullscreenWindow = TestWindow.new(id: 11, parent: tabGroup, adaptiveWeight: 1)
+        TestWindow.new(id: 12, parent: tabGroup, adaptiveWeight: 1)
         fullscreenWindow.isFullscreen = true
         fullscreenWindow.noOuterGapsInFullscreen = true
         fullscreenWindow.layoutReason = .macos(prevParentKind: .tilingContainer, prevWorkspaceName: workspace.name)
@@ -502,7 +500,7 @@ final class TreeNodeTest: XCTestCase {
         let frozenChild = try XCTUnwrap(decoded.workspaces.first?.rootTilingNode.children.first)
         switch frozenChild {
             case .container(let container):
-                XCTAssertEqual(container.layout, .accordion)
+                XCTAssertEqual(container.layout, .tabGroup)
                 XCTAssertEqual(container.orientation, .h)
                 XCTAssertEqual(container.children.count, 2)
                 let fullscreenChild = try XCTUnwrap(container.children.first)
@@ -531,7 +529,7 @@ final class TreeNodeTest: XCTestCase {
         XCTAssertTrue(frozenWorld.workspaces.isEmpty)
     }
 
-    func testRestoreFrozenWorldIfNeededDoesNotReviveEmptyVisibleWorkspace() async throws {
+    func testRestoreFrozenWorldIfNeededUsesNativeFallbackWorkspaceForMissingVisibleWorkspace() async throws {
         let occupiedWorkspace = Workspace.get(byName: "occupied")
         let window = TestWindow.new(id: 31, parent: occupiedWorkspace.rootTilingContainer)
         let emptyWorkspace = Workspace.get(byName: "empty")
@@ -544,14 +542,14 @@ final class TreeNodeTest: XCTestCase {
         )
 
         _ = occupiedWorkspace.focusWorkspace()
-        Workspace.garbageCollectUnusedWorkspaces()
+        Workspace.reconcileWorkspaceState()
         XCTAssertNil(Workspace.existing(byName: emptyWorkspace.name))
 
         let didRestore = try await restoreFrozenWorldIfNeeded(frozenWorld, newlyDetectedWindow: window)
         XCTAssertTrue(didRestore)
 
-        XCTAssertNil(Workspace.existing(byName: emptyWorkspace.name))
-        XCTAssertTrue(mainMonitor.activeWorkspace.isSystemStub)
+        XCTAssertEqual(mainMonitor.activeWorkspace.projectId, workspaceProjectDefaultId)
+        XCTAssertTrue(mainMonitor.activeWorkspace.isEffectivelyEmpty)
         XCTAssertTrue(mainMonitor.activeWorkspace !== occupiedWorkspace)
     }
 

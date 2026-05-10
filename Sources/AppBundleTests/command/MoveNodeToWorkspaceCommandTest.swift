@@ -25,15 +25,22 @@ final class MoveNodeToWorkspaceCommandTest: XCTestCase {
         assertEquals((Workspace.get(byName: "b").rootTilingContainer.children.singleOrNil() as? Window)?.windowId, 1)
     }
 
-    func testEmptyWorkspaceSubject() async throws {
+    func testMovingLastWindowLeavesOneAdjacentEmptyWorkspace() async throws {
         let workspaceA = Workspace.get(byName: "a")
         workspaceA.rootTilingContainer.apply {
             _ = TestWindow.new(id: 1, parent: $0).focusWindow()
         }
 
         try await MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "b")).run(.defaultEnv, .emptyStdin)
-        XCTAssertNil(Workspace.existing(byName: "a"))
-        XCTAssertNotEqual(focus.workspace.name, "b")
+
+        Workspace.reconcileWorkspaceState()
+
+        XCTAssertTrue(Workspace.existing(byName: "a") === workspaceA)
+        XCTAssertTrue(workspaceA.isEffectivelyEmpty)
+        XCTAssertEqual(
+            userFacingWorkspaces(Workspace.all, focusedWorkspace: focus.workspace).filter(\.isOrdinaryEmptySlot),
+            [workspaceA],
+        )
     }
 
     func testAnotherWindowSubject() async throws {
@@ -77,21 +84,105 @@ final class MoveNodeToWorkspaceCommandTest: XCTestCase {
         XCTAssertEqual(Workspace.get(byName: "b").projectId, project.id)
     }
 
-    func testMoveWindowToWorkspaceWrapsRootAccordionInsteadOfTabbingIntoIt() async throws {
+    func testDirectNumericMoveCreatesOnlyAdjacentWorkspace() async throws {
+        let workspace1 = Workspace.get(byName: "1")
+        workspace1.markAsAutomaticallyNamed()
+        let window = TestWindow.new(id: 11, parent: workspace1.rootTilingContainer)
+        _ = window.focusWindow()
+
+        let result = try await MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "2"))
+            .run(.defaultEnv, .emptyStdin)
+
+        assertEquals(result.exitCode, 0)
+        XCTAssertEqual(window.nodeWorkspace?.name, "2")
+        XCTAssertEqual(workspaceDisplayName("2"), "Workspace 2")
+    }
+
+    func testDirectNumericMoveDoesNotCreateWorkspaceMultipleHopsAway() async throws {
+        let workspace1 = Workspace.get(byName: "1")
+        workspace1.markAsAutomaticallyNamed()
+        let window = TestWindow.new(id: 12, parent: workspace1.rootTilingContainer)
+        _ = window.focusWindow()
+
+        let result = try await MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "3"))
+            .run(.defaultEnv, .emptyStdin)
+
+        assertEquals(result.exitCode, 1)
+        XCTAssertNil(Workspace.existing(byName: "3"))
+        XCTAssertEqual(window.nodeWorkspace, workspace1)
+    }
+
+    func testDirectNumericMoveFillsDisplayIndexGapBeforeAppending() async throws {
+        let first = Workspace.get(byName: "1")
+        first.markAsAutomaticallyNamed()
+        let window = TestWindow.new(id: 17, parent: first.rootTilingContainer)
+        let thirdRaw = Workspace.get(byName: "3")
+        thirdRaw.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 18, parent: thirdRaw.rootTilingContainer)
+        _ = window.focusWindow()
+
+        let result = try await MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "3"))
+            .run(.defaultEnv, .emptyStdin)
+
+        assertEquals(result.exitCode, 0)
+        XCTAssertEqual(window.nodeWorkspace?.name, "2")
+        XCTAssertNil(Workspace.existing(byName: "4"))
+        XCTAssertEqual(workspaceDisplayName(first.name), "Workspace 1")
+        XCTAssertEqual(workspaceDisplayName(thirdRaw.name), "Workspace 2")
+        XCTAssertEqual(workspaceDisplayName("2"), "Workspace 3")
+    }
+
+    func testDirectNumericMoveDoesNotCreateMultipleHopsAfterBlankIsCollected() async throws {
+        let workspace1 = Workspace.get(byName: "1")
+        workspace1.markAsAutomaticallyNamed()
+        let window = TestWindow.new(id: 13, parent: workspace1.rootTilingContainer)
+        _ = window.focusWindow()
+        assertEquals(
+            try await WorkspaceCommand(args: WorkspaceCmdArgs(target: .direct(.parse("2").getOrDie())))
+                .run(.defaultEnv, .emptyStdin)
+                .exitCode,
+            0,
+        )
+        _ = window.focusWindow()
+        Workspace.reconcileWorkspaceState()
+        XCTAssertNil(Workspace.existing(byName: "2"))
+
+        let result = try await MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(workspace: "3"))
+            .run(.defaultEnv, .emptyStdin)
+
+        assertEquals(result.exitCode, 1)
+        XCTAssertNil(Workspace.existing(byName: "3"))
+        XCTAssertEqual(window.nodeWorkspace, workspace1)
+    }
+
+    func testRelativeNextMoveCreatesAdjacentWorkspace() async throws {
+        let workspace1 = Workspace.get(byName: "1")
+        workspace1.markAsAutomaticallyNamed()
+        let window = TestWindow.new(id: 14, parent: workspace1.rootTilingContainer)
+        _ = window.focusWindow()
+
+        let result = try await MoveNodeToWorkspaceCommand(args: MoveNodeToWorkspaceCmdArgs(target: .relative(.next)))
+            .run(.defaultEnv, .emptyStdin)
+
+        assertEquals(result.exitCode, 0)
+        XCTAssertEqual(window.nodeWorkspace?.name, "2")
+    }
+
+    func testMoveWindowToWorkspaceWrapsRootTabGroupInsteadOfTabbingIntoIt() async throws {
         let sourceWorkspace = Workspace.get(byName: "a")
         let window = TestWindow.new(id: 1, parent: sourceWorkspace.rootTilingContainer)
         let targetWorkspace = Workspace.get(byName: "b")
-        let rootAccordion = targetWorkspace.rootTilingContainer
-        rootAccordion.layout = .accordion
-        _ = TestWindow.new(id: 2, parent: rootAccordion)
-        _ = TestWindow.new(id: 3, parent: rootAccordion)
+        let rootTabGroup = targetWorkspace.rootTilingContainer
+        rootTabGroup.layout = .tabGroup
+        _ = TestWindow.new(id: 2, parent: rootTabGroup)
+        _ = TestWindow.new(id: 3, parent: rootTabGroup)
 
         XCTAssertTrue(moveWindowToWorkspace(window, targetWorkspace, CmdIo(stdin: .emptyStdin), focusFollowsWindow: false, failIfNoop: false))
 
         XCTAssertEqual(targetWorkspace.rootTilingContainer.layout, .tiles)
-        XCTAssertTrue(targetWorkspace.rootTilingContainer.children.first === rootAccordion)
+        XCTAssertTrue(targetWorkspace.rootTilingContainer.children.first === rootTabGroup)
         XCTAssertTrue(targetWorkspace.rootTilingContainer.children.last === window)
-        XCTAssertEqual(rootAccordion.children.count, 2)
+        XCTAssertEqual(rootTabGroup.children.count, 2)
     }
 
     func testSummonWindow() async throws {

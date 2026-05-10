@@ -161,6 +161,6 @@ extension Window {
 
 extension TilingContainer {
     var isWindowTabGroup: Bool {
-        layout == .accordion && children.count > 1
+        layout == .tabGroup && children.count > 1
     }
 }

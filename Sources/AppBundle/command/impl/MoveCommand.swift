@@ -19,7 +19,7 @@ struct MoveCommand: Command {
                 let indexOfSiblingTarget = indexOfCurrent + direction.focusOffset
                 if parent.orientation == direction.orientation && parent.children.indices.contains(indexOfSiblingTarget) {
                     let siblingTarget = parent.children[indexOfSiblingTarget]
-                    if currentNode is TilingContainer || (siblingTarget as? TilingContainer)?.layout == .accordion {
+                    if currentNode is TilingContainer || (siblingTarget as? TilingContainer)?.layout == .tabGroup {
                         return moveNodeToSiblingIndex(currentNode, parent, indexOfSiblingTarget)
                     }
                     switch siblingTarget.tilingTreeNodeCasesOrDie() {
@@ -183,7 +183,7 @@ extension TilingTreeNodeCases {
 extension Window {
     @MainActor
     var moveNode: TreeNode {
-        if let parent = parent as? TilingContainer, parent.layout == .accordion {
+        if let parent = parent as? TilingContainer, parent.layout == .tabGroup {
             return parent
         } else {
             return self

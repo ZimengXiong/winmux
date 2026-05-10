@@ -20,7 +20,7 @@ struct FrozenMonitor: Codable, Sendable {
 
 struct FrozenWorkspace: Codable, Sendable {
     let name: String
-    let projectId: String
+    let projectId: WorkspaceProjectId
     let namingStyle: WorkspaceNamingStyle
     let monitor: FrozenMonitor // todo drop this property, once monitor to workspace assignment migrates to TreeNode
     let rootTilingNode: FrozenContainer
@@ -53,7 +53,7 @@ struct FrozenWorkspace: Codable, Sendable {
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         name = try container.decode(String.self, forKey: .name)
-        projectId = try container.decodeIfPresent(String.self, forKey: .projectId) ?? workspaceProjectDefaultId
+        projectId = try container.decodeIfPresent(WorkspaceProjectId.self, forKey: .projectId) ?? workspaceProjectDefaultId
         namingStyle = try container.decodeIfPresent(WorkspaceNamingStyle.self, forKey: .namingStyle) ?? .explicit
         monitor = try container.decode(FrozenMonitor.self, forKey: .monitor)
         rootTilingNode = try container.decode(FrozenContainer.self, forKey: .rootTilingNode)
@@ -135,11 +135,11 @@ func restoreFrozenWorldIfNeeded(_ frozenWorld: FrozenWorld, newlyDetectedWindow:
         guard let targetMonitor = topLeftCornerToMonitor[monitor.topLeftCorner]?.singleOrNil() else { continue }
         let targetWorkspace: Workspace
         if let existingVisibleWorkspace = Workspace.existing(byName: monitor.visibleWorkspace),
-           restoredWorkspaceNames.contains(existingVisibleWorkspace.name) || existingVisibleWorkspace.isSystemStub
+           restoredWorkspaceNames.contains(existingVisibleWorkspace.name)
         {
             targetWorkspace = existingVisibleWorkspace
         } else {
-            targetWorkspace = getStubWorkspace(for: targetMonitor)
+            targetWorkspace = getOrCreateLaneFallbackWorkspace(for: targetMonitor)
         }
         _ = targetMonitor.setActiveWorkspace(targetWorkspace)
     }

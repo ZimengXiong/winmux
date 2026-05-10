@@ -67,7 +67,36 @@ final class WorkspaceNamingTest: XCTestCase {
         XCTAssertEqual(workspaceDisplayName(second.name), "Workspace 2")
     }
 
-    func testAutomaticNumericWorkspaceNamesCompactLiveWorkspaceSet() {
+    func testAutomaticWorkspaceDisplayNamesFollowProjectLaneOrderInsteadOfRawNameSort() {
+        let first = Workspace.get(byName: "10")
+        first.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 201, parent: first.rootTilingContainer)
+        let second = Workspace.get(byName: "2")
+        second.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 202, parent: second.rootTilingContainer)
+
+        XCTAssertEqual(
+            orderedUserFacingWorkspaces(in: first.scope, focusedWorkspace: focus.workspace)
+                .filter(\.usesAutomaticDisplayName)
+                .map(\.name),
+            ["10", "2"],
+        )
+        XCTAssertEqual(workspaceDisplayName(first.name), "Workspace 1")
+        XCTAssertEqual(workspaceDisplayName(second.name), "Workspace 2")
+    }
+
+    func testNextAutomaticWorkspaceRawNameReusesLowestNumericGap() {
+        let first = Workspace.get(byName: "1")
+        first.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 208, parent: first.rootTilingContainer)
+        let thirdRaw = Workspace.get(byName: "3")
+        thirdRaw.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 209, parent: thirdRaw.rootTilingContainer)
+
+        XCTAssertEqual(nextSidebarCreatedWorkspaceName(), "2")
+    }
+
+    func testAutomaticNumericWorkspaceDisplayNamesCompactWithoutRenamingWorkspaceIds() {
         let first = Workspace.get(byName: "1")
         first.markAsAutomaticallyNamed()
         _ = TestWindow.new(id: 6, parent: first.rootTilingContainer)
@@ -75,15 +104,57 @@ final class WorkspaceNamingTest: XCTestCase {
         second.markAsAutomaticallyNamed()
         _ = TestWindow.new(id: 7, parent: second.rootTilingContainer)
 
-        Workspace.garbageCollectUnusedWorkspaces()
+        Workspace.reconcileWorkspaceState()
 
         XCTAssertEqual(first.name, "1")
-        XCTAssertEqual(second.name, "2")
-        XCTAssertTrue(Workspace.existing(byName: "2") === second)
-        XCTAssertNil(Workspace.existing(byName: "3"))
+        XCTAssertEqual(second.name, "3")
+        XCTAssertEqual(workspaceDisplayName(first.name), "Workspace 1")
+        XCTAssertEqual(workspaceDisplayName(second.name), "Workspace 2")
+        XCTAssertTrue(Workspace.existing(byName: "3") === second)
     }
 
-    func testAutomaticWorkspaceNameCompactionPreservesFocus() {
+    func testDeletingMiddleAutomaticWorkspaceCompactsNamesWithoutReorderingSurvivors() throws {
+        let first = Workspace.get(byName: "10")
+        first.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 203, parent: first.rootTilingContainer)
+        let deleted = Workspace.get(byName: "2")
+        deleted.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 204, parent: deleted.rootTilingContainer)
+        let third = Workspace.get(byName: "7")
+        third.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 205, parent: third.rootTilingContainer)
+
+        try deleteWorkspaceForSidebar(workspaceName: deleted.name)
+
+        XCTAssertNil(Workspace.existing(byName: deleted.name))
+        XCTAssertEqual(
+            orderedUserFacingWorkspaces(in: first.scope, focusedWorkspace: focus.workspace)
+                .filter(\.usesAutomaticDisplayName)
+                .map(\.name),
+            ["10", "7"],
+        )
+        XCTAssertEqual(workspaceDisplayName(first.name), "Workspace 1")
+        XCTAssertEqual(workspaceDisplayName(third.name), "Workspace 2")
+    }
+
+    func testResettingCustomWorkspaceNameAfterCompactionUsesCurrentAutomaticName() throws {
+        let deleted = Workspace.get(byName: "10")
+        deleted.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 206, parent: deleted.rootTilingContainer)
+        let survivor = Workspace.get(byName: "2")
+        survivor.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 207, parent: survivor.rootTilingContainer)
+        try renameWorkspaceForSidebar(workspaceName: survivor.name, displayName: "Code")
+
+        try deleteWorkspaceForSidebar(workspaceName: deleted.name)
+        try resetWorkspaceSidebarName(workspaceName: survivor.name)
+
+        XCTAssertEqual(survivor.name, "2")
+        XCTAssertEqual(workspaceDisplayName(survivor.name), "Workspace 1")
+        XCTAssertNil(config.workspaceSidebar.workspaceLabels[survivor.name])
+    }
+
+    func testAutomaticWorkspaceDisplayNameCompactionPreservesFocus() {
         let first = Workspace.get(byName: "1")
         first.markAsAutomaticallyNamed()
         _ = TestWindow.new(id: 8, parent: first.rootTilingContainer)
@@ -92,9 +163,10 @@ final class WorkspaceNamingTest: XCTestCase {
         _ = TestWindow.new(id: 9, parent: focused.rootTilingContainer)
         _ = focused.focusWorkspace()
 
-        Workspace.garbageCollectUnusedWorkspaces()
+        Workspace.reconcileWorkspaceState()
 
-        XCTAssertEqual(focused.name, "2")
+        XCTAssertEqual(focused.name, "3")
+        XCTAssertEqual(workspaceDisplayName(focused.name), "Workspace 2")
         XCTAssertTrue(focus.workspace === focused)
     }
 
@@ -182,7 +254,20 @@ final class WorkspaceNamingTest: XCTestCase {
         XCTAssertEqual(config.workspaceSidebar.workspaceLabels[workspace.name], "Code")
     }
 
-    func testDeletingWorkspaceCompactsAutomaticWorkspaceNames() throws {
+    func testResettingWorkspaceNameFromSidebarUsesDefaultDisplayName() throws {
+        let workspace = Workspace.get(byName: "1")
+        workspace.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 114, parent: workspace.rootTilingContainer)
+        try renameWorkspaceForSidebar(workspaceName: workspace.name, displayName: "Code")
+
+        try resetWorkspaceSidebarName(workspaceName: workspace.name)
+
+        XCTAssertEqual(workspace.name, "1")
+        XCTAssertEqual(workspaceDisplayName(workspace.name), "Workspace 1")
+        XCTAssertNil(config.workspaceSidebar.workspaceLabels[workspace.name])
+    }
+
+    func testDeletingWorkspaceKeepsStableWorkspaceIdsAndCompactsDisplayNames() throws {
         let first = Workspace.get(byName: "1")
         first.markAsAutomaticallyNamed()
         let firstWindow = TestWindow.new(id: 15, parent: first.rootTilingContainer)
@@ -192,8 +277,8 @@ final class WorkspaceNamingTest: XCTestCase {
 
         try deleteWorkspaceForSidebar(workspaceName: first.name)
 
-        XCTAssertNil(Workspace.existing(byName: "2"))
-        XCTAssertTrue(Workspace.existing(byName: "1") === second)
+        XCTAssertNil(Workspace.existing(byName: "1"))
+        XCTAssertTrue(Workspace.existing(byName: "2") === second)
         XCTAssertTrue(firstWindow.nodeWorkspace === second)
         XCTAssertEqual(workspaceDisplayName(second.name), "Workspace 1")
     }
@@ -213,7 +298,7 @@ final class WorkspaceNamingTest: XCTestCase {
         try deleteWorkspaceForSidebar(workspaceName: deleted.name)
 
         XCTAssertTrue(focus.workspace === next)
-        XCTAssertTrue(Workspace.existing(byName: "2") === next)
+        XCTAssertTrue(Workspace.existing(byName: "3") === next)
     }
 
     func testDeletingLastFocusedWorkspaceFocusesPreviousClosestWorkspace() throws {
@@ -235,6 +320,8 @@ final class WorkspaceNamingTest: XCTestCase {
         let defaultWorkspace = Workspace.get(byName: "1")
         defaultWorkspace.markAsAutomaticallyNamed()
         _ = TestWindow.new(id: 17, parent: defaultWorkspace.rootTilingContainer)
+        _ = defaultWorkspace.focusWorkspace()
+        Workspace.reconcileWorkspaceState()
         let project = createWorkspaceProject()
         let projectWorkspace = Workspace.get(byName: "2")
         projectWorkspace.markAsAutomaticallyNamed()
@@ -254,14 +341,14 @@ final class WorkspaceNamingTest: XCTestCase {
     func testCreatedProjectPersistsNameAndDeleteRemovesPersistedName() throws {
         let project = createWorkspaceProject()
 
-        XCTAssertEqual(config.workspaceSidebar.projectLabels[project.id], "Project 1")
+        XCTAssertEqual(config.workspaceSidebar.projectLabels[project.id.rawValue], "Project 1")
         try renameWorkspaceProject(project.id, displayName: "Work")
-        XCTAssertEqual(config.workspaceSidebar.projectLabels[project.id], "Work")
-        config.workspaceSidebar.projectColors[project.id] = "#60A5FA"
+        XCTAssertEqual(config.workspaceSidebar.projectLabels[project.id.rawValue], "Work")
+        config.workspaceSidebar.projectColors[project.id.rawValue] = "#60A5FA"
         try deleteWorkspaceProject(project.id)
 
-        XCTAssertNil(config.workspaceSidebar.projectLabels[project.id])
-        XCTAssertNil(config.workspaceSidebar.projectColors[project.id])
+        XCTAssertNil(config.workspaceSidebar.projectLabels[project.id.rawValue])
+        XCTAssertNil(config.workspaceSidebar.projectColors[project.id.rawValue])
         XCTAssertFalse(workspaceProjects().contains { $0.id == project.id })
     }
 
@@ -400,19 +487,18 @@ final class WorkspaceNamingTest: XCTestCase {
         XCTAssertTrue(newMain.activeWorkspace === workspace)
     }
 
-    func testSystemStubDoesNotForgetActiveProject() throws {
+    func testLaneFallbackWorkspaceDoesNotForgetActiveProject() throws {
         let project = createWorkspaceProject()
         let projectWorkspace = try XCTUnwrap(switchWorkspaceProject(project.id, on: mainMonitor))
         XCTAssertTrue(projectWorkspace.isVisible)
 
-        let stub = replaceActiveWorkspaceWithSystemStubForTests(on: mainMonitor)
-        XCTAssertTrue(stub.isSystemStub)
+        let fallback = activateLaneFallbackWorkspaceForTests(on: mainMonitor)
+        XCTAssertEqual(fallback.projectId, project.id)
         XCTAssertEqual(activeWorkspaceProjectId(for: mainMonitor), project.id)
 
-        Workspace.garbageCollectUnusedWorkspaces()
+        Workspace.reconcileWorkspaceState()
 
         XCTAssertEqual(activeWorkspaceProjectId(for: mainMonitor), project.id)
-        XCTAssertFalse(mainMonitor.activeWorkspace.isSystemStub)
         XCTAssertEqual(mainMonitor.activeWorkspace.projectId, project.id)
         XCTAssertTrue(userFacingWorkspaces(Workspace.all, focusedWorkspace: focus.workspace).contains(mainMonitor.activeWorkspace))
     }
@@ -425,9 +511,9 @@ final class WorkspaceNamingTest: XCTestCase {
         let projectWorkspace = try XCTUnwrap(switchWorkspaceProject(project.id, on: mainMonitor))
         let projectWindow = TestWindow.new(id: 20, parent: projectWorkspace.rootTilingContainer)
 
-        Workspace.garbageCollectUnusedWorkspaces()
+        Workspace.reconcileWorkspaceState()
         projectWindow.unbindFromParent()
-        Workspace.garbageCollectUnusedWorkspaces()
+        Workspace.reconcileWorkspaceState()
 
         XCTAssertTrue(projectWorkspace.isVisible)
         XCTAssertEqual(activeWorkspaceProjectId(for: mainMonitor), project.id)

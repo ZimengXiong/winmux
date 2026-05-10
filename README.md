@@ -1,6 +1,6 @@
 # WinMux *Beta*
 
-WinMux is a intuitive, sidebar'ed WM for macOS built on Aerospace ([for now](#on-aerospace)). 
+WinMux is an intuitive, sidebar-first window manager for macOS. It began as an AeroSpace-derived codebase, but its runtime model is being reshaped around WinMux projects, workspaces, displays, tab groups, and sidebar workflows.
 
 
 
@@ -16,7 +16,7 @@ An agent mode is in the works, read about it [here](https://blog.zimengxiong.com
   <img src="sidebar.gif" width="800" alt="Sidebar demo">
 </a>
 
-The sidebar is a more interactively-performant and useful (though less customizable—WIP!) alternative to [Sketchybar](https://github.com/felixkratz/sketchybar) and Aerospace's built in menu bar dropdown for most everyday tasks. It provides better visibility into spaces and spatial awareness on the desktop.
+The sidebar is a more interactively-performant and useful (though less customizable—WIP!) alternative to [Sketchybar](https://github.com/felixkratz/sketchybar) and traditional workspace menu bar dropdowns for most everyday tasks. It provides better visibility into spaces and spatial awareness on the desktop.
 
 You can drag windows in and out of the sidebar from and to the current workspace. You can rearrange windows across all spaces using the sidebar, including tab groups.
 
@@ -31,9 +31,9 @@ The sidebar can be configured (as shown) to display the current date, time, batt
   <img src="tabgroups.gif" width="800" alt="Tab groups demo">
 </a>
 
-Tab groups allow you to have many windows occupy the same footprint, similar to Aerospace accordians or Yabai stacks. This is useful when you want to have multiple pieces of reference information next to an editor, multiple tabs in different browser profiles, or, when you simply want multiple fullscreen views without the additional friction and overhead of creating a new workspace.
+Tab groups allow you to have many windows occupy the same footprint, similar to Yabai stacks but with browser-like tab behavior. This is useful when you want to have multiple pieces of reference information next to an editor, multiple tabs in different browser profiles, or, when you simply want multiple fullscreen views without the additional friction and overhead of creating a new workspace.
 
-Unlike accordians or stacks, WinMux tab groups behave more intuitively like you would expect tabs to in browsers, and don't need a keyboard shortcut to activate. You can drag tabs from tab groups into another window's [intent zone](#managed-tiling-mode), or in between workspaces. You can also rearrange tab order within a tab group, and navigate through them with relative and absolute keybindings. 
+Unlike stack-only layouts, WinMux tab groups behave more intuitively like you would expect tabs to in browsers, and don't need a keyboard shortcut to activate. You can drag tabs from tab groups into another window's [intent zone](#managed-tiling-mode), or in between workspaces. You can also rearrange tab order within a tab group, and navigate through them with relative and absolute keybindings.
 
 
 ## Managed (Tiling) Mode
@@ -116,10 +116,10 @@ end tell
 
 ```
 
-#### On Aerospace
-Aerospace is not known exactly, to be performant under load. Since it is not a root level program like Yabai, and works with virtual workspaces, it bugs out often and is really slow to use *when* e.g. your memory is being filled up or your CPU is under load. Under normal circumstances it is not noticable, and should feel snappier than something like Yabai.
+#### Architecture Direction
+WinMux started from AeroSpace, but the goal is not to keep AeroSpace as the product model. Runtime behavior should be expressed in WinMux concepts: projects, workspaces, displays, monitors, tab groups, and sidebar state.
 
-This is especially noticable on lower-end devices (such as my MBA M2 with 16GB RAM). Virtual worksapces are also a pain to deal with. The eventual goal is to rebase WinMux on top of Yabai (and lose some of the features, but that's ok), or at least make it support a yabai "backend" (though a lot of the things we do require modifying the WM itself).
+The eventual goal is still to keep exploring lower-level backends such as Yabai where it makes sense, but WinMux should not depend on old AeroSpace names or compatibility fallbacks in normal operation.
 
 ## Installation
 Download the latest binary from releases and launch.
@@ -132,11 +132,18 @@ xattr -dr com.apple.quarantine /Applications/WinMux.app/
 
 ## Migrating
 ### From AeroSpace
-If `~/.config/winmux/winmux.toml` already exists, WinMux uses it as-is. It is a standard Aerospace config.
+If `~/.config/winmux/winmux.toml` already exists, WinMux uses it as-is.
 
-If it does not exist and an AeroSpace config exists, WinMux imports that config into `~/.config/winmux/winmux.toml` and uses it.
+If it does not exist and an AeroSpace config exists, WinMux imports that config once into `~/.config/winmux/winmux.toml`, translating known AeroSpace-era names into current WinMux syntax. After that, WinMux reads the generated WinMux config and does not keep syncing or falling back to the AeroSpace source file.
 
 If neither exists, WinMux creates a new WinMux config with the bundled defaults.
+
+The importer translates:
+
+- `accordion` layouts to `tab-group`
+- `h_accordion` / `v_accordion` layout commands to `h_tab_group` / `v_tab_group`
+- `accordion-padding` to `tab-group-padding`
+- `AEROSPACE_*` workspace/window environment variables to `WINMUX_*`
 
 After importing an AeroSpace config, add the WinMux-specific features you want with a block like this:
 
@@ -156,7 +163,7 @@ window-tabs.height = 36
     show-date = true
 ```
 
-New WinMux bootstrap configs include `menu-bar-reserve-height = 28` by default. Imported AeroSpace configs are copied as-is, so add this key manually or set it from Settings if your sidebar starts underneath the macOS menu bar.
+New WinMux bootstrap configs include `menu-bar-reserve-height = 28` by default. Imported AeroSpace configs are migrated, but the importer only translates known compatibility names; add this key manually or set it from Settings if your sidebar starts underneath the macOS menu bar.
 ## Release Build
 Release builds use XcodeGen/Xcode
 

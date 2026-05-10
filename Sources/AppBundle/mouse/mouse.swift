@@ -173,7 +173,7 @@ func shouldAllowSameWorkspaceWindowSurfaceIntent(
 @MainActor
 func isWindowInDraggableTabGroup(_ window: Window) -> Bool {
     guard let parent = window.parent as? TilingContainer else { return false }
-    return parent.layout == .accordion && parent.children.count > 1
+    return parent.layout == .tabGroup && parent.children.count > 1
 }
 
 @MainActor

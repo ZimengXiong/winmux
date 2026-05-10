@@ -57,17 +57,11 @@ extension TilingContainer {
 
 enum Layout: String, Codable {
     case tiles
-    case accordion
+    case tabGroup = "tab-group"
 }
 
 extension String {
     func parseLayout() -> Layout? {
-        if let parsed = Layout(rawValue: self) {
-            return parsed
-        } else if self == "list" {
-            return .tiles
-        } else {
-            return nil
-        }
+        Layout(rawValue: self)
     }
 }

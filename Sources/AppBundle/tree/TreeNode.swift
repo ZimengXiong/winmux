@@ -1,7 +1,7 @@
 import AppKit
 import Common
 
-open class TreeNode: Equatable, AeroAny {
+open class TreeNode: Equatable, WinMuxAny {
     private var _children: [TreeNode] = []
     var children: [TreeNode] { _children }
     fileprivate final weak var _parent: NonLeafTreeNodeObject? = nil

@@ -46,7 +46,7 @@ struct Config: ConvenienceCopyable {
     var automaticallyUnhideMacosHiddenApps: Bool = false
     var enableWindowManagement: Bool = true
     var shortcutsPreset: ShortcutsPreset = .none
-    var accordionPadding: Int = 30
+    var tabGroupPadding: Int = 30
     var enableNormalizationOppositeOrientationForNestedContainers: Bool = true
     var persistentWorkspaces: OrderedSet<String> = []
     var execOnWorkspaceChange: [String] = [] // todo deprecate

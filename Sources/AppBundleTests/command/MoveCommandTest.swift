@@ -16,9 +16,9 @@ final class MoveCommandTest: XCTestCase {
         assertEquals(root.layoutDescription, .h_tiles([.window(2), .window(1)]))
     }
 
-    func testMove_swapWithAccordionTreatsAccordionAsSingleNode() async throws {
+    func testMove_swapWithTabGroupTreatsTabGroupAsSingleNode() async throws {
         let root = Workspace.get(byName: name).rootTilingContainer.apply {
-            TilingContainer(parent: $0, adaptiveWeight: 1, .v, .accordion, index: INDEX_BIND_LAST).apply {
+            TilingContainer(parent: $0, adaptiveWeight: 1, .v, .tabGroup, index: INDEX_BIND_LAST).apply {
                 TestWindow.new(id: 1, parent: $0)
                 TestWindow.new(id: 2, parent: $0)
             }
@@ -28,18 +28,18 @@ final class MoveCommandTest: XCTestCase {
         try await MoveCommand(args: MoveCmdArgs(rawArgs: [], .left)).run(.defaultEnv, .emptyStdin)
         assertEquals(root.layoutDescription, .h_tiles([
             .window(3),
-            .v_accordion([
+            .v_tab_group([
                 .window(1),
                 .window(2),
             ]),
         ]))
     }
 
-    func testMoveOut_accordionTreatsAccordionAsSingleNode() async throws {
+    func testMoveOut_tabGroupTreatsTabGroupAsSingleNode() async throws {
         let workspace = Workspace.get(byName: name)
         workspace.rootTilingContainer.apply {
             TestWindow.new(id: 0, parent: $0)
-            TilingContainer(parent: $0, adaptiveWeight: 1, .v, .accordion, index: INDEX_BIND_LAST).apply {
+            TilingContainer(parent: $0, adaptiveWeight: 1, .v, .tabGroup, index: INDEX_BIND_LAST).apply {
                 assertEquals(TestWindow.new(id: 1, parent: $0).focusWindow(), true)
                 TestWindow.new(id: 2, parent: $0)
             }
@@ -51,7 +51,7 @@ final class MoveCommandTest: XCTestCase {
             .workspace([
                 .h_tiles([
                     .window(0),
-                    .v_accordion([
+                    .v_tab_group([
                         .window(1),
                         .window(2),
                     ]),
@@ -340,10 +340,10 @@ extension TreeNode {
                         container.orientation == .h
                             ? .h_tiles(container.children.map(\.layoutDescription))
                             : .v_tiles(container.children.map(\.layoutDescription))
-                    case .accordion:
+                    case .tabGroup:
                         container.orientation == .h
-                            ? .h_accordion(container.children.map(\.layoutDescription))
-                            : .v_accordion(container.children.map(\.layoutDescription))
+                            ? .h_tab_group(container.children.map(\.layoutDescription))
+                            : .v_tab_group(container.children.map(\.layoutDescription))
                 }
         }
     }
@@ -353,8 +353,8 @@ enum LayoutDescription: Equatable {
     case workspace([LayoutDescription])
     case h_tiles([LayoutDescription])
     case v_tiles([LayoutDescription])
-    case h_accordion([LayoutDescription])
-    case v_accordion([LayoutDescription])
+    case h_tab_group([LayoutDescription])
+    case v_tab_group([LayoutDescription])
     case window(UInt32)
     case macosPopupWindowsContainer
     case macosMinimized

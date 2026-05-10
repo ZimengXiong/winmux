@@ -331,9 +331,9 @@ final class ConfigTest: XCTestCase {
     }
 
     func testParseTiles() {
-        let command = parseCommand("layout tiles h_tiles v_tiles list h_list v_list").cmdOrNil
+        let command = parseCommand("layout tiles h_tiles v_tiles tab-group h_tab_group v_tab_group").cmdOrNil
         XCTAssertTrue(command is LayoutCommand)
-        assertEquals((command as! LayoutCommand).args.toggleBetween.val, [.tiles, .h_tiles, .v_tiles, .tiles, .h_tiles, .v_tiles])
+        assertEquals((command as! LayoutCommand).args.toggleBetween.val, [.tiles, .h_tiles, .v_tiles, .tabGroup, .hTabGroup, .vTabGroup])
 
         guard case .help = parseCommand("layout tiles -h") else {
             XCTFail()

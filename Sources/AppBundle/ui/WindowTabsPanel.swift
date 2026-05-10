@@ -1184,13 +1184,14 @@ enum WindowIntentPreviewPalette {
     static let fillColor = mattePanelNSColor
     static let fill = fillColor.cgColor
     static let innerStroke = NSColor.white.withAlphaComponent(0.025).cgColor
+    static let accentColor = fillColor
 
     static func highlight(alpha: CGFloat) -> CGColor {
         NSColor.white.withAlphaComponent(min(max(alpha * 0.24, 0), 0.035)).cgColor
     }
 
     static func accent(alpha: CGFloat) -> CGColor {
-        NSColor.white.withAlphaComponent(min(max(alpha * 0.20, 0), 0.075)).cgColor
+        accentColor.cgColor
     }
 }
 
@@ -1263,7 +1264,7 @@ private func reorderTabInStrip(_ windowId: UInt32, toIndex targetIndex: Int) {
         try await runLightSession(.menuBarButton, token) {
             guard let window = Window.get(byId: windowId),
                   let parent = window.parent as? TilingContainer,
-                  parent.layout == .accordion,
+                  parent.layout == .tabGroup,
                   let currentIndex = window.ownIndex
             else { return }
             let clampedTarget = max(0, min(targetIndex, parent.children.count - 1))

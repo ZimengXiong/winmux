@@ -34,7 +34,7 @@ final class ListWindowsTest: XCTestCase {
     }
 
     func testInterpolationVariablesConsistency() {
-        for kind in AeroObjKind.allCases {
+        for kind in FormatObjectKind.allCases {
             switch kind {
                 case .window:
                     assertTrue(FormatVar.WindowFormatVar.allCases.allSatisfy { $0.rawValue.starts(with: "window-") })
@@ -51,24 +51,24 @@ final class ListWindowsTest: XCTestCase {
     func testFormat() {
         Workspace.get(byName: name).rootTilingContainer.apply {
             let windows = [
-                AeroObj.window(window: TestWindow.new(id: 2, parent: $0), title: "non-empty"),
-                AeroObj.window(window: TestWindow.new(id: 1, parent: $0), title: ""),
+                FormatObject.window(window: TestWindow.new(id: 2, parent: $0), title: "non-empty"),
+                FormatObject.window(window: TestWindow.new(id: 1, parent: $0), title: ""),
             ]
             assertEquals(windows.format([.interVar("window-title")]), .success(["non-empty", ""]))
         }
 
         Workspace.get(byName: name).rootTilingContainer.apply {
             let windows = [
-                AeroObj.window(window: TestWindow.new(id: 2, parent: $0), title: "non-empty"),
-                AeroObj.window(window: TestWindow.new(id: 10, parent: $0), title: ""),
+                FormatObject.window(window: TestWindow.new(id: 2, parent: $0), title: "non-empty"),
+                FormatObject.window(window: TestWindow.new(id: 10, parent: $0), title: ""),
             ]
             assertEquals(windows.format([.interVar("window-id"), .interVar("right-padding"), .interVar("window-title")]), .success(["2 non-empty", "10"]))
         }
 
         Workspace.get(byName: name).rootTilingContainer.apply {
             let windows = [
-                AeroObj.window(window: TestWindow.new(id: 2, parent: $0), title: "title1"),
-                AeroObj.window(window: TestWindow.new(id: 10, parent: $0), title: "title2"),
+                FormatObject.window(window: TestWindow.new(id: 2, parent: $0), title: "title1"),
+                FormatObject.window(window: TestWindow.new(id: 10, parent: $0), title: "title2"),
             ]
             assertEquals(windows.format([.interVar("window-id"), .interVar("right-padding"), .literal(" | "), .interVar("window-title")]), .success(["2  | title1", "10 | title2"]))
         }
@@ -77,7 +77,7 @@ final class ListWindowsTest: XCTestCase {
             let window = TestWindow.new(id: 42, parent: $0)
             window.unbindFromParent()
 
-            let windows = [AeroObj.window(window: window, title: "detached")]
+            let windows = [FormatObject.window(window: window, title: "detached")]
 
             assertEquals(windows.format([.interVar("workspace")]), .success(["NULL-WORKSPACE"]))
         }

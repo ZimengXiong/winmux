@@ -5,7 +5,7 @@ func dumpAxRecursive(_ ax: AXUIElement, _ kind: AxKind, recursionDepth: Int = 0)
     if recursionDepth > 5 {
         return [
             "dumpAxRecursive infinite recursion": .bool(true),
-            kAXAeroSynthetic: .bool(true),
+            kAXWinMuxSynthetic: .bool(true),
         ]
     }
     let recursionDepth = recursionDepth + 1
@@ -30,9 +30,9 @@ func dumpAxRecursive(_ ax: AXUIElement, _ kind: AxKind, recursionDepth: Int = 0)
             if isWritable.boolValue { writable.append(key) }
         }
     }
-    if !writable.isEmpty { result["Aero.AxWritable"] = .string(writable.joined(separator: ", ")) }
-    if !failedAxRequest.isEmpty { result["Aero.AxFailed"] = .string(failedAxRequest.joined(separator: ", ")) }
-    if !ignored.isEmpty { result["Aero.AxIgnored"] = .string(ignored.joined(separator: ", ")) }
+    if !writable.isEmpty { result["WinMux.AxWritable"] = .string(writable.joined(separator: ", ")) }
+    if !failedAxRequest.isEmpty { result["WinMux.AxFailed"] = .string(failedAxRequest.joined(separator: ", ")) }
+    if !ignored.isEmpty { result["WinMux.AxIgnored"] = .string(ignored.joined(separator: ", ")) }
     return result
 }
 

@@ -4,7 +4,7 @@ start-at-login = false
 auto-reload-config = true
 enable-normalization-flatten-containers = true
 enable-normalization-opposite-orientation-for-nested-containers = true
-accordion-padding = 30
+tab-group-padding = 30
 
 window-tabs.enabled = true
 window-tabs.height = 36

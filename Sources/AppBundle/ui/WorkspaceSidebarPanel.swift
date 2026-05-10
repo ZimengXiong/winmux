@@ -98,8 +98,8 @@ func workspaceSidebarVisibleWorkspacesByProject(
     workspaces: [WorkspaceSidebarWorkspaceViewModel],
     selectedScopeId: String,
     focusedMonitorScopeId: String,
-) -> [String: [WorkspaceSidebarWorkspaceViewModel]] {
-    var result: [String: [WorkspaceSidebarWorkspaceViewModel]] = [:]
+) -> [WorkspaceProjectId: [WorkspaceSidebarWorkspaceViewModel]] {
+    var result: [WorkspaceProjectId: [WorkspaceSidebarWorkspaceViewModel]] = [:]
     for workspace in workspaces where workspaceSidebarWorkspaceMatchesScope(
         workspaceMonitorScopeId: workspace.monitorScopeId,
         selectedScopeId: selectedScopeId,
@@ -313,20 +313,20 @@ func workspaceSidebarProjectSwipeTranslationAfterScroll(
     currentTranslation - scrollingDeltaX
 }
 
-func workspaceSidebarProjectHue(projectId: String) -> Double {
+func workspaceSidebarProjectHue(projectId: WorkspaceProjectId) -> Double {
     var hash: UInt64 = 14_695_981_039_346_656_037
-    for byte in projectId.utf8 {
+    for byte in projectId.rawValue.utf8 {
         hash ^= UInt64(byte)
         hash &*= 1_099_511_628_211
     }
     return Double(hash % 360) / 360.0
 }
 
-func workspaceSidebarProjectColor(projectId: String) -> Color {
+func workspaceSidebarProjectColor(projectId: WorkspaceProjectId) -> Color {
     workspaceSidebarProjectColor(projectId: projectId, configuredHex: nil)
 }
 
-func workspaceSidebarProjectColor(projectId: String, configuredHex: String?) -> Color {
+func workspaceSidebarProjectColor(projectId: WorkspaceProjectId, configuredHex: String?) -> Color {
     if let configuredHex,
        let color = workspaceSidebarColor(hex: configuredHex) {
         return color
@@ -1001,11 +1001,7 @@ private func createWorkspaceFromSidebarButton() {
     runWorkspaceSidebarSession {
         let targetMonitor = sidebarWorkspaceTargetMonitor()
         let projectId = sidebarWorkspaceTargetProjectId(targetMonitor: targetMonitor)
-        let workspaceName = nextSidebarCreatedWorkspaceName(projectId: projectId, monitor: targetMonitor)
-        let workspace = Workspace.get(byName: workspaceName)
-        workspace.markAsSidebarManaged()
-        workspace.assignProject(projectId)
-        workspace.seedMonitorIfNeeded(targetMonitor)
+        let workspace = getOrCreateAdjacentBlankWorkspace(projectId: projectId, monitor: targetMonitor)
         _ = workspace.focusWorkspace()
     }
 }
@@ -1014,11 +1010,7 @@ private func createWorkspaceFromSidebarButton() {
 func createWorkspaceFromSidebarDrag(sourceNode: TreeNode, sourceWindow: Window) -> Bool {
     let targetMonitor = sidebarWorkspaceTargetMonitor(fallbackWindow: sourceWindow, fallbackPoint: mouseLocation)
     let projectId = sidebarWorkspaceTargetProjectId(targetMonitor: targetMonitor)
-    let workspaceName = nextSidebarCreatedWorkspaceName(projectId: projectId, monitor: targetMonitor)
-    let workspace = Workspace.get(byName: workspaceName)
-    workspace.markAsSidebarManaged()
-    workspace.assignProject(projectId)
-    workspace.seedMonitorIfNeeded(targetMonitor)
+    let workspace = getOrCreateAdjacentBlankWorkspace(projectId: projectId, monitor: targetMonitor)
     let targetContainer: NonLeafTreeNodeObject
     if sourceNode is Window, sourceWindow.isFloating {
         targetContainer = workspace
@@ -1030,7 +1022,7 @@ func createWorkspaceFromSidebarDrag(sourceNode: TreeNode, sourceWindow: Window) 
 }
 
 @MainActor
-private func sidebarWorkspaceTargetProjectId(targetMonitor: Monitor) -> String {
+private func sidebarWorkspaceTargetProjectId(targetMonitor: Monitor) -> WorkspaceProjectId {
     let selectedProjectId = TrayMenuModel.shared.workspaceSidebarSelectedProjectId
     guard workspaceProjects().contains(where: { $0.id == selectedProjectId }) else {
         return activeWorkspaceProjectId(for: targetMonitor)
@@ -1039,7 +1031,7 @@ private func sidebarWorkspaceTargetProjectId(targetMonitor: Monitor) -> String {
 }
 
 @MainActor
-private func selectWorkspaceSidebarProject(_ projectId: String) {
+private func selectWorkspaceSidebarProject(_ projectId: WorkspaceProjectId) {
     guard workspaceProjects().contains(where: { $0.id == projectId }) else { return }
     TrayMenuModel.shared.workspaceSidebarSelectedProjectId = projectId
     runWorkspaceSidebarSession {
@@ -1074,12 +1066,12 @@ private func setWorkspaceSidebarProjectColor(_ project: WorkspaceSidebarProjectV
     runWorkspaceSidebarSession {
         let normalizedColorHex = colorHex.flatMap(normalizedWorkspaceSidebarColorHex)
         if let normalizedColorHex {
-            config.workspaceSidebar.projectColors[project.id] = normalizedColorHex
+            config.workspaceSidebar.projectColors[project.id.rawValue] = normalizedColorHex
         } else {
-            config.workspaceSidebar.projectColors.removeValue(forKey: project.id)
+            config.workspaceSidebar.projectColors.removeValue(forKey: project.id.rawValue)
         }
         if !isUnitTest {
-            try persistWorkspaceSidebarProjectColor(projectId: project.id, colorHex: normalizedColorHex)
+            try persistWorkspaceSidebarProjectColor(projectId: project.id.rawValue, colorHex: normalizedColorHex)
         }
         await updateWorkspaceSidebarModel()
     }
@@ -1106,6 +1098,14 @@ private func renameWorkspaceFromSidebar(_ workspace: WorkspaceSidebarWorkspaceVi
 private func renameWorkspaceFromSidebar(_ workspace: WorkspaceSidebarWorkspaceViewModel, displayName: String) {
     runWorkspaceSidebarSession {
         try renameWorkspaceForSidebar(workspaceName: workspace.name, displayName: displayName)
+        await updateWorkspaceSidebarModel()
+    }
+}
+
+@MainActor
+private func resetWorkspaceNameFromSidebar(_ workspace: WorkspaceSidebarWorkspaceViewModel) {
+    runWorkspaceSidebarSession {
+        try resetWorkspaceSidebarName(workspaceName: workspace.name)
         await updateWorkspaceSidebarModel()
     }
 }
@@ -1165,7 +1165,7 @@ private func finishSidebarWindowDrag() {
 struct WorkspaceSidebarView: View {
     @ObservedObject var viewModel: TrayMenuModel
     @State private var projectSwipeTranslation: CGFloat = 0
-    @State private var projectSwipeStartProjectId: String? = nil
+    @State private var projectSwipeStartProjectId: WorkspaceProjectId? = nil
     @State private var projectSwipeDidCrossBreakPoint = false
     @State private var projectPagerWidth: CGFloat = 0
 
@@ -1337,7 +1337,7 @@ struct WorkspaceSidebarView: View {
         leadingInset: CGFloat,
         trailingInset: CGFloat,
         topPadding: CGFloat,
-        visibleWorkspacesByProject: [String: [WorkspaceSidebarWorkspaceViewModel]],
+        visibleWorkspacesByProject: [WorkspaceProjectId: [WorkspaceSidebarWorkspaceViewModel]],
         swipeDirection: Int?,
     ) -> some View {
         if viewModel.workspaceSidebarProjects.isEmpty {
@@ -1592,7 +1592,7 @@ struct WorkspaceSidebarView: View {
         }
     }
 
-    private func finishProjectSwipeNavigation(to projectId: String, direction: Int) {
+    private func finishProjectSwipeNavigation(to projectId: WorkspaceProjectId, direction: Int) {
         let startProjectId = projectSwipeStartProjectId
         let fullPageOffset = -CGFloat(direction) * max(projectPagerWidth, CGFloat(config.workspaceSidebar.width), 1)
         withAnimation(.easeOut(duration: 0.12)) {
@@ -1870,15 +1870,15 @@ struct WorkspaceSidebarMonitorSelector: View {
 
 struct WorkspaceSidebarProjectPager: View {
     let projects: [WorkspaceSidebarProjectViewModel]
-    let selectedProjectId: String
+    let selectedProjectId: WorkspaceProjectId
     let expansionProgress: CGFloat
     let swipeDirection: Int?
     let switchProgress: CGFloat
     let edgeProgress: CGFloat
 
     @State private var isHovered = false
-    @State private var pressedProjectId: String? = nil
-    @State private var editingProjectId: String? = nil
+    @State private var pressedProjectId: WorkspaceProjectId? = nil
+    @State private var editingProjectId: WorkspaceProjectId? = nil
     @State private var editingProjectDraft = ""
 
     private var sectionWidth: CGFloat { workspaceSidebarSectionWidth(expansionProgress) }
@@ -2092,7 +2092,7 @@ struct WorkspaceSidebarProjectPager: View {
     private func projectMenuInlineEditor(_ project: WorkspaceSidebarProjectViewModel) -> some View {
         WorkspaceSidebarProjectRenameField(
             text: $editingProjectDraft,
-            focusId: project.id,
+            focusId: project.id.rawValue,
             alignment: .left,
             fontSize: 11.5,
             fontWeight: .semibold,
@@ -2127,7 +2127,7 @@ struct WorkspaceSidebarProjectPager: View {
         if editingProjectId == project.id && isCompact {
             WorkspaceSidebarProjectRenameField(
                 text: $editingProjectDraft,
-                focusId: project.id,
+                focusId: project.id.rawValue,
                 alignment: .center,
                 fontSize: 11,
                 fontWeight: .semibold,
@@ -2464,12 +2464,12 @@ private final class WorkspaceSidebarProjectMenuControl: NSControl {
 
 private struct WorkspaceSidebarProjectMenuButton: NSViewRepresentable {
     let projects: [WorkspaceSidebarProjectViewModel]
-    let selectedProjectId: String
+    let selectedProjectId: WorkspaceProjectId
     let selectedProjectName: String
     let width: CGFloat
     let isHovered: Bool
     let canDeleteSelectedProject: Bool
-    let onSelectProject: (String) -> Void
+    let onSelectProject: (WorkspaceProjectId) -> Void
     let onCreateProject: () -> Void
     let onRenameSelectedProject: () -> Void
     let onSetSelectedProjectColor: (String?) -> Void
@@ -2544,7 +2544,7 @@ private struct WorkspaceSidebarProjectMenuButton: NSViewRepresentable {
         }
 
         @objc private func selectProject(_ item: NSMenuItem) {
-            guard let projectId = item.representedObject as? String else { return }
+            guard let projectId = item.representedObject as? WorkspaceProjectId else { return }
             parent.onSelectProject(projectId)
         }
 
@@ -2800,6 +2800,9 @@ struct WorkspaceSidebarWorkspaceSection: View {
             .contextMenu {
                 Button("Rename Workspace") {
                     beginInlineRename()
+                }
+                Button("Reset Workspace Name") {
+                    resetWorkspaceNameFromSidebar(workspace)
                 }
                 Button(role: .destructive) {
                     deleteWorkspaceFromSidebar(workspace)

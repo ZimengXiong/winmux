@@ -13,9 +13,9 @@ func sanitizedWorkspaceSidebarHoveredWorkspaceName(
 }
 
 func resolvedWorkspaceSidebarSelectedProjectId(
-    validProjectIds: Set<String>,
-    activeProjectId: String,
-) -> String {
+    validProjectIds: Set<WorkspaceProjectId>,
+    activeProjectId: WorkspaceProjectId,
+) -> WorkspaceProjectId {
     if validProjectIds.contains(activeProjectId) {
         return activeProjectId
     }
@@ -77,7 +77,7 @@ func updateWorkspaceSidebarModel() async {
     let didTopPaddingChange = TrayMenuModel.shared.workspaceSidebarTopPadding != previousTopPadding
 
     var sidebarWorkspaces: [WorkspaceSidebarWorkspaceViewModel] = []
-    for workspace in Workspace.all {
+    for workspace in orderedWorkspacesForPresentation() {
         if !shouldShowWorkspaceInSidebar(workspace, currentFocus: currentFocus, isEditingWorkspace: false) {
             continue
         }
@@ -222,7 +222,7 @@ private func buildWorkspaceSidebarProjectViewModels() -> [WorkspaceSidebarProjec
         WorkspaceSidebarProjectViewModel(
             id: $0.id,
             displayName: $0.name,
-            colorHex: config.workspaceSidebar.projectColors[$0.id].flatMap(normalizedWorkspaceSidebarColorHex),
+            colorHex: config.workspaceSidebar.projectColors[$0.id.rawValue].flatMap(normalizedWorkspaceSidebarColorHex),
         )
     }
 }
@@ -273,7 +273,7 @@ private func buildWorkspaceSidebarItems(
                 currentFocus: currentFocus,
             )))]
         case .tilingContainer(let container):
-            if container.layout == .accordion, container.children.count > 1 {
+            if container.layout == .tabGroup, container.children.count > 1 {
                 let group = await makeWorkspaceSidebarTabGroupViewModel(
                     for: container,
                     workspaceName: workspaceName,

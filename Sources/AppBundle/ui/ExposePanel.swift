@@ -251,7 +251,7 @@ private func buildEntries(from node: TreeNode, focusedWindowId: UInt32?, screenW
             guard w.isBound else { return [] }
             return [.window(makeItem(for: w, focusedWindowId: focusedWindowId, screenWidth: screenWidth))]
         case .tilingContainer(let c):
-            if c.layout == .accordion, c.children.count > 1 {
+            if c.layout == .tabGroup, c.children.count > 1 {
                 let ws = c.allLeafWindowsRecursive.filter(\.isBound)
                 guard !ws.isEmpty else { return [] }
                 let items = ws.map { makeItem(for: $0, focusedWindowId: focusedWindowId, screenWidth: screenWidth) }

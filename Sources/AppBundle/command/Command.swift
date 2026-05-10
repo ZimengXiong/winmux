@@ -1,7 +1,7 @@
 import AppKit
 import Common
 
-protocol Command: AeroAny, Equatable, Sendable {
+protocol Command: WinMuxAny, Equatable, Sendable {
     associatedtype T where T: CmdArgs
     var args: T { get }
     @MainActor

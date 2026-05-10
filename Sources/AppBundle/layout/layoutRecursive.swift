@@ -65,8 +65,8 @@ extension TreeNode {
                 switch container.layout {
                     case .tiles:
                         try await container.layoutTiles(point, width: width, height: height, virtual: virtual, context)
-                    case .accordion:
-                        try await container.layoutAccordion(point, width: width, height: height, virtual: virtual, context)
+                    case .tabGroup:
+                        try await container.layoutTabGroup(point, width: width, height: height, virtual: virtual, context)
                 }
             case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer,
                  .macosPopupWindowsContainer, .macosHiddenAppsWindowsContainer:
@@ -176,7 +176,7 @@ extension TilingContainer {
     }
 
     @MainActor
-    fileprivate func layoutAccordion(_ point: CGPoint, width: CGFloat, height: CGFloat, virtual: Rect, _ context: LayoutContext) async throws {
+    fileprivate func layoutTabGroup(_ point: CGPoint, width: CGFloat, height: CGFloat, virtual: Rect, _ context: LayoutContext) async throws {
         if usesWindowTabBehavior {
             let tabBarHeight = showsWindowTabs ? windowTabBarHeight : 0
             let shellHorizontalInset = showsWindowTabs ? windowTabGroupShellHorizontalInset() : 0
@@ -209,7 +209,7 @@ extension TilingContainer {
 
         guard let mruIndex: Int = mostRecentChild?.ownIndex else { return }
         for (index, child) in children.enumerated() {
-            let padding = CGFloat(config.accordionPadding)
+            let padding = CGFloat(config.tabGroupPadding)
             let (lPadding, rPadding): (CGFloat, CGFloat) = switch index {
                 case 0 where children.count == 1: (0, 0)
                 case 0:                           (0, padding)

@@ -6,7 +6,7 @@ struct ListWorkspacesCommand: Command {
     /*conforms*/ let shouldResetClosedWindowsCache = false
 
     func run(_ env: CmdEnv, _ io: CmdIo) -> Bool {
-        var result: [Workspace] = userFacingWorkspaces(Workspace.all, focusedWorkspace: focus.workspace)
+        var result: [Workspace] = userFacingWorkspaces(orderedWorkspacesForPresentation(), focusedWorkspace: focus.workspace)
         if let visible = args.filteringOptions.visible {
             result = result.filter { $0.isVisible == visible }
         }
@@ -22,7 +22,7 @@ struct ListWorkspacesCommand: Command {
         if args.outputOnlyCount {
             return io.out("\(result.count)")
         } else {
-            let list = result.map { AeroObj.workspace($0) }
+            let list = result.map { FormatObject.workspace($0) }
             if args.json {
                 return switch list.formatToJson(args.format, ignoreRightPaddingVar: args._format.isEmpty) {
                     case .success(let json): io.out(json)

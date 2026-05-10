@@ -261,16 +261,16 @@ func focusAfterWindowClosure(
             candidate?.windowOrNil?.participatesInWorkspaceFocus != false
     }
 
-    func nearestAccordionTabContainer(_ candidate: LiveFocus?) -> TilingContainer? {
+    func nearestTabGroupTabContainer(_ candidate: LiveFocus?) -> TilingContainer? {
         candidate?.windowOrNil?.parentsWithSelf
             .lazy
             .compactMap { $0 as? TilingContainer }
-            .first(where: { $0.layout == .accordion && $0.children.count > 1 })
+            .first(where: { $0.layout == .tabGroup && $0.children.count > 1 })
     }
 
-    let snapshotCloseFallbackTabGroup = nearestAccordionTabContainer(refreshSnapshotCloseFallback)
-    let snapshotPreviousFocusTabGroup = nearestAccordionTabContainer(refreshSnapshotPreviousFocus)
-    let snapshotPreviousPreviousFocusTabGroup = nearestAccordionTabContainer(refreshSnapshotPreviousPreviousFocus)
+    let snapshotCloseFallbackTabGroup = nearestTabGroupTabContainer(refreshSnapshotCloseFallback)
+    let snapshotPreviousFocusTabGroup = nearestTabGroupTabContainer(refreshSnapshotPreviousFocus)
+    let snapshotPreviousPreviousFocusTabGroup = nearestTabGroupTabContainer(refreshSnapshotPreviousPreviousFocus)
 
     let shouldPreferSnapshotPreviousFocusWithinSameTabGroup =
         isValidReplacement(refreshSnapshotCloseFallback) &&
@@ -346,7 +346,6 @@ extension Window {
 // The function is private because it's unsafe. It leaves the window in unbound state
 @MainActor
 private func unbindAndGetBindingDataForNewWindow(_ windowId: UInt32, _ macApp: MacApp, _ workspace: Workspace, window: Window?) async throws -> BindingData {
-    let workspace = materializeWorkspaceForUserWindowIfNeeded(workspace)
     let windowLevel = getWindowLevel(for: windowId)
     return switch try await macApp.getAxUiElementWindowType(windowId, windowLevel) {
         case .popup: BindingData(parent: macosPopupWindowsContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
@@ -359,16 +358,15 @@ private func unbindAndGetBindingDataForNewWindow(_ windowId: UInt32, _ macApp: M
 // It is unsafe because it may leave `window` in unbound state.
 @MainActor
 func bindingDataForNewTilingWindow(_ workspace: Workspace, window: Window?) -> BindingData {
-    let workspace = materializeWorkspaceForUserWindowIfNeeded(workspace)
     window?.unbindFromParent() // It's important to unbind to get correct data from below
     let mruWindow = workspace.mostRecentWindowRecursive
     if let mruWindow, let tilingParent = mruWindow.parent as? TilingContainer {
-        if tilingParent.layout == .accordion {
+        if tilingParent.layout == .tabGroup {
             var insertionAnchor: TreeNode = tilingParent
             var insertionParent: NonLeafTreeNodeObject = tilingParent.parent.orDie()
-            while let accordionParent = insertionParent as? TilingContainer, accordionParent.layout == .accordion {
-                insertionAnchor = accordionParent
-                insertionParent = accordionParent.parent.orDie()
+            while let tabGroupParent = insertionParent as? TilingContainer, tabGroupParent.layout == .tabGroup {
+                insertionAnchor = tabGroupParent
+                insertionParent = tabGroupParent.parent.orDie()
             }
             switch insertionParent.cases {
                 case .tilingContainer(let parent):

@@ -16,7 +16,7 @@ extension MonitorImpl: Monitor {
 }
 
 /// Use it instead of NSScreen because it can be mocked in tests
-protocol Monitor: AeroAny {
+protocol Monitor: WinMuxAny {
     /// The index in NSScreen.screens array. 1-based index
     var monitorAppKitNsScreenScreensId: Int { get }
     var name: String { get }

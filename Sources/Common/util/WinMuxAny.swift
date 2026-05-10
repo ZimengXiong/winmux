@@ -1,9 +1,9 @@
 import Foundation
 import AppKit
 
-public protocol AeroAny {}
+public protocol WinMuxAny {}
 
-extension AeroAny {
+extension WinMuxAny {
     @discardableResult
     @inlinable
     public func apply(_ block: (Self) -> Void) -> Self {
@@ -22,12 +22,12 @@ extension AeroAny {
     @inlinable public func then<R>(_ body: (Self) -> R) -> R { body(self) }
 }
 
-extension Int: AeroAny {}
-extension String: AeroAny {}
-extension Character: AeroAny {}
-extension Regex: AeroAny {}
-extension Array: AeroAny {}
-extension URL: AeroAny {}
-extension CGFloat: AeroAny {}
-extension AXUIElement: AeroAny {}
-extension CGPoint: AeroAny {}
+extension Int: WinMuxAny {}
+extension String: WinMuxAny {}
+extension Character: WinMuxAny {}
+extension Regex: WinMuxAny {}
+extension Array: WinMuxAny {}
+extension URL: WinMuxAny {}
+extension CGFloat: WinMuxAny {}
+extension AXUIElement: WinMuxAny {}
+extension CGPoint: WinMuxAny {}

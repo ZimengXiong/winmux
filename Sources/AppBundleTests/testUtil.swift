@@ -33,9 +33,9 @@ func setUpWorkspacesForTests() {
             child.unbindFromParent()
         }
     }
-    resetWorkspaceTopologyForTests()
+    resetWinMuxWorkspaceStateForTests()
     check(Workspace.get(byName: "setUpWorkspacesForTests").focusWorkspace())
-    Workspace.garbageCollectUnusedWorkspaces()
+    Workspace.reconcileWorkspaceState()
     check(focus.workspace.isEffectivelyEmpty)
     check(focus.workspace === Workspace.all.singleOrNil(), Workspace.all.map(\.description).joined(separator: ", "))
     check(mainMonitor.setActiveWorkspace(focus.workspace))

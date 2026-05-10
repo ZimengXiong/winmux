@@ -298,7 +298,7 @@ enum Ax {
     //)
 }
 
-let kAXAeroSynthetic = "Aero.synthetic"
+let kAXWinMuxSynthetic = "WinMux.synthetic"
 
 private func castToAxUiElementMock(_ a: AnyObject) -> AxUiElementMock {
     if isUnitTest {
@@ -306,8 +306,8 @@ private func castToAxUiElementMock(_ a: AnyObject) -> AxUiElementMock {
             let windowId = UInt32.init(String(str.prefix(upTo: commaIndex)).removePrefix("AXUIElement(AxWindowId="))
             if let windowId {
                 return castToAxUiElementMock([
-                    "Aero.axWindowId": Json.uint32(windowId),
-                    kAXAeroSynthetic: Json.bool(true),
+                    "WinMux.axWindowId": Json.uint32(windowId),
+                    kAXWinMuxSynthetic: Json.bool(true),
                 ] as AnyObject)
             }
         }

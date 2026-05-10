@@ -19,9 +19,12 @@ public struct LayoutCmdArgs: CmdArgs {
     }
 
     public enum LayoutDescription: String, CaseIterable, Equatable, Sendable {
-        case accordion, tiles
+        case tabGroup = "tab-group"
+        case tiles
         case horizontal, vertical
-        case h_accordion, v_accordion, h_tiles, v_tiles
+        case hTabGroup = "h_tab_group"
+        case vTabGroup = "v_tab_group"
+        case h_tiles, v_tiles
         case tiling, floating
     }
 }
@@ -55,15 +58,6 @@ func parseLayoutCmdArgs(_ args: StrArrSlice) -> ParsedCmd<LayoutCmdArgs> {
 
 extension String {
     fileprivate func parseLayoutDescription() -> LayoutCmdArgs.LayoutDescription? {
-        if let parsed = LayoutCmdArgs.LayoutDescription(rawValue: self) {
-            return parsed
-        } else if self == "list" {
-            return .tiles
-        } else if self == "h_list" {
-            return .h_tiles
-        } else if self == "v_list" {
-            return .v_tiles
-        }
-        return nil
+        LayoutCmdArgs.LayoutDescription(rawValue: self)
     }
 }

@@ -51,7 +51,7 @@ struct ListWindowsCommand: Command {
             _list = _list.filter { $0.window.isBound }
             _list = _list.sortedBy([{ $0.window.app.name ?? "" }, \.title])
 
-            let list = _list.map { AeroObj.window(window: $0.window, title: $0.title) }
+            let list = _list.map { FormatObject.window(window: $0.window, title: $0.title) }
             if args.json {
                 return switch list.formatToJson(args.format, ignoreRightPaddingVar: args._format.isEmpty) {
                     case .success(let json): io.out(json)

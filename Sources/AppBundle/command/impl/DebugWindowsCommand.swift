@@ -79,30 +79,30 @@ private func dumpWindowDebugInfo(_ window: Window) async throws -> String {
 
     let windowLevel = getWindowLevel(for: window.windowId)
     let windowLevelJson = windowLevel?.toJson() ?? .null
-    result["Aero.windowLevel"] = windowLevelJson
-    result["Aero.axWindowId"] = .uint32(window.windowId)
-    result["Aero.workspace"] = .stringOrNull(window.nodeWorkspace?.name)
-    result["Aero.treeNodeParent"] = .string(String(describing: window.parent))
-    result["Aero.macOS.version"] = .string(ProcessInfo().operatingSystemVersionString) // because built-in apps might behave differently depending on the OS version
-    result["Aero.App.appBundleId"] = .stringOrNull(window.app.rawAppBundleId)
-    result["Aero.App.pid"] = .int(Int(window.app.pid))
-    result["Aero.App.versionShort"] = .stringOrNull(appInfoDic["CFBundleShortVersionString"] as? String)
-    result["Aero.App.version"] = .stringOrNull(appInfoDic["CFBundleVersion"] as? String)
-    result["Aero.App.nsApp.activationPolicy"] = .string(window.macApp.nsApp.activationPolicy.prettyDescription)
-    result["Aero.App.nsApp.execPath"] = .stringOrNull(window.macApp.nsApp.executableURL?.description)
-    result["Aero.App.nsApp.appBundlePath"] = .stringOrNull(window.macApp.nsApp.bundleURL?.description)
-    result["Aero.AXApp"] = .dict(try await window.macApp.dumpAppAxInfo())
+    result["WinMux.windowLevel"] = windowLevelJson
+    result["WinMux.axWindowId"] = .uint32(window.windowId)
+    result["WinMux.workspace"] = .stringOrNull(window.nodeWorkspace?.name)
+    result["WinMux.treeNodeParent"] = .string(String(describing: window.parent))
+    result["WinMux.macOS.version"] = .string(ProcessInfo().operatingSystemVersionString) // because built-in apps might behave differently depending on the OS version
+    result["WinMux.App.appBundleId"] = .stringOrNull(window.app.rawAppBundleId)
+    result["WinMux.App.pid"] = .int(Int(window.app.pid))
+    result["WinMux.App.versionShort"] = .stringOrNull(appInfoDic["CFBundleShortVersionString"] as? String)
+    result["WinMux.App.version"] = .stringOrNull(appInfoDic["CFBundleVersion"] as? String)
+    result["WinMux.App.nsApp.activationPolicy"] = .string(window.macApp.nsApp.activationPolicy.prettyDescription)
+    result["WinMux.App.nsApp.execPath"] = .stringOrNull(window.macApp.nsApp.executableURL?.description)
+    result["WinMux.App.nsApp.appBundlePath"] = .stringOrNull(window.macApp.nsApp.bundleURL?.description)
+    result["WinMux.AXApp"] = .dict(try await window.macApp.dumpAppAxInfo())
 
     let isDialog = try await window.isDialogHeuristic(windowLevel)
     let isWindow = try await window.isWindowHeuristic(windowLevel)
-    result["Aero.AxUiElementWindowType"] = .string(AxUiElementWindowType.new(isWindow: isWindow, isDialog: { isDialog }).rawValue)
-    result["Aero.AxUiElementWindowType_isDialogHeuristic"] = .bool(isDialog)
+    result["WinMux.AxUiElementWindowType"] = .string(AxUiElementWindowType.new(isWindow: isWindow, isDialog: { isDialog }).rawValue)
+    result["WinMux.AxUiElementWindowType_isDialogHeuristic"] = .bool(isDialog)
 
     var matchingCallbacks: [Json] = []
     for callback in config.onWindowDetected where try await callback.matches(window) {
         matchingCallbacks.append(callback.debugJson)
     }
-    result["Aero.on-window-detected"] = .array(matchingCallbacks)
+    result["WinMux.on-window-detected"] = .array(matchingCallbacks)
 
     return JSONEncoder.winMuxDefault.encodeToString(result).prettyDescription
         .prefixLines(with: "\(window.app.rawAppBundleId ?? "nil-bundle-id").\(window.windowId) ||| ")

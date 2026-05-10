@@ -96,8 +96,8 @@ private func windowResizePreviewItems(
                         context: context,
                         activeWindowId: activeWindowId,
                     )
-                case .accordion:
-                    return windowResizePreviewAccordionItems(
+                case .tabGroup:
+                    return windowResizePreviewTabGroupItems(
                         container: container,
                         point: point,
                         width: width,
@@ -169,7 +169,7 @@ private func windowResizePreviewTileItems(
 }
 
 @MainActor
-private func windowResizePreviewAccordionItems(
+private func windowResizePreviewTabGroupItems(
     container: TilingContainer,
     point: CGPoint,
     width: CGFloat,
@@ -190,7 +190,7 @@ private func windowResizePreviewAccordionItems(
     guard let mruIndex = container.mostRecentChild?.ownIndex else { return [] }
     var items: [WindowResizePreviewItem] = []
     for (index, child) in container.children.enumerated() {
-        let padding = CGFloat(config.accordionPadding)
+        let padding = CGFloat(config.tabGroupPadding)
         let (leadingPadding, trailingPadding): (CGFloat, CGFloat) = switch index {
             case 0 where container.children.count == 1: (0, 0)
             case 0:                                    (0, padding)
