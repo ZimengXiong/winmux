@@ -1,5 +1,13 @@
 import Common
 
+@MainActor
+func resolvedForceAssignedMonitor(forWorkspaceName name: String) -> Monitor? {
+    config.workspaceToMonitorForceAssignment[name]?
+        .lazy
+        .compactMap { $0.resolveMonitor(sortedMonitors: sortedMonitors) }
+        .first
+}
+
 extension Workspace {
     private func existingContainer<T: TreeNode>(_ type: T.Type) -> T? {
         let containers = children.filterIsInstance(of: T.self)
@@ -48,9 +56,6 @@ extension Workspace {
     }
 
     @MainActor var forceAssignedMonitor: Monitor? {
-        config.workspaceToMonitorForceAssignment[name]?
-            .lazy
-            .compactMap { $0.resolveMonitor(sortedMonitors: sortedMonitors) }
-            .first
+        resolvedForceAssignedMonitor(forWorkspaceName: name)
     }
 }

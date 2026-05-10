@@ -11,6 +11,7 @@ private let workspaceSidebarParser: [String: any ParserProtocol<WorkspaceSidebar
     "show-status-pills": Parser(\.showStatusPills, parseBool),
     "show-date": Parser(\.showDate, parseBool),
     "menu-bar-reserve-height": Parser(\.menuBarReserveHeight, parseWorkspaceSidebarMenuBarReserveHeight),
+    "project-deletion-action": Parser(\.projectDeletionAction, parseWorkspaceProjectDeletionAction),
     "workspace-labels": Parser(\.workspaceLabels, parseWorkspaceSidebarLabels),
     "project-labels": Parser(\.projectLabels, parseWorkspaceSidebarLabels),
     "project-colors": Parser(\.projectColors, parseWorkspaceSidebarProjectColors),
@@ -32,6 +33,19 @@ private func parseWorkspaceSidebarWidth(_ raw: TOMLValueConvertible, _ backtrace
 private func parseWorkspaceSidebarMenuBarReserveHeight(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace) -> ParsedToml<Int> {
     parseInt(raw, backtrace)
         .filter(.semantic(backtrace, "Must be greater than or equal to 0")) { $0 >= 0 }
+}
+
+private func parseWorkspaceProjectDeletionAction(
+    _ raw: TOMLValueConvertible,
+    _ backtrace: TomlBacktrace,
+) -> ParsedToml<WorkspaceProjectDeletionAction> {
+    parseString(raw, backtrace).flatMap { rawValue in
+        WorkspaceProjectDeletionAction(rawValue: rawValue)
+            .orFailure(.semantic(
+                backtrace,
+                "Possible values: \(WorkspaceProjectDeletionAction.allCases.map(\.rawValue).joined(separator: ", "))",
+            ))
+    }
 }
 
 private func parseWorkspaceSidebarLabels(

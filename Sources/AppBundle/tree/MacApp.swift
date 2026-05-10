@@ -94,6 +94,21 @@ final class MacApp: AbstractApp {
         }
     }
 
+    func pressCloseButton(_ windowId: UInt32) async throws -> Bool {
+        if serverArgs.isReadOnly { return false }
+        setFrameJobs.removeValue(forKey: windowId)?.cancel()
+        return try await withWindow(windowId) { window, job in
+            guard let closeButton = window.get(Ax.closeButtonAttr) else { return false }
+            return AXUIElementPerformAction(closeButton.cast, kAXPressAction as CFString) == .success
+        } ?? false
+    }
+
+    func containsAxWindow(_ windowId: UInt32) async throws -> Bool {
+        try await thread?.runInLoop { [axApp] job in
+            axApp.threadGuarded.get(Ax.windowsAttr)?.contains { $0.windowId == windowId } ?? false
+        } ?? false
+    }
+
     func getAxSize(_ windowId: UInt32) async throws -> CGSize? {
         try await withWindow(windowId) { window, job in
             window.get(Ax.sizeAttr)

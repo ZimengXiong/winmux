@@ -2,12 +2,35 @@ import Foundation
 
 private let workspaceSidebarSectionHeader = "[workspace-sidebar]"
 private let workspaceSidebarMenuBarReserveKey = "menu-bar-reserve-height"
+private let workspaceSidebarProjectDeletionActionKey = "project-deletion-action"
 
 func updateWorkspaceSidebarMenuBarReserveConfig(
     in configText: String,
     height: Int,
 ) -> String {
-    let renderedValue = "\(height)"
+    updateWorkspaceSidebarScalarConfig(
+        in: configText,
+        key: workspaceSidebarMenuBarReserveKey,
+        renderedValue: "\(height)",
+    )
+}
+
+func updateWorkspaceSidebarProjectDeletionActionConfig(
+    in configText: String,
+    action: WorkspaceProjectDeletionAction,
+) -> String {
+    updateWorkspaceSidebarScalarConfig(
+        in: configText,
+        key: workspaceSidebarProjectDeletionActionKey,
+        renderedValue: "'\(action.rawValue)'",
+    )
+}
+
+private func updateWorkspaceSidebarScalarConfig(
+    in configText: String,
+    key: String,
+    renderedValue: String,
+) -> String {
     let lines = configText.components(separatedBy: "\n")
     guard let sectionIndex = lines.firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == workspaceSidebarSectionHeader }) else {
         var result = configText
@@ -18,7 +41,7 @@ func updateWorkspaceSidebarMenuBarReserveConfig(
             result += "\n"
         }
         result += "\(workspaceSidebarSectionHeader)\n"
-        result += "    \(workspaceSidebarMenuBarReserveKey) = \(renderedValue)"
+        result += "    \(key) = \(renderedValue)"
         return result
     }
 
@@ -30,14 +53,14 @@ func updateWorkspaceSidebarMenuBarReserveConfig(
 
     var resultLines = lines
     for lineIndex in (sectionIndex + 1)..<sectionEnd {
-        guard workspaceSidebarConfigKey(in: resultLines[lineIndex]) == workspaceSidebarMenuBarReserveKey else { continue }
+        guard workspaceSidebarConfigKey(in: resultLines[lineIndex]) == key else { continue }
         let indentation = String(resultLines[lineIndex].prefix(while: { $0.isWhitespace }))
         let trailingComment = trailingTomlComment(in: resultLines[lineIndex]).map { " " + $0 } ?? ""
-        resultLines[lineIndex] = "\(indentation)\(workspaceSidebarMenuBarReserveKey) = \(renderedValue)\(trailingComment)"
+        resultLines[lineIndex] = "\(indentation)\(key) = \(renderedValue)\(trailingComment)"
         return resultLines.joined(separator: "\n")
     }
 
-    resultLines.insert("    \(workspaceSidebarMenuBarReserveKey) = \(renderedValue)", at: sectionIndex + 1)
+    resultLines.insert("    \(key) = \(renderedValue)", at: sectionIndex + 1)
     return resultLines.joined(separator: "\n")
 }
 
@@ -46,6 +69,18 @@ func persistWorkspaceSidebarMenuBarReserveHeight(_ height: Int) throws -> URL {
     let targetUrl = preferredWorkspaceSidebarConfigUrl()
     let currentText = (try? String(contentsOf: targetUrl, encoding: .utf8)) ?? starterConfigText()
     let updatedText = updateWorkspaceSidebarMenuBarReserveConfig(in: currentText, height: height)
+    if let parent = targetUrl.deletingLastPathComponent().takeIf({ $0.path != targetUrl.path }) {
+        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+    }
+    try updatedText.write(to: targetUrl, atomically: true, encoding: .utf8)
+    return targetUrl
+}
+
+@MainActor
+func persistWorkspaceSidebarProjectDeletionAction(_ action: WorkspaceProjectDeletionAction) throws -> URL {
+    let targetUrl = preferredWorkspaceSidebarConfigUrl()
+    let currentText = (try? String(contentsOf: targetUrl, encoding: .utf8)) ?? starterConfigText()
+    let updatedText = updateWorkspaceSidebarProjectDeletionActionConfig(in: currentText, action: action)
     if let parent = targetUrl.deletingLastPathComponent().takeIf({ $0.path != targetUrl.path }) {
         try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
     }

@@ -83,9 +83,17 @@ struct WorkspaceSidebarConfig: ConvenienceCopyable, Equatable, Sendable {
     var showStatusPills: Bool = true
     var showDate: Bool = true
     var menuBarReserveHeight: Int = 28
+    var projectDeletionAction: WorkspaceProjectDeletionAction = .closeWindows
     var workspaceLabels: [String: String] = [:]
     var projectLabels: [String: String] = [:]
     var projectColors: [String: String] = [:]
+}
+
+enum WorkspaceProjectDeletionAction: String, CaseIterable, Identifiable, Sendable {
+    case closeWindows = "close-windows"
+    case moveWindowsToFallback = "move-windows-to-fallback"
+
+    var id: String { rawValue }
 }
 
 struct WindowTabsConfig: ConvenienceCopyable, Equatable, Sendable {

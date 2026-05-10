@@ -133,6 +133,20 @@ final class MacWindow: Window {
         macApp.nativeFocus(windowId)
     }
 
+    @MainActor
+    func requestCloseForProjectDeletion(timeout: TimeInterval = 1.5) async -> Bool {
+        guard (try? await macApp.pressCloseButton(windowId)) == true else { return false }
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if (try? await macApp.containsAxWindow(windowId)) == false {
+                garbageCollect(skipClosedWindowsCache: true)
+                return true
+            }
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        return false
+    }
+
     override func closeAxWindow() {
         garbageCollect(skipClosedWindowsCache: true)
         macApp.closeAndUnregisterAxWindow(windowId)

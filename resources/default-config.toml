@@ -37,6 +37,7 @@ on-mode-changed = []
     width = 240
     monitor = 'main'
     menu-bar-reserve-height = 28
+    project-deletion-action = 'close-windows'
     show-status-pills = true
     show-date = true
 

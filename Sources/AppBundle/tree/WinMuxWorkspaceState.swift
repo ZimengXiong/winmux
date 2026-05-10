@@ -148,11 +148,47 @@ struct WinMuxWorkspaceState {
     }
 
     mutating func pruneProjectWorkspaceIndexes() {
+        for workspace in workspaceById.values {
+            ensureProjectExists(workspace.projectId)
+            ensureLaneExists(workspace.laneId)
+        }
+        for (laneId, lane) in lanesById {
+            var lane = lane
+            if lane.activeWorkspaceId.flatMap({ workspaceById[$0] }) == nil {
+                lane.activeWorkspaceId = nil
+            }
+            if lane.previousWorkspaceId.flatMap({ workspaceById[$0] }) == nil {
+                lane.previousWorkspaceId = nil
+            }
+            lanesById[laneId] = lane
+        }
+
+        let orderedWorkspaces = workspaceById.values.sorted()
         for (projectId, project) in projectsById {
             var project = project
-            project.workspaceOrderByLane = project.workspaceOrderByLane.mapValues { ids in
-                ids.filter { workspaceById[$0]?.projectId == projectId }
-            }.filter { !$0.value.isEmpty }
+            var seen: Set<WorkspaceId> = []
+            var workspaceOrderByLane: [DisplayLaneId: [WorkspaceId]] = [:]
+            for (laneId, ids) in project.workspaceOrderByLane {
+                let validIds = ids.filter { workspaceId in
+                    guard let workspace = workspaceById[workspaceId],
+                          workspace.projectId == projectId,
+                          workspace.laneId == laneId,
+                          !seen.contains(workspaceId)
+                    else {
+                        return false
+                    }
+                    seen.insert(workspaceId)
+                    return true
+                }
+                if !validIds.isEmpty {
+                    workspaceOrderByLane[laneId] = validIds
+                }
+            }
+            for workspace in orderedWorkspaces where workspace.projectId == projectId && !seen.contains(workspace.id) {
+                workspaceOrderByLane[workspace.laneId, default: []].append(workspace.id)
+                seen.insert(workspace.id)
+            }
+            project.workspaceOrderByLane = workspaceOrderByLane
             project.lastActiveWorkspaceByLane = project.lastActiveWorkspaceByLane.filter { laneId, workspaceId in
                 workspaceById[workspaceId]?.projectId == projectId &&
                     workspaceById[workspaceId]?.laneId == laneId

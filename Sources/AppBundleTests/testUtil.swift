@@ -4,6 +4,17 @@ import Foundation
 import HotKey
 import XCTest
 
+struct TestMonitor: Monitor {
+    let monitorAppKitNsScreenScreensId: Int
+    let name: String
+    let rect: Rect
+    let visibleRect: Rect
+    let isMain: Bool
+
+    var width: CGFloat { rect.width }
+    var height: CGFloat { rect.height }
+}
+
 let projectRoot: URL = {
     var url = URL(filePath: #filePath).absoluteURL
     check(FileManager.default.fileExists(atPath: url.path))

@@ -35,6 +35,20 @@ Tab groups allow you to have many windows occupy the same footprint, similar to 
 
 Unlike stack-only layouts, WinMux tab groups behave more intuitively like you would expect tabs to in browsers, and don't need a keyboard shortcut to activate. You can drag tabs from tab groups into another window's [intent zone](#managed-tiling-mode), or in between workspaces. You can also rearrange tab order within a tab group, and navigate through them with relative and absolute keybindings.
 
+### Deck Project Launcher
+Deck is an experimental Bunch-style project launcher included in this repo:
+
+```bash
+deck init winmux --root ~/Projects/WindowManagers/winmux
+deck open winmux
+```
+
+Deck profiles are explicit TOML launch recipes. They can open apps, URLs, files, shell commands, terminal commands, browser windows, and Bunch URLs. When WinMux is running, Deck routes matching windows into WinMux workspaces and tab groups through the agent API.
+
+Profiles also appear in the workspace sidebar project picker. Choosing one can append a fresh set of routed workspaces to the current project or launch the profile inside a new project.
+
+See [docs/deck.md](docs/deck.md) for the profile schema and examples.
+
 
 ## Managed (Tiling) Mode
 <a href="intentzones.mp4">
