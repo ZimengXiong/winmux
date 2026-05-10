@@ -122,7 +122,7 @@ private final class UnmanagedWindowSnapPreviewPanel: NSPanelHud {
         isExcludedFromWindowsMenu = true
         animationBehavior = .none
         ignoresMouseEvents = true
-        level = .statusBar
+        applyWinMuxLayer(.overlay)
         backgroundColor = .clear
 
         hostingView.rootView = AnyView(UnmanagedWindowSnapPreviewView(state: state))

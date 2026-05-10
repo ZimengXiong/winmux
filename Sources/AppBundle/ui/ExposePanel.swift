@@ -148,7 +148,7 @@ final class ExposePanel: NSPanelHud {
         isExcludedFromWindowsMenu = true
         animationBehavior = .none
         backgroundColor = .clear
-        level = .statusBar
+        applyWinMuxLayer(.overlay)
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         contentView = hostingView
         hostingView.frame = contentView?.bounds ?? .zero

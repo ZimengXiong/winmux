@@ -90,7 +90,7 @@ struct WorkspaceSidebarConfig: ConvenienceCopyable, Equatable, Sendable {
 
 struct WindowTabsConfig: ConvenienceCopyable, Equatable, Sendable {
     var enabled: Bool = true
-    var height: Int = 28
+    var height: Int = 36
 }
 
 extension WorkspaceSidebarConfig {

@@ -138,7 +138,7 @@ After importing an AeroSpace config, add the WinMux-specific features you want w
 
 ```toml
 window-tabs.enabled = true
-window-tabs.height = 28
+window-tabs.height = 36
 
 [workspace-sidebar]
     enabled = true

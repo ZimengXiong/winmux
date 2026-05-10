@@ -36,6 +36,7 @@ import Foundation
         UnsupportedMonitorGuard.shared.prepareForStartup()
 
         checkAccessibilityPermissions()
+        requestScreenRecordingPermissionsIfNeeded()
         startUnixSocketServer()
         GlobalObserver.initObserver()
         UnsupportedMonitorGuard.shared.startObserving()

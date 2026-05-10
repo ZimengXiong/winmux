@@ -17,6 +17,8 @@ private let workspaceSidebarHeaderLeadingPadding: CGFloat = 3
 private let workspaceSidebarWindowRowsLeadingIndent: CGFloat = 4
 private let workspaceSidebarPagerHeight: CGFloat = 32
 private let workspaceSidebarActiveWorkspaceTint = Color(nsColor: .systemBlue)
+private let workspaceSidebarHoverAnimation: Animation = .interactiveSpring(response: 0.34, dampingFraction: 0.86, blendDuration: 0.06)
+private let workspaceSidebarReducedMotionHoverAnimation: Animation = .easeOut(duration: 0.14)
 private let workspaceSidebarProjectSwipeIntentThreshold: CGFloat = 5
 private let workspaceSidebarProjectSwipeNavigateThreshold: CGFloat = 44
 private let workspaceSidebarProjectSwipeCreateThreshold: CGFloat = 104
@@ -67,6 +69,18 @@ private func workspaceSidebarSectionWidth(_ expansionProgress: CGFloat) -> CGFlo
     let compact = workspaceSidebarCompactSectionWidth()
     let expanded = workspaceSidebarExpandedSectionWidth()
     return compact + (expanded - compact) * expansionProgress
+}
+
+func workspaceSidebarOuterLeadingPadding(isCompact: Bool) -> CGFloat {
+    isCompact ? workspaceSidebarCompactRailHorizontalInset : workspaceSidebarContentLeadingInset
+}
+
+func workspaceSidebarOuterTrailingPadding(isCompact: Bool) -> CGFloat {
+    isCompact ? workspaceSidebarCompactRailHorizontalInset : workspaceSidebarContentTrailingInset
+}
+
+func workspaceSidebarStatusBottomPadding(isCompact: Bool) -> CGFloat {
+    workspaceSidebarOuterLeadingPadding(isCompact: isCompact)
 }
 
 @MainActor
@@ -467,7 +481,7 @@ final class WorkspaceSidebarPanel: NSPanelHud {
         isExcludedFromWindowsMenu = true
         animationBehavior = .none
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue + 1)
+        applyWinMuxLayer(.workspaceSidebar)
         contentView = hostingView
         hostingView.frame = contentView?.bounds ?? .zero
         hostingView.autoresizingMask = [.width, .height]
@@ -1090,22 +1104,19 @@ private func updateSidebarWindowDrag(_ windowId: UInt32, subject: WindowDragSubj
         cancelManipulatedWithMouseState()
         return
     }
-    let didStartSession = beginWindowMoveWithMouseSessionIfNeeded(
+    beginWindowMoveWithMouseSessionIfNeeded(
         windowId: window.windowId,
         subject: subject,
         detachOrigin: .window,
         startedInSidebar: true,
         anchorRect: resolvedDraggedWindowAnchorRect(for: window, subject: subject),
     )
-    let currentMouseLocation = mouseLocation
-    guard WindowDragFrameGate.shared.shouldProcess(
+    WindowMouseInteractionDriver.shared.startMove(
         windowId: window.windowId,
-        point: currentMouseLocation,
-        force: didStartSession,
-    ) else {
-        return
-    }
-    _ = updatePendingWindowDragIntent(sourceWindow: window, mouseLocation: currentMouseLocation, subject: subject, detachOrigin: .window)
+        subject: subject,
+        detachOrigin: .window,
+        startedInSidebar: true,
+    )
 }
 
 @MainActor
@@ -1150,8 +1161,8 @@ struct WorkspaceSidebarView: View {
 
     private func sidebarContent(expansionProgress: CGFloat) -> some View {
         let isCompact = expansionProgress < workspaceSidebarRowsRevealProgress
-        let leadingInset = isCompact ? workspaceSidebarCompactRailHorizontalInset : workspaceSidebarContentLeadingInset
-        let trailingInset = isCompact ? workspaceSidebarCompactRailHorizontalInset : workspaceSidebarContentTrailingInset
+        let leadingInset = workspaceSidebarOuterLeadingPadding(isCompact: isCompact)
+        let trailingInset = workspaceSidebarOuterTrailingPadding(isCompact: isCompact)
         let showsMonitorSelector = !isCompact && viewModel.workspaceSidebarShowsMonitorSelector
         let projectSwipeDirection = workspaceSidebarProjectSwipeDirection(
             horizontalTranslation: projectSwipeTranslation,
@@ -1218,7 +1229,7 @@ struct WorkspaceSidebarView: View {
             .padding(.leading, leadingInset)
             .padding(.trailing, trailingInset)
             .padding(.top, 8)
-            .padding(.bottom, 10)
+            .padding(.bottom, workspaceSidebarStatusBottomPadding(isCompact: isCompact))
         }
         .coordinateSpace(name: "workspaceSidebarContent")
         .onPreferenceChange(WorkspaceSidebarDropTargetPreferenceKey.self) { frames in
@@ -1230,16 +1241,14 @@ struct WorkspaceSidebarView: View {
         .environment(\.colorScheme, .dark)
         .clipShape(sidebarShape)
         .overlay(alignment: .trailing) {
-            if !usesNativeLiquidGlass {
-                Rectangle()
-                    .fill(Color.white.opacity(0.08))
-                    .frame(width: 0.5)
-            }
+            Rectangle()
+                .fill(mattePanelSeparator.opacity(0.72))
+                .frame(width: 0.5)
         }
         .shadow(
-            color: Color.black.opacity(usesNativeLiquidGlass ? 0 : 0.32),
-            radius: usesNativeLiquidGlass ? 0 : 14,
-            x: usesNativeLiquidGlass ? 0 : 2,
+            color: Color.black.opacity(0.28),
+            radius: 14,
+            x: 2,
             y: 0
         )
         .overlay {
@@ -1271,16 +1280,11 @@ struct WorkspaceSidebarView: View {
     }
 
     private func sidebarSurface<S: Shape>(in shape: S) -> some View {
-        LiquidGlassSurface(
-            shape: shape,
-            tint: workspaceSidebarActiveWorkspaceTint,
-            tintOpacity: 0.055,
-            scrimOpacity: 0.36,
-            highlightOpacity: 0.08,
-            borderOpacity: 0.10,
-            glowOpacity: 0,
-            isInteractive: true,
-        )
+        shape
+            .fill(mattePanelFill)
+            .overlay {
+                shape.stroke(mattePanelSeparator.opacity(0.34), lineWidth: 0.5)
+            }
         .ignoresSafeArea()
     }
 
@@ -1940,7 +1944,7 @@ struct WorkspaceSidebarProjectPager: View {
 
     private var projectDotTrack: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(alignment: .center, spacing: isHovered ? 7 : 5) {
+            HStack(alignment: .center, spacing: 6) {
                 ForEach(Array(projects.enumerated()), id: \.element.id) { index, project in
                     projectDot(
                         project,
@@ -2194,12 +2198,12 @@ struct WorkspaceSidebarProjectPager: View {
             return 9
         }
         if isCurrent {
-            return (isHovered ? 22 : 16) * max(swipeProgress, 0.45) + 8 * edgeProgress
+            return 18 * max(swipeProgress, 0.45) + 8 * edgeProgress
         }
         if isSwipeTarget {
             return 7 + 15 * swipeProgress
         }
-        return isHovered && !isCompact ? 11 : 7
+        return 8
     }
 
     private func dotHeight(isCurrent: Bool, isSwipeTarget: Bool, swipeProgress: CGFloat, edgeProgress: CGFloat) -> CGFloat {
@@ -2209,7 +2213,7 @@ struct WorkspaceSidebarProjectPager: View {
         if isCurrent || isSwipeTarget {
             return 7 + 1.5 * swipeProgress + edgeProgress
         }
-        return isHovered && !isCompact ? 8 : 7
+        return 7
     }
 
     private func dotHitWidth(isCurrent: Bool, isSwipeTarget: Bool, swipeProgress: CGFloat, edgeProgress: CGFloat) -> CGFloat {
@@ -2724,6 +2728,8 @@ struct WorkspaceSidebarWorkspaceSection: View {
     @State private var hoveredWindowId: UInt32? = nil
     @State private var isEditingName = false
     @State private var editingNameDraft = ""
+    @Namespace private var rowHoverNamespace
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let headerHeight: CGFloat = 26
     private let rowHeight: CGFloat = 23
@@ -2767,7 +2773,8 @@ struct WorkspaceSidebarWorkspaceSection: View {
             .zIndex(isDropTarget ? 1 : 0)
             .animation(.spring(response: 0.2, dampingFraction: 0.82), value: dragPreview)
             .animation(.spring(response: 0.2, dampingFraction: 0.82), value: expansionProgress)
-            .animation(.easeOut(duration: 0.15), value: isHovered)
+            .animation(reduceMotion ? workspaceSidebarReducedMotionHoverAnimation : workspaceSidebarHoverAnimation, value: isHovered)
+            .animation(reduceMotion ? workspaceSidebarReducedMotionHoverAnimation : workspaceSidebarHoverAnimation, value: hoveredWindowId)
             .background {
                 ZStack {
                     sectionBackground
@@ -2937,6 +2944,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
                     rowHeight: rowHeight,
                     isHovered: hoveredWindowId == window.windowId,
                     style: .window,
+                    hoverNamespace: rowHoverNamespace,
                 )
             .padding(.leading, leadingHitInset)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -2968,6 +2976,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
 
     private func workspaceTabGroupView(_ group: WorkspaceSidebarTabGroupViewModel) -> some View {
         let isDragging = activeSidebarDragSourceWindowId == group.representativeWindowId
+        let groupHoverId = UInt32.max - group.representativeWindowId
         return VStack(alignment: .leading, spacing: 1) {
             Button {
                 guard shouldHandleWorkspaceSidebarActivation(isEditing: false, isSidebarDragInProgress: isWorkspaceSidebarDragInProgress()) else { return }
@@ -2978,8 +2987,9 @@ struct WorkspaceSidebarWorkspaceSection: View {
                     badge: group.windowCount > 1 ? "\(group.windowCount)" : nil,
                     isFocused: group.isFocused,
                     rowHeight: rowHeight,
-                    isHovered: false,
+                    isHovered: hoveredWindowId == groupHoverId,
                     style: .tabGroupHeader,
+                    hoverNamespace: rowHoverNamespace,
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
@@ -2996,6 +3006,13 @@ struct WorkspaceSidebarWorkspaceSection: View {
                     finishSidebarWindowDrag()
                 },
             ))
+            .onHover { hover in
+                hoveredWindowId = nextWorkspaceSidebarHoveredWindowId(
+                    currentHoveredWindowId: hoveredWindowId,
+                    windowId: groupHoverId,
+                    isHovering: hover,
+                )
+            }
             .opacity(isDragging ? 0.25 : 1)
             .scaleEffect(isDragging ? 0.94 : 1)
 
@@ -3015,11 +3032,6 @@ struct WorkspaceSidebarWorkspaceSection: View {
     private var sectionBackground: some View {
         sectionShape
             .fill(sectionBackgroundFill)
-            .background {
-                liquidGlassBackground(in: sectionShape, isInteractive: true) {
-                    Color.clear
-                }
-            }
             .overlay {
                 sectionShape
                     .strokeBorder(sectionBorderColor, lineWidth: sectionBorderWidth)
@@ -3105,7 +3117,10 @@ struct WorkspaceSidebarWorkspaceSection: View {
         if workspace.isFocused {
             return workspaceSidebarActiveWorkspaceTint.opacity(isCompact ? 0.70 : 0.42)
         }
-        return usesNativeLiquidGlass && !isCompact ? Color.white.opacity(0.08) : Color.clear
+        if isHovered || workspace.isVisible {
+            return mattePanelSeparator.opacity(isCompact ? 0.32 : 0.24)
+        }
+        return Color.clear
     }
 
     private var sectionBorderWidth: CGFloat {
@@ -3115,7 +3130,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
         if workspace.isFocused {
             return isCompact ? 0.9 : 0.7
         }
-        if usesNativeLiquidGlass && !isCompact {
+        if isHovered || workspace.isVisible {
             return 0.6
         }
         return 0.5
@@ -3288,8 +3303,10 @@ struct WorkspaceSidebarWindowRow: View {
     let rowHeight: CGFloat
     let isHovered: Bool
     let style: Style
+    let hoverNamespace: Namespace.ID
 
     private var isTabGroupHeader: Bool { style == .tabGroupHeader }
+    private var isActiveRow: Bool { isFocused }
     private var rowShape: RoundedRectangle {
         RoundedRectangle(cornerRadius: workspaceSidebarRowCornerRadius, style: .continuous)
     }
@@ -3297,9 +3314,10 @@ struct WorkspaceSidebarWindowRow: View {
     var body: some View {
         HStack(spacing: 8) {
             Text(title)
-                .font(.system(size: isTabGroupHeader ? 12.5 : 12, weight: isFocused || isTabGroupHeader ? .semibold : .regular))
+                .font(.system(size: isTabGroupHeader ? 12.5 : 12, weight: isActiveRow ? .semibold : .regular))
                 .foregroundStyle(rowTextColor)
                 .lineLimit(1)
+                .truncationMode(.tail)
             Spacer(minLength: 0)
             if let badge {
                 Text(badge)
@@ -3311,12 +3329,17 @@ struct WorkspaceSidebarWindowRow: View {
         .padding(.vertical, 1.5)
         .frame(height: rowHeight)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
+        .background {
             rowShape
                 .fill(rowBackgroundFill)
-        )
+            if isHovered {
+                rowShape
+                    .fill(rowHoverOverlayFill)
+                    .matchedGeometryEffect(id: "workspace-sidebar-row-hover", in: hoverNamespace)
+            }
+        }
         .overlay {
-            if isTabGroupHeader {
+            if isActiveRow {
                 rowShape
                     .fill(
                         LinearGradient(
@@ -3332,29 +3355,33 @@ struct WorkspaceSidebarWindowRow: View {
             }
         }
         .overlay {
-            if isTabGroupHeader {
+            if isActiveRow {
                 rowShape
-                    .strokeBorder(Color.white.opacity(isFocused ? 0.16 : 0.09), lineWidth: 0.5)
+                    .strokeBorder(Color.white.opacity(0.16), lineWidth: 0.5)
             }
         }
         .contentShape(Rectangle())
     }
 
     private var rowTextColor: Color {
-        if isTabGroupHeader {
-            return Color.white.opacity(isFocused ? 0.96 : 0.86)
+        if isActiveRow {
+            return Color.white.opacity(isTabGroupHeader ? 0.96 : 1)
         }
-        return isFocused ? Color.white : Color.white.opacity(0.78)
+        return Color.white.opacity(0.78)
     }
 
     private var rowBackgroundFill: Color {
-        if isTabGroupHeader {
-            if isFocused {
+        if isActiveRow {
+            if isTabGroupHeader {
                 return Color.white.opacity(0.14)
             }
-            return Color.white.opacity(isHovered ? 0.11 : 0.075)
+            return Color.white.opacity(0.085)
         }
-        return isFocused ? Color.white.opacity(0.085) : isHovered ? Color.white.opacity(0.045) : Color.clear
+        return Color.clear
+    }
+
+    private var rowHoverOverlayFill: Color {
+        isTabGroupHeader ? Color.white.opacity(0.04) : Color.white.opacity(0.045)
     }
 }
 

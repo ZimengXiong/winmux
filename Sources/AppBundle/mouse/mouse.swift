@@ -201,6 +201,7 @@ func beginWindowMoveWithMouseSessionIfNeeded(
 
 @MainActor
 func cancelManipulatedWithMouseState() {
+    WindowMouseInteractionDriver.shared.stop()
     cancelWindowDragActualRectRefresh()
     clearPendingUnmanagedWindowSnap()
     clearDraggedWindowAnchorRect(for: currentlyManipulatedWithMouseWindowId)

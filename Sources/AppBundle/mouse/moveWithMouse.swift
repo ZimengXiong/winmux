@@ -1,9 +1,6 @@
 import AppKit
 import Common
 
-@MainActor
-private var moveWithMouseTask: Task<(), any Error>? = nil
-
 func movedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutableRawPointer?) {
     let windowId = ax.containingWindowId()
     let notif = notif as String
@@ -18,8 +15,7 @@ func movedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutableR
             scheduleRefreshSession(.ax(notif))
             return
         }
-        moveWithMouseTask?.cancel()
-        moveWithMouseTask = Task {
+        Task {
             try checkCancellation()
             try await runLightSession(.ax(notif), token) {
                 try await moveWithMouse(window)
@@ -38,41 +34,26 @@ private func moveWithMouse(_ window: Window) async throws { // todo cover with t
             nativeAnchorRect ??
             window.lastKnownActualRect ??
             window.lastAppliedLayoutPhysicalRect
-        let didStartSession = beginWindowMoveWithMouseSessionIfNeeded(
+        beginWindowMoveWithMouseSessionIfNeeded(
             windowId: window.windowId,
             subject: subject,
             detachOrigin: .window,
             startedInSidebar: false,
             anchorRect: anchorRect,
         )
-        let mouseLocation = mouseLocation
-        guard WindowDragFrameGate.shared.shouldProcess(
+        WindowMouseInteractionDriver.shared.startMove(
             windowId: window.windowId,
-            point: mouseLocation,
-            force: didStartSession,
-        ) else {
-            return
-        }
-        let didUpdateIntent = updatePendingWindowDragIntent(
-            sourceWindow: window,
-            mouseLocation: mouseLocation,
             subject: subject,
             detachOrigin: .window,
+            startedInSidebar: false,
         )
-        if didUpdateIntent {
-            clearPendingUnmanagedWindowSnap()
-        } else if subject == .window {
-            refreshPendingUnmanagedWindowSnap(sourceWindow: window, mouseLocation: mouseLocation)
-        } else {
-            clearPendingUnmanagedWindowSnap()
-        }
         return
     }
     syncClosedWindowsCacheToCurrentWorld()
     guard let parent = window.parent else { return }
     switch parent.cases {
         case .workspace:
-            try await moveFloatingWindow(window)
+            moveFloatingWindowWithMouse(window)
         case .tilingContainer:
             moveTilingWindow(window)
         case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer,
@@ -82,8 +63,8 @@ private func moveWithMouse(_ window: Window) async throws { // todo cover with t
 }
 
 @MainActor
-private func moveFloatingWindow(_ window: Window) async throws {
-    guard let targetWorkspace = try await window.getCenter()?.monitorApproximation.activeWorkspace else { return }
+func moveFloatingWindowWithMouse(_ window: Window) {
+    let targetWorkspace = mouseLocation.monitorApproximation.activeWorkspace
     guard let parent = window.parent else { return }
     if targetWorkspace != parent {
         window.bindAsFloatingWindow(to: targetWorkspace)
@@ -103,19 +84,11 @@ private func moveTilingWindow(_ window: Window) {
     if didStartSession, subject == .window {
         window.lastAppliedLayoutPhysicalRect = nil
     }
-    let mouseLocation = mouseLocation
-    guard WindowDragFrameGate.shared.shouldProcess(
+    WindowMouseInteractionDriver.shared.startMove(
         windowId: window.windowId,
-        point: mouseLocation,
-        force: didStartSession,
-    ) else {
-        return
-    }
-    _ = updatePendingWindowDragIntent(
-        sourceWindow: window,
-        mouseLocation: mouseLocation,
         subject: subject,
         detachOrigin: .window,
+        startedInSidebar: false,
     )
 }
 

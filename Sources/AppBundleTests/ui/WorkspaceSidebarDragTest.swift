@@ -22,6 +22,29 @@ final class WorkspaceSidebarDragTest: XCTestCase {
         )
     }
 
+    @MainActor
+    func testWindowChromeUsesNormalAppWindowLayer() {
+        XCTAssertEqual(
+            WinMuxPanelLayer.windowChrome.level.rawValue,
+            NSWindow.Level.normal.rawValue,
+        )
+        XCTAssertLessThan(
+            WinMuxPanelLayer.windowChrome.level.rawValue,
+            WinMuxPanelLayer.windowIntentPreview.level.rawValue,
+        )
+    }
+
+    @MainActor
+    func testWorkspaceSidebarLayerIsAboveAllWinMuxPanels() {
+        for layer in WinMuxPanelLayer.allCases where layer != .workspaceSidebar {
+            XCTAssertLessThan(
+                layer.level.rawValue,
+                WinMuxPanelLayer.workspaceSidebar.level.rawValue,
+                "\(layer) should render below the workspace sidebar",
+            )
+        }
+    }
+
     func testLeftMouseButtonPressedUsesBitmask() {
         XCTAssertTrue(isLeftMouseButtonPressed(mask: 0b1))
         XCTAssertTrue(isLeftMouseButtonPressed(mask: 0b11))
@@ -314,6 +337,17 @@ final class WorkspaceSidebarDragTest: XCTestCase {
         XCTAssertEqual(
             workspaceSidebarHoverCueWidth(collapsedWidth: 28, expandedWidth: 34),
             CGFloat(28),
+        )
+    }
+
+    func testWorkspaceSidebarStatusBottomPaddingMatchesLeadingEdgePadding() {
+        XCTAssertEqual(
+            workspaceSidebarStatusBottomPadding(isCompact: true),
+            workspaceSidebarOuterLeadingPadding(isCompact: true),
+        )
+        XCTAssertEqual(
+            workspaceSidebarStatusBottomPadding(isCompact: false),
+            workspaceSidebarOuterLeadingPadding(isCompact: false),
         )
     }
 

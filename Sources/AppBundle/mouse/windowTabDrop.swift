@@ -148,6 +148,31 @@ private struct WindowDragIntentDestination {
     let previewStyle: WindowTabDropPreviewStyle
     let previewGeometry: WindowTabDropPreviewGeometry
     let isGroup: Bool
+    let previewZones: [WindowDragIntentPreviewZone]
+
+    init(
+        kind: WindowDragIntentKind,
+        previewContainerRect: Rect,
+        previewRect: Rect,
+        interactionRect: Rect,
+        title: String,
+        subtitle: String,
+        previewStyle: WindowTabDropPreviewStyle,
+        previewGeometry: WindowTabDropPreviewGeometry,
+        isGroup: Bool,
+        previewZones: [WindowDragIntentPreviewZone] = [],
+    ) {
+        self.kind = kind
+        self.previewContainerRect = previewContainerRect
+        self.previewRect = previewRect
+        self.interactionRect = interactionRect
+        self.title = title
+        self.subtitle = subtitle
+        self.previewStyle = previewStyle
+        self.previewGeometry = previewGeometry
+        self.isGroup = isGroup
+        self.previewZones = previewZones
+    }
 
     @MainActor
     func preview(sourceWindowId: UInt32) -> WindowTabDropPreviewViewModel {
@@ -161,6 +186,7 @@ private struct WindowDragIntentDestination {
             isGroup: isGroup,
             referenceWindowId: previewReferenceWindowId(sourceWindowId: sourceWindowId),
             isPointerSettled: WindowDragFrameGate.shared.state(for: sourceWindowId)?.isSettled ?? false,
+            zones: previewZones.map(\.viewModel),
         )
     }
 
@@ -173,6 +199,39 @@ private struct WindowDragIntentDestination {
             case .moveToWorkspace, .createWorkspace, .sidebarHover:
                 return sourceWindowId
         }
+    }
+}
+
+private struct WindowDragIntentPreviewZone {
+    let rect: Rect
+    let style: WindowTabDropPreviewStyle
+    let geometry: WindowTabDropPreviewGeometry
+    let isActive: Bool
+
+    var viewModel: WindowTabDropPreviewZoneViewModel {
+        WindowTabDropPreviewZoneViewModel(
+            frame: rect.toAppKitScreenRect,
+            style: style,
+            geometry: geometry,
+            isActive: isActive,
+        )
+    }
+}
+
+private extension WindowDragIntentDestination {
+    func withPreviewZones(_ zones: [WindowDragIntentPreviewZone]) -> WindowDragIntentDestination {
+        WindowDragIntentDestination(
+            kind: kind,
+            previewContainerRect: previewContainerRect,
+            previewRect: previewRect,
+            interactionRect: interactionRect,
+            title: title,
+            subtitle: subtitle,
+            previewStyle: previewStyle,
+            previewGeometry: previewGeometry,
+            isGroup: isGroup,
+            previewZones: zones,
+        )
     }
 }
 
@@ -662,6 +721,69 @@ private func stackSplitDestination(
 }
 
 @MainActor
+private func windowSurfacePreviewZones(
+    sourceWindow: Window,
+    targetWindow: Window,
+    targetNode: TreeNode,
+    subject: WindowDragSubject,
+    detachOrigin: TabDetachOrigin,
+    activeKind: WindowDragIntentKind,
+) -> [WindowDragIntentPreviewZone] {
+    var zones: [WindowDragIntentPreviewZone] = []
+
+    if subject == .window,
+       config.windowTabs.enabled,
+       let tabDestination = tabStackDestination(targetWindow: targetWindow),
+       !shouldSuppressSameAccordionTabDestination(
+           sourceWindow: sourceWindow,
+           targetWindow: targetWindow,
+           detachOrigin: detachOrigin,
+       )
+    {
+        zones.append(WindowDragIntentPreviewZone(
+            rect: tabDestination.previewRect,
+            style: .tabInsert,
+            geometry: .tabStrip,
+            isActive: activeKind == tabDestination.kind,
+        ))
+    }
+
+    guard config.enableWindowManagement else { return zones }
+
+    for position in [WindowStackSplitPosition.left, .right, .above, .below] {
+        guard let destination = stackSplitDestination(
+            sourceWindow: sourceWindow,
+            targetWindow: targetWindow,
+            subject: subject,
+            position: position,
+            detachOrigin: detachOrigin,
+        ) else { continue }
+        zones.append(WindowDragIntentPreviewZone(
+            rect: targetNode.stackSplitDropZoneRect(position: position) ?? destination.previewRect,
+            style: .stackSplit,
+            geometry: position.previewGeometry,
+            isActive: activeKind == destination.kind,
+        ))
+    }
+
+    if let destination = swapDestination(
+        sourceWindow: sourceWindow,
+        targetWindow: targetWindow,
+        subject: subject,
+        detachOrigin: detachOrigin,
+    ) {
+        zones.append(WindowDragIntentPreviewZone(
+            rect: targetNode.swapDropZoneRect ?? destination.previewRect,
+            style: .swap,
+            geometry: .rounded,
+            isActive: activeKind == destination.kind,
+        ))
+    }
+
+    return zones
+}
+
+@MainActor
 private func currentWindowTabDropDestination(sourceWindow: Window, mouseLocation: CGPoint) -> WindowDragIntentDestination? {
     let targetWorkspace = mouseLocation.monitorApproximation.activeWorkspace
     return mouseLocation.findWindowTabDropDestination(in: targetWorkspace.rootTilingContainer, excluding: sourceWindow)
@@ -1017,13 +1139,13 @@ extension Window {
     @MainActor
     var tabDropZoneRect: Rect? {
         guard let rect = windowDragVisibleRect else { return nil }
-        return rect.tabInsertPreviewRect(barHeight: CGFloat(config.windowTabs.height))
+        return rect.tabInsertPreviewRect(barHeight: resolvedWindowTabBarHeight())
     }
 
     @MainActor
     var tabDropInteractionRect: Rect? {
         guard let rect = windowDragVisibleRect else { return nil }
-        return rect.tabInsertInteractionRect(barHeight: CGFloat(config.windowTabs.height))
+        return rect.tabInsertInteractionRect(barHeight: resolvedWindowTabBarHeight())
     }
 
     @MainActor
@@ -1106,6 +1228,13 @@ extension CGPoint {
                         }
                         return nil
                     case .accordion:
+                        if container.usesWindowTabBehavior {
+                            guard let targetWindow = container.tabActiveWindow ??
+                                container.mostRecentWindowRecursive ??
+                                container.anyLeafWindowRecursive
+                            else { return nil }
+                            return shouldExcludeDragTargetNode(targetWindow, excludedNode: excludedNode) ? nil : targetWindow
+                        }
                         let candidates = container.childrenByMostRecentUse.filter { $0.windowDragVisibleRect?.contains(self) == true }
                         for child in candidates {
                             if let window = findWindowDragTarget(in: child, excluding: excludedNode) {
@@ -1145,6 +1274,9 @@ extension CGPoint {
                         }
                         return nil
                     case .accordion:
+                        if container.usesWindowTabBehavior {
+                            return nil
+                        }
                         for child in container.childrenByMostRecentUse where child.windowDragVisibleRect?.contains(self) == true {
                             if let destination = findWindowTabDropDestination(in: child, excluding: sourceWindow) {
                                 return destination
@@ -1236,43 +1368,14 @@ func refreshPendingWindowDragIntentFromGlobalMouseDrag() {
         return
     }
     guard let windowId = currentlyManipulatedWithMouseWindowId,
-          let sourceWindow = Window.get(byId: windowId)
+          Window.get(byId: windowId) != nil
     else {
         clearPendingWindowDragIntent()
         clearPendingUnmanagedWindowSnap()
         cancelManipulatedWithMouseState()
         return
     }
-    let currentMouseLocation = mouseLocation
-    guard WindowDragFrameGate.shared.shouldProcess(windowId: sourceWindow.windowId, point: currentMouseLocation) else {
-        return
-    }
-    if !config.enableWindowManagement &&
-        !getCurrentMouseDragStartedInSidebar() &&
-        getCurrentMouseDragSubject() == .window &&
-        getCurrentMouseTabDetachOrigin() == .window
-    {
-        let didUpdateIntent = updatePendingWindowDragIntent(
-            sourceWindow: sourceWindow,
-            mouseLocation: currentMouseLocation,
-            subject: .window,
-            detachOrigin: .window,
-        )
-        if didUpdateIntent {
-            clearPendingUnmanagedWindowSnap()
-        } else {
-            clearPendingWindowDragIntent()
-            refreshPendingUnmanagedWindowSnap(sourceWindow: sourceWindow, mouseLocation: currentMouseLocation)
-        }
-        return
-    }
-    clearPendingUnmanagedWindowSnap()
-    _ = updatePendingWindowDragIntent(
-        sourceWindow: sourceWindow,
-        mouseLocation: currentMouseLocation,
-        subject: getCurrentMouseDragSubject(),
-        detachOrigin: getCurrentMouseTabDetachOrigin(),
-    )
+    WindowMouseInteractionDriver.shared.noteGlobalDragActivity()
 }
 
 @MainActor
@@ -1543,7 +1646,7 @@ private func expectedTabbedWindowRect(targetWindow: Window, targetRect: Rect) ->
     let isAlreadyTabbed = (targetWindow.parent as? TilingContainer)?.layout == .accordion
     guard !isAlreadyTabbed else { return targetRect }
 
-    let tabBarHeight = min(CGFloat(config.windowTabs.height), targetRect.height)
+    let tabBarHeight = min(resolvedWindowTabBarHeight(), targetRect.height)
     return Rect(
         topLeftX: targetRect.topLeftX,
         topLeftY: targetRect.topLeftY + tabBarHeight,
