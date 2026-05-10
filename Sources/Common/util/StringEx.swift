@@ -34,9 +34,13 @@ extension [String] {
         if isEmpty {
             return ""
         }
-        var remainingLen = maxLength
+        let first = first.orDie()
+        guard first.count <= maxLength else {
+            return String(first.prefix(maxLength)) + trailing
+        }
+        var remainingLen = maxLength - first.count
         let separatorCount = separator.count
-        var result: String = first.orDie()
+        var result: String = first
         for _elem in self.dropFirst() {
             let elemCount = separatorCount + _elem.count
             if remainingLen < elemCount / 2 {

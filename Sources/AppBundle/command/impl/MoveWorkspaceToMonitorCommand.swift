@@ -15,12 +15,7 @@ struct MoveWorkspaceToMonitorCommand: Command {
                 if targetMonitor.monitorId_oneBased == prevMonitor.monitorId_oneBased {
                     return true
                 }
-                if targetMonitor.setActiveWorkspace(focusedWorkspace) {
-                    let fallbackWorkspace = getOrCreateLaneFallbackWorkspace(for: prevMonitor)
-                    check(
-                        prevMonitor.setActiveWorkspace(fallbackWorkspace),
-                        "Generated incompatible fallback workspace (\(fallbackWorkspace)) for the monitor (\(prevMonitor)",
-                    )
+                if activateWorkspaceOnMonitorPreservingSourceLane(focusedWorkspace, targetMonitor: targetMonitor) {
                     return true
                 } else {
                     return io.err(

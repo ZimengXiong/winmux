@@ -1,5 +1,6 @@
 @testable import AppBundle
 import AppKit
+import Common
 import XCTest
 
 private struct WorkspaceNamingTestMonitor: Monitor {
@@ -422,6 +423,68 @@ final class WorkspaceNamingTest: XCTestCase {
         XCTAssertEqual(secondary.activeWorkspace.scope, workspaceScope(projectId: project.id, monitor: secondary))
     }
 
+    func testMovingWorkspaceToAnotherMonitorKeepsSourceMonitorInSameProject() async throws {
+        let main = WorkspaceNamingTestMonitor(
+            monitorAppKitNsScreenScreensId: 1,
+            name: "Left",
+            rect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            isMain: true,
+        )
+        let secondary = WorkspaceNamingTestMonitor(
+            monitorAppKitNsScreenScreensId: 2,
+            name: "Right",
+            rect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            isMain: false,
+        )
+        setMonitorsForTests([main, secondary])
+        let project = createWorkspaceProject()
+        let projectWorkspace = try XCTUnwrap(switchWorkspaceProject(project.id, on: main))
+        XCTAssertTrue(projectWorkspace.focusWorkspace())
+
+        var args = MoveWorkspaceToMonitorCmdArgs(rawArgs: [])
+        args.target = .initialized(.relative(.next))
+        let result = try await MoveWorkspaceToMonitorCommand(args: args).run(.defaultEnv, .emptyStdin)
+
+        assertEquals(result.exitCode, 0)
+        XCTAssertTrue(secondary.activeWorkspace === projectWorkspace)
+        XCTAssertEqual(main.activeWorkspace.projectId, project.id)
+        XCTAssertTrue(main.activeWorkspace !== projectWorkspace)
+    }
+
+    func testSummoningWorkspaceToFocusedMonitorKeepsSourceMonitorInSameProject() async throws {
+        let main = WorkspaceNamingTestMonitor(
+            monitorAppKitNsScreenScreensId: 1,
+            name: "Left",
+            rect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            isMain: true,
+        )
+        let secondary = WorkspaceNamingTestMonitor(
+            monitorAppKitNsScreenScreensId: 2,
+            name: "Right",
+            rect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            isMain: false,
+        )
+        setMonitorsForTests([main, secondary])
+        let project = createWorkspaceProject()
+        let projectWorkspace = try XCTUnwrap(switchWorkspaceProject(project.id, on: secondary))
+        let focusedWorkspace = Workspace.get(byName: "focused")
+        XCTAssertTrue(main.setActiveWorkspace(focusedWorkspace))
+        XCTAssertTrue(focusedWorkspace.focusWorkspace())
+
+        let result = try await parseCommand("summon-workspace \(projectWorkspace.name)").cmdOrDie
+            .run(.defaultEnv, .emptyStdin)
+
+        assertEquals(result.exitCode, 0)
+        XCTAssertTrue(main.activeWorkspace === projectWorkspace)
+        XCTAssertTrue(focus.workspace === projectWorkspace)
+        XCTAssertEqual(secondary.activeWorkspace.projectId, project.id)
+        XCTAssertTrue(secondary.activeWorkspace !== projectWorkspace)
+    }
+
     func testWorkspaceToMonitorForceAssignmentRejectsWrongMonitor() {
         let main = WorkspaceNamingTestMonitor(
             monitorAppKitNsScreenScreensId: 1,
@@ -485,6 +548,37 @@ final class WorkspaceNamingTest: XCTestCase {
         gcMonitors()
 
         XCTAssertTrue(newMain.activeWorkspace === workspace)
+    }
+
+    func testGcMonitorsIgnoresInactiveLanesWhenPreservingVisibleWorkspace() {
+        let oldMain = WorkspaceNamingTestMonitor(
+            monitorAppKitNsScreenScreensId: 1,
+            name: "Main",
+            rect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            isMain: true,
+        )
+        setMonitorsForTests([oldMain])
+        let visibleWorkspace = Workspace.get(byName: "visible")
+        _ = TestWindow.new(id: 22, parent: visibleWorkspace.rootTilingContainer)
+        XCTAssertTrue(oldMain.setActiveWorkspace(visibleWorkspace))
+        let inactiveWorkspace = Workspace.get(byName: "inactive")
+        inactiveWorkspace.assignLane(DisplayLaneId(topLeftCorner: CGPoint(x: 100, y: 0)))
+
+        let newMain = WorkspaceNamingTestMonitor(
+            monitorAppKitNsScreenScreensId: 1,
+            name: "Main",
+            rect: Rect(topLeftX: 100, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 100, topLeftY: 0, width: 1920, height: 1080),
+            isMain: true,
+        )
+        setMonitorsForTests([newMain])
+
+        gcMonitors()
+
+        XCTAssertTrue(newMain.activeWorkspace === visibleWorkspace)
+        XCTAssertTrue(inactiveWorkspace.isEffectivelyEmpty)
+        XCTAssertFalse(inactiveWorkspace.isVisible)
     }
 
     func testLaneFallbackWorkspaceDoesNotForgetActiveProject() throws {

@@ -79,12 +79,14 @@ struct Main {
                         """,
                 )
             }
-            var lineCount = 0
-            while let line = readLine(strippingNewline: false) {
-                stdin += line
-                lineCount += 1
-                if lineCount > 1000 {
-                    exit(1, err: "stdin number of lines limit is exceeded")
+            if shouldUseRelativeWorkspaceStdin(parsedArgs) {
+                var lineCount = 0
+                while let line = readLine(strippingNewline: false) {
+                    stdin += line
+                    lineCount += 1
+                    if lineCount > 1000 {
+                        exit(1, err: "stdin number of lines limit is exceeded")
+                    }
                 }
             }
         }
@@ -138,6 +140,17 @@ private func hasExplicitRelativeWorkspaceStdinFlag(_ args: any CmdArgs) -> Bool 
             args.explicitStdinFlag != nil
         default:
             true
+    }
+}
+
+private func shouldUseRelativeWorkspaceStdin(_ args: any CmdArgs) -> Bool {
+    switch args {
+        case let args as WorkspaceCmdArgs:
+            args.useStdin
+        case let args as MoveNodeToWorkspaceCmdArgs:
+            args.useStdin
+        default:
+            false
     }
 }
 

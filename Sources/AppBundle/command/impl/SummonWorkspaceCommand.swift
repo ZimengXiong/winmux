@@ -18,7 +18,7 @@ struct SummonWorkspaceCommand: Command {
             }
             return !args.failIfNoop
         }
-        if monitor.setActiveWorkspace(workspace) {
+        if activateWorkspaceOnMonitorPreservingSourceLane(workspace, targetMonitor: monitor) {
             return workspace.focusWorkspace()
         } else {
             return io.err("Can't move workspace '\(workspace.name)' to monitor '\(monitor.name)'. workspace-to-monitor-force-assignment doesn't allow it")

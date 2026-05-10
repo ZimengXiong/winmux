@@ -68,8 +68,15 @@ func workspaceScope(projectId: WorkspaceProjectId, monitor: Monitor) -> Workspac
 }
 
 @MainActor func getOrCreateLaneFallbackWorkspace(for monitor: Monitor) -> Workspace {
-    getOrCreateFallbackWorkspace(
+    getOrCreateLaneFallbackWorkspace(
         projectId: activeWorkspaceProjectId(for: monitor),
+        for: monitor,
+    )
+}
+
+@MainActor func getOrCreateLaneFallbackWorkspace(projectId: WorkspaceProjectId, for monitor: Monitor) -> Workspace {
+    getOrCreateFallbackWorkspace(
+        projectId: projectId,
         laneId: DisplayLaneId(monitor),
         monitor: monitor,
     )
@@ -1048,6 +1055,24 @@ extension Monitor {
 }
 
 @MainActor
+func activateWorkspaceOnMonitorPreservingSourceLane(_ workspace: Workspace, targetMonitor: Monitor) -> Bool {
+    let sourceMonitor = workspace.isVisible ? workspace.workspaceMonitor : nil
+    let sourceProjectId = workspace.projectId
+    guard targetMonitor.setActiveWorkspace(workspace) else { return false }
+
+    if let sourceMonitor,
+       sourceMonitor.rect.topLeftCorner != targetMonitor.rect.topLeftCorner
+    {
+        let fallbackWorkspace = getOrCreateLaneFallbackWorkspace(projectId: sourceProjectId, for: sourceMonitor)
+        check(
+            sourceMonitor.setActiveWorkspace(fallbackWorkspace),
+            "Generated incompatible fallback workspace (\(fallbackWorkspace)) for the monitor (\(sourceMonitor))",
+        )
+    }
+    return true
+}
+
+@MainActor
 func gcMonitors() {
     rearrangeWorkspacesOnMonitors()
 }
@@ -1080,7 +1105,13 @@ private func checkWorkspaceHierarchyInvariants() {
 
 @MainActor
 private func rearrangeWorkspacesOnMonitors() {
-    var oldVisibleMonitors: Set<DisplayLaneId> = winMuxWorkspaceState.lanesById.keys.toSet()
+    let oldLanesById = winMuxWorkspaceState.lanesById
+    var oldVisibleMonitors: Set<DisplayLaneId> = oldLanesById.compactMap { laneId, lane in
+        guard let activeWorkspaceId = lane.activeWorkspaceId,
+              winMuxWorkspaceState.workspaceById[activeWorkspaceId] != nil
+        else { return nil }
+        return laneId
+    }.toSet()
 
     let newMonitors = monitors.map(DisplayLaneId.init)
     var newMonitorToOldMonitorMapping: [DisplayLaneId: DisplayLaneId] = [:]
@@ -1091,7 +1122,6 @@ private func rearrangeWorkspacesOnMonitors() {
         }
     }
 
-    let oldLanesById = winMuxWorkspaceState.lanesById
     winMuxWorkspaceState.lanesById = [:]
 
     for newMonitor in newMonitors {
