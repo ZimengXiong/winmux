@@ -2079,6 +2079,40 @@ final class WindowTabsTest: XCTestCase {
     }
 
     @MainActor
+    func testTabInsertAndTopSplitIntentZonesTouchWithoutDeadBand() {
+        setUpWorkspacesForTests()
+        config.windowTabs.enabled = true
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let window = TestWindow.new(id: 1, parent: root)
+        window.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
+
+        let windowTabInteraction = window.tabDropInteractionRect.orDie()
+        let windowTopSplitInteraction = window.stackSplitDropZoneRect(position: .above).orDie()
+
+        XCTAssertEqual(windowTopSplitInteraction.minY, windowTabInteraction.maxY, accuracy: 0.001)
+    }
+
+    @MainActor
+    func testAccordionTabInsertAndTopSplitIntentZonesTouchWithoutDeadBand() {
+        setUpWorkspacesForTests()
+        config.windowTabs.enabled = true
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let active = TestWindow.new(id: 1, parent: accordion)
+        let second = TestWindow.new(id: 2, parent: accordion)
+        accordion.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
+        active.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
+        second.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
+
+        let tabInteraction = accordion.windowTabDropInteractionRect.orDie()
+        let topSplitInteraction = accordion.stackSplitDropZoneRect(position: .above).orDie()
+
+        XCTAssertEqual(topSplitInteraction.minY, tabInteraction.maxY, accuracy: 0.001)
+    }
+
+    @MainActor
     func testFullscreenActiveTabHidesTabStripWithoutDisablingAccordionBehavior() {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")

@@ -66,4 +66,47 @@ final class MouseDragSubjectTest: XCTestCase {
 
         XCTAssertEqual(gate.state?.point, CGPoint(x: 10, y: 0))
     }
+
+    func testResizeGestureCandidateEdgesStayTightToActualFrameEdges() {
+        let rect = Rect(topLeftX: 100, topLeftY: 100, width: 500, height: 300)
+
+        XCTAssertEqual(
+            resizeGestureCandidateEdges(mouse: CGPoint(x: 592, y: 164), rect: rect),
+            ResizeGestureEdges(left: false, right: true, up: false, down: false)
+        )
+    }
+
+    func testResizeGestureCalibrationCorrectsPendingCornerGuessFromObservedDelta() {
+        let baseRect = Rect(topLeftX: 0, topLeftY: 0, width: 400, height: 300)
+        var gesture = makeResizeGestureSession(
+            windowId: 1,
+            baseRect: baseRect,
+            observedRect: baseRect,
+            mouse: CGPoint(x: 400, y: 20),
+            edges: ResizeGestureEdges(left: false, right: true, up: true, down: false),
+            timestamp: 10,
+        ).orDie()
+
+        gesture.calibrate(
+            observedRect: Rect(topLeftX: 0, topLeftY: 0, width: 450, height: 300),
+            mouse: CGPoint(x: 450, y: 20),
+            timestamp: 10.1,
+        )
+
+        XCTAssertEqual(gesture.edges, ResizeGestureEdges(left: false, right: true, up: false, down: false))
+        let predicted = gesture.predictedRect(mouse: CGPoint(x: 460, y: 60))
+        XCTAssertEqual(predicted.width, 460)
+        XCTAssertEqual(predicted.height, 300)
+    }
+
+    func testMouseInteractionHiddenIdsStayHiddenUntilSessionRestore() {
+        XCTAssertEqual(
+            nextMouseInteractionHiddenWindowIds(activeWindowId: 1, currentlyHidden: [2, 3], discovered: []),
+            [2, 3]
+        )
+        XCTAssertEqual(
+            nextMouseInteractionHiddenWindowIds(activeWindowId: 2, currentlyHidden: [2, 3], discovered: [4]),
+            [3, 4]
+        )
+    }
 }

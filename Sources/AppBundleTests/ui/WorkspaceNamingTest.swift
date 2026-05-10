@@ -303,30 +303,36 @@ final class WorkspaceNamingTest: XCTestCase {
         XCTAssertFalse(workspaceProjects().contains { $0.id == first.id })
     }
 
-    func testSwitchingProjectMovesProjectOffPreviousDisplay() {
+    func testSameProjectCanStayActiveOnMultipleDisplays() {
         let main = WorkspaceNamingTestMonitor(
             monitorAppKitNsScreenScreensId: 1,
-            name: "Main",
+            name: "Left",
             rect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
             visibleRect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
-            isMain: true,
+            isMain: false,
         )
         let secondary = WorkspaceNamingTestMonitor(
             monitorAppKitNsScreenScreensId: 2,
-            name: "Secondary",
+            name: "Main",
             rect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
             visibleRect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
-            isMain: false,
+            isMain: true,
         )
         setMonitorsForTests([main, secondary])
         let project = createWorkspaceProject()
 
-        XCTAssertNotNil(switchWorkspaceProject(project.id, on: main))
-        XCTAssertEqual(activeWorkspaceProjectId(for: main), project.id)
-        XCTAssertNotNil(switchWorkspaceProject(project.id, on: secondary))
+        let mainWorkspace = switchWorkspaceProject(project.id, on: main)
+        let secondaryWorkspace = switchWorkspaceProject(project.id, on: secondary)
 
-        XCTAssertNotEqual(activeWorkspaceProjectId(for: main), project.id)
+        XCTAssertNotNil(mainWorkspace)
+        XCTAssertNotNil(secondaryWorkspace)
+        XCTAssertFalse(mainWorkspace === secondaryWorkspace)
+        XCTAssertEqual(activeWorkspaceProjectId(for: main), project.id)
         XCTAssertEqual(activeWorkspaceProjectId(for: secondary), project.id)
+        XCTAssertEqual(main.activeWorkspace.projectId, project.id)
+        XCTAssertEqual(secondary.activeWorkspace.projectId, project.id)
+        XCTAssertEqual(main.activeWorkspace.scope, workspaceScope(projectId: project.id, monitor: main))
+        XCTAssertEqual(secondary.activeWorkspace.scope, workspaceScope(projectId: project.id, monitor: secondary))
     }
 
     func testWorkspaceToMonitorForceAssignmentRejectsWrongMonitor() {

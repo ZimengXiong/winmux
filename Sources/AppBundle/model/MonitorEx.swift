@@ -3,7 +3,10 @@ import AppKit
 extension Monitor {
     @MainActor
     var workspaceSidebarInset: CGFloat {
-        config.workspaceSidebar.enabled ? CGFloat(config.workspaceSidebar.collapsedWidth) : 0
+        guard config.workspaceSidebar.enabled else { return 0 }
+        return workspaceSidebarResolvedPanelMonitor().rect.topLeftCorner == rect.topLeftCorner
+            ? CGFloat(config.workspaceSidebar.collapsedWidth)
+            : 0
     }
 
     @MainActor
@@ -19,7 +22,8 @@ extension Monitor {
         )
     }
 
+    @MainActor
     var monitorId_oneBased: Int? {
-        monitorAppKitNsScreenScreensId
+        sortedMonitors.firstIndex { $0.rect.topLeftCorner == rect.topLeftCorner }.map { $0 + 1 }
     }
 }

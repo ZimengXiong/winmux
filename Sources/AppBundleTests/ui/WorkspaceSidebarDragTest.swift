@@ -559,11 +559,6 @@ final class WorkspaceSidebarDragTest: XCTestCase {
     }
 
     @MainActor
-    func testSecondaryMonitorWindowsAreManaged() {
-        XCTAssertTrue(shouldWinMuxManageWindow(at: CGPoint(x: 2000, y: 20)))
-    }
-
-    @MainActor
     func testMonitorScopeResolvesMonitorPoint() {
         let secondary = WorkspaceSidebarDragTestMonitor(
             monitorAppKitNsScreenScreensId: 2,

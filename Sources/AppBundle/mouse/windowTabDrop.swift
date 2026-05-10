@@ -1029,6 +1029,7 @@ private func currentSidebarWorkspaceDropDestination(sourceWindow: Window, mouseL
     return nil
 }
 
+@MainActor
 private func workspaceSidebarMonitorDisplayName(_ monitor: Monitor) -> String {
     let name = monitor.name.trimmingCharacters(in: .whitespacesAndNewlines)
     if monitor.isMain {
@@ -2077,15 +2078,19 @@ extension TilingContainer {
     }
 }
 
+private func tabInteractionTopExclusion(_ interactionRect: Rect, in visibleRect: Rect) -> CGFloat {
+    max(interactionRect.maxY - visibleRect.minY, 0)
+}
+
 extension TreeNode {
     @MainActor
     private var centeredBodyDropZoneRect: Rect? {
         guard let rect = windowDragVisibleRect else { return nil }
         let topExclusion: CGFloat = switch self {
             case let window as Window:
-                window.tabDropInteractionRect?.height ?? rect.height * 0.2
+                window.tabDropInteractionRect.map { tabInteractionTopExclusion($0, in: rect) } ?? rect.height * 0.2
             case let container as TilingContainer:
-                container.windowTabDropInteractionRect?.height ?? rect.height * 0.2
+                container.windowTabDropInteractionRect.map { tabInteractionTopExclusion($0, in: rect) } ?? rect.height * 0.2
             default:
                 max(rect.height * 0.2, 40)
         }

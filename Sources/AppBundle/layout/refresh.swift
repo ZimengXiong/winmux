@@ -39,11 +39,7 @@ private func shouldDropScheduledRefresh(_ newEvent: RefreshSessionEvent, activeE
 func shouldSyncFocusBackToMacOs(
     nativeFocused: Window?,
     frontmostActivationPolicy: NSApplication.ActivationPolicy?,
-    nativeFocusIsOnUnmanagedMonitor: Bool = false,
 ) -> Bool {
-    if nativeFocusIsOnUnmanagedMonitor {
-        return false
-    }
     if nativeFocused?.participatesInWorkspaceFocus == false {
         return false
     }
@@ -103,12 +99,6 @@ func runRefreshSessionBlocking(
             try await $_refreshSessionFocusSnapshot.withValue(focusSnapshot) {
                 let frontmostActivationPolicy = NSWorkspace.shared.frontmostApplication?.activationPolicy
                 let nativeFocused = try await getNativeFocusedWindow()
-                let nativeFocusIsOnUnmanagedMonitor: Bool
-                if nativeFocused == nil {
-                    nativeFocusIsOnUnmanagedMonitor = try await isNativeFocusOnUnmanagedMonitor()
-                } else {
-                    nativeFocusIsOnUnmanagedMonitor = false
-                }
                 try checkCancellation()
                 if let nativeFocused { try await debugWindowsIfRecording(nativeFocused) }
                 updateFocusCache(nativeFocused)
@@ -146,7 +136,6 @@ func runRefreshSessionBlocking(
                     if shouldSyncFocusBackToMacOs(
                         nativeFocused: nativeFocused,
                         frontmostActivationPolicy: frontmostActivationPolicy,
-                        nativeFocusIsOnUnmanagedMonitor: nativeFocusIsOnUnmanagedMonitor,
                     ) {
                         let logicalFocused = focus.windowOrNil
                         if logicalFocused?.windowId != nativeFocused?.windowId {

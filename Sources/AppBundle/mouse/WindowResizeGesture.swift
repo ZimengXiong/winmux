@@ -1,6 +1,11 @@
 import CoreGraphics
 import Foundation
 
+private let resizeGestureMinimumWidth = CGFloat(80)
+private let resizeGestureMinimumHeight = CGFloat(80)
+private let resizeGestureChangedEdgeThreshold = CGFloat(2)
+private let resizeGestureCandidateEdgeThreshold = CGFloat(32)
+
 struct ResizeGestureEdges: Equatable {
     let left: Bool
     let right: Bool
@@ -20,36 +25,38 @@ struct ResizeGestureMouseOffset: Equatable {
 struct ResizeGestureSessionState {
     let windowId: UInt32
     let baseRect: Rect
-    let edges: ResizeGestureEdges
+    var edges: ResizeGestureEdges
     var mouseOffset: ResizeGestureMouseOffset
     var latestRect: Rect
     var lastCalibrationTimestamp: TimeInterval
 
     func predictedRect(mouse: CGPoint) -> Rect {
-        let minimumWidth = CGFloat(80)
-        let minimumHeight = CGFloat(80)
         var minX = baseRect.minX
         var maxX = baseRect.maxX
         var minY = baseRect.minY
         var maxY = baseRect.maxY
 
         if edges.left {
-            minX = min(mouse.x - mouseOffset.left, maxX - minimumWidth)
+            minX = min(mouse.x - mouseOffset.left, maxX - resizeGestureMinimumWidth)
         }
         if edges.right {
-            maxX = max(mouse.x - mouseOffset.right, minX + minimumWidth)
+            maxX = max(mouse.x - mouseOffset.right, minX + resizeGestureMinimumWidth)
         }
         if edges.up {
-            minY = min(mouse.y - mouseOffset.up, maxY - minimumHeight)
+            minY = min(mouse.y - mouseOffset.up, maxY - resizeGestureMinimumHeight)
         }
         if edges.down {
-            maxY = max(mouse.y - mouseOffset.down, minY + minimumHeight)
+            maxY = max(mouse.y - mouseOffset.down, minY + resizeGestureMinimumHeight)
         }
 
         return Rect(topLeftX: minX, topLeftY: minY, width: maxX - minX, height: maxY - minY)
     }
 
     mutating func calibrate(observedRect: Rect, mouse: CGPoint, timestamp: TimeInterval) {
+        let observedEdges = resizeGestureEdgesFromDelta(baseRect: baseRect, observedRect: observedRect)
+        if observedEdges.hasAny {
+            edges = observedEdges
+        }
         if edges.left {
             mouseOffset.left = mouse.x - observedRect.minX
         }
@@ -92,16 +99,38 @@ func makeResizeGestureSession(
 }
 
 func resizeGestureEdges(baseRect: Rect, observedRect: Rect, mouse: CGPoint) -> ResizeGestureEdges {
-    let threshold = CGFloat(2)
+    let edges = resizeGestureEdgesFromDelta(baseRect: baseRect, observedRect: observedRect)
+    let fallback = resizeGestureCandidateEdges(mouse: mouse, rect: observedRect)
+    var left = edges.left
+    var right = edges.right
+    var up = edges.up
+    var down = edges.down
+    if !left, !right {
+        left = fallback.left
+        right = fallback.right
+    }
+    if !up, !down {
+        up = fallback.up
+        down = fallback.down
+    }
+
+    return ResizeGestureEdges(left: left, right: right, up: up, down: down)
+}
+
+func resizeGestureCandidateEdges(mouse: CGPoint, rect: Rect) -> ResizeGestureEdges {
+    resizeGestureEdgesNear(mouse: mouse, rect: rect, threshold: resizeGestureCandidateEdgeThreshold)
+}
+
+func resizeGestureEdgesFromDelta(baseRect: Rect, observedRect: Rect) -> ResizeGestureEdges {
     let leftDiff = abs(baseRect.minX - observedRect.minX)
     let rightDiff = abs(baseRect.maxX - observedRect.maxX)
     let upDiff = abs(baseRect.minY - observedRect.minY)
     let downDiff = abs(baseRect.maxY - observedRect.maxY)
 
-    var left = leftDiff > threshold
-    var right = rightDiff > threshold
-    var up = upDiff > threshold
-    var down = downDiff > threshold
+    var left = leftDiff > resizeGestureChangedEdgeThreshold
+    var right = rightDiff > resizeGestureChangedEdgeThreshold
+    var up = upDiff > resizeGestureChangedEdgeThreshold
+    var down = downDiff > resizeGestureChangedEdgeThreshold
 
     if left, right {
         left = leftDiff >= rightDiff
@@ -110,16 +139,6 @@ func resizeGestureEdges(baseRect: Rect, observedRect: Rect, mouse: CGPoint) -> R
     if up, down {
         up = upDiff >= downDiff
         down = !up
-    }
-
-    let fallback = resizeGestureEdgesNear(mouse: mouse, rect: observedRect, threshold: 96)
-    if !left, !right {
-        left = fallback.left
-        right = fallback.right
-    }
-    if !up, !down {
-        up = fallback.up
-        down = fallback.down
     }
 
     return ResizeGestureEdges(left: left, right: right, up: up, down: down)

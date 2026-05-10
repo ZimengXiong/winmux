@@ -115,13 +115,6 @@ final class MacApp: AbstractApp {
         return try await MacWindow.getOrRegister(windowId: windowId, macApp: self)
     }
 
-    @MainActor
-    func hasFocusedWindowOnUnmanagedMonitor() async throws -> Bool {
-        guard let windowId = try await focusedWindowId() else { return false }
-        guard let center = try await getAxRect(windowId)?.center else { return false }
-        return !shouldWinMuxManageWindow(at: center)
-    }
-
     @MainActor func nativeFocus(_ windowId: UInt32) {
         if serverArgs.isReadOnly { return }
         MacApp.focusJob?.cancel()

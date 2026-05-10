@@ -531,7 +531,6 @@ func deleteWorkspaceProject(_ projectId: String) throws {
 func switchWorkspaceProject(_ projectId: String, on monitor: Monitor) -> Workspace? {
     materializePersistedWorkspaceProjects()
     guard workspaceProjectIdToProject[projectId] != nil else { return nil }
-    ensureWorkspaceProjectIsNotOpenElsewhere(projectId: projectId, targetPoint: monitor.rect.topLeftCorner)
     let workspace = preferredWorkspace(projectId: projectId, monitor: monitor) ?? createBlankWorkspace(projectId: projectId, monitor: monitor)
     return monitor.setActiveWorkspace(workspace) ? workspace : nil
 }
@@ -663,27 +662,6 @@ private func removeWorkspaceFromRegistry(_ workspace: Workspace) {
         }
     }
     workspaceNameToWorkspace.removeValue(forKey: workspace.name)
-}
-
-@MainActor
-private func fallbackProjectId(excluding projectId: String) -> String {
-    let activeProjectIds = activeWorkspaceProjectIdByScreenPoint.values.toSet()
-    if let project = workspaceProjects().first(where: { $0.id != projectId && !activeProjectIds.contains($0.id) }) {
-        return project.id
-    }
-    return createWorkspaceProject().id
-}
-
-@MainActor
-private func ensureWorkspaceProjectIsNotOpenElsewhere(projectId: String, targetPoint: CGPoint) {
-    let occupiedPoints = activeWorkspaceProjectIdByScreenPoint
-        .filter { point, activeProjectId in point != targetPoint && activeProjectId == projectId }
-        .map(\.key)
-    for point in occupiedPoints {
-        let fallbackId = fallbackProjectId(excluding: projectId)
-        let monitor = point.monitorApproximation
-        _ = switchWorkspaceProject(fallbackId, on: monitor)
-    }
 }
 
 @MainActor
@@ -1049,9 +1027,6 @@ extension CGPoint {
         if !isValidAssignment(workspace: workspace, screen: self) {
             return false
         }
-        if !workspace.isSystemStub {
-            ensureWorkspaceProjectIsNotOpenElsewhere(projectId: workspace.projectId, targetPoint: self)
-        }
         if let prevMonitorPoint = visibleWorkspaceToScreenPoint[workspace] {
             visibleWorkspaceToScreenPoint.removeValue(forKey: workspace)
             screenPointToPrevVisibleWorkspace[prevMonitorPoint] =
@@ -1081,16 +1056,11 @@ private func checkWorkspaceHierarchyInvariants() {
         check(workspaceProjectIdToProject[workspace.projectId] != nil, "Workspace '\(workspace.name)' references missing project '\(workspace.projectId)'")
     }
 
-    var openProjectIds: Set<String> = []
     for (point, workspace) in screenPointToVisibleWorkspace where !workspace.isSystemStub {
         let activeProjectId = activeWorkspaceProjectIdByScreenPoint[point]
         check(
             activeProjectId == workspace.projectId,
             "Visible workspace '\(workspace.name)' project '\(workspace.projectId)' disagrees with active project '\(activeProjectId ?? "nil")'",
-        )
-        check(
-            openProjectIds.insert(workspace.projectId).inserted,
-            "Project '\(workspace.projectId)' is open on more than one display",
         )
     }
 }

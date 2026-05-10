@@ -15,10 +15,17 @@ final class WindowMouseInteractionOpacityController {
 
     private init() {}
 
-    func update(activeWindowId: UInt32) {
+    func update(activeWindowId: UInt32, hidesPassiveTabGroupChrome: Bool) {
         guard !isUnitTest else { return }
-        let nextHiddenIds = Set(mouseInteractionWindowIdsToHide(activeWindowId: activeWindowId))
-        moveWindowsOutOfView(activeWindowId: activeWindowId)
+        let nextHiddenIds = nextMouseInteractionHiddenWindowIds(
+            activeWindowId: activeWindowId,
+            currentlyHidden: hiddenWindowIds,
+            discovered: Set(mouseInteractionWindowIdsToHide(activeWindowId: activeWindowId)),
+        )
+        moveWindowsOutOfView(
+            activeWindowId: activeWindowId,
+            hidesPassiveTabGroupChrome: hidesPassiveTabGroupChrome,
+        )
         setWindowListAlpha(
             windowIds: Array(hiddenWindowIds.subtracting(nextHiddenIds)),
             alpha: mouseInteractionVisibleWindowAlpha,
@@ -50,11 +57,15 @@ final class WindowMouseInteractionOpacityController {
         return temporarilyMovedWindows.keys.contains(windowId)
     }
 
-    private func moveWindowsOutOfView(activeWindowId: UInt32) {
+    private func moveWindowsOutOfView(activeWindowId: UInt32, hidesPassiveTabGroupChrome: Bool) {
         let windowsToHide = mouseInteractionManagedWindowsToHide(activeWindowId: activeWindowId)
-        WindowTabStripPanelController.shared.setHiddenPassiveTabGroupChrome(
-            passiveTabGroupChromeIdsToHide(windows: windowsToHide, activeWindowId: activeWindowId)
-        )
+        if hidesPassiveTabGroupChrome {
+            WindowTabStripPanelController.shared.setHiddenPassiveTabGroupChrome(
+                passiveTabGroupChromeIdsToHide(windows: windowsToHide, activeWindowId: activeWindowId)
+            )
+        } else {
+            WindowTabStripPanelController.shared.clearHiddenPassiveTabGroupChrome()
+        }
         let visibleIds = Set(windowsToHide.map(\.windowId))
         for staleId in temporarilyMovedWindows.keys where !visibleIds.contains(staleId) {
             guard let rect = temporarilyMovedWindows.removeValue(forKey: staleId),
@@ -70,6 +81,17 @@ final class WindowMouseInteractionOpacityController {
             window.setAxFrame(mouseInteractionHiddenTopLeftCorner(for: rect), nil)
         }
     }
+}
+
+func nextMouseInteractionHiddenWindowIds(
+    activeWindowId: UInt32,
+    currentlyHidden: Set<UInt32>,
+    discovered: Set<UInt32>,
+) -> Set<UInt32> {
+    var result = discovered
+    result.formUnion(currentlyHidden)
+    result.remove(activeWindowId)
+    return result
 }
 
 @MainActor
