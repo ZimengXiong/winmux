@@ -11,7 +11,7 @@ public func getMessageWindow(messageModel: MessageModel) -> some Scene {
                 NSApp.setActivationPolicy(.accessory)
                 NSApplication.shared.windows.forEach {
                     if $0.identifier?.rawValue == messageWindowId {
-                        $0.level = .floating
+                        $0.level = WinMuxPanelLayer.overlay.level
                         $0.styleMask.remove(.miniaturizable) // Disable minimize button, because we don't unminimize the window on config error
                     }
                 }

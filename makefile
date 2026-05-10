@@ -1,5 +1,6 @@
 VERSION ?= 0.0.0-SNAPSHOT
 CODESIGN_IDENTITY ?= Apple Development
+EXPECTED_CODESIGN_AUTHORITY ?= Apple Development: zxzimeng@gmail.com (4F7GA4MB42)
 DEVELOPMENT_TEAM ?= W9C2P3N7Q2
 RELEASE_DIR ?= .release
 RELEASE_TAG ?= v$(VERSION)
@@ -103,6 +104,7 @@ release:
 	    archive; \
 	test -d "$$app_path"; \
 	codesign --verify --deep --strict --verbose=2 "$$app_path"; \
+	codesign -dv --verbose=4 "$$app_path" 2>&1 | grep -F "Authority=$(EXPECTED_CODESIGN_AUTHORITY)" >/dev/null; \
 	ditto -c -k --sequesterRsrc --keepParent "$$app_path" "$$zip_path"; \
 	if [ "$(PUBLISH)" != "1" ]; then \
 	    echo "Skipping GitHub release publish because PUBLISH=$(PUBLISH)"; \

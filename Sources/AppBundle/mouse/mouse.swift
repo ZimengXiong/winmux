@@ -8,6 +8,44 @@ enum MouseManipulationKind: Equatable {
 
 private let postDragAxObserverSuppressionDuration: Duration = .seconds(2)
 
+struct MousePointerSample: Equatable {
+    let point: CGPoint
+    let timestamp: TimeInterval
+}
+
+@MainActor
+final class MousePointerTracker {
+    static let shared = MousePointerTracker()
+
+    private var latestSample: MousePointerSample?
+
+    private init() {}
+
+    var currentSample: MousePointerSample {
+        latestSample ?? MousePointerSample(point: mouseLocation, timestamp: ProcessInfo.processInfo.systemUptime)
+    }
+
+    func note(event: NSEvent) {
+        latestSample = MousePointerSample(
+            point: normalizedScreenPoint(for: event),
+            timestamp: event.timestamp,
+        )
+    }
+
+    func note(point: CGPoint, timestamp: TimeInterval = ProcessInfo.processInfo.systemUptime) {
+        latestSample = MousePointerSample(point: point, timestamp: timestamp)
+    }
+
+    func reset() {
+        latestSample = nil
+    }
+
+    private func normalizedScreenPoint(for event: NSEvent) -> CGPoint {
+        let screenPoint = event.window.map { $0.convertPoint(toScreen: event.locationInWindow) } ?? NSEvent.mouseLocation
+        return normalizeAppKitScreenPoint(screenPoint)
+    }
+}
+
 @MainActor var currentlyManipulatedWithMouseWindowId: UInt32? = nil
 @MainActor private var pinnedDraggedWindowId: UInt32? = nil
 @MainActor private var currentMouseDragSubject: WindowDragSubject = .window
@@ -165,6 +203,7 @@ func beginWindowMoveWithMouseSessionIfNeeded(
     detachOrigin: TabDetachOrigin,
     startedInSidebar: Bool,
     anchorRect: Rect?,
+    refreshActualRects: Bool = true,
 ) -> Bool {
     let previousWindowId = currentlyManipulatedWithMouseWindowId
     let previousKind = getCurrentMouseManipulationKind()
@@ -183,6 +222,9 @@ func beginWindowMoveWithMouseSessionIfNeeded(
 
     if previousWindowId != windowId {
         clearDraggedWindowAnchorRect(for: previousWindowId)
+        if let previousWindowId {
+            WindowDragFrameGate.shared.reset(windowId: previousWindowId)
+        }
     }
 
     currentlyManipulatedWithMouseWindowId = windowId
@@ -192,15 +234,21 @@ func beginWindowMoveWithMouseSessionIfNeeded(
     setCurrentMouseDragStartedInSidebar(startedInSidebar)
     setDraggedWindowAnchorRect(anchorRect, for: windowId)
     WindowTabStripPanelController.shared.setIgnoresMouseEvents(true)
-    refreshVisibleWindowActualRectsForCurrentDrag(sourceWindowId: windowId)
+    if refreshActualRects {
+        refreshVisibleWindowActualRectsForCurrentDrag(sourceWindowId: windowId)
+    } else {
+        cancelWindowDragActualRectRefresh()
+    }
     return true
 }
 
 @MainActor
 func cancelManipulatedWithMouseState() {
+    WindowMouseInteractionDriver.shared.stop()
     cancelWindowDragActualRectRefresh()
     clearPendingUnmanagedWindowSnap()
     clearDraggedWindowAnchorRect(for: currentlyManipulatedWithMouseWindowId)
+    WindowDragFrameGate.shared.resetAll()
     setCurrentMouseManipulationKind(.none)
     setCurrentMouseDragSubject(.window)
     setCurrentMouseTabDetachOrigin(.window)
@@ -298,7 +346,9 @@ func shouldIgnoreMovedObsForCurrentDragSession(windowId: UInt32?) -> Bool {
 
 /// Same motivation as in monitorFrameNormalized
 var mouseLocation: CGPoint {
-    let mainMonitorHeight: CGFloat = mainMonitor.height
-    let location = NSEvent.mouseLocation
-    return location.copy(\.y, mainMonitorHeight - location.y)
+    normalizeAppKitScreenPoint(NSEvent.mouseLocation)
+}
+
+func normalizeAppKitScreenPoint(_ point: CGPoint) -> CGPoint {
+    point.copy(\.y, mainMonitor.height - point.y)
 }

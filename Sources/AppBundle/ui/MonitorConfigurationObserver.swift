@@ -1,15 +1,15 @@
 import AppKit
 
 @MainActor
-final class UnsupportedMonitorGuard {
-    static let shared = UnsupportedMonitorGuard()
+final class MonitorConfigurationObserver {
+    static let shared = MonitorConfigurationObserver()
 
     private var observer: NSObjectProtocol?
 
     private init() {}
 
     func prepareForStartup() {
-        refreshMonitorPolicy(refreshReason: "UnsupportedMonitorGuard.prepareForStartup")
+        refreshMonitorPolicy(refreshReason: "MonitorConfigurationObserver.prepareForStartup")
     }
 
     func startObserving() {
@@ -20,13 +20,9 @@ final class UnsupportedMonitorGuard {
             queue: .main,
         ) { _ in
             Task { @MainActor in
-                UnsupportedMonitorGuard.shared.handleScreenParametersChanged()
+                MonitorConfigurationObserver.shared.handleScreenParametersChanged()
             }
         }
-    }
-
-    func shouldManageWindow(at _: CGPoint) -> Bool {
-        true
     }
 
     private func handleScreenParametersChanged() {
@@ -40,9 +36,4 @@ final class UnsupportedMonitorGuard {
             scheduleRefreshSession(.globalObserver(refreshReason))
         }
     }
-}
-
-@MainActor
-func shouldWinMuxManageWindow(at point: CGPoint) -> Bool {
-    UnsupportedMonitorGuard.shared.shouldManageWindow(at: point)
 }

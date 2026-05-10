@@ -4,6 +4,7 @@ import Common
 final class MacWindow: Window {
     let macApp: MacApp
     private var prevUnhiddenProportionalPositionInsideWorkspaceRect: CGPoint?
+    private var hiddenInCorner: OptimalHideCorner?
 
     @MainActor
     private init(_ id: UInt32, _ actor: MacApp, lastFloatingSize: CGSize?, parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {
@@ -18,15 +19,10 @@ final class MacWindow: Window {
     @discardableResult
     static func getOrRegister(windowId: UInt32, macApp: MacApp) async throws -> MacWindow? {
         if let existing = allWindowsMap[windowId] {
-            let rect = try await existing.getAxRect()
-            if shouldManageWindow(rect) {
-                return existing
-            }
-            existing.garbageCollect(skipClosedWindowsCache: true)
-            return nil
+            _ = try await existing.getAxRect()
+            return existing
         }
         let rect = try await macApp.getAxRect(windowId)
-        guard shouldManageWindow(rect) else { return nil }
         let data = try await unbindAndGetBindingDataForNewWindow(
             windowId,
             macApp,
@@ -145,6 +141,9 @@ final class MacWindow: Window {
     // todo it's part of the window layout and should be moved to layoutRecursive.swift
     @MainActor
     func hideInCorner(_ corner: OptimalHideCorner) async throws {
+        if isHiddenInCorner, hiddenInCorner == corner {
+            return
+        }
         guard let nodeMonitor else { return }
         // Don't accidentally override prevUnhiddenEmulationPosition in case of subsequent `hideInCorner` calls
         if !isHiddenInCorner {
@@ -173,6 +172,7 @@ final class MacWindow: Window {
                 p = nodeMonitor.visibleRect.bottomRightCorner - onePixelOffset
         }
         setAxFrame(p, nil)
+        hiddenInCorner = corner
     }
 
     @MainActor
@@ -204,6 +204,7 @@ final class MacWindow: Window {
         }
 
         self.prevUnhiddenProportionalPositionInsideWorkspaceRect = nil
+        self.hiddenInCorner = nil
     }
 
     override var isHiddenInCorner: Bool {
@@ -230,12 +231,6 @@ final class MacWindow: Window {
         }
         return rect
     }
-}
-
-@MainActor
-private func shouldManageWindow(_ rect: Rect?) -> Bool {
-    guard let center = rect?.center else { return true }
-    return shouldWinMuxManageWindow(at: center)
 }
 
 @MainActor

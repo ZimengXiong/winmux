@@ -132,12 +132,12 @@ var monitors: [Monitor] {
 
 var sortedMonitors: [Monitor] {
     monitors.sorted {
-        if $0.isMain != $1.isMain {
-            return $0.isMain
-        }
         if $0.rect.minX != $1.rect.minX {
             return $0.rect.minX < $1.rect.minX
         }
-        return $0.rect.minY < $1.rect.minY
+        if $0.rect.minY != $1.rect.minY {
+            return $0.rect.minY < $1.rect.minY
+        }
+        return $0.monitorAppKitNsScreenScreensId < $1.monitorAppKitNsScreenScreensId
     }
 }

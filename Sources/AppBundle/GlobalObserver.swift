@@ -66,8 +66,16 @@ enum GlobalObserver {
         }
     }
 
-    private static func onPointerActivity(_: NSEvent) {
+    private static func onPointerActivity(_ event: NSEvent) {
+        let isLeftMouseDownEvent = event.type == .leftMouseDown
+        let timestamp = event.timestamp
+        let screenPoint = NSEvent.mouseLocation
+        let point = normalizeAppKitScreenPoint(screenPoint)
         Task { @MainActor in
+            MousePointerTracker.shared.note(point: point, timestamp: timestamp)
+            if isLeftMouseDownEvent {
+                await WindowMouseInteractionDriver.shared.capturePendingResizeCandidate()
+            }
             noteTapBindingKeyDown()
         }
     }
@@ -108,8 +116,11 @@ enum GlobalObserver {
             }
         })
 
-        retainEventMonitor(NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDragged) { _ in
+        retainEventMonitor(NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDragged) { event in
+            let timestamp = event.timestamp
+            let point = normalizeAppKitScreenPoint(NSEvent.mouseLocation)
             Task { @MainActor in
+                MousePointerTracker.shared.note(point: point, timestamp: timestamp)
                 refreshPendingWindowDragIntentFromGlobalMouseDrag()
             }
         })

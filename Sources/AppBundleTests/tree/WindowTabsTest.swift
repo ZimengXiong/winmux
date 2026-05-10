@@ -1,4 +1,5 @@
 @testable import AppBundle
+import AppKit
 import CoreGraphics
 import XCTest
 
@@ -11,6 +12,27 @@ private struct WindowTabsTestMonitor: Monitor {
 
     var width: CGFloat { rect.width }
     var height: CGFloat { rect.height }
+}
+
+private func cgWindowBounds(windowNumber: Int) -> CGRect? {
+    guard let windows = CGWindowListCopyWindowInfo(
+        [.optionIncludingWindow],
+        CGWindowID(windowNumber),
+    ) as? [[String: Any]],
+        let bounds = windows.first?[kCGWindowBounds as String] as? [String: Any],
+        let x = bounds["X"] as? NSNumber,
+        let y = bounds["Y"] as? NSNumber,
+        let width = bounds["Width"] as? NSNumber,
+        let height = bounds["Height"] as? NSNumber
+    else {
+        return nil
+    }
+    return CGRect(
+        x: CGFloat(truncating: x),
+        y: CGFloat(truncating: y),
+        width: CGFloat(truncating: width),
+        height: CGFloat(truncating: height),
+    )
 }
 
 final class WindowTabsTest: XCTestCase {
@@ -428,7 +450,7 @@ final class WindowTabsTest: XCTestCase {
         XCTAssertEqual(tabBarRect.topLeftX, 40)
         XCTAssertEqual(tabBarRect.topLeftY, 60)
         XCTAssertEqual(tabBarRect.width, 500)
-        XCTAssertEqual(tabBarRect.height, CGFloat(config.windowTabs.height))
+        XCTAssertEqual(tabBarRect.height, resolvedWindowTabBarHeight())
         XCTAssertEqual(groupFrameRect.topLeftX, 40)
         XCTAssertEqual(groupFrameRect.topLeftY, 60)
         XCTAssertEqual(groupFrameRect.width, 500)
@@ -451,12 +473,74 @@ final class WindowTabsTest: XCTestCase {
 
         let groupFrame = try XCTUnwrap(accordion.lastAppliedLayoutPhysicalRect)
         let activeFrame = try XCTUnwrap(active.lastAppliedLayoutPhysicalRect)
-        let tabBarHeight = CGFloat(config.windowTabs.height)
+        let tabBarHeight = resolvedWindowTabBarHeight()
 
         XCTAssertEqual(activeFrame.topLeftX, groupFrame.topLeftX + windowTabGroupShellHorizontalInset())
         XCTAssertEqual(activeFrame.topLeftY, groupFrame.topLeftY + tabBarHeight)
         XCTAssertEqual(activeFrame.width, groupFrame.width - windowTabGroupShellHorizontalInset() * 2)
         XCTAssertEqual(activeFrame.height, groupFrame.height - tabBarHeight - windowTabGroupShellBottomInset())
+    }
+
+    @MainActor
+    func testTabGroupResizeChromeFrameDerivesFromActiveWindowContentFrame() {
+        config.windowTabs.height = 36
+        let activeContentFrame = Rect(topLeftX: 43, topLeftY: 96, width: 494, height: 261)
+        let groupFrame = windowTabGroupFrameRect(forActiveWindowContentRect: activeContentFrame)
+        let tabBarFrame = windowTabBarRect(forGroupFrameRect: groupFrame)
+
+        XCTAssertEqual(groupFrame.topLeftX, 40)
+        XCTAssertEqual(groupFrame.topLeftY, 60)
+        XCTAssertEqual(groupFrame.width, 500)
+        XCTAssertEqual(groupFrame.height, 300)
+        XCTAssertEqual(tabBarFrame.topLeftX, 40)
+        XCTAssertEqual(tabBarFrame.topLeftY, 60)
+        XCTAssertEqual(tabBarFrame.width, 500)
+        XCTAssertEqual(tabBarFrame.height, 36)
+    }
+
+    func testTabGroupOuterTopRadiusMatchesTabStripInsteadOfAppWindow() {
+        let topInnerRadius = CGFloat(40)
+        XCTAssertEqual(windowTabGroupOuterCornerRadius(innerCornerRadius: topInnerRadius), 12)
+        XCTAssertLessThan(
+            windowTabGroupOuterCornerRadius(innerCornerRadius: topInnerRadius),
+            topInnerRadius,
+        )
+    }
+
+    func testWindowTabLocalOcclusionRectsConvertScreenCoordinatesToPanelCoordinates() {
+        let panelFrame = CGRect(x: 100, y: 100, width: 300, height: 200)
+        let occludingScreenFrames = [
+            CGRect(x: 150, y: 220, width: 80, height: 60),
+            CGRect(x: 10, y: 10, width: 20, height: 20),
+        ]
+
+        let localRects = windowTabLocalOcclusionRects(
+            panelFrame: panelFrame,
+            occludingScreenFrames: occludingScreenFrames,
+        )
+
+        XCTAssertEqual(localRects, [
+            CGRect(x: 50, y: 20, width: 80, height: 60),
+        ])
+    }
+
+    func testWindowTabStripViewModelTracksFloatingWindowOcclusionSeparatelyForStripAndFrame() {
+        let owner = NSObject()
+        let model = WindowTabStripViewModel(
+            id: ObjectIdentifier(owner),
+            workspaceName: "tabs",
+            frame: CGRect(x: 100, y: 280, width: 300, height: 28),
+            groupFrame: CGRect(x: 100, y: 100, width: 300, height: 208),
+            activeWindowId: 1,
+            activeWindowCornerRadius: 12,
+            tabs: [],
+            occludingFloatingWindowFrames: [
+                CGRect(x: 140, y: 120, width: 100, height: 80),
+            ],
+        )
+
+        XCTAssertFalse(model.tabStripIsOccludedByFloatingWindow)
+        XCTAssertTrue(model.groupFrameIsOccludedByFloatingWindow)
     }
 
     @MainActor
@@ -620,7 +704,7 @@ final class WindowTabsTest: XCTestCase {
 
         let fullRect = window.lastAppliedLayoutPhysicalRect.orDie()
         let tabPreview = window.tabDropZoneRect.orDie()
-        let expectedTabBandHeight = min(max(CGFloat(config.windowTabs.height) + 18, 52), fullRect.height)
+        let expectedTabBandHeight = min(max(resolvedWindowTabBarHeight() + 18, 52), fullRect.height)
 
         XCTAssertEqual(tabPreview.minX, fullRect.minX)
         XCTAssertEqual(tabPreview.maxX, fullRect.maxX)
@@ -1697,8 +1781,177 @@ final class WindowTabsTest: XCTestCase {
             - (windowTabStripContentPadding() * 2)
 
         XCTAssertEqual(windowTabStripAvailableTabsWidth(stripWidth: stripWidth), expectedTabsWidth)
-        XCTAssertEqual(windowTabStripTabWidth(stripWidth: stripWidth, count: 1), 220)
+        XCTAssertEqual(windowTabStripTabWidth(stripWidth: stripWidth, count: 1), 240)
+        XCTAssertEqual(windowTabStripTabWidth(stripWidth: stripWidth, count: 3), 240)
         XCTAssertLessThan(windowTabStripAvailableTabsWidth(stripWidth: stripWidth), stripWidth)
+    }
+
+    func testWindowTabStripLeadingFadeOnlyAppearsAfterScrollingFromLeftEdge() {
+        let stripWidth: CGFloat = 240
+
+        XCTAssertEqual(windowTabLeadingScrollFadeWidth(
+            isScrollable: true,
+            contentMinX: 0,
+            stripWidth: stripWidth,
+        ), 0)
+        XCTAssertEqual(windowTabLeadingScrollFadeWidth(
+            isScrollable: true,
+            contentMinX: -0.5,
+            stripWidth: stripWidth,
+        ), 0)
+        XCTAssertEqual(windowTabLeadingScrollFadeWidth(
+            isScrollable: false,
+            contentMinX: -12,
+            stripWidth: stripWidth,
+        ), 0)
+        XCTAssertGreaterThan(windowTabLeadingScrollFadeWidth(
+            isScrollable: true,
+            contentMinX: -2,
+            stripWidth: stripWidth,
+        ), 0)
+    }
+
+    func testWindowTabStripTrailingFadeTracksScrollableContent() {
+        let stripWidth: CGFloat = 240
+
+        XCTAssertEqual(windowTabTrailingScrollFadeWidth(isScrollable: false, stripWidth: stripWidth), 0)
+        XCTAssertGreaterThan(windowTabTrailingScrollFadeWidth(isScrollable: true, stripWidth: stripWidth), 0)
+    }
+
+    func testWindowIntentPreviewSymbolsMatchIntentStyle() {
+        XCTAssertEqual(windowIntentPreviewSymbolName(for: .tabInsert, isGroup: false), "square.stack.3d.up")
+        XCTAssertEqual(windowIntentPreviewSymbolName(for: .detach, isGroup: false), "arrow.up.left.and.arrow.down.right")
+        XCTAssertEqual(windowIntentPreviewSymbolName(for: .stackSplit, isGroup: false), "rectangle.split.2x1")
+        XCTAssertEqual(windowIntentPreviewSymbolName(for: .swap, isGroup: false), "arrow.left.arrow.right")
+        XCTAssertEqual(windowIntentPreviewSymbolName(for: .workspaceMove, isGroup: false), "macwindow.badge.plus")
+        XCTAssertEqual(windowIntentPreviewSymbolName(for: .workspaceMove, isGroup: true), "rectangle.stack.badge.plus")
+    }
+
+    func testWindowIntentPreviewGuideLinesFollowIntentGeometry() {
+        let size = CGSize(width: 120, height: 80)
+
+        XCTAssertNil(windowIntentPreviewGuideLine(for: .rounded, in: size))
+        XCTAssertEqual(
+            windowIntentPreviewGuideLine(for: .splitLeft, in: size),
+            WindowIntentPreviewGuideLine(start: CGPoint(x: 119, y: 8), end: CGPoint(x: 119, y: 72)),
+        )
+        XCTAssertEqual(
+            windowIntentPreviewGuideLine(for: .splitBelow, in: size),
+            WindowIntentPreviewGuideLine(start: CGPoint(x: 8, y: 1), end: CGPoint(x: 112, y: 1)),
+        )
+        XCTAssertEqual(
+            windowIntentPreviewGuideLine(for: .tabStrip, in: size),
+            WindowIntentPreviewGuideLine(start: CGPoint(x: 10, y: 79), end: CGPoint(x: 110, y: 79)),
+        )
+    }
+
+    func testWindowIntentPreviewFillStaysGrayOverDarkContent() {
+        let fill = WindowIntentPreviewPalette.fillColor.usingColorSpace(.deviceRGB).orDie()
+        let matte = mattePanelNSColor.usingColorSpace(.deviceRGB).orDie()
+        let darkContent: CGFloat = 0.05
+        let lightContent: CGFloat = 1
+        let darkRed = fill.alphaComponent * fill.redComponent + (1 - fill.alphaComponent) * darkContent
+        let darkGreen = fill.alphaComponent * fill.greenComponent + (1 - fill.alphaComponent) * darkContent
+        let darkBlue = fill.alphaComponent * fill.blueComponent + (1 - fill.alphaComponent) * darkContent
+        let lightRed = fill.alphaComponent * fill.redComponent + (1 - fill.alphaComponent) * lightContent
+        let lightGreen = fill.alphaComponent * fill.greenComponent + (1 - fill.alphaComponent) * lightContent
+        let lightBlue = fill.alphaComponent * fill.blueComponent + (1 - fill.alphaComponent) * lightContent
+
+        XCTAssertEqual(fill.redComponent, matte.redComponent, accuracy: 0.001)
+        XCTAssertEqual(fill.greenComponent, matte.greenComponent, accuracy: 0.001)
+        XCTAssertEqual(fill.blueComponent, matte.blueComponent, accuracy: 0.001)
+        XCTAssertEqual(fill.alphaComponent, matte.alphaComponent, accuracy: 0.001)
+        XCTAssertGreaterThan(fill.alphaComponent, 0.88)
+        XCTAssertGreaterThan(min(darkRed, darkGreen, darkBlue), 0.09)
+        XCTAssertLessThan(max(darkRed, darkGreen, darkBlue), 0.16)
+        XCTAssertLessThan(max(lightRed, lightGreen, lightBlue), 0.25)
+        XCTAssertLessThan(max(fill.redComponent, fill.greenComponent, fill.blueComponent) - min(fill.redComponent, fill.greenComponent, fill.blueComponent), 0.01)
+    }
+
+    @MainActor
+    func testHudPanelBaseDoesNotPaintSystemHudBackdrop() {
+        let panel = NSPanelHud()
+
+        XCTAssertFalse(panel.styleMask.contains(.hudWindow))
+        XCTAssertFalse(panel.isOpaque)
+    }
+
+    @MainActor
+    func testWindowIntentPreviewPanelRendersGrayTranslucentSurface() throws {
+        let frame = CGRect(x: 120, y: 120, width: 240, height: 160)
+        let background = NSWindow(
+            contentRect: frame.insetBy(dx: -12, dy: -12),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false,
+        )
+        background.isOpaque = true
+        background.backgroundColor = .white
+        background.level = NSWindow.Level(rawValue: WinMuxPanelLayer.windowIntentPreview.level.rawValue - 1)
+        background.orderFrontRegardless()
+        defer { background.orderOut(nil) }
+
+        let panel = WindowTabDropPreviewPanel.shared
+        panel.show(WindowTabDropPreviewViewModel(
+            containerFrame: frame,
+            frame: frame,
+            title: "Preview",
+            subtitle: "Preview",
+            style: .stackSplit,
+            geometry: .rounded,
+            isGroup: false,
+            referenceWindowId: nil,
+            isPointerSettled: true,
+            zones: [],
+        ))
+        RunLoop.main.run(until: Date().addingTimeInterval(0.12))
+        defer { panel.hide() }
+        guard let panelBounds = cgWindowBounds(windowNumber: panel.windowNumber),
+              let cgImage = CGWindowListCreateImage(
+                  panelBounds,
+                  .optionIncludingWindow,
+                  CGWindowID(panel.windowNumber),
+                  [.nominalResolution],
+              )
+        else {
+            throw XCTSkip("Could not capture intent preview panel window")
+        }
+
+        let bitmap = NSBitmapImageRep(cgImage: cgImage)
+        let sample = bitmap.colorAt(x: bitmap.pixelsWide / 2, y: bitmap.pixelsHigh / 2).orDie()
+            .usingColorSpace(.deviceRGB).orDie()
+        XCTAssertGreaterThan(min(sample.redComponent, sample.greenComponent, sample.blueComponent), 0.12)
+        XCTAssertLessThan(max(sample.redComponent, sample.greenComponent, sample.blueComponent), 0.28)
+    }
+
+    @MainActor
+    func testResizePreviewWeightMapDoesNotMutateWeightsUntilCommit() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        root.changeOrientation(.h)
+        root.layout = .tiles
+
+        let left = TestWindow.new(id: 1, parent: root, adaptiveWeight: 500)
+        let right = TestWindow.new(id: 2, parent: root, adaptiveWeight: 500)
+        left.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 500, height: 400)
+        left.lastAppliedLayoutVirtualRect = left.lastAppliedLayoutPhysicalRect
+        right.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 500, topLeftY: 0, width: 500, height: 400)
+        right.lastAppliedLayoutVirtualRect = right.lastAppliedLayoutPhysicalRect
+
+        let proposedRect = Rect(topLeftX: 0, topLeftY: 0, width: 620, height: 400)
+        let weightMap = proposedResizeWeightMap(left, rect: proposedRect).orDie()
+
+        XCTAssertEqual(left.hWeight, 500)
+        XCTAssertEqual(right.hWeight, 500)
+        XCTAssertEqual(weightMap.weight(for: left, orientation: .h), 620)
+        XCTAssertEqual(weightMap.weight(for: right, orientation: .h), 380)
+
+        applyResizeWithMouse(left, rect: proposedRect)
+
+        XCTAssertEqual(left.hWeight, 620)
+        XCTAssertEqual(right.hWeight, 380)
+        cancelManipulatedWithMouseState()
     }
 
     func testWindowTabStripDragInProgressIgnoresRegularWindowMove() {
@@ -1823,6 +2076,40 @@ final class WindowTabsTest: XCTestCase {
         XCTAssertEqual(windowZone.maxX, accordionZone.maxX)
         XCTAssertGreaterThanOrEqual(accordionZone.topLeftY, accordionRect.topLeftY)
         XCTAssertLessThanOrEqual(accordionZone.topLeftY, accordionRect.topLeftY + 6)
+    }
+
+    @MainActor
+    func testTabInsertAndTopSplitIntentZonesTouchWithoutDeadBand() {
+        setUpWorkspacesForTests()
+        config.windowTabs.enabled = true
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let window = TestWindow.new(id: 1, parent: root)
+        window.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
+
+        let windowTabInteraction = window.tabDropInteractionRect.orDie()
+        let windowTopSplitInteraction = window.stackSplitDropZoneRect(position: .above).orDie()
+
+        XCTAssertEqual(windowTopSplitInteraction.minY, windowTabInteraction.maxY, accuracy: 0.001)
+    }
+
+    @MainActor
+    func testAccordionTabInsertAndTopSplitIntentZonesTouchWithoutDeadBand() {
+        setUpWorkspacesForTests()
+        config.windowTabs.enabled = true
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let accordion = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .accordion, index: INDEX_BIND_LAST)
+        let active = TestWindow.new(id: 1, parent: accordion)
+        let second = TestWindow.new(id: 2, parent: accordion)
+        accordion.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
+        active.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
+        second.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
+
+        let tabInteraction = accordion.windowTabDropInteractionRect.orDie()
+        let topSplitInteraction = accordion.stackSplitDropZoneRect(position: .above).orDie()
+
+        XCTAssertEqual(topSplitInteraction.minY, tabInteraction.maxY, accuracy: 0.001)
     }
 
     @MainActor

@@ -16,6 +16,16 @@ extension TreeNode {
         return result
     }
 
+    func containsLeafWindow(withId windowId: UInt32) -> Bool {
+        if let window = self as? Window {
+            return window.windowId == windowId
+        }
+        for child in children where child.containsLeafWindow(withId: windowId) {
+            return true
+        }
+        return false
+    }
+
     var ownIndex: Int? {
         guard let parent else { return nil }
         return parent.children.firstIndex(of: self).orDie()

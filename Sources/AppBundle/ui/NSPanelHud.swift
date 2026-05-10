@@ -4,7 +4,7 @@ open class NSPanelHud: NSPanel {
     init() {
         super.init(
             contentRect: .zero,
-            styleMask: [.nonactivatingPanel, .borderless, .hudWindow, .utilityWindow],
+            styleMask: [.nonactivatingPanel, .borderless],
             backing: .buffered,
             defer: false,
         )
@@ -15,6 +15,7 @@ open class NSPanelHud: NSPanel {
         self.isMovableByWindowBackground = false
         self.alphaValue = 1
         self.hasShadow = true
+        self.isOpaque = false
         self.backgroundColor = .clear
     }
 }

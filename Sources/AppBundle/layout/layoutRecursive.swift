@@ -193,9 +193,7 @@ extension TilingContainer {
             )
             guard let activeChild = mostRecentChild else { return }
 
-            for child in children where child != activeChild {
-                try await child.hideTabbedWindows(context.workspace)
-            }
+            // Switch tabs by placing the newly active child first, then parking the old visible tabs.
             try await activeChild.layoutRecursive(
                 contentPoint,
                 width: contentWidth,
@@ -203,6 +201,9 @@ extension TilingContainer {
                 virtual: contentVirtual,
                 context,
             )
+            for child in children where child != activeChild {
+                try await child.hideTabbedWindows(context.workspace)
+            }
             return
         }
 

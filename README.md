@@ -68,7 +68,7 @@ You do not need to open up a config file to change shortcuts for basic actions. 
 WinMux comes with it's own mission-control-expose that shows you all the windows and tab groups in the current workspace. Trigger it with `⌃+i`
 
 #### Displays
-Only one display is supported at this time (I only use one display, so I don't have much experience/time to put in to figure out how multi displays should work, feel free to contribute). additional displays will still work, but will not be managed.
+Multiple displays are managed. Each display can show its own visible workspace, and the sidebar can be scoped to the focused display, all displays, or a specific display.
 
 #### Workspaces
 You can NOT create workspaces that have no windows in them. Workspaces with no windows are automatically destroyed.
@@ -142,7 +142,7 @@ After importing an AeroSpace config, add the WinMux-specific features you want w
 
 ```toml
 window-tabs.enabled = true
-window-tabs.height = 28
+window-tabs.height = 36
 
 [workspace-sidebar]
     enabled = true

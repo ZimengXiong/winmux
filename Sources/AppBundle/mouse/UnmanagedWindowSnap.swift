@@ -1,5 +1,6 @@
 import AppKit
 import Common
+import SwiftUI
 
 enum UnmanagedWindowSnapAction: String, CaseIterable, Sendable {
     case leftHalf = "left-half"
@@ -75,7 +76,7 @@ private let rectangleSnapCornerSize: CGFloat = 20
 private let unmanagedSnapMaximizeCenterFraction: CGFloat = 1.0 / 3.0
 private let unmanagedSnapPreviewBorderWidth: CGFloat = 3
 private let unmanagedSnapPreviewCornerRadius: CGFloat = 10
-private let unmanagedSnapPreviewFillOpacity: CGFloat = 0.08
+private let unmanagedSnapPreviewTransitionDuration: TimeInterval = 0.14
 
 @MainActor private var pendingUnmanagedWindowSnap: PendingUnmanagedWindowSnap? = nil
 @MainActor private var lastUnmanagedWindowSnapLogSignature: String? = nil
@@ -104,9 +105,14 @@ private func alignedUnmanagedSnapPreviewFrame(_ frame: CGRect) -> CGRect {
 private final class UnmanagedWindowSnapPreviewPanel: NSPanelHud {
     static let shared = UnmanagedWindowSnapPreviewPanel()
 
-    private let overlayView = NSView(frame: .zero)
+    private let state = UnmanagedWindowSnapPreviewState()
+    private let hostingView = NSHostingView(rootView: AnyView(EmptyView()))
     private var pendingHide: DispatchWorkItem? = nil
     private let hideDebounce: TimeInterval = 0.07
+    private var hasShownPreview = false
+    private var animationStartTime: CFTimeInterval = 0
+    private var animationStartFrame: CGRect = .zero
+    private var animationTargetFrame: CGRect = .zero
 
     override private init() {
         super.init()
@@ -116,24 +122,26 @@ private final class UnmanagedWindowSnapPreviewPanel: NSPanelHud {
         isExcludedFromWindowsMenu = true
         animationBehavior = .none
         ignoresMouseEvents = true
-        level = .statusBar
+        applyWinMuxLayer(.overlay)
         backgroundColor = .clear
 
-        overlayView.wantsLayer = true
-        overlayView.layer?.masksToBounds = true
-        overlayView.layer?.cornerRadius = unmanagedSnapPreviewCornerRadius
-        overlayView.layer?.borderWidth = unmanagedSnapPreviewBorderWidth
-        contentView = overlayView
-        applyStyle()
+        hostingView.rootView = AnyView(UnmanagedWindowSnapPreviewView(state: state))
+        hostingView.frame = contentView?.bounds ?? .zero
+        hostingView.autoresizingMask = [.width, .height]
+        contentView = hostingView
     }
 
-    func show(frame: CGRect) {
+    func show(action: UnmanagedWindowSnapAction, frame: CGRect) {
         pendingHide?.cancel()
         pendingHide = nil
-        applyStyle()
+        state.action = action
         let targetFrame = alignedUnmanagedSnapPreviewFrame(frame)
-        if self.frame != targetFrame {
+        if hasShownPreview {
+            animateFrame(to: targetFrame, duration: unmanagedSnapPreviewTransitionDuration)
+        } else {
+            DisplayRefreshDriver.shared.remove(owner: self)
             setFrame(targetFrame, display: true, animate: false)
+            hasShownPreview = true
         }
         orderFrontRegardless()
     }
@@ -143,16 +151,103 @@ private final class UnmanagedWindowSnapPreviewPanel: NSPanelHud {
         let hideWorkItem = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.pendingHide = nil
+            DisplayRefreshDriver.shared.remove(owner: self)
+            self.hasShownPreview = false
+            self.state.action = nil
             self.orderOut(nil)
         }
         pendingHide = hideWorkItem
         DispatchQueue.main.asyncAfter(deadline: .now() + hideDebounce, execute: hideWorkItem)
     }
 
-    private func applyStyle() {
-        let accent = NSColor.controlAccentColor
-        overlayView.layer?.backgroundColor = accent.withAlphaComponent(unmanagedSnapPreviewFillOpacity).cgColor
-        overlayView.layer?.borderColor = accent.cgColor
+    private func animateFrame(to targetFrame: CGRect, duration: TimeInterval) {
+        animationStartTime = CACurrentMediaTime()
+        animationStartFrame = frame
+        animationTargetFrame = targetFrame
+        DisplayRefreshDriver.shared.add(owner: self) { [weak self] timestamp in
+            self?.updateFrameAnimation(timestamp: timestamp, duration: duration)
+        }
+    }
+
+    private func updateFrameAnimation(timestamp: CFTimeInterval, duration: TimeInterval) {
+        let rawProgress = duration > 0 ? CGFloat((timestamp - animationStartTime) / duration) : 1
+        let progress = displayRefreshEaseInOut(rawProgress)
+        let nextFrame = displayRefreshInterpolate(animationStartFrame, animationTargetFrame, progress: progress)
+        setFrame(alignedUnmanagedSnapPreviewFrame(nextFrame), display: true, animate: false)
+        guard rawProgress >= 1 else { return }
+        setFrame(animationTargetFrame, display: true, animate: false)
+        DisplayRefreshDriver.shared.remove(owner: self)
+    }
+}
+
+@MainActor
+private final class UnmanagedWindowSnapPreviewState: ObservableObject {
+    @Published var action: UnmanagedWindowSnapAction? = nil
+}
+
+private struct UnmanagedWindowSnapPreviewView: View {
+    @ObservedObject var state: UnmanagedWindowSnapPreviewState
+
+    var body: some View {
+        GeometryReader { proxy in
+            let shape = RoundedRectangle(cornerRadius: unmanagedSnapPreviewCornerRadius, style: .continuous)
+            let accent = Color(nsColor: .controlAccentColor)
+            ZStack {
+                LiquidGlassSurface(
+                    shape: shape,
+                    tint: accent,
+                    tintOpacity: 0.14,
+                    scrimOpacity: 0.11,
+                    highlightOpacity: 0.14,
+                    borderOpacity: 0.18,
+                    glowOpacity: 0.18,
+                    glowRadius: 14,
+                    lineWidth: 0.8,
+                    isInteractive: false,
+                )
+                shape
+                    .strokeBorder(
+                        accent.opacity(0.74),
+                        style: StrokeStyle(lineWidth: unmanagedSnapPreviewBorderWidth, lineJoin: .round),
+                    )
+                unmanagedSnapPreviewGlyph(action: state.action, size: proxy.size)
+            }
+        }
+        .environment(\.colorScheme, .dark)
+        .allowsHitTesting(false)
+    }
+
+    private func unmanagedSnapPreviewGlyph(action: UnmanagedWindowSnapAction?, size: CGSize) -> some View {
+        let symbolName = unmanagedSnapPreviewSymbolName(for: action)
+        let side = min(max(min(size.width, size.height) * 0.12, 34), 52)
+        return Image(systemName: symbolName)
+            .font(.system(size: side * 0.48, weight: .semibold))
+            .foregroundStyle(Color.white.opacity(0.72))
+            .frame(width: side, height: side)
+            .background {
+                Circle()
+                    .fill(Color.black.opacity(0.16))
+                    .overlay {
+                        Circle()
+                            .strokeBorder(Color.white.opacity(0.14), lineWidth: 0.7)
+                    }
+            }
+            .shadow(color: Color.black.opacity(0.18), radius: 6, y: 2)
+    }
+
+    private func unmanagedSnapPreviewSymbolName(for action: UnmanagedWindowSnapAction?) -> String {
+        switch action {
+            case .maximize:
+                return "arrow.up.left.and.arrow.down.right"
+            case .firstThird, .centerThird, .lastThird, .firstTwoThirds, .lastTwoThirds:
+                return "rectangle.split.3x1"
+            case .topHalf, .bottomHalf:
+                return "rectangle.split.1x2"
+            case .leftHalf, .rightHalf, .topLeft, .topRight, .bottomLeft, .bottomRight:
+                return "rectangle.split.2x1"
+            case nil:
+                return "rectangle"
+        }
     }
 }
 
@@ -362,7 +457,7 @@ private func setPendingUnmanagedWindowSnap(_ pending: PendingUnmanagedWindowSnap
         "unmanagedSnap.set window=\(pending.windowId) workspace=\(pending.workspaceName) action=\(pending.action.rawValue) container=\(debugDescribe(pending.containerRect)) target=\(debugDescribe(pending.targetRect))"
     )
     pendingUnmanagedWindowSnap = pending
-    UnmanagedWindowSnapPreviewPanel.shared.show(frame: pending.targetRect.toAppKitScreenRect)
+    UnmanagedWindowSnapPreviewPanel.shared.show(action: pending.action, frame: pending.targetRect.toAppKitScreenRect)
 }
 
 @MainActor

@@ -1,5 +1,6 @@
 @testable import AppBundle
 import AppKit
+import Common
 import XCTest
 
 final class AxRefreshFastPathTest: XCTestCase {
@@ -41,6 +42,12 @@ final class AxRefreshFastPathTest: XCTestCase {
         XCTAssertEqual(focus.windowOrNil?.windowId, second.windowId)
         XCTAssertEqual(refreshCount, 0)
         XCTAssertEqual(normalizeCount, 0)
+    }
+
+    func testFocusOnlyEventsCanReuseLastAppliedWindowFrames() {
+        XCTAssertTrue(RefreshSessionEvent.ax(kAXFocusedWindowChangedNotification as String).canReuseLastAppliedWindowFrames)
+        XCTAssertTrue(RefreshSessionEvent.globalObserver(NSWorkspace.didActivateApplicationNotification.rawValue).canReuseLastAppliedWindowFrames)
+        XCTAssertFalse(RefreshSessionEvent.ax(kAXMovedNotification as String).canReuseLastAppliedWindowFrames)
     }
 
     @MainActor

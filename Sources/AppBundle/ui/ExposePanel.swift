@@ -101,6 +101,27 @@ func orderedExposeItemsForExpandedGroup(_ items: [ExposeWindowItem]) -> [ExposeW
     return ordered
 }
 
+func exposeThumbnailWindowIds(from entries: [ExposeEntry]) -> [UInt32] {
+    var seen: Set<UInt32> = []
+    var result: [UInt32] = []
+    func append(_ id: UInt32) {
+        if seen.insert(id).inserted {
+            result.append(id)
+        }
+    }
+    for entry in entries {
+        switch entry {
+            case .window(let window):
+                append(window.id)
+            case .group(let group):
+                for item in group.items {
+                    append(item.id)
+                }
+        }
+    }
+    return result
+}
+
 // MARK: - Data
 
 struct ExposeWindowItem: Identifiable {
@@ -112,6 +133,21 @@ struct ExposeWindowItem: Identifiable {
     let isFocused: Bool
     /// Fraction of screen width this window occupies (0…1). 1.0 = full-width.
     let widthRatio: CGFloat
+}
+
+extension ExposeWindowItem {
+    func withThumbnail(_ thumbnail: NSImage?) -> ExposeWindowItem {
+        guard let thumbnail else { return self }
+        return ExposeWindowItem(
+            id: id,
+            title: title,
+            appName: appName,
+            thumbnail: thumbnail,
+            aspectRatio: aspectRatio,
+            isFocused: isFocused,
+            widthRatio: widthRatio,
+        )
+    }
 }
 
 struct ExposeTabGroup: Identifiable {
@@ -148,7 +184,7 @@ final class ExposePanel: NSPanelHud {
         isExcludedFromWindowsMenu = true
         animationBehavior = .none
         backgroundColor = .clear
-        level = .statusBar
+        applyWinMuxLayer(.overlay)
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         contentView = hostingView
         hostingView.frame = contentView?.bounds ?? .zero
@@ -235,13 +271,11 @@ private func buildEntries(from node: TreeNode, focusedWindowId: UInt32?, screenW
 
 @MainActor
 private func makeItem(for w: Window, focusedWindowId: UInt32?, screenWidth: CGFloat) -> ExposeWindowItem {
-    let mw = w.asMacWindow()
-    let th = captureThumb(mw.windowId)
     let ar: CGFloat = w.lastAppliedLayoutPhysicalRect.map { $0.width / $0.height } ?? 1.5
     let wr: CGFloat = w.lastAppliedLayoutPhysicalRect.map { $0.width / max(1, screenWidth) } ?? 1.0
-    return ExposeWindowItem(id: mw.windowId, title: sidebarDisplayLabel(for: w),
-                            appName: w.app.name ?? "Unknown", thumbnail: th,
-                            aspectRatio: ar, isFocused: mw.windowId == focusedWindowId,
+    return ExposeWindowItem(id: w.windowId, title: sidebarDisplayLabel(for: w),
+                            appName: w.app.name ?? "Unknown", thumbnail: nil,
+                            aspectRatio: ar, isFocused: w.windowId == focusedWindowId,
                             widthRatio: wr)
 }
 
@@ -263,6 +297,7 @@ private struct ExposeView: View {
     @State private var expandedGroupFrames: [ExposeExpandedGroupFrame] = []
     @State private var collapsedGroupFrames: [ExposeCollapsedGroupFrame] = []
     @State private var expandedGroupOriginFrame: CGRect? = nil
+    @State private var thumbnails: [UInt32: NSImage] = [:]
 
     var body: some View {
         ZStack {
@@ -304,6 +339,9 @@ private struct ExposeView: View {
         }
         .onAppear {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { appeared = true }
+        }
+        .task {
+            await loadThumbnailsIfNeeded()
         }
     }
 
@@ -416,9 +454,10 @@ private struct ExposeView: View {
     private func slotView(_ slot: Slot, ch: CGFloat) -> some View {
         switch slot {
             case .single(let window, let expandedGroupId, let groupBadgeLabel):
+                let item = window.withThumbnail(thumbnails[window.id])
                 let cardCw = (ch - exposeCardTitleHeight) * window.aspectRatio
                 WinCard(
-                    item: window,
+                    item: item,
                     cw: cardCw,
                     ch: ch,
                     badgeLabel: groupBadgeLabel,
@@ -440,7 +479,7 @@ private struct ExposeView: View {
 
             case .stack(let group):
                 let cardCw = (ch - 24) * group.aspectRatio
-                StackCard(group: group, cw: cardCw, ch: ch)
+                StackCard(group: group, thumbnails: thumbnails, cw: cardCw, ch: ch)
                     .background {
                         GeometryReader { geometry in
                             Color.clear.preference(
@@ -471,6 +510,18 @@ private struct ExposeView: View {
                     }
                 }
             }
+        }
+    }
+
+    @MainActor
+    private func loadThumbnailsIfNeeded() async {
+        try? await Task.sleep(nanoseconds: 16_000_000)
+        for id in exposeThumbnailWindowIds(from: entries) where thumbnails[id] == nil {
+            guard !Task.isCancelled else { return }
+            if let thumbnail = captureThumb(id) {
+                thumbnails[id] = thumbnail
+            }
+            try? await Task.sleep(nanoseconds: 4_000_000)
         }
     }
 }
@@ -545,6 +596,7 @@ private struct WinCard: View {
 
 private struct StackCard: View {
     let group: ExposeTabGroup
+    let thumbnails: [UInt32: NSImage]
     let cw: CGFloat
     let ch: CGFloat
     @State private var hov = false
@@ -565,8 +617,9 @@ private struct StackCard: View {
                     let depthIndex = abs(i - activeIndex)
                     let cardW = cw - CGFloat(depthIndex) * 8
                     let cardH = thumbH - CGFloat(depthIndex) * 4
+                    let itemWithThumbnail = item.withThumbnail(thumbnails[item.id])
 
-                    cardThumb(item, w: cardW, h: cardH, hov: isActive && hov)
+                    cardThumb(itemWithThumbnail, w: cardW, h: cardH, hov: isActive && hov)
                         // Cascade offset: items behind fan out to the right and down
                         .offset(
                             x: CGFloat(depthIndex) * 10,

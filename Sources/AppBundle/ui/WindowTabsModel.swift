@@ -3,6 +3,7 @@ import AppKit
 private let windowTabGroupShellHorizontalInsetValue: CGFloat = 3
 private let windowTabGroupShellTopInsetValue: CGFloat = 0
 private let windowTabGroupShellBottomInsetValue: CGFloat = 3
+private let windowTabBarMinimumHeightValue: CGFloat = 36
 
 func windowTabGroupShellHorizontalInset() -> CGFloat {
     windowTabGroupShellHorizontalInsetValue
@@ -17,7 +18,37 @@ func windowTabGroupShellBottomInset() -> CGFloat {
 }
 
 @MainActor
+func resolvedWindowTabBarHeight() -> CGFloat {
+    max(CGFloat(config.windowTabs.height), windowTabBarMinimumHeightValue)
+}
+
+@MainActor
+func windowTabGroupFrameRect(forActiveWindowContentRect contentRect: Rect) -> Rect {
+    let horizontalInset = windowTabGroupShellHorizontalInset()
+    let topInset = resolvedWindowTabBarHeight() + windowTabGroupShellTopInset()
+    let bottomInset = windowTabGroupShellBottomInset()
+    return Rect(
+        topLeftX: contentRect.topLeftX - horizontalInset,
+        topLeftY: contentRect.topLeftY - topInset,
+        width: max(contentRect.width + horizontalInset * 2, 0),
+        height: max(contentRect.height + topInset + bottomInset, 0),
+    )
+}
+
+@MainActor
+func windowTabBarRect(forGroupFrameRect groupFrameRect: Rect) -> Rect {
+    Rect(
+        topLeftX: groupFrameRect.topLeftX,
+        topLeftY: groupFrameRect.topLeftY,
+        width: groupFrameRect.width,
+        height: min(resolvedWindowTabBarHeight(), groupFrameRect.height),
+    )
+}
+
+@MainActor
 func updateWindowTabModel() async {
+    let didClearMouseInteractionChromeSuppression =
+        WindowTabStripPanelController.shared.clearMouseInteractionChromeSuppressionIfInactive()
     guard TrayMenuModel.shared.isEnabled, config.windowTabs.enabled else {
         TrayMenuModel.shared.windowTabStrips = []
         WindowTabStripPanelController.shared.refresh()
@@ -31,6 +62,7 @@ func updateWindowTabModel() async {
         if workspace.allLeafWindowsRecursive.contains(where: \.isFullscreen) {
             continue
         }
+        let occludingFloatingWindowFrames = await windowTabOccludingFloatingWindowFrames(in: workspace)
         for container in workspace.rootTilingContainer.allTabbedContainersRecursive {
             guard let tabBarRect = container.windowTabBarRect,
                   let groupFrameRect = container.windowTabGroupFrameRect
@@ -48,20 +80,27 @@ func updateWindowTabModel() async {
                 return WindowTabItemViewModel(
                     windowId: window.windowId,
                     workspaceName: workspace.name,
+                    appName: appName,
+                    appBundleId: window.app.rawAppBundleId,
+                    appBundlePath: window.app.bundlePath,
                     title: title,
                     isActive: window.windowId == activeWindowId,
                 )
             }
             guard !tabs.isEmpty else { continue }
+            let appKitTabBarFrame = tabBarRect.toAppKitScreenRect.alignedToBackingPixels()
+            let appKitGroupFrame = groupFrameRect.toAppKitScreenRect.alignedToBackingPixels()
 
             strips.append(
                 WindowTabStripViewModel(
                     id: ObjectIdentifier(container),
                     workspaceName: workspace.name,
-                    frame: tabBarRect.toAppKitScreenRect,
-                    groupFrame: groupFrameRect.toAppKitScreenRect,
+                    frame: appKitTabBarFrame,
+                    groupFrame: appKitGroupFrame,
                     activeWindowId: activeWindowId,
+                    activeWindowCornerRadius: windowTabGroupAppCornerRadius(activeWindowId: activeWindowId),
                     tabs: tabs,
+                    occludingFloatingWindowFrames: occludingFloatingWindowFrames,
                 ),
             )
         }
@@ -72,8 +111,52 @@ func updateWindowTabModel() async {
         TrayMenuModel.shared.windowTabStrips = strips
         WindowTabStripPanelController.shared.refresh()
     } else {
+        if didClearMouseInteractionChromeSuppression {
+            WindowTabStripPanelController.shared.refresh()
+        }
         debugFocusLog("updateWindowTabModel unchanged strips=\(strips.map(\.frame))")
     }
+}
+
+@MainActor
+func windowTabOccludingFloatingWindowFrames(in workspace: Workspace) async -> [CGRect] {
+    var frames: [CGRect] = []
+    for window in workspace.floatingWindows where window.isBound {
+        let rect: Rect?
+        if let cachedRect = window.lastKnownActualRect {
+            rect = cachedRect
+        } else {
+            rect = try? await window.getAxRect()
+        }
+        guard let rect, rect.width > 0, rect.height > 0 else { continue }
+        frames.append(rect.toAppKitScreenRect.alignedToBackingPixels())
+    }
+    return frames
+}
+
+func windowTabLocalOcclusionRects(panelFrame: CGRect, occludingScreenFrames: [CGRect]) -> [CGRect] {
+    occludingScreenFrames.compactMap { screenFrame in
+        guard screenFrame.intersects(panelFrame) else { return nil }
+        let local = CGRect(
+            x: screenFrame.minX - panelFrame.minX,
+            y: panelFrame.maxY - screenFrame.maxY,
+            width: screenFrame.width,
+            height: screenFrame.height,
+        )
+        let bounds = CGRect(origin: .zero, size: panelFrame.size)
+        let clipped = local.intersection(bounds)
+        guard clipped.width > 0, clipped.height > 0 else { return nil }
+        return clipped
+    }
+}
+
+func windowTabLocalFrame(panelFrame: CGRect, childFrame: CGRect) -> CGRect {
+    CGRect(
+        x: childFrame.minX - panelFrame.minX,
+        y: panelFrame.maxY - childFrame.maxY,
+        width: childFrame.width,
+        height: childFrame.height,
+    )
 }
 
 extension TreeNode {
@@ -96,7 +179,7 @@ extension TilingContainer {
 
     @MainActor
     var windowTabBarHeight: CGFloat {
-        showsWindowTabs ? min(CGFloat(config.windowTabs.height), windowTabBarReferenceRect?.height ?? 0) : 0
+        showsWindowTabs ? min(resolvedWindowTabBarHeight(), windowTabBarReferenceRect?.height ?? 0) : 0
     }
 
     @MainActor
