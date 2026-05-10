@@ -112,6 +112,7 @@ final class WindowTabStripPanelController {
     private var stripPanels: [ObjectIdentifier: WindowTabStripPanel] = [:]
     private var transientResizeTabGroupId: ObjectIdentifier? = nil
     private var mouseInteractionChromeMode: MouseInteractionChromeMode? = nil
+    private var hiddenPassiveTabGroupChromeIds: Set<ObjectIdentifier> = []
 
     private init() {}
 
@@ -136,6 +137,10 @@ final class WindowTabStripPanelController {
             return
         }
         for strip in strips {
+            if hiddenPassiveTabGroupChromeIds.contains(strip.id) {
+                orderOutPanels(id: strip.id)
+                continue
+            }
             let visualPanel = visualPanels[strip.id] ?? WindowTabGroupVisualPanel(id: strip.id)
             visualPanels[strip.id] = visualPanel
             visualPanel.update(with: strip, drawsMockTabs: false)
@@ -187,6 +192,10 @@ final class WindowTabStripPanelController {
         transientResizeTabGroupId = id
         let visualPanel = visualPanels[id] ?? WindowTabGroupVisualPanel(id: id)
         visualPanels[id] = visualPanel
+        if hiddenPassiveTabGroupChromeIds.contains(id) {
+            orderOutPanels(id: id)
+            return true
+        }
         visualPanel.update(with: transientStrip, drawsMockTabs: mouseInteractionChromeMode == .frameOnly)
 
         if mouseInteractionChromeMode != nil {
@@ -217,6 +226,19 @@ final class WindowTabStripPanelController {
         guard mouseInteractionChromeMode != nil || transientResizeTabGroupId != nil else { return }
         mouseInteractionChromeMode = nil
         transientResizeTabGroupId = nil
+        hiddenPassiveTabGroupChromeIds.removeAll()
+        refresh()
+    }
+
+    func setHiddenPassiveTabGroupChrome(_ ids: Set<ObjectIdentifier>) {
+        guard hiddenPassiveTabGroupChromeIds != ids else { return }
+        hiddenPassiveTabGroupChromeIds = ids
+        refresh()
+    }
+
+    func clearHiddenPassiveTabGroupChrome() {
+        guard !hiddenPassiveTabGroupChromeIds.isEmpty else { return }
+        hiddenPassiveTabGroupChromeIds.removeAll()
         refresh()
     }
 
@@ -234,6 +256,7 @@ final class WindowTabStripPanelController {
             transientResizeTabGroupId = nil
         }
         mouseInteractionChromeMode = nil
+        hiddenPassiveTabGroupChromeIds.removeAll()
         for panel in visualPanels.values {
             panel.orderOut(nil)
         }
@@ -257,6 +280,10 @@ final class WindowTabStripPanelController {
 
     private func refreshFrameOnlyChrome(strips: [WindowTabStripViewModel], activeIds: Set<ObjectIdentifier>) {
         for strip in strips {
+            if hiddenPassiveTabGroupChromeIds.contains(strip.id) {
+                orderOutPanels(id: strip.id)
+                continue
+            }
             let visualPanel = visualPanels[strip.id] ?? WindowTabGroupVisualPanel(id: strip.id)
             visualPanels[strip.id] = visualPanel
             visualPanel.update(with: strip, drawsMockTabs: true)
@@ -517,10 +544,17 @@ final class WindowTabDropPreviewPanel: NSPanelHud {
         alphaValue = 1
         let previewKey = WindowIntentPreviewContentKey(model: preview)
         if currentPreviewKey != previewKey || !hasShownPreview {
-            let shouldMorph = hasShownPreview
-                && currentPreviewKey?.canMorph(to: previewKey) == true
-                && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-            compositorView.update(preview, animatingPathChanges: shouldMorph)
+            let animation: WindowIntentPreviewAnimation
+            if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+                animation = .none
+            } else if hasShownPreview, currentPreviewKey?.canMorph(to: previewKey) == true {
+                animation = .morph
+            } else if !hasShownPreview {
+                animation = .appear
+            } else {
+                animation = .none
+            }
+            compositorView.update(preview, animation: animation)
             currentPreviewKey = previewKey
         }
         if !isVisible || !hasShownPreview {
@@ -806,10 +840,10 @@ private final class WindowIntentPreviewCompositorView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func update(_ model: WindowTabDropPreviewViewModel, animatingPathChanges: Bool) {
+    func update(_ model: WindowTabDropPreviewViewModel, animation: WindowIntentPreviewAnimation) {
         currentModel = model
         isHidden = false
-        render(model, animatingPathChanges: animatingPathChanges)
+        render(model, animation: animation)
     }
 
     func clear() {
@@ -829,7 +863,7 @@ private final class WindowIntentPreviewCompositorView: NSView {
     override func layout() {
         super.layout()
         if let currentModel {
-            render(currentModel, animatingPathChanges: false)
+            render(currentModel, animation: .none)
         }
     }
 
@@ -869,14 +903,29 @@ private final class WindowIntentPreviewCompositorView: NSView {
         }
     }
 
-    private func render(_ model: WindowTabDropPreviewViewModel, animatingPathChanges: Bool) {
+    private func render(_ model: WindowTabDropPreviewViewModel, animation: WindowIntentPreviewAnimation) {
         let scale = updateContentsScale()
         let zones = localZones(for: model, scale: scale)
+        let activeZones = zones.filter(\.isActive)
         let surfacePath = combinedSurfacePath(for: zones, inset: 0)
-        let activeSurfacePath = combinedSurfacePath(for: zones.filter(\.isActive), inset: 0)
+        let activeSurfacePath = combinedSurfacePath(for: activeZones, inset: 0)
         let insetPath = combinedSurfacePath(for: zones, inset: 1)
         let guidePath = combinedGuidePath(for: zones)
-        let activeGuidePath = combinedGuidePath(for: zones.filter(\.isActive))
+        let activeGuidePath = combinedGuidePath(for: activeZones)
+        let appearingStartZones: [WindowIntentPreviewLocalZone]
+        let appearingActiveZones: [WindowIntentPreviewLocalZone]
+        if animation == .appear {
+            appearingStartZones = appearanceStartZones(for: zones)
+            appearingActiveZones = appearingStartZones.filter(\.isActive)
+        } else {
+            appearingStartZones = []
+            appearingActiveZones = []
+        }
+        let appearingSurfacePath = combinedSurfacePath(for: appearingStartZones, inset: 0)
+        let appearingActiveSurfacePath = combinedSurfacePath(for: appearingActiveZones, inset: 0)
+        let appearingInsetPath = combinedSurfacePath(for: appearingStartZones, inset: 1)
+        let appearingGuidePath = combinedGuidePath(for: appearingStartZones)
+        let appearingActiveGuidePath = combinedGuidePath(for: appearingActiveZones)
         let style = WindowIntentPreviewLayerStyle(style: model.style, isPointerSettled: model.isPointerSettled)
 
         CATransaction.begin()
@@ -886,38 +935,68 @@ private final class WindowIntentPreviewCompositorView: NSView {
             layer.contentsScale = scale
             layer.isHidden = false
         }
-        setPath(surfacePath, on: surfaceLayer, animating: animatingPathChanges, key: "surfacePath")
+        setPath(surfacePath, on: surfaceLayer, animation: animation, key: "surfacePath", appearingStartPath: appearingSurfacePath)
         surfaceLayer.fillColor = WindowIntentPreviewPalette.fill
-        setPath(surfacePath, on: highlightLayer, animating: animatingPathChanges, key: "highlightPath")
+        setPath(surfacePath, on: highlightLayer, animation: animation, key: "highlightPath", appearingStartPath: appearingSurfacePath)
         highlightLayer.fillColor = WindowIntentPreviewPalette.highlight(alpha: style.highlightAlpha)
-        setPath(insetPath, on: innerStrokeLayer, animating: animatingPathChanges, key: "innerStrokePath")
-        setPath(surfacePath, on: accentStrokeLayer, animating: animatingPathChanges, key: "accentPath")
+        setPath(insetPath, on: innerStrokeLayer, animation: animation, key: "innerStrokePath", appearingStartPath: appearingInsetPath)
+        setPath(surfacePath, on: accentStrokeLayer, animation: animation, key: "accentPath", appearingStartPath: appearingSurfacePath)
         accentStrokeLayer.strokeColor = WindowIntentPreviewPalette.accent(alpha: style.inactiveStrokeAlpha)
-        setPath(activeSurfacePath, on: activeStrokeLayer, animating: animatingPathChanges, key: "activeStrokePath")
+        setPath(activeSurfacePath, on: activeStrokeLayer, animation: animation, key: "activeStrokePath", appearingStartPath: appearingActiveSurfacePath)
         activeStrokeLayer.strokeColor = WindowIntentPreviewPalette.accent(alpha: style.strokeAlpha)
-        setPath(guidePath, on: guideLayer, animating: animatingPathChanges, key: "guidePath")
+        setPath(guidePath, on: guideLayer, animation: animation, key: "guidePath", appearingStartPath: appearingGuidePath)
         guideLayer.strokeColor = WindowIntentPreviewPalette.accent(alpha: style.inactiveGuideAlpha)
-        setPath(activeGuidePath, on: activeGuideLayer, animating: animatingPathChanges, key: "activeGuidePath")
+        setPath(activeGuidePath, on: activeGuideLayer, animation: animation, key: "activeGuidePath", appearingStartPath: appearingActiveGuidePath)
         activeGuideLayer.strokeColor = WindowIntentPreviewPalette.accent(alpha: style.guideAlpha)
         CATransaction.commit()
+        if animation == .appear {
+            animateInitialOpacity()
+        }
     }
 
-    private func setPath(_ path: CGPath?, on layer: CAShapeLayer, animating: Bool, key: String) {
+    private func setPath(
+        _ path: CGPath?,
+        on layer: CAShapeLayer,
+        animation: WindowIntentPreviewAnimation,
+        key: String,
+        appearingStartPath: CGPath?
+    ) {
         let currentPresentationPath = layer.presentation()?.path
         let currentModelPath = layer.path
         layer.removeAnimation(forKey: key)
         layer.path = path
-        guard animating,
-              let fromPath = currentPresentationPath ?? currentModelPath,
-              let path
-        else { return }
+        let fromPath: CGPath?
+        let duration: CFTimeInterval
+        switch animation {
+            case .none:
+                return
+            case .morph:
+                fromPath = currentPresentationPath ?? currentModelPath
+                duration = 0.145
+            case .appear:
+                fromPath = appearingStartPath
+                duration = 0.16
+        }
+        guard let fromPath, let path else { return }
 
-        let animation = CABasicAnimation(keyPath: "path")
-        animation.fromValue = fromPath
-        animation.toValue = path
-        animation.duration = 0.145
-        animation.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0, 0, 1)
-        layer.add(animation, forKey: key)
+        let pathAnimation = CABasicAnimation(keyPath: "path")
+        pathAnimation.fromValue = fromPath
+        pathAnimation.toValue = path
+        pathAnimation.duration = duration
+        pathAnimation.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0, 0, 1)
+        layer.add(pathAnimation, forKey: key)
+    }
+
+    private func animateInitialOpacity() {
+        guard let layer else { return }
+        layer.removeAnimation(forKey: "intentPreviewAppear")
+        let opacity = CABasicAnimation(keyPath: "opacity")
+        opacity.fromValue = 0.72
+        opacity.toValue = 1
+        opacity.duration = 0.13
+        opacity.timingFunction = CAMediaTimingFunction(controlPoints: 0.2, 0, 0, 1)
+        layer.opacity = 1
+        layer.add(opacity, forKey: "intentPreviewAppear")
     }
 
     private func updateContentsScale() -> CGFloat {
@@ -947,6 +1026,25 @@ private final class WindowIntentPreviewCompositorView: NSView {
             width: screenFrame.width,
             height: screenFrame.height,
         )
+    }
+
+    private func appearanceStartZones(for zones: [WindowIntentPreviewLocalZone]) -> [WindowIntentPreviewLocalZone] {
+        zones.map { zone in
+            let startWidth = max(zone.frame.width * 0.88, min(zone.frame.width, 2))
+            let startHeight = max(zone.frame.height * 0.88, min(zone.frame.height, 2))
+            let startFrame = CGRect(
+                x: zone.frame.midX - startWidth / 2,
+                y: zone.frame.midY - startHeight / 2,
+                width: startWidth,
+                height: startHeight,
+            )
+            return WindowIntentPreviewLocalZone(
+                frame: startFrame,
+                style: zone.style,
+                geometry: zone.geometry,
+                isActive: zone.isActive,
+            )
+        }
     }
 
     private func combinedSurfacePath(for zones: [WindowIntentPreviewLocalZone], inset: CGFloat) -> CGPath? {
@@ -1000,6 +1098,12 @@ private struct WindowIntentPreviewLocalZone {
     let style: WindowTabDropPreviewStyle
     let geometry: WindowTabDropPreviewGeometry
     let isActive: Bool
+}
+
+private enum WindowIntentPreviewAnimation {
+    case none
+    case appear
+    case morph
 }
 
 private struct WindowIntentPreviewContentKey: Equatable {
@@ -1681,6 +1785,7 @@ private struct WindowTabStripView: View {
 
     private func tabStripBody(stripWidth: CGFloat, stripHeight: CGFloat) -> some View {
         let tabOrder = strip.tabs.map(\.windowId)
+        let tabIndicesById = tabIndexLookup(for: strip.tabs)
         let count = max(strip.tabs.count, 1)
         let tabWidth = windowTabStripTabWidth(stripWidth: stripWidth, count: count)
         let itemHeight = max(stripHeight - 4, 18)
@@ -1699,13 +1804,14 @@ private struct WindowTabStripView: View {
             isScrollable: shouldFadeTabScroll,
             stripWidth: stripWidth,
         )
-        let groupDragWindowId = strip.tabs.first(where: \.isActive)?.windowId ?? strip.tabs.first?.windowId
+        let activeWindowId = strip.tabs.first(where: \.isActive)?.windowId
+        let groupDragWindowId = activeWindowId ?? strip.tabs.first?.windowId
         let stripCornerRadius = strip.activeWindowCornerRadius
         let topInnerCornerRadius = windowTabGroupTopInnerCornerRadius(stripCornerRadius)
         let outerTopRadius = windowTabGroupOuterCornerRadius(innerCornerRadius: topInnerCornerRadius)
         let tabStripShape = windowTabStripShape(outerTopRadius: outerTopRadius)
 
-        let draggingIndex = draggingTabId.flatMap { id in strip.tabs.firstIndex(where: { $0.windowId == id }) }
+        let draggingIndex = draggingTabId.flatMap { tabIndicesById[$0] }
         let targetIndex: Int? = draggingIndex.map { srcIdx in
             let delta = Int(round(dragTranslationX / effectiveTabWidth))
             return max(0, min(srcIdx + delta, strip.tabs.count - 1))
@@ -1735,6 +1841,7 @@ private struct WindowTabStripView: View {
                             targetIndex: targetIndex,
                             effectiveTabWidth: effectiveTabWidth,
                             currentOrder: tabOrder,
+                            tabIndicesById: tabIndicesById,
                         ))
                         .zIndex(draggingTabId == tab.windowId ? 1 : 0)
                         .shadow(
@@ -1860,10 +1967,19 @@ private struct WindowTabStripView: View {
         }
         .clipShape(tabStripShape)
         .animation(reduceMotion ? windowTabReducedMotionAnimation : windowTabPillAnimation, value: hoveredTabId)
-        .animation(reduceMotion ? windowTabReducedMotionAnimation : windowTabPillAnimation, value: strip.tabs.first(where: \.isActive)?.windowId)
+        .animation(reduceMotion ? windowTabReducedMotionAnimation : windowTabPillAnimation, value: activeWindowId)
         .onChange(of: tabOrder) { newOrder in
             clearPendingReorderDropIfModelApplied(currentOrder: newOrder)
         }
+    }
+
+    private func tabIndexLookup(for tabs: [WindowTabItemViewModel]) -> [UInt32: Int] {
+        var result: [UInt32: Int] = [:]
+        result.reserveCapacity(tabs.count)
+        for (index, tab) in tabs.enumerated() {
+            result[tab.windowId] = index
+        }
+        return result
     }
 
     private func windowTabStripShape(outerTopRadius: CGFloat) -> WindowTabDropOutlineShape {
@@ -1893,12 +2009,13 @@ private struct WindowTabStripView: View {
         targetIndex: Int?,
         effectiveTabWidth: CGFloat,
         currentOrder: [UInt32],
+        tabIndicesById: [UInt32: Int],
     ) -> CGFloat {
         if let pendingReorderDrop, pendingReorderDrop.orderBeforeDrop == currentOrder {
             if tab.windowId == pendingReorderDrop.windowId {
                 return CGFloat(pendingReorderDrop.targetIndex - pendingReorderDrop.sourceIndex) * effectiveTabWidth
             }
-            guard let tabIndex = strip.tabs.firstIndex(where: { $0.id == tab.id }) else { return 0 }
+            guard let tabIndex = tabIndicesById[tab.windowId] else { return 0 }
             return tabShiftOffset(
                 tabIndex: tabIndex,
                 sourceIndex: pendingReorderDrop.sourceIndex,
@@ -1920,7 +2037,7 @@ private struct WindowTabStripView: View {
             return dragTranslationX
         }
 
-        guard let tabIndex = strip.tabs.firstIndex(where: { $0.id == tab.id }) else { return 0 }
+        guard let tabIndex = tabIndicesById[tab.windowId] else { return 0 }
         return tabShiftOffset(
             tabIndex: tabIndex,
             sourceIndex: draggingIndex,

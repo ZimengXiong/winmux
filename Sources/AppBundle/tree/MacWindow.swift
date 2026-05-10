@@ -4,6 +4,7 @@ import Common
 final class MacWindow: Window {
     let macApp: MacApp
     private var prevUnhiddenProportionalPositionInsideWorkspaceRect: CGPoint?
+    private var hiddenInCorner: OptimalHideCorner?
 
     @MainActor
     private init(_ id: UInt32, _ actor: MacApp, lastFloatingSize: CGSize?, parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {
@@ -145,6 +146,9 @@ final class MacWindow: Window {
     // todo it's part of the window layout and should be moved to layoutRecursive.swift
     @MainActor
     func hideInCorner(_ corner: OptimalHideCorner) async throws {
+        if isHiddenInCorner, hiddenInCorner == corner {
+            return
+        }
         guard let nodeMonitor else { return }
         // Don't accidentally override prevUnhiddenEmulationPosition in case of subsequent `hideInCorner` calls
         if !isHiddenInCorner {
@@ -173,6 +177,7 @@ final class MacWindow: Window {
                 p = nodeMonitor.visibleRect.bottomRightCorner - onePixelOffset
         }
         setAxFrame(p, nil)
+        hiddenInCorner = corner
     }
 
     @MainActor
@@ -204,6 +209,7 @@ final class MacWindow: Window {
         }
 
         self.prevUnhiddenProportionalPositionInsideWorkspaceRect = nil
+        self.hiddenInCorner = nil
     }
 
     override var isHiddenInCorner: Bool {

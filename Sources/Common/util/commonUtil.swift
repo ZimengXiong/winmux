@@ -87,10 +87,16 @@ public enum RefreshSessionEvent: Sendable, CustomStringConvertible {
 
     public var canReuseLastAppliedWindowFrames: Bool {
         switch self {
+            case .ax(let notif):
+                notif == kAXFocusedWindowChangedNotification as String
+            case .globalObserver(let notif):
+                notif == NSWorkspace.didActivateApplicationNotification.rawValue
             case .hotkeyBinding, .menuBarButton, .socketServer, .onModeChanged:
                 true
-            case .configAutoReload, .globalObserver, .globalObserverLeftMouseUp, .startup,
-                 .resetManipulatedWithMouse, .ax, .onFocusedMonitorChanged, .onFocusChanged:
+            case .onFocusedMonitorChanged, .onFocusChanged:
+                true
+            case .configAutoReload, .globalObserverLeftMouseUp, .startup,
+                 .resetManipulatedWithMouse:
                 false
         }
     }

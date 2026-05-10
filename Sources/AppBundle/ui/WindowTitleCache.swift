@@ -5,7 +5,7 @@ private struct CachedWindowTitle {
     let fetchedAt: Date
 }
 
-private let cachedWindowTitleMaxAge: TimeInterval = 1
+private let cachedWindowTitleMaxAge: TimeInterval = 5
 
 @MainActor
 private var cachedWindowTitles: [UInt32: CachedWindowTitle] = [:]

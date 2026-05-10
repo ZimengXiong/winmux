@@ -580,4 +580,51 @@ final class WorkspaceSidebarDragTest: XCTestCase {
         XCTAssertEqual(workspaceSidebarMonitorScopePoint(scopeId), secondary.rect.topLeftCorner)
         XCTAssertEqual(workspaceSidebarMonitor(forScopeId: scopeId)?.rect.topLeftCorner, secondary.rect.topLeftCorner)
     }
+
+    func testVisibleWorkspacesAreGroupedByProjectAndScope() {
+        let focusedScope = "monitor:0.0"
+        let otherScope = "monitor:1920.0"
+        let workspaces = [
+            WorkspaceSidebarWorkspaceViewModel(
+                name: "1",
+                projectId: "default",
+                displayName: "1",
+                sidebarLabel: "",
+                isGeneratedName: false,
+                monitorScopeId: focusedScope,
+                monitorName: nil,
+                isFocused: true,
+                isVisible: true,
+                items: [],
+            ),
+            WorkspaceSidebarWorkspaceViewModel(
+                name: "2",
+                projectId: "project-b",
+                displayName: "2",
+                sidebarLabel: "",
+                isGeneratedName: false,
+                monitorScopeId: otherScope,
+                monitorName: nil,
+                isFocused: false,
+                isVisible: true,
+                items: [],
+            ),
+        ]
+
+        let grouped = workspaceSidebarVisibleWorkspacesByProject(
+            workspaces: workspaces,
+            selectedScopeId: workspaceSidebarFocusedScopeId,
+            focusedMonitorScopeId: focusedScope,
+        )
+
+        XCTAssertEqual(grouped["default"]?.map(\.name), ["1"])
+        XCTAssertNil(grouped["project-b"])
+    }
+
+    func testProjectPagerRendersOnlyCurrentAndSwipeTargetPages() {
+        XCTAssertTrue(shouldRenderWorkspaceSidebarProjectPage(index: 1, displayIndex: 1, swipeDirection: nil, projectCount: 4))
+        XCTAssertFalse(shouldRenderWorkspaceSidebarProjectPage(index: 0, displayIndex: 1, swipeDirection: nil, projectCount: 4))
+        XCTAssertTrue(shouldRenderWorkspaceSidebarProjectPage(index: 2, displayIndex: 1, swipeDirection: 1, projectCount: 4))
+        XCTAssertFalse(shouldRenderWorkspaceSidebarProjectPage(index: 3, displayIndex: 1, swipeDirection: 1, projectCount: 4))
+    }
 }

@@ -5,6 +5,9 @@ func resizedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutabl
     let notif = notif as String
     let windowId = ax.containingWindowId()
     Task { @MainActor in
+        if WindowMouseInteractionOpacityController.shared.shouldSuppressObserverEvent(windowId: windowId) {
+            return
+        }
         if shouldIgnoreAxObserverEventForPostDragSuppression(windowId: windowId, notif: notif) {
             return
         }

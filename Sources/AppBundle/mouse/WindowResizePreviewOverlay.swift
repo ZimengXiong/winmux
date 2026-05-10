@@ -79,7 +79,9 @@ private func windowResizePreviewItems(
             return [WindowResizePreviewItem(window: window, rect: physicalRect)]
         case .tilingContainer(let container):
             if container.usesWindowTabBehavior {
-                guard !container.allLeafWindowsRecursive.contains(where: { $0.windowId == activeWindowId }) else { return [] }
+                if let activeWindowId, container.containsLeafWindow(withId: activeWindowId) {
+                    return []
+                }
                 guard physicalRect.width > 0, physicalRect.height > 0 else { return [] }
                 return [WindowResizePreviewItem(tabGroup: container, rect: physicalRect)]
             }
@@ -177,7 +179,9 @@ private func windowResizePreviewAccordionItems(
     activeWindowId: UInt32?,
 ) -> [WindowResizePreviewItem] {
     if container.usesWindowTabBehavior {
-        guard !container.allLeafWindowsRecursive.contains(where: { $0.windowId == activeWindowId }) else { return [] }
+        if let activeWindowId, container.containsLeafWindow(withId: activeWindowId) {
+            return []
+        }
         let physicalRect = Rect(topLeftX: point.x, topLeftY: point.y, width: max(width, 0), height: max(height, 0))
         guard physicalRect.width > 0, physicalRect.height > 0 else { return [] }
         return [WindowResizePreviewItem(tabGroup: container, rect: physicalRect)]

@@ -1,6 +1,7 @@
 import CoreGraphics
 import Common
 import Darwin
+import Foundation
 
 private let mouseInteractionHiddenWindowAlpha: Float = 0
 private let mouseInteractionVisibleWindowAlpha: Float = 1
@@ -10,12 +11,14 @@ final class WindowMouseInteractionOpacityController {
     static let shared = WindowMouseInteractionOpacityController()
 
     private var hiddenWindowIds: Set<UInt32> = []
+    private var temporarilyMovedWindows: [UInt32: Rect] = [:]
 
     private init() {}
 
     func update(activeWindowId: UInt32) {
         guard !isUnitTest else { return }
         let nextHiddenIds = Set(mouseInteractionWindowIdsToHide(activeWindowId: activeWindowId))
+        moveWindowsOutOfView(activeWindowId: activeWindowId)
         setWindowListAlpha(
             windowIds: Array(hiddenWindowIds.subtracting(nextHiddenIds)),
             alpha: mouseInteractionVisibleWindowAlpha,
@@ -28,14 +31,70 @@ final class WindowMouseInteractionOpacityController {
     }
 
     func restore() {
-        guard !hiddenWindowIds.isEmpty else { return }
-        setWindowListAlpha(windowIds: Array(hiddenWindowIds), alpha: mouseInteractionVisibleWindowAlpha)
+        if !hiddenWindowIds.isEmpty {
+            setWindowListAlpha(windowIds: Array(hiddenWindowIds), alpha: mouseInteractionVisibleWindowAlpha)
+        }
         hiddenWindowIds.removeAll()
+        suppressPostDragAxObserverEvents(for: temporarilyMovedWindows.keys)
+        for (windowId, rect) in temporarilyMovedWindows {
+            guard let window = Window.get(byId: windowId) else { continue }
+            window.lastKnownActualRect = rect
+            window.setAxFrame(rect.topLeftCorner, rect.size)
+        }
+        temporarilyMovedWindows.removeAll()
+        WindowTabStripPanelController.shared.clearHiddenPassiveTabGroupChrome()
+    }
+
+    func shouldSuppressObserverEvent(windowId: UInt32?) -> Bool {
+        guard let windowId else { return false }
+        return temporarilyMovedWindows.keys.contains(windowId)
+    }
+
+    private func moveWindowsOutOfView(activeWindowId: UInt32) {
+        let windowsToHide = mouseInteractionManagedWindowsToHide(activeWindowId: activeWindowId)
+        WindowTabStripPanelController.shared.setHiddenPassiveTabGroupChrome(
+            passiveTabGroupChromeIdsToHide(windows: windowsToHide, activeWindowId: activeWindowId)
+        )
+        let visibleIds = Set(windowsToHide.map(\.windowId))
+        for staleId in temporarilyMovedWindows.keys where !visibleIds.contains(staleId) {
+            guard let rect = temporarilyMovedWindows.removeValue(forKey: staleId),
+                  let window = Window.get(byId: staleId)
+            else { continue }
+            window.lastKnownActualRect = rect
+            window.setAxFrame(rect.topLeftCorner, rect.size)
+        }
+        for window in windowsToHide where temporarilyMovedWindows[window.windowId] == nil {
+            guard let rect = window.lastKnownActualRect ?? window.lastAppliedLayoutPhysicalRect else { continue }
+            temporarilyMovedWindows[window.windowId] = rect
+            window.lastKnownActualRect = rect
+            window.setAxFrame(mouseInteractionHiddenTopLeftCorner(for: rect), nil)
+        }
     }
 }
 
 @MainActor
+private func passiveTabGroupChromeIdsToHide(windows: [Window], activeWindowId: UInt32) -> Set<ObjectIdentifier> {
+    let activeTabGroup = Window.get(byId: activeWindowId)?.nearestWindowTabGroup
+    return Set(windows.compactMap { window in
+        guard let tabGroup = window.nearestWindowTabGroup,
+              tabGroup.usesWindowTabBehavior,
+              tabGroup !== activeTabGroup
+        else {
+            return nil
+        }
+        return ObjectIdentifier(tabGroup)
+    })
+}
+
+@MainActor
 func mouseInteractionWindowIdsToHide(activeWindowId: UInt32) -> [UInt32] {
+    var windowIds = Set(mouseInteractionManagedWindowIdsToHide(activeWindowId: activeWindowId))
+    windowIds.formUnion(mouseInteractionVisibleWindowIdsToHide(activeWindowId: activeWindowId))
+    return Array(windowIds)
+}
+
+@MainActor
+private func mouseInteractionManagedWindowIdsToHide(activeWindowId: UInt32) -> [UInt32] {
     MacWindow.allWindows.compactMap { window in
         guard window.windowId != activeWindowId,
               !window.isHiddenInCorner,
@@ -45,6 +104,59 @@ func mouseInteractionWindowIdsToHide(activeWindowId: UInt32) -> [UInt32] {
         }
         return window.windowId
     }
+}
+
+private func mouseInteractionVisibleWindowIdsToHide(activeWindowId: UInt32) -> [UInt32] {
+    mouseInteractionVisibleWindowsToHide(activeWindowId: activeWindowId).map(\.id)
+}
+
+@MainActor
+private func mouseInteractionManagedWindowsToHide(activeWindowId: UInt32) -> [Window] {
+    MacWindow.allWindows.compactMap { window in
+        guard window.windowId != activeWindowId,
+              !window.isHiddenInCorner,
+              window.nodeWorkspace?.isVisible == true
+        else {
+            return nil
+        }
+        return window
+    }
+}
+
+private struct MouseInteractionVisibleWindow {
+    let id: UInt32
+}
+
+private func mouseInteractionVisibleWindowsToHide(activeWindowId: UInt32) -> [MouseInteractionVisibleWindow] {
+    let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+    guard let windowInfos = CGWindowListCopyWindowInfo(options, CGWindowID(0)) as? [[String: Any]] else {
+        return []
+    }
+
+    let currentProcessId = ProcessInfo.processInfo.processIdentifier
+    return windowInfos.compactMap { info in
+        guard let windowId = (info[kCGWindowNumber as String] as? NSNumber)?.uint32Value,
+              windowId != activeWindowId,
+              let layer = (info[kCGWindowLayer as String] as? NSNumber)?.intValue,
+              layer == 0,
+              let ownerProcessId = (info[kCGWindowOwnerPID as String] as? NSNumber)?.intValue,
+              ownerProcessId != currentProcessId,
+              let alpha = (info[kCGWindowAlpha as String] as? NSNumber)?.doubleValue,
+              alpha > 0.01,
+              let boundsDictionary = info[kCGWindowBounds as String] as? NSDictionary,
+              let bounds = CGRect(dictionaryRepresentation: boundsDictionary),
+              bounds.width > 8,
+              bounds.height > 8
+        else {
+            return nil
+        }
+        return MouseInteractionVisibleWindow(id: windowId)
+    }
+}
+
+private func mouseInteractionHiddenTopLeftCorner(for rect: Rect) -> CGPoint {
+    let monitorRect = rect.center.monitorApproximation.visibleRect
+    return monitorRect.bottomRightCorner + CGPoint(x: 8, y: 8)
 }
 
 @MainActor

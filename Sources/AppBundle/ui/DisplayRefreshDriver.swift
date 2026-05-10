@@ -3,6 +3,27 @@ import CoreVideo
 import Foundation
 import QuartzCore
 
+private let displayRefreshHostClockFrequency = CVGetHostClockFrequency()
+
+private func displayRefreshDriverCallback(
+    _: CVDisplayLink,
+    _ now: UnsafePointer<CVTimeStamp>,
+    _: UnsafePointer<CVTimeStamp>,
+    _: CVOptionFlags,
+    _: UnsafeMutablePointer<CVOptionFlags>,
+    _ userInfo: UnsafeMutableRawPointer?,
+) -> CVReturn {
+    guard let userInfo else { return kCVReturnSuccess }
+    let driver = Unmanaged<DisplayRefreshDriver>.fromOpaque(userInfo).takeUnretainedValue()
+    let timestamp = displayRefreshHostClockFrequency > 0
+        ? Double(now.pointee.hostTime) / displayRefreshHostClockFrequency
+        : CACurrentMediaTime()
+    Task { @MainActor in
+        driver.fire(timestamp: timestamp)
+    }
+    return kCVReturnSuccess
+}
+
 @MainActor
 final class DisplayRefreshDriver: @unchecked Sendable {
     static let shared = DisplayRefreshDriver()
@@ -44,7 +65,7 @@ final class DisplayRefreshDriver: @unchecked Sendable {
             return false
         }
         let userInfo = Unmanaged.passUnretained(self).toOpaque()
-        guard CVDisplayLinkSetOutputCallback(rawLink, Self.displayLinkCallback, userInfo) == kCVReturnSuccess,
+        guard CVDisplayLinkSetOutputCallback(rawLink, displayRefreshDriverCallback, userInfo) == kCVReturnSuccess,
               CVDisplayLinkStart(rawLink) == kCVReturnSuccess
         else {
             return false
@@ -75,10 +96,20 @@ final class DisplayRefreshDriver: @unchecked Sendable {
     }
 
     private func pruneReleasedOwners() {
-        subscriptions = subscriptions.filter { $0.value.owner != nil }
+        var releasedOwners: [ObjectIdentifier]?
+        for (id, subscription) in subscriptions where subscription.owner == nil {
+            if releasedOwners == nil {
+                releasedOwners = []
+            }
+            releasedOwners?.append(id)
+        }
+        guard let releasedOwners else { return }
+        for id in releasedOwners {
+            subscriptions.removeValue(forKey: id)
+        }
     }
 
-    private func fire(timestamp: CFTimeInterval) {
+    fileprivate func fire(timestamp: CFTimeInterval) {
         pruneReleasedOwners()
         guard !subscriptions.isEmpty else {
             stopIfIdle()
@@ -89,18 +120,6 @@ final class DisplayRefreshDriver: @unchecked Sendable {
         }
     }
 
-    private nonisolated static let displayLinkCallback: CVDisplayLinkOutputCallback = { _, now, _, _, _, userInfo in
-        guard let userInfo else { return kCVReturnSuccess }
-        let driver = Unmanaged<DisplayRefreshDriver>.fromOpaque(userInfo).takeUnretainedValue()
-        let hostFrequency = CVGetHostClockFrequency()
-        let timestamp = hostFrequency > 0 ? Double(now.pointee.hostTime) / hostFrequency : CACurrentMediaTime()
-        DispatchQueue.main.async {
-            Task { @MainActor in
-                driver.fire(timestamp: timestamp)
-            }
-        }
-        return kCVReturnSuccess
-    }
 }
 
 func displayRefreshEaseInOut(_ progress: CGFloat) -> CGFloat {

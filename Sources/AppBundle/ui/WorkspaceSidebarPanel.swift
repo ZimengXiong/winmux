@@ -94,6 +94,41 @@ private func workspaceSidebarContentWidth(_ expansionProgress: CGFloat) -> CGFlo
     )
 }
 
+func workspaceSidebarVisibleWorkspacesByProject(
+    workspaces: [WorkspaceSidebarWorkspaceViewModel],
+    selectedScopeId: String,
+    focusedMonitorScopeId: String,
+) -> [String: [WorkspaceSidebarWorkspaceViewModel]] {
+    var result: [String: [WorkspaceSidebarWorkspaceViewModel]] = [:]
+    for workspace in workspaces where workspaceSidebarWorkspaceMatchesScope(
+        workspaceMonitorScopeId: workspace.monitorScopeId,
+        selectedScopeId: selectedScopeId,
+        focusedMonitorScopeId: focusedMonitorScopeId,
+    ) {
+        result[workspace.projectId, default: []].append(workspace)
+    }
+    return result
+}
+
+func shouldRenderWorkspaceSidebarProjectPage(
+    index: Int,
+    displayIndex: Int,
+    swipeDirection: Int?,
+    projectCount: Int,
+) -> Bool {
+    guard index != displayIndex else { return true }
+    guard let swipeDirection,
+          let targetIndex = workspaceSidebarProjectIndexAfterSwipe(
+            currentIndex: displayIndex,
+            projectCount: projectCount,
+            direction: swipeDirection,
+          )
+    else {
+        return false
+    }
+    return index == targetIndex
+}
+
 enum WorkspaceSidebarDropTargetKind: Equatable {
     case workspace(String)
     case newWorkspace
@@ -1187,6 +1222,11 @@ struct WorkspaceSidebarView: View {
         let projectSwitchProgress = hasSwipeTarget
             ? workspaceSidebarProjectSwipeSwitchProgress(distance: abs(projectSwipeTranslation))
             : 0
+        let visibleWorkspacesByProject = workspaceSidebarVisibleWorkspacesByProject(
+            workspaces: viewModel.workspaceSidebarWorkspaces,
+            selectedScopeId: viewModel.workspaceSidebarSelectedMonitorScopeId,
+            focusedMonitorScopeId: viewModel.workspaceSidebarFocusedMonitorScopeId,
+        )
 
         return VStack(alignment: .leading, spacing: 0) {
             if showsMonitorSelector {
@@ -1206,6 +1246,8 @@ struct WorkspaceSidebarView: View {
                 leadingInset: leadingInset,
                 trailingInset: trailingInset,
                 topPadding: showsMonitorSelector ? 0 : viewModel.workspaceSidebarTopPadding,
+                visibleWorkspacesByProject: visibleWorkspacesByProject,
+                swipeDirection: projectSwipeDirection,
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
@@ -1295,10 +1337,12 @@ struct WorkspaceSidebarView: View {
         leadingInset: CGFloat,
         trailingInset: CGFloat,
         topPadding: CGFloat,
+        visibleWorkspacesByProject: [String: [WorkspaceSidebarWorkspaceViewModel]],
+        swipeDirection: Int?,
     ) -> some View {
         if viewModel.workspaceSidebarProjects.isEmpty {
             workspacePage(
-                projectId: viewModel.workspaceSidebarSelectedProjectId,
+                workspaces: visibleWorkspacesByProject[viewModel.workspaceSidebarSelectedProjectId] ?? [],
                 expansionProgress: expansionProgress,
                 leadingInset: leadingInset,
                 trailingInset: trailingInset,
@@ -1318,16 +1362,27 @@ struct WorkspaceSidebarView: View {
 
                 HStack(alignment: .top, spacing: 0) {
                     ForEach(Array(viewModel.workspaceSidebarProjects.enumerated()), id: \.element.id) { index, project in
-                        workspacePage(
-                            projectId: project.id,
-                            expansionProgress: expansionProgress,
-                            leadingInset: leadingInset,
-                            trailingInset: trailingInset,
-                            topPadding: topPadding,
-                            isInteractive: index == displayIndex,
-                        )
-                        .frame(width: pageWidth, alignment: .topLeading)
-                        .allowsHitTesting(index == displayIndex)
+                        if shouldRenderWorkspaceSidebarProjectPage(
+                            index: index,
+                            displayIndex: displayIndex,
+                            swipeDirection: swipeDirection,
+                            projectCount: viewModel.workspaceSidebarProjects.count,
+                        ) {
+                            workspacePage(
+                                workspaces: visibleWorkspacesByProject[project.id] ?? [],
+                                expansionProgress: expansionProgress,
+                                leadingInset: leadingInset,
+                                trailingInset: trailingInset,
+                                topPadding: topPadding,
+                                isInteractive: index == displayIndex,
+                            )
+                            .frame(width: pageWidth, alignment: .topLeading)
+                            .allowsHitTesting(index == displayIndex)
+                        } else {
+                            Color.clear
+                                .frame(width: pageWidth, alignment: .topLeading)
+                                .allowsHitTesting(false)
+                        }
                     }
                 }
                 .offset(x: -CGFloat(displayIndex) * pageWidth + dragOffset)
@@ -1343,7 +1398,7 @@ struct WorkspaceSidebarView: View {
     }
 
     private func workspacePage(
-        projectId: String,
+        workspaces: [WorkspaceSidebarWorkspaceViewModel],
         expansionProgress: CGFloat,
         leadingInset: CGFloat,
         trailingInset: CGFloat,
@@ -1352,7 +1407,7 @@ struct WorkspaceSidebarView: View {
     ) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 6) {
-                ForEach(visibleWorkspaceSidebarWorkspaces(projectId: projectId)) { workspace in
+                ForEach(workspaces) { workspace in
                     WorkspaceSidebarWorkspaceSection(
                         workspace: workspace,
                         dragPreview: viewModel.workspaceSidebarDropPreview,
@@ -1373,17 +1428,6 @@ struct WorkspaceSidebarView: View {
             .padding(.bottom, 10)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    private func visibleWorkspaceSidebarWorkspaces(projectId: String) -> [WorkspaceSidebarWorkspaceViewModel] {
-        viewModel.workspaceSidebarWorkspaces.filter {
-            $0.projectId == projectId &&
-                workspaceSidebarWorkspaceMatchesScope(
-                    workspaceMonitorScopeId: $0.monitorScopeId,
-                    selectedScopeId: viewModel.workspaceSidebarSelectedMonitorScopeId,
-                    focusedMonitorScopeId: viewModel.workspaceSidebarFocusedMonitorScopeId,
-                )
-        }
     }
 
     private var selectedProjectIndex: Int? {
@@ -1588,7 +1632,6 @@ private struct WorkspaceSidebarProjectSwipeScrollCapture: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
         context.coordinator.view = view
-        context.coordinator.installMonitor()
         return view
     }
 
@@ -1597,9 +1640,10 @@ private struct WorkspaceSidebarProjectSwipeScrollCapture: NSViewRepresentable {
         context.coordinator.isEnabled = isEnabled
         context.coordinator.onChanged = onChanged
         context.coordinator.onEnded = onEnded
-        context.coordinator.installMonitor()
-        if !isEnabled {
-            context.coordinator.resetAccumulatedScroll()
+        if isEnabled {
+            context.coordinator.installMonitor()
+        } else {
+            context.coordinator.removeMonitor()
         }
     }
 
