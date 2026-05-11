@@ -1,0 +1,73 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">winmux colorful dark logo</title>
+  <desc id="desc">Dark polished logo with floating abstract windows in different colors.</desc>
+
+  <defs>
+    <radialGradient id="bgGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(160 96) rotate(38) scale(440)">
+      <stop offset="0" stop-color="#2B2B2B"/>
+      <stop offset="0.35" stop-color="#121212"/>
+      <stop offset="0.72" stop-color="#070707"/>
+      <stop offset="1" stop-color="#000000"/>
+    </radialGradient>
+
+    <linearGradient id="windowA" x1="120" y1="96" x2="312" y2="250" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4CC9F0" stop-opacity="0.55"/>
+      <stop offset="0.5" stop-color="#4361EE" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#0B1026" stop-opacity="0.62"/>
+    </linearGradient>
+
+    <linearGradient id="windowB" x1="288" y1="96" x2="430" y2="240" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFB703" stop-opacity="0.55"/>
+      <stop offset="0.5" stop-color="#FB8500" stop-opacity="0.26"/>
+      <stop offset="1" stop-color="#241000" stop-opacity="0.64"/>
+    </linearGradient>
+
+    <linearGradient id="windowC" x1="88" y1="282" x2="280" y2="414" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#80ED99" stop-opacity="0.5"/>
+      <stop offset="0.5" stop-color="#2D6A4F" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#03150C" stop-opacity="0.66"/>
+    </linearGradient>
+
+    <linearGradient id="windowD" x1="296" y1="274" x2="432" y2="404" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F72585" stop-opacity="0.5"/>
+      <stop offset="0.5" stop-color="#7209B7" stop-opacity="0.27"/>
+      <stop offset="1" stop-color="#160018" stop-opacity="0.68"/>
+    </linearGradient>
+
+    <linearGradient id="windowE" x1="84" y1="176" x2="214" y2="286" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFD6FF" stop-opacity="0.46"/>
+      <stop offset="0.5" stop-color="#C77DFF" stop-opacity="0.25"/>
+      <stop offset="1" stop-color="#13001E" stop-opacity="0.64"/>
+    </linearGradient>
+
+    <linearGradient id="edgeShine" x1="120" y1="90" x2="416" y2="420" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.14"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.03"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.3"/>
+    </linearGradient>
+
+    <filter id="frontShadow" x="52" y="60" width="412" height="406" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000000" flood-opacity="0.55"/>
+    </filter>
+
+    <clipPath id="iconClip">
+      <rect width="512" height="512" rx="112"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#iconClip)">
+    <rect width="512" height="512" rx="112" fill="url(#bgGlow)"/>
+
+    <g filter="url(#frontShadow)">
+      <rect x="128" y="92" width="180" height="148" rx="34" fill="url(#windowA)" stroke="#7DE3FF" stroke-opacity="0.52" stroke-width="1.8" transform="rotate(-10 218 166)"/>
+      <rect x="294" y="84" width="136" height="166" rx="32" fill="url(#windowB)" stroke="#FFD166" stroke-opacity="0.5" stroke-width="1.8" transform="rotate(11 362 167)"/>
+      <rect x="96" y="280" width="192" height="138" rx="36" fill="url(#windowC)" stroke="#B7FFC8" stroke-opacity="0.48" stroke-width="1.8" transform="rotate(8 192 349)"/>
+      <rect x="310" y="274" width="124" height="132" rx="32" fill="url(#windowD)" stroke="#FF8BD1" stroke-opacity="0.48" stroke-width="1.8" transform="rotate(-8 372 340)"/>
+      <rect x="78" y="186" width="138" height="106" rx="28" fill="url(#windowE)" stroke="#E0AAFF" stroke-opacity="0.48" stroke-width="1.7" transform="rotate(-7 147 239)"/>
+    </g>
+
+    <rect x="1.5" y="1.5" width="509" height="509" rx="110.5" stroke="url(#edgeShine)" stroke-width="3"/>
+
+    <ellipse cx="256" cy="432" rx="132" ry="24" fill="#000000" fill-opacity="0.35"/>
+  </g>
+</svg>
