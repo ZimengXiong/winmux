@@ -373,6 +373,19 @@ private func unbindAndGetBindingDataForNewWindow(_ windowId: UInt32, _ macApp: M
 @MainActor
 func bindingDataForNewTilingWindow(_ workspace: Workspace, window: Window?) -> BindingData {
     window?.unbindFromParent() // It's important to unbind to get correct data from below
+    // When autoAddNewWindowsToTabGroup is enabled, add new windows to the focused window's tab group
+    if config.autoAddNewWindowsToTabGroup, let focusedWindow = focus.windowOrNil {
+        if focusedWindow.nodeWorkspace == workspace,
+           let tabGroup = focusedWindow.parent as? TilingContainer,
+           tabGroup.layout == .tabGroup
+        {
+            return BindingData(
+                parent: tabGroup,
+                adaptiveWeight: WEIGHT_AUTO,
+                index: INDEX_BIND_LAST,
+            )
+        }
+    }
     let mruWindow = workspace.mostRecentWindowRecursive
     if let mruWindow, let tilingParent = mruWindow.parent as? TilingContainer {
         if tilingParent.layout == .tabGroup {

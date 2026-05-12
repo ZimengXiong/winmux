@@ -16,6 +16,7 @@ on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
 
 automatically-unhide-macos-hidden-apps = false
 enable-window-management = true
+auto-add-new-windows-to-tab-group = false
 shortcuts-preset = 'none'
 persistent-workspaces = []
 on-mode-changed = []

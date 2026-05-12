@@ -57,6 +57,7 @@ struct Config: ConvenienceCopyable {
     // var onFocusedWorkspaceChanged: [any Command] = []
     var onFocusedMonitorChanged: [any Command] = []
 
+    var autoAddNewWindowsToTabGroup: Bool = false
     var gaps: Gaps = .zero
     var workspaceSidebar = WorkspaceSidebarConfig()
     var windowTabs = WindowTabsConfig()

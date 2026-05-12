@@ -1,5 +1,6 @@
 import AppKit
 import Common
+import HotKey
 
 enum GlobalObserver {
     @MainActor private static var isInitialized = false
@@ -145,6 +146,15 @@ enum GlobalObserver {
         retainEventMonitor(NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: onKeyDown))
         retainEventMonitor(NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             onKeyDown(event)
+            // Check if this key matches a recently-pressed prefix (sequence binding)
+            if handleSequenceKeyDown(event: event) {
+                return nil // consume the event
+            }
+            // If this is a sequence prefix key (e.g. Escape), arm the sequence detector
+            if let prefix = Key(carbonKeyCode: UInt32(event.keyCode)),
+               sequenceBindingsPrefixKeys.contains(prefix) {
+                noteSequencePrefixKeyPressed(prefix)
+            }
             if event.modifierFlags.contains(.control), event.keyCode == 34 {
                 return nil // consume the event
             }

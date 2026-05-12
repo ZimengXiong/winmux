@@ -12,7 +12,15 @@ import TOMLKit
 @MainActor private var pendingTapTriggerTokens: [TapModifierKey: Int] = [:]
 @MainActor private var nextTapTriggerToken = 0
 @MainActor private var hotkeysSuspended = false
+@MainActor private var sequenceBindingsByPrefix: [Key: [SequenceBinding]] = [:]
+@MainActor var sequenceBindingsPrefixKeys: Set<Key> = []
+/// Timestamp of the last Escape press, used for sequence detection via local monitor
+@MainActor private var lastSequencePrefixTime: DispatchTime? = nil
+/// Which prefix key was pressed last
+@MainActor private var lastSequencePrefixKey: Key? = nil
 private let tapBindingTriggerDelayNs: UInt64 = 75_000_000
+/// Max time (ns) between prefix key and subsequent key for a sequence binding
+private let sequenceChordTimeoutNs: UInt64 = 300_000_000 // 300ms
 
 @MainActor func resetHotKeys() {
     // Explicitly unregister all hotkeys. We cannot always rely on destruction of the HotKey object to trigger
@@ -25,6 +33,10 @@ private let tapBindingTriggerDelayNs: UInt64 = 75_000_000
     pendingTapBindings = [:]
     pressedTapModifiers = []
     cancelPendingTapTriggers()
+    sequenceBindingsByPrefix = [:]
+    sequenceBindingsPrefixKeys = []
+    lastSequencePrefixTime = nil
+    lastSequencePrefixKey = nil
     hotkeysSuspended = false
 }
 
@@ -52,9 +64,9 @@ extension HotKey {
 }
 
 @MainActor func activateMode(_ targetMode: String?) async throws {
-    let targetBindings = targetMode.flatMap { config.modes[$0] }?.bindings ?? [:]
-    activeTapBindings = targetMode
-        .flatMap { config.modes[$0] }?
+    let mode = targetMode.flatMap { config.modes[$0] }
+    let targetBindings = mode?.bindings ?? [:]
+    activeTapBindings = mode?
         .tapBindings
         .values
         .reduce(into: [:]) { $0[$1.trigger] = $1 } ?? [:]
@@ -69,6 +81,17 @@ extension HotKey {
                 triggerBinding(binding.descriptionWithKeyNotation, binding.commands)
             }
         })
+    }
+    // Populate sequence binding lookup tables
+    sequenceBindingsByPrefix = [:]
+    sequenceBindingsPrefixKeys = []
+    lastSequencePrefixTime = nil
+    lastSequencePrefixKey = nil
+    if let seqBindings = mode?.sequenceBindings.values {
+        for seq in seqBindings {
+            sequenceBindingsByPrefix[seq.prefix, default: []].append(seq)
+            sequenceBindingsPrefixKeys.insert(seq.prefix)
+        }
     }
     let oldMode = activeMode
     activeMode = targetMode
@@ -101,6 +124,47 @@ extension HotKey {
             }
         }
     }
+}
+
+/// Called from the local keyDown monitor when the Escape key (or other prefix key)
+/// is pressed. Records the timestamp so a subsequent matching key can trigger a
+/// sequence binding. Does NOT consume the event.
+@MainActor func noteSequencePrefixKeyPressed(_ prefix: Key) {
+    lastSequencePrefixTime = DispatchTime.now()
+    lastSequencePrefixKey = prefix
+}
+
+/// Called from the local keyDown monitor for every keyDown event.
+/// If a prefix key was pressed recently (within `sequenceChordTimeoutNs`),
+/// checks if this key matches a sequence binding and executes it.
+/// Returns true if the event was consumed (should not reach the app).
+@MainActor func handleSequenceKeyDown(event: NSEvent) -> Bool {
+    guard let prefix = lastSequencePrefixKey,
+          let lastTime = lastSequencePrefixTime,
+          let bindings = sequenceBindingsByPrefix[prefix] else {
+        return false
+    }
+    let elapsed = DispatchTime.now().uptimeNanoseconds - lastTime.uptimeNanoseconds
+    guard elapsed < sequenceChordTimeoutNs else {
+        // Timeout expired, clear state
+        lastSequencePrefixTime = nil
+        lastSequencePrefixKey = nil
+        return false
+    }
+    // Check if this key matches any sequence binding for this prefix
+    for seq in bindings {
+        if seq.key.carbonKeyCode == event.keyCode {
+            // Match! Execute the command and consume the event
+            lastSequencePrefixTime = nil
+            lastSequencePrefixKey = nil
+            triggerBinding(seq.descriptionWithKeyNotation, seq.commands)
+            return true
+        }
+    }
+    // No match - clear state and let event pass through
+    lastSequencePrefixTime = nil
+    lastSequencePrefixKey = nil
+    return false
 }
 
 @MainActor func noteTapBindingKeyDown() {
@@ -200,29 +264,62 @@ struct HotkeyBinding: Equatable, Sendable {
     }
 }
 
-func parseBindings(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace, _ errors: inout [TomlParseError], _ mapping: [String: Key]) -> [String: HotkeyBinding] {
+
+
+/// Returns true if the binding string looks like a sequence (e.g. `esc-h`)
+/// where the first segment before `-` is a known key, not a modifier.
+private func looksLikeSequenceBinding(_ raw: String, _ mapping: [String: Key]) -> Bool {
+    let rawKeys = raw.split(separator: "-")
+    guard rawKeys.count == 2 else { return false }
+    let first = String(rawKeys[0])
+    // If the first part is a modifier, this is a chord, not a sequence
+    guard modifiersMap[first] == nil else { return false }
+    // If the first part is a known key name, treat as sequence
+    return mapping[first] != nil
+}
+
+func parseBindings(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace, _ errors: inout [TomlParseError], _ mapping: [String: Key]) -> (chordBindings: [String: HotkeyBinding], sequenceBindings: [String: SequenceBinding]) {
     guard let rawTable = raw.table else {
         errors += [expectedActualTypeError(expected: .table, actual: raw.type, backtrace)]
-        return [:]
+        return ([:], [:])
     }
-    var result: [String: HotkeyBinding] = [:]
+    var chordResult: [String: HotkeyBinding] = [:]
+    var seqResult: [String: SequenceBinding] = [:]
     for (binding, rawCommand): (String, TOMLValueConvertible) in rawTable {
         let backtrace = backtrace + .key(binding)
-        let binding = parseBinding(binding, backtrace, mapping)
-            .flatMap { modifiers, key -> ParsedToml<HotkeyBinding> in
-                parseCommandOrCommands(rawCommand).toParsedToml(backtrace).map {
-                    HotkeyBinding(modifiers, key, $0, descriptionWithKeyNotation: binding)
+        // Detect if this looks like a sequence binding (e.g. `esc-h`)
+        // Parse as sequence if the first segment is not a modifier but is a known key
+        if looksLikeSequenceBinding(binding, mapping) {
+            let parsedPrefix = tryParseSequenceBinding(binding, backtrace, mapping)
+            if parsedPrefix.isSuccess {
+                let seqBindingResult: ParsedToml<SequenceBinding> = parsedPrefix.flatMap { (prefix, key) in
+                    parseCommandOrCommands(rawCommand).toParsedToml(backtrace).map { cmds in
+                        SequenceBinding(prefix: prefix, key: key, commands: cmds, descriptionWithKeyNotation: binding)
+                    }
+                }
+                if let seqBinding = seqBindingResult.getOrNil(appendErrorTo: &errors) {
+                    if seqResult.keys.contains(seqBinding.descriptionWithKeyNotation) {
+                        errors.append(.semantic(backtrace, "'\(seqBinding.descriptionWithKeyNotation)' Sequence binding redeclaration"))
+                    }
+                    seqResult[seqBinding.descriptionWithKeyNotation] = seqBinding
+                    continue
                 }
             }
-            .getOrNil(appendErrorTo: &errors)
-        if let binding {
-            if result.keys.contains(binding.descriptionWithKeyCode) {
-                errors.append(.semantic(backtrace, "'\(binding.descriptionWithKeyCode)' Binding redeclaration"))
+        }
+        // Parse as chord binding (original logic)
+        let parsed: ParsedToml<HotkeyBinding> = parseBinding(binding, backtrace, mapping).flatMap { modifiers, key in
+            parseCommandOrCommands(rawCommand).toParsedToml(backtrace).map {
+                HotkeyBinding(modifiers, key, $0, descriptionWithKeyNotation: binding)
             }
-            result[binding.descriptionWithKeyCode] = binding
+        }
+        if let chord = parsed.getOrNil(appendErrorTo: &errors) {
+            if chordResult.keys.contains(chord.descriptionWithKeyCode) {
+                errors.append(.semantic(backtrace, "'\(chord.descriptionWithKeyCode)' Binding redeclaration"))
+            }
+            chordResult[chord.descriptionWithKeyCode] = chord
         }
     }
-    return result
+    return (chordResult, seqResult)
 }
 
 func parseBinding(_ raw: String, _ backtrace: TomlBacktrace, _ mapping: [String: Key]) -> ParsedToml<(NSEvent.ModifierFlags, Key)> {

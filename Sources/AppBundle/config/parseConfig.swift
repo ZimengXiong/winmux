@@ -123,6 +123,7 @@ private let configParser: [String: any ParserProtocol<Config>] = [
     keyMappingConfigRootKey: Parser(\.keyMapping, skipParsing(Config().keyMapping)), // Parsed manually
     modeConfigRootKey: Parser(\.modes, skipParsing(Config().modes)), // Parsed manually
 
+    "auto-add-new-windows-to-tab-group": Parser(\.autoAddNewWindowsToTabGroup, parseBool),
     "gaps": Parser(\.gaps, parseGaps),
     "workspace-sidebar": Parser(\.workspaceSidebar, parseWorkspaceSidebar),
     "window-tabs": Parser(\.windowTabs, parseWindowTabs),
