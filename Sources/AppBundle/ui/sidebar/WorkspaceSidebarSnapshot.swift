@@ -46,7 +46,7 @@ struct WorkspaceSidebarLayoutSnapshot: Equatable {
 
 enum WorkspaceSidebarAction: Equatable {
     case selectWorkspace(String)
-    case selectWindow(UInt32, fallbackWorkspace: String)
+    case selectWindow(UInt32)
     case selectProject(WorkspaceProjectId)
     case createProject
     case renameProject(WorkspaceProjectId, displayName: String)

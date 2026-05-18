@@ -82,6 +82,70 @@ final class WorkspaceSidebarDragTest: XCTestCase {
         ])
     }
 
+    @MainActor
+    func testWorkspaceSidebarFallbackWorkspaceNameFindsWindowsAndTabGroups() {
+        let previousWorkspaces = TrayMenuModel.shared.workspaceSidebarWorkspaces
+        defer { TrayMenuModel.shared.workspaceSidebarWorkspaces = previousWorkspaces }
+
+        let window = WorkspaceSidebarWindowViewModel(
+            windowId: 101,
+            workspaceName: "coding",
+            appName: "Editor",
+            appBundleId: nil,
+            appBundlePath: nil,
+            title: "File.swift",
+            isFocused: false,
+        )
+        let tab = WorkspaceSidebarWindowViewModel(
+            windowId: 202,
+            workspaceName: "research",
+            appName: "Browser",
+            appBundleId: nil,
+            appBundlePath: nil,
+            title: "Docs",
+            isFocused: false,
+        )
+        let group = WorkspaceSidebarTabGroupViewModel(
+            representativeWindowId: 201,
+            workspaceName: "research",
+            title: "Research",
+            windowCount: 1,
+            isFocused: false,
+            tabs: [tab],
+        )
+        TrayMenuModel.shared.workspaceSidebarWorkspaces = [
+            WorkspaceSidebarWorkspaceViewModel(
+                name: "coding",
+                projectId: workspaceProjectDefaultId,
+                displayName: "Coding",
+                sidebarLabel: "Coding",
+                isGeneratedName: false,
+                monitorScopeId: workspaceSidebarDefaultScopeId,
+                monitorName: nil,
+                isFocused: false,
+                isVisible: true,
+                items: [WorkspaceSidebarItemViewModel(kind: .window(window))],
+            ),
+            WorkspaceSidebarWorkspaceViewModel(
+                name: "research",
+                projectId: workspaceProjectDefaultId,
+                displayName: "Research",
+                sidebarLabel: "Research",
+                isGeneratedName: false,
+                monitorScopeId: workspaceSidebarDefaultScopeId,
+                monitorName: nil,
+                isFocused: false,
+                isVisible: true,
+                items: [WorkspaceSidebarItemViewModel(kind: .tabGroup(group))],
+            ),
+        ]
+
+        XCTAssertEqual(workspaceSidebarFallbackWorkspaceName(for: 101), "coding")
+        XCTAssertEqual(workspaceSidebarFallbackWorkspaceName(for: 201), "research")
+        XCTAssertEqual(workspaceSidebarFallbackWorkspaceName(for: 202), "research")
+        XCTAssertNil(workspaceSidebarFallbackWorkspaceName(for: 999))
+    }
+
     func testWorkspaceSidebarDragPayloadRoundTripsWindowAndTabGroupIds() {
         XCTAssertEqual(
             WorkspaceSidebarDragPayload(encodedValue: WorkspaceSidebarDragPayload.window(17).encodedValue),

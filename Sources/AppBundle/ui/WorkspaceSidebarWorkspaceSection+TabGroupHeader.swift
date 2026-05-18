@@ -9,7 +9,7 @@ extension WorkspaceSidebarWorkspaceSection {
                 return
             }
             activeInUseOverrideWorkspaceName = nil
-            actions.send(.selectWindow(group.representativeWindowId, fallbackWorkspace: group.workspaceName))
+            actions.send(.selectWindow(group.representativeWindowId))
         } label: {
             WorkspaceSidebarWindowRow(
                 title: group.title.isEmpty ? "Tab Group" : group.title,

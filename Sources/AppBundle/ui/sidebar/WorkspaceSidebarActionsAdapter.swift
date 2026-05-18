@@ -17,8 +17,8 @@ func handleWorkspaceSidebarAction(_ action: WorkspaceSidebarAction) {
     switch action {
         case .selectWorkspace(let name):
             focusWorkspaceFromSidebar(name)
-        case .selectWindow(let windowId, let fallbackWorkspace):
-            focusWindowFromSidebar(windowId, fallbackWorkspace: fallbackWorkspace)
+        case .selectWindow(let windowId):
+            focusWindowFromSidebar(windowId)
         case .selectProject(let projectId):
             selectWorkspaceSidebarProject(projectId)
         case .createProject:

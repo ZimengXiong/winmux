@@ -428,17 +428,40 @@ func deleteWorkspaceFromSidebar(_ workspace: WorkspaceSidebarWorkspaceViewModel)
 }
 
 @MainActor
-func focusWindowFromSidebar(_ windowId: UInt32, fallbackWorkspace: String) {
+func focusWindowFromSidebar(_ windowId: UInt32) {
     runWorkspaceSidebarSession {
         guard let window = Window.get(byId: windowId),
               let liveFocus = window.toLiveFocusOrNil()
         else {
-            _ = Workspace.existing(byName: fallbackWorkspace)?.focusWorkspace()
+            if let fallbackWorkspace = workspaceSidebarFallbackWorkspaceName(for: windowId) {
+                _ = Workspace.existing(byName: fallbackWorkspace)?.focusWorkspace()
+            }
             return
         }
         _ = setFocus(to: liveFocus)
         window.nativeFocus()
     }
+}
+
+@MainActor
+func workspaceSidebarFallbackWorkspaceName(for windowId: UInt32) -> String? {
+    for workspace in TrayMenuModel.shared.workspaceSidebarWorkspaces {
+        for item in workspace.items {
+            switch item.kind {
+                case .window(let window) where window.windowId == windowId:
+                    return window.workspaceName
+                case .tabGroup(let group) where group.representativeWindowId == windowId:
+                    return group.workspaceName
+                case .tabGroup(let group):
+                    if group.tabs.contains(where: { $0.windowId == windowId }) {
+                        return group.workspaceName
+                    }
+                case .window:
+                    continue
+            }
+        }
+    }
+    return nil
 }
 
 @MainActor

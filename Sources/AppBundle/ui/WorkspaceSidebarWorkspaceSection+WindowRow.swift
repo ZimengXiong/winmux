@@ -14,7 +14,7 @@ extension WorkspaceSidebarWorkspaceSection {
                 return
             }
             activeInUseOverrideWorkspaceName = nil
-            actions.send(.selectWindow(window.windowId, fallbackWorkspace: window.workspaceName))
+            actions.send(.selectWindow(window.windowId))
         } label: {
             WorkspaceSidebarWindowRow(
                 title: window.title ?? window.appName,
