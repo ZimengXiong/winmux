@@ -15,6 +15,7 @@ let windowTabStripPreferredTabWidth: CGFloat = 240
 let windowTabStripMinimumTabWidth: CGFloat = 132
 let windowTabStripScrollFadeWidth: CGFloat = 22
 let windowTabStripScrollOriginTolerance: CGFloat = 1
+let windowTabStripGroupDragMinimumDistance: CGFloat = 1
 let windowTabGroupFrameStrokeWidth: CGFloat = 0.5
 let windowTabGroupFrameInnerStrokeWidth: CGFloat = 0.5
 let windowTabGroupFrameMaxInnerCornerRadius: CGFloat = 22

@@ -168,6 +168,21 @@ import XCTest
         ))
     }
 
+    func testCompositedGroupPreviewOnlyRunsForTabStripOriginatedGroupDrags() {
+        XCTAssertTrue(shouldShowCompositedGroupMovePreview(
+            subject: .group,
+            startedInSidebar: false,
+        ))
+        XCTAssertFalse(shouldShowCompositedGroupMovePreview(
+            subject: .group,
+            startedInSidebar: true,
+        ))
+        XCTAssertFalse(shouldShowCompositedGroupMovePreview(
+            subject: .window,
+            startedInSidebar: false,
+        ))
+    }
+
     func testWindowTabStripLayoutReservesGroupDragHandleGutters() {
         let stripWidth: CGFloat = 360
         let expectedTabsWidth = stripWidth

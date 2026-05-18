@@ -30,7 +30,7 @@ extension WindowMouseInteractionDriver {
     }
 
     func configureMoveChrome(windowId: UInt32, session: MoveSession) {
-        if session.subject == .group {
+        if shouldShowCompositedGroupMovePreview(session: session) {
             WindowTabStripPanelController.shared.hideChromeDuringMouseInteraction(showFrameOnly: false)
             if let sourceWindow = Window.get(byId: windowId) {
                 beginCompositedMovePreview(sourceWindow: sourceWindow, session: session)
