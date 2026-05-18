@@ -3,7 +3,7 @@ import SwiftUI
 
 extension WindowTabStripView {
     func groupDragGesture(for windowId: UInt32?) -> some Gesture {
-        DragGesture(minimumDistance: 10)
+        DragGesture(minimumDistance: 4, coordinateSpace: .global)
             .onChanged { _ in
                 guard let windowId,
                       shouldAllowTabStripChromeGroupDrag(windowId: windowId)

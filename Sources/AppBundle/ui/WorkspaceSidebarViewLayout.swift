@@ -7,7 +7,7 @@ extension WorkspaceSidebarView {
         let isCompact = expansionProgress < workspaceSidebarRowsRevealProgress
         let leadingInset = workspaceSidebarOuterLeadingPadding(isCompact: isCompact)
         let trailingInset = workspaceSidebarOuterTrailingPadding(isCompact: isCompact)
-        let showsMonitorSelector = !isCompact && viewModel.workspaceSidebarShowsMonitorSelector
+        let showsMonitorSelector = !isCompact && snapshot.showsMonitorSelector
         let projectSwipeDirection = workspaceSidebarProjectSwipeDirection(
             horizontalTranslation: projectSwipeTranslation,
             verticalTranslation: 0,
@@ -16,14 +16,14 @@ extension WorkspaceSidebarView {
         let activeProjectIndex = projectPagerDisplayIndex
         let projectSwipeProgress = workspaceSidebarProjectEdgeCreationProgress(
             currentIndex: activeProjectIndex,
-            projectCount: viewModel.workspaceSidebarProjects.count,
+            projectCount: snapshot.projects.count,
             direction: projectSwipeDirection,
             distance: abs(projectSwipeTranslation),
         )
         let hasSwipeTarget = projectSwipeDirection.flatMap { direction in
             workspaceSidebarProjectIndexAfterSwipe(
                 currentIndex: activeProjectIndex,
-                projectCount: viewModel.workspaceSidebarProjects.count,
+                projectCount: snapshot.projects.count,
                 direction: direction,
             )
         } != nil
@@ -31,60 +31,49 @@ extension WorkspaceSidebarView {
             ? workspaceSidebarProjectSwipeSwitchProgress(distance: abs(projectSwipeTranslation))
             : 0
         let visibleWorkspacesByProject = workspaceSidebarVisibleWorkspacesByProject(
-            workspaces: viewModel.workspaceSidebarWorkspaces,
-            selectedScopeId: viewModel.workspaceSidebarSelectedMonitorScopeId,
-            focusedMonitorScopeId: viewModel.workspaceSidebarFocusedMonitorScopeId,
+            workspaces: snapshot.workspaces,
+            selectedScopeId: snapshot.selectedMonitorScopeId,
+            focusedMonitorScopeId: snapshot.focusedMonitorScopeId,
         )
 
         return VStack(alignment: .leading, spacing: 0) {
             if showsMonitorSelector {
-                WorkspaceSidebarMonitorSelector(
-                    scopes: viewModel.workspaceSidebarMonitorScopes,
-                    selectedScopeId: viewModel.workspaceSidebarSelectedMonitorScopeId,
+                monitorSelectorSection(
                     expansionProgress: expansionProgress,
+                    leadingInset: leadingInset,
+                    trailingInset: trailingInset,
                 )
-                .padding(.leading, leadingInset)
-                .padding(.trailing, trailingInset)
-                .padding(.top, viewModel.workspaceSidebarTopPadding)
-                .padding(.bottom, 6)
             }
 
             projectPagerContent(
                 expansionProgress: expansionProgress,
                 leadingInset: leadingInset,
                 trailingInset: trailingInset,
-                topPadding: showsMonitorSelector ? 0 : viewModel.workspaceSidebarTopPadding,
+                topPadding: showsMonitorSelector ? 0 : snapshot.topPadding,
                 visibleWorkspacesByProject: visibleWorkspacesByProject,
                 swipeDirection: projectSwipeDirection,
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
-            WorkspaceSidebarProjectPager(
-                projects: viewModel.workspaceSidebarProjects,
-                selectedProjectId: viewModel.workspaceSidebarSelectedProjectId,
+            projectPagerSection(
                 expansionProgress: expansionProgress,
+                leadingInset: leadingInset,
+                trailingInset: trailingInset,
                 swipeDirection: projectSwipeDirection,
                 switchProgress: projectSwitchProgress,
                 edgeProgress: projectSwipeProgress,
             )
-            .zIndex(2)
-            .padding(.leading, leadingInset)
-            .padding(.trailing, trailingInset)
-            .padding(.top, 6)
-            .padding(.bottom, 2)
 
-            WorkspaceSidebarStatusView(
-                sectionWidth: workspaceSidebarSectionWidth(expansionProgress),
+            statusSection(
+                expansionProgress: expansionProgress,
                 isCompact: isCompact,
+                leadingInset: leadingInset,
+                trailingInset: trailingInset,
             )
-            .padding(.leading, leadingInset)
-            .padding(.trailing, trailingInset)
-            .padding(.top, 8)
-            .padding(.bottom, workspaceSidebarStatusBottomPadding(isCompact: isCompact))
         }
         .coordinateSpace(name: "workspaceSidebarContent")
         .onPreferenceChange(WorkspaceSidebarDropTargetPreferenceKey.self) { frames in
-            WorkspaceSidebarPanel.shared.updateDropTargets(frames)
+            actions.send(.setDropTargets(frames))
         }
         .background {
             sidebarSurface(in: sidebarShape)
@@ -103,138 +92,8 @@ extension WorkspaceSidebarView {
             y: 0
         )
         .overlay {
-            WorkspaceSidebarProjectSwipeScrollCapture(
-                isEnabled: !viewModel.workspaceSidebarProjects.isEmpty,
-                onChanged: { horizontalTranslation, verticalTranslation in
-                    handleProjectSwipeChanged(
-                        horizontalTranslation: horizontalTranslation,
-                        verticalTranslation: verticalTranslation,
-                        expansionProgress: expansionProgress,
-                    )
-                },
-                onEnded: { horizontalTranslation, verticalTranslation in
-                    handleProjectSwipeEnded(
-                        horizontalTranslation: horizontalTranslation,
-                        verticalTranslation: verticalTranslation,
-                        expansionProgress: expansionProgress,
-                    )
-                },
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .allowsHitTesting(false)
+            sidebarSwipeCaptureOverlay(expansionProgress: expansionProgress)
         }
         .simultaneousGesture(projectSwipeGesture(expansionProgress: expansionProgress))
-    }
-
-    var sidebarShape: some Shape {
-        Rectangle()
-    }
-
-    func sidebarSurface<S: Shape>(in shape: S) -> some View {
-        shape
-            .fill(mattePanelFill)
-            .overlay {
-                shape.stroke(mattePanelSeparator.opacity(0.34), lineWidth: 0.5)
-            }
-        .ignoresSafeArea()
-    }
-
-    @ViewBuilder
-    func projectPagerContent(
-        expansionProgress: CGFloat,
-        leadingInset: CGFloat,
-        trailingInset: CGFloat,
-        topPadding: CGFloat,
-        visibleWorkspacesByProject: [WorkspaceProjectId: [WorkspaceSidebarWorkspaceViewModel]],
-        swipeDirection: Int?,
-    ) -> some View {
-        if viewModel.workspaceSidebarProjects.isEmpty {
-            workspacePage(
-                workspaces: visibleWorkspacesByProject[viewModel.workspaceSidebarSelectedProjectId] ?? [],
-                expansionProgress: expansionProgress,
-                leadingInset: leadingInset,
-                trailingInset: trailingInset,
-                topPadding: topPadding,
-                isInteractive: true,
-            )
-        } else {
-            GeometryReader { geometry in
-                let pageWidth = max(geometry.size.width, 1)
-                let displayIndex = projectPagerDisplayIndex ?? 0
-                let dragOffset = workspaceSidebarProjectPagerDragOffset(
-                    horizontalTranslation: projectSwipeTranslation,
-                    currentIndex: displayIndex,
-                    projectCount: viewModel.workspaceSidebarProjects.count,
-                    pageWidth: pageWidth,
-                )
-
-                HStack(alignment: .top, spacing: 0) {
-                    ForEach(Array(viewModel.workspaceSidebarProjects.enumerated()), id: \.element.id) { index, project in
-                        if shouldRenderWorkspaceSidebarProjectPage(
-                            index: index,
-                            displayIndex: displayIndex,
-                            swipeDirection: swipeDirection,
-                            projectCount: viewModel.workspaceSidebarProjects.count,
-                        ) {
-                            workspacePage(
-                                workspaces: visibleWorkspacesByProject[project.id] ?? [],
-                                expansionProgress: expansionProgress,
-                                leadingInset: leadingInset,
-                                trailingInset: trailingInset,
-                                topPadding: topPadding,
-                                isInteractive: index == displayIndex,
-                            )
-                            .frame(width: pageWidth, alignment: .topLeading)
-                            .allowsHitTesting(index == displayIndex)
-                        } else {
-                            Color.clear
-                                .frame(width: pageWidth, alignment: .topLeading)
-                                .allowsHitTesting(false)
-                        }
-                    }
-                }
-                .offset(x: -CGFloat(displayIndex) * pageWidth + dragOffset)
-                .onAppear {
-                    projectPagerWidth = pageWidth
-                }
-                .onChange(of: pageWidth) { width in
-                    projectPagerWidth = width
-                }
-            }
-            .clipped()
-        }
-    }
-
-    func workspacePage(
-        workspaces: [WorkspaceSidebarWorkspaceViewModel],
-        expansionProgress: CGFloat,
-        leadingInset: CGFloat,
-        trailingInset: CGFloat,
-        topPadding: CGFloat,
-        isInteractive: Bool,
-    ) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(workspaces) { workspace in
-                    WorkspaceSidebarWorkspaceSection(
-                        workspace: workspace,
-                        dragPreview: viewModel.workspaceSidebarDropPreview,
-                        expansionProgress: expansionProgress,
-                        emitsDropTarget: isInteractive,
-                    )
-                }
-                WorkspaceSidebarCreateWorkspaceSection(
-                    dragPreview: viewModel.workspaceSidebarDropPreview,
-                    expansionProgress: expansionProgress,
-                    emitsDropTarget: isInteractive,
-                    onCreateWorkspace: createWorkspaceFromSidebarButton,
-                )
-            }
-            .padding(.leading, leadingInset)
-            .padding(.trailing, trailingInset)
-            .padding(.top, topPadding)
-            .padding(.bottom, 10)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }

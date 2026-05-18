@@ -7,6 +7,7 @@ struct WindowIntentPreviewContentKey: Equatable {
     let style: WindowTabDropPreviewStyle
     let geometry: WindowTabDropPreviewGeometry
     let zones: [WindowTabDropPreviewZoneViewModel]
+    let dropIntentOverlay: WindowDropIntentOverlayModel?
 
     init(model: WindowTabDropPreviewViewModel) {
         containerSize = model.containerFrame.size
@@ -15,5 +16,6 @@ struct WindowIntentPreviewContentKey: Equatable {
         style = model.style
         geometry = model.geometry
         zones = model.zones
+        dropIntentOverlay = model.dropIntentOverlay
     }
 }

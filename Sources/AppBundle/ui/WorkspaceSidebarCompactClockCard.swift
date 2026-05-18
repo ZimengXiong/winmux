@@ -20,7 +20,7 @@ struct WorkspaceSidebarCompactClockCard: View {
             Text(components.second)
                 .foregroundStyle(Color.white.opacity(0.62))
         }
-        .font(.system(size: 16, weight: .semibold))
+        .font(.system(size: 18, weight: .semibold))
         .monospacedDigit()
         .padding(.leading, 7)
         .frame(width: sectionWidth, alignment: .leading)

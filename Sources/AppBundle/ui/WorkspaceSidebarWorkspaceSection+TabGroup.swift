@@ -15,7 +15,12 @@ extension WorkspaceSidebarWorkspaceSection {
     func tabGroupTabs(_ group: WorkspaceSidebarTabGroupViewModel, isDragging: Bool) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             ForEach(group.tabs) { tab in
-                workspaceWindowButton(tab, allowsDrag: true, subject: .window, leadingHitInset: 14)
+                workspaceWindowButton(
+                    tab,
+                    allowsDrag: true,
+                    subject: .window,
+                    leadingHitInset: workspaceSidebarTabGroupChildLeadingIndent,
+                )
             }
         }
         .opacity(isDragging ? 0.4 : 1)

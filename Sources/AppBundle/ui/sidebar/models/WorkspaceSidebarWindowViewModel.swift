@@ -2,6 +2,8 @@ struct WorkspaceSidebarWindowViewModel: Hashable, Identifiable {
     let windowId: UInt32
     let workspaceName: String
     let appName: String
+    let appBundleId: String?
+    let appBundlePath: String?
     let title: String?
     let isFocused: Bool
 

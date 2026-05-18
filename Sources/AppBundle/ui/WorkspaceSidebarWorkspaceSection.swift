@@ -7,6 +7,10 @@ struct WorkspaceSidebarWorkspaceSection: View {
     let dragPreview: WorkspaceSidebarDropPreviewViewModel?
     let expansionProgress: CGFloat
     let emitsDropTarget: Bool
+    let isFromOtherDisplay: Bool
+    let isInUseOnOtherDisplay: Bool
+    @Binding var activeInUseOverrideWorkspaceName: String?
+    let actions: WorkspaceSidebarActions
 
     @State var isHovered = false
     @State var hoveredWindowId: UInt32? = nil
@@ -15,8 +19,8 @@ struct WorkspaceSidebarWorkspaceSection: View {
     @Namespace var rowHoverNamespace
     @Environment(\.accessibilityReduceMotion) var reduceMotion
 
-    let headerHeight: CGFloat = 26
-    let rowHeight: CGFloat = 23
+    let headerHeight: CGFloat = workspaceSidebarWorkspaceSectionHeaderHeight
+    let rowHeight: CGFloat = workspaceSidebarWorkspaceRowHeight
 
     var contentWidth: CGFloat { workspaceSidebarContentWidth(expansionProgress) }
     var sectionWidth: CGFloat { workspaceSidebarSectionWidth(expansionProgress) }
@@ -24,13 +28,20 @@ struct WorkspaceSidebarWorkspaceSection: View {
     var showsWindowRows: Bool { expansionProgress >= workspaceSidebarRowsRevealProgress }
     var isDropTarget: Bool { dragPreview?.targetWorkspaceName == workspace.name }
     var activeSidebarDragSourceWindowId: UInt32? { dragPreview?.sourceWindowId }
+    var isShowingInUseOverlay: Bool { activeInUseOverrideWorkspaceName == workspace.name }
+    var inUseOverrideText: String {
+        if let monitorName = workspace.monitorName, !monitorName.isEmpty {
+            return "In use on \(monitorName)"
+        }
+        return "In use on another display"
+    }
     var sectionShape: RoundedRectangle {
         RoundedRectangle(cornerRadius: workspaceSidebarSectionCornerRadius, style: .continuous)
     }
 
     var body: some View {
         interactiveSectionContent
-            .padding(.vertical, isCompact ? 4 : 5)
+            .padding(.vertical, isCompact ? 3 : 4)
             .padding(.horizontal, workspaceSidebarSectionInnerHorizontalInset)
             .frame(width: sectionWidth, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -41,22 +52,19 @@ struct WorkspaceSidebarWorkspaceSection: View {
                     beginInlineRename()
                 }
                 Button("Reset Workspace Name") {
-                    resetWorkspaceNameFromSidebar(workspace)
+                    actions.send(.resetWorkspace(workspace.name))
                 }
                 Button(role: .destructive) {
-                    deleteWorkspaceFromSidebar(workspace)
+                    actions.send(.deleteWorkspace(workspace.name))
                 } label: {
                     Text("Delete Workspace")
                 }
             }
             .onHover { hover in
                 isHovered = hover
-                TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName = nextWorkspaceSidebarHoveredWorkspaceName(
-                    currentHoveredWorkspaceName: TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName,
-                    workspaceName: workspace.name,
-                    isHovering: hover,
-                )
+                actions.send(.hoverWorkspace(workspace.name, isHovering: hover))
             }
+            .help(isInUseOnOtherDisplay ? inUseOverrideText : workspace.displayName)
             .zIndex(isDropTarget ? 1 : 0)
             .animation(.spring(response: 0.2, dampingFraction: 0.82), value: dragPreview)
             .animation(.spring(response: 0.2, dampingFraction: 0.82), value: expansionProgress)
@@ -65,10 +73,16 @@ struct WorkspaceSidebarWorkspaceSection: View {
             .background {
                 ZStack {
                     sectionBackground
-                    if !isCompact {
-                        sectionActivationButton
-                    }
+                if !isCompact && !isInUseOnOtherDisplay {
+                    sectionActivationButton
                 }
+                }
+            }
+            .overlay(alignment: .center) {
+                inUseOverrideOverlay
+                    .opacity(isShowingInUseOverlay && !isEditingName ? 1 : 0)
+                    .allowsHitTesting(isShowingInUseOverlay && !isEditingName)
+                    .zIndex(5)
             }
             .shadow(
                 color: isDropTarget ? Color.accentColor.opacity(0.18) : .clear,

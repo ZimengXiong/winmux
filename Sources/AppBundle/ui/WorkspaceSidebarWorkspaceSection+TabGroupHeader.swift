@@ -4,7 +4,12 @@ extension WorkspaceSidebarWorkspaceSection {
     func tabGroupHeaderButton(_ group: WorkspaceSidebarTabGroupViewModel, groupHoverId: UInt32) -> some View {
         Button {
             guard shouldHandleWorkspaceSidebarActivation(isEditing: false, isSidebarDragInProgress: isWorkspaceSidebarDragInProgress()) else { return }
-            focusWindowFromSidebar(group.representativeWindowId, fallbackWorkspace: group.workspaceName)
+            if isInUseOnOtherDisplay {
+                activeInUseOverrideWorkspaceName = workspace.name
+                return
+            }
+            activeInUseOverrideWorkspaceName = nil
+            actions.send(.selectWindow(group.representativeWindowId, fallbackWorkspace: group.workspaceName))
         } label: {
             WorkspaceSidebarWindowRow(
                 title: group.title.isEmpty ? "Tab Group" : group.title,
@@ -14,6 +19,8 @@ extension WorkspaceSidebarWorkspaceSection {
                 isHovered: hoveredWindowId == groupHoverId,
                 style: .tabGroupHeader,
                 hoverNamespace: rowHoverNamespace,
+                appBundleIds: group.tabs.map(\.appBundleId),
+                appBundlePaths: group.tabs.map(\.appBundlePath),
             )
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())

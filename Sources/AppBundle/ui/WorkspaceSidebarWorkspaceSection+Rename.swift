@@ -14,7 +14,7 @@ extension WorkspaceSidebarWorkspaceSection {
         .padding(.horizontal, 5)
         .frame(height: 24)
         .background(workspaceRenameEditorBackground)
-        .padding(.leading, workspaceSidebarHeaderLeadingPadding)
+        .padding(.leading, workspaceSidebarHeaderRowLeadingPadding)
         .padding(.trailing, workspaceSidebarRowHorizontalPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
     }

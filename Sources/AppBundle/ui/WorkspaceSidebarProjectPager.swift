@@ -9,11 +9,17 @@ struct WorkspaceSidebarProjectPager: View {
     let swipeDirection: Int?
     let switchProgress: CGFloat
     let edgeProgress: CGFloat
+    let onSelectProject: (WorkspaceProjectId) -> Void
+    let onCreateProject: () -> Void
+    let onRenameProject: (WorkspaceSidebarProjectViewModel, String) -> Void
+    let onSetProjectColor: (WorkspaceSidebarProjectViewModel, String?) -> Void
+    let onDeleteProject: (WorkspaceSidebarProjectViewModel) -> Void
 
     @State var isHovered = false
     @State var pressedProjectId: WorkspaceProjectId? = nil
     @State var editingProjectId: WorkspaceProjectId? = nil
     @State var editingProjectDraft = ""
+    @State var isProjectMenuOpen = false
 
     var sectionWidth: CGFloat { workspaceSidebarSectionWidth(expansionProgress) }
     var isCompact: Bool { expansionProgress < workspaceSidebarRowsRevealProgress }
@@ -24,6 +30,17 @@ struct WorkspaceSidebarProjectPager: View {
     var selectedProject: WorkspaceSidebarProjectViewModel? {
         projects.first { $0.id == selectedProjectId }
             ?? projects.first
+    }
+    var pagerHeight: CGFloat {
+        guard isProjectMenuOpen && !isCompact else {
+            return workspaceSidebarPagerHeight
+        }
+        let rowCount = CGFloat(projects.count + 1)
+        let popupPadding = (workspaceSidebarMenuRowSpacing + 1) * 2
+        let rowSpacing = CGFloat(max(projects.count - 1, 0)) * workspaceSidebarMenuRowSpacing
+        let dividerHeight = 0.5 + (workspaceSidebarMenuRowSpacing * 2)
+        let popupHeight = (rowCount * workspaceSidebarMenuRowHeight) + rowSpacing + dividerHeight + popupPadding
+        return popupHeight + workspaceSidebarSectionGap + workspaceSidebarPagerHeight
     }
     var swipeTargetIndex: Int? {
         guard let swipeDirection else { return nil }
@@ -51,13 +68,8 @@ struct WorkspaceSidebarProjectPager: View {
     var body: some View {
         if !projects.isEmpty {
             pagerContent
-                .frame(width: sectionWidth, height: workspaceSidebarPagerHeight, alignment: .center)
+                .frame(width: sectionWidth, height: pagerHeight, alignment: .bottom)
                 .contentShape(Rectangle())
-                .contextMenu {
-                    Button("New") {
-                        createWorkspaceSidebarProject()
-                    }
-                }
                 .onHover { hovering in
                     isHovered = hovering
                 }
@@ -65,6 +77,7 @@ struct WorkspaceSidebarProjectPager: View {
                 .animation(.interactiveSpring(response: 0.24, dampingFraction: 0.86), value: currentIndex)
                 .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.88), value: edgeProgress)
                 .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .bottom)))
+                .zIndex(isProjectMenuOpen ? 20 : 0)
         }
     }
 
@@ -73,14 +86,16 @@ struct WorkspaceSidebarProjectPager: View {
             if isCompact {
                 compactProjectIndicator
             } else {
-                HStack(alignment: .center, spacing: footerSpacing) {
-                    projectDotTrack
-                    projectMenu
-                        .frame(width: projectMenuWidth, height: workspaceSidebarPagerHeight, alignment: .trailing)
+                ZStack(alignment: .bottomTrailing) {
+                    projectControls
+                    projectPopup
                 }
+                .frame(width: sectionWidth, height: pagerHeight, alignment: .bottomTrailing)
+                .transaction { $0.animation = nil }
             }
         }
         .padding(.horizontal, isCompact ? 2 : 0)
-        .frame(width: sectionWidth, height: workspaceSidebarPagerHeight, alignment: .center)
+        .frame(width: sectionWidth, height: pagerHeight, alignment: .bottom)
+        .transaction { $0.animation = nil }
     }
 }

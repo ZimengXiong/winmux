@@ -326,6 +326,39 @@ final class WorkspaceSidebarDragTest: XCTestCase {
         )
     }
 
+    func testWorkspaceSidebarInUseOverlayOnlyAppliesToVisibleOtherMonitor() {
+        let workspace = WorkspaceSidebarWorkspaceViewModel(
+            name: "2",
+            projectId: workspaceProjectDefaultId,
+            displayName: "2",
+            sidebarLabel: "2",
+            isGeneratedName: false,
+            monitorScopeId: "monitor:1440.0,0.0",
+            monitorName: "Side Display",
+            isFocused: false,
+            isVisible: true,
+            items: [],
+        )
+        XCTAssertTrue(
+            workspaceSidebarWorkspaceIsInUseOnOtherDisplay(
+                workspace,
+                selectedScopeId: "monitor:0.0,0.0",
+            ),
+        )
+        XCTAssertFalse(
+            workspaceSidebarWorkspaceIsInUseOnOtherDisplay(
+                workspace,
+                selectedScopeId: "monitor:1440.0,0.0",
+            ),
+        )
+        XCTAssertFalse(
+            workspaceSidebarWorkspaceIsInUseOnOtherDisplay(
+                workspace,
+                selectedScopeId: workspaceSidebarAllScopeId,
+            ),
+        )
+    }
+
     func testWorkspaceSidebarHoverCueWidthStaysCollapsed() {
         XCTAssertEqual(
             workspaceSidebarHoverCueWidth(collapsedWidth: 28, expandedWidth: 160),

@@ -4,6 +4,9 @@ import SwiftUI
 enum WindowIntentPreviewPalette {
     static let fillColor = mattePanelNSColor
     static let fill = Color(nsColor: fillColor)
+    static let gridBaseFill = Color.accentColor.opacity(0.07)
+    static let gridLineStroke = Color.accentColor.opacity(0.48)
+    static let gridOuterStroke = Color.accentColor.opacity(0.48)
 
     static func highlight(style: WindowTabDropPreviewStyle, isActive: Bool) -> Color {
         Color.white.opacity(style.highlightOpacity * (isActive ? 1 : 0.45))
@@ -19,6 +22,14 @@ enum WindowIntentPreviewPalette {
 
     static func accent(alpha _: CGFloat) -> CGColor {
         fillColor.cgColor
+    }
+
+    static func gridZoneFill(isActive: Bool) -> Color {
+        Color.accentColor.opacity(isActive ? 0.23 : 0.045)
+    }
+
+    static func gridSymbol(isActive: Bool) -> Color {
+        Color.white.opacity(isActive ? 1.0 : 0.7)
     }
 }
 

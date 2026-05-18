@@ -9,6 +9,7 @@ struct WindowDragIntentDestination {
     let previewGeometry: WindowTabDropPreviewGeometry
     let isGroup: Bool
     let previewZones: [WindowDragIntentPreviewZone]
+    let dropIntentOverlay: WindowDropIntentOverlayModel?
 
     init(
         kind: WindowDragIntentKind,
@@ -21,6 +22,7 @@ struct WindowDragIntentDestination {
         previewGeometry: WindowTabDropPreviewGeometry,
         isGroup: Bool,
         previewZones: [WindowDragIntentPreviewZone] = [],
+        dropIntentOverlay: WindowDropIntentOverlayModel? = nil,
     ) {
         self.kind = kind
         self.previewContainerRect = previewContainerRect
@@ -32,5 +34,6 @@ struct WindowDragIntentDestination {
         self.previewGeometry = previewGeometry
         self.isGroup = isGroup
         self.previewZones = previewZones
+        self.dropIntentOverlay = dropIntentOverlay
     }
 }

@@ -6,7 +6,10 @@ import SwiftUI
 final class WorkspaceSidebarPanel: NSPanelHud {
     static let shared = WorkspaceSidebarPanel()
 
-    let hostingView = NSHostingView(rootView: WorkspaceSidebarView(viewModel: TrayMenuModel.shared))
+    let hostingView = NSHostingView(rootView: WorkspaceSidebarContainerView(
+        viewModel: TrayMenuModel.shared,
+        actions: makeWorkspaceSidebarActionsAdapter()
+    ))
     var pendingExpand: DispatchWorkItem?
     var pendingCollapse: DispatchWorkItem?
     var pendingCollapseFinalize: DispatchWorkItem?

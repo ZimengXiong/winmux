@@ -38,7 +38,7 @@ extension WorkspaceSidebarProjectPager {
                 )
         } else {
             Button {
-                selectWorkspaceSidebarProject(project.id)
+                onSelectProject(project.id)
             } label: {
                 Capsule(style: .continuous)
                     .fill(dotFill(

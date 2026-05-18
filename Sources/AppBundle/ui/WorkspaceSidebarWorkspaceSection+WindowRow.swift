@@ -9,7 +9,12 @@ extension WorkspaceSidebarWorkspaceSection {
     ) -> some View {
         Button {
             guard shouldHandleWorkspaceSidebarActivation(isEditing: false, isSidebarDragInProgress: isWorkspaceSidebarDragInProgress()) else { return }
-            focusWindowFromSidebar(window.windowId, fallbackWorkspace: window.workspaceName)
+            if isInUseOnOtherDisplay {
+                activeInUseOverrideWorkspaceName = workspace.name
+                return
+            }
+            activeInUseOverrideWorkspaceName = nil
+            actions.send(.selectWindow(window.windowId, fallbackWorkspace: window.workspaceName))
         } label: {
             WorkspaceSidebarWindowRow(
                 title: window.title ?? window.appName,
@@ -17,8 +22,10 @@ extension WorkspaceSidebarWorkspaceSection {
                 isFocused: window.isFocused,
                 rowHeight: rowHeight,
                 isHovered: hoveredWindowId == window.windowId,
-                style: .window,
+                style: leadingHitInset > 0 ? .tabGroupChild : .window,
                 hoverNamespace: rowHoverNamespace,
+                appBundleIds: [window.appBundleId],
+                appBundlePaths: [window.appBundlePath],
             )
             .padding(.leading, leadingHitInset)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -29,8 +36,8 @@ extension WorkspaceSidebarWorkspaceSection {
         .contentShape(Rectangle())
         .modifier(WorkspaceSidebarOptionalDragModifier(
             isEnabled: allowsDrag,
-            onChanged: { updateSidebarWindowDrag(window.windowId, subject: subject) },
-            onEnded: finishSidebarWindowDrag,
+            onChanged: { actions.send(.updateWindowDrag(window.windowId, subject: subject)) },
+            onEnded: { actions.send(.finishWindowDrag) },
         ))
         .onHover { hover in
             hoveredWindowId = nextWorkspaceSidebarHoveredWindowId(

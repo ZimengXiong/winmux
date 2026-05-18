@@ -38,10 +38,20 @@ func handleWorkspaceSidebarAction(_ action: WorkspaceSidebarAction) {
             if let workspace = workspaceSidebarWorkspaceViewModel(name) {
                 renameWorkspaceFromSidebar(workspace, displayName: displayName)
             }
+        case .resetWorkspace(let name):
+            if let workspace = workspaceSidebarWorkspaceViewModel(name) {
+                resetWorkspaceNameFromSidebar(workspace)
+            }
         case .deleteWorkspace(let name):
             if let workspace = workspaceSidebarWorkspaceViewModel(name) {
                 deleteWorkspaceFromSidebar(workspace)
             }
+        case .hoverWorkspace(let name, let isHovering):
+            TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName = nextWorkspaceSidebarHoveredWorkspaceName(
+                currentHoveredWorkspaceName: TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName,
+                workspaceName: name,
+                isHovering: isHovering,
+            )
         case .updateWindowDrag(let windowId, let subject):
             updateSidebarWindowDrag(windowId, subject: subject)
         case .finishWindowDrag:

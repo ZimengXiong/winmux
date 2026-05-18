@@ -13,6 +13,33 @@ struct WindowTabDropPreviewViewModel: Equatable {
     let referenceWindowId: UInt32?
     let isPointerSettled: Bool
     let zones: [WindowTabDropPreviewZoneViewModel]
+    let dropIntentOverlay: WindowDropIntentOverlayModel?
+
+    init(
+        containerFrame: CGRect,
+        frame: CGRect,
+        title: String,
+        subtitle: String,
+        style: WindowTabDropPreviewStyle,
+        geometry: WindowTabDropPreviewGeometry,
+        isGroup: Bool,
+        referenceWindowId: UInt32?,
+        isPointerSettled: Bool,
+        zones: [WindowTabDropPreviewZoneViewModel],
+        dropIntentOverlay: WindowDropIntentOverlayModel? = nil
+    ) {
+        self.containerFrame = containerFrame
+        self.frame = frame
+        self.title = title
+        self.subtitle = subtitle
+        self.style = style
+        self.geometry = geometry
+        self.isGroup = isGroup
+        self.referenceWindowId = referenceWindowId
+        self.isPointerSettled = isPointerSettled
+        self.zones = zones
+        self.dropIntentOverlay = dropIntentOverlay
+    }
 }
 
 struct WindowTabDropPreviewZoneViewModel: Equatable {
@@ -20,6 +47,12 @@ struct WindowTabDropPreviewZoneViewModel: Equatable {
     let style: WindowTabDropPreviewStyle
     let geometry: WindowTabDropPreviewGeometry
     let isActive: Bool
+}
+
+struct WindowDropIntentOverlayModel: Equatable {
+    let targetFrame: CGRect
+    let activeZone: WindowDropZone?
+    let cornerRadius: CGFloat?
 }
 
 enum WindowTabDropPreviewStyle: Equatable {
@@ -111,4 +144,3 @@ func windowIntentPreviewSymbolName(for style: WindowTabDropPreviewStyle, isGroup
             isGroup ? "rectangle.stack.badge.plus" : "macwindow.badge.plus"
     }
 }
-

@@ -3,6 +3,7 @@ import CoreGraphics
 struct WindowDropIntentResolution {
     let intent: WindowDropIntent
     let targetFrame: Rect
+    let targetCornerRadius: CGFloat?
     let zones: [WindowIntentZone]
 }
 
@@ -12,6 +13,7 @@ struct WindowDropIntentResolver {
         targetWindowId: UInt32,
         pointer: CGPoint,
         targetFrame: Rect,
+        targetCornerRadius: CGFloat? = nil,
     ) -> WindowDropIntentResolution? {
         guard sourceWindowId != targetWindowId,
               targetFrame.contains(pointer),
@@ -26,6 +28,7 @@ struct WindowDropIntentResolver {
                 zone: zone,
             ),
             targetFrame: targetFrame,
+            targetCornerRadius: targetCornerRadius,
             zones: WindowIntentZoneBuilder.zones(in: targetFrame),
         )
     }

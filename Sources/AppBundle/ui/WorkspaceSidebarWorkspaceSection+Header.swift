@@ -28,19 +28,21 @@ extension WorkspaceSidebarWorkspaceSection {
     }
 
     var expandedHeader: some View {
-        VStack(alignment: .leading, spacing: 1) {
+        HStack(spacing: workspaceSidebarHeaderSpacing) {
             Text(workspace.displayName)
-                .font(.system(size: 14, weight: workspace.isFocused ? .bold : .semibold))
-                .foregroundStyle(workspace.isFocused ? Color.white.opacity(0.96) : Color.white.opacity(0.86))
+                .font(.system(size: 15, weight: workspace.isFocused ? .bold : .semibold))
+                .foregroundStyle(workspace.isFocused ? Color.white : Color.white.opacity(0.85))
                 .lineLimit(1)
-            if let monitorName = workspace.monitorName, showsWindowRows {
-                Text(monitorName)
-                    .font(.system(size: 9.5, weight: .regular))
-                    .foregroundStyle(Color.white.opacity(0.48))
-                    .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 0)
+            if !workspace.items.isEmpty {
+                Text("\(workspace.items.count)")
+                    .font(.system(size: 12, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.white.opacity(0.35))
             }
         }
-        .padding(.leading, workspaceSidebarHeaderLeadingPadding)
+        .padding(.leading, workspaceSidebarHeaderRowLeadingPadding)
         .padding(.trailing, workspaceSidebarRowHorizontalPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
     }

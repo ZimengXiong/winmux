@@ -39,7 +39,9 @@ enum WorkspaceSidebarAction: Equatable {
     case selectMonitorScope(String)
     case createWorkspace
     case renameWorkspace(String, displayName: String)
+    case resetWorkspace(String)
     case deleteWorkspace(String)
+    case hoverWorkspace(String, isHovering: Bool)
     case updateWindowDrag(UInt32, subject: WindowDragSubject)
     case finishWindowDrag
     case setDropTargets([WorkspaceSidebarDropTargetFrame])

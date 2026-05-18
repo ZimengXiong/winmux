@@ -23,27 +23,14 @@ func windowSurfaceDestination(
     ) {
         return reentryDestination
     }
-    if subject == .window,
-       config.windowTabs.enabled,
-       let tabDestination = tabStackDestination(targetWindow: targetWindow, mouseLocation: mouseLocation)
-    {
-        if case .tabStack(let targetWindowId) = tabDestination.kind,
-           let targetWindow = Window.get(byId: targetWindowId),
-           shouldSuppressSameTabGroupTabDestination(
-               sourceWindow: sourceWindow,
-               targetWindow: targetWindow,
-               detachOrigin: detachOrigin,
-           )
-        {
-            // Body drags from an existing tab group should be able to detach instead of
-            // being trapped by that same group's own tab insert target.
-        } else {
-            return tabDestination
-        }
-    }
-
     guard config.enableWindowManagement else {
-        return nil
+        return legacyTabStackDestination(
+            sourceWindow: sourceWindow,
+            targetWindow: targetWindow,
+            mouseLocation: mouseLocation,
+            subject: subject,
+            detachOrigin: detachOrigin,
+        )
     }
 
     let resolvedIntent = resolveWindowDropIntent(
@@ -73,4 +60,30 @@ func windowSurfaceDestination(
         subject: subject,
         detachOrigin: detachOrigin,
     )
+}
+
+@MainActor
+private func legacyTabStackDestination(
+    sourceWindow: Window,
+    targetWindow: Window,
+    mouseLocation: CGPoint,
+    subject: WindowDragSubject,
+    detachOrigin: TabDetachOrigin,
+) -> WindowDragIntentDestination? {
+    guard subject == .window,
+          config.windowTabs.enabled,
+          let tabDestination = tabStackDestination(targetWindow: targetWindow, mouseLocation: mouseLocation)
+    else { return nil }
+
+    if case .tabStack(let targetWindowId) = tabDestination.kind,
+       let targetWindow = Window.get(byId: targetWindowId),
+       shouldSuppressSameTabGroupTabDestination(
+           sourceWindow: sourceWindow,
+           targetWindow: targetWindow,
+           detachOrigin: detachOrigin,
+       )
+    {
+        return nil
+    }
+    return tabDestination
 }

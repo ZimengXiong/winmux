@@ -12,6 +12,7 @@ extension WindowDragIntentDestination {
             referenceWindowId: previewReferenceWindowId(sourceWindowId: sourceWindowId),
             isPointerSettled: WindowDragFrameGate.shared.state(for: sourceWindowId)?.isSettled ?? false,
             zones: previewZones.map(\.viewModel),
+            dropIntentOverlay: dropIntentOverlay,
         )
     }
 
@@ -27,6 +28,36 @@ extension WindowDragIntentDestination {
     }
 
     func withPreviewZones(_ zones: [WindowDragIntentPreviewZone]) -> WindowDragIntentDestination {
+        replacingIntentPreview(
+            containerRect: previewContainerRect,
+            previewRect: previewRect,
+            interactionRect: interactionRect,
+            zones: zones
+        )
+    }
+
+    func replacingIntentPreview(
+        containerRect: Rect,
+        previewRect: Rect,
+        interactionRect: Rect,
+        zones: [WindowDragIntentPreviewZone]
+    ) -> WindowDragIntentDestination {
+        WindowDragIntentDestination(
+            kind: kind,
+            previewContainerRect: containerRect,
+            previewRect: previewRect,
+            interactionRect: interactionRect,
+            title: title,
+            subtitle: subtitle,
+            previewStyle: previewStyle,
+            previewGeometry: previewGeometry,
+            isGroup: isGroup,
+            previewZones: zones,
+            dropIntentOverlay: dropIntentOverlay,
+        )
+    }
+
+    func withDropIntentOverlay(_ overlay: WindowDropIntentOverlayModel?) -> WindowDragIntentDestination {
         WindowDragIntentDestination(
             kind: kind,
             previewContainerRect: previewContainerRect,
@@ -37,7 +68,8 @@ extension WindowDragIntentDestination {
             previewStyle: previewStyle,
             previewGeometry: previewGeometry,
             isGroup: isGroup,
-            previewZones: zones,
+            previewZones: previewZones,
+            dropIntentOverlay: overlay,
         )
     }
 }

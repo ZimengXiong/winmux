@@ -4,12 +4,12 @@ import SwiftUI
 extension WindowTabStripView {
     func tabStripBody(stripWidth: CGFloat, stripHeight: CGFloat) -> some View {
         let context = WindowTabStripLayoutContext(strip: strip, width: stripWidth)
-        let itemHeight = max(stripHeight - 4, 18)
+        let itemHeight = min(max(stripHeight - 10, 18), 26)
         let activeWindowId = strip.tabs.first(where: \.isActive)?.windowId
         let groupDragWindowId = activeWindowId ?? strip.tabs.first?.windowId
         let shape = windowTabStripShape(outerTopRadius: context.outerTopRadius)
 
-        return HStack(spacing: 0) {
+        return HStack(spacing: 6) {
             WindowTabGroupHandleView(
                 windowId: groupDragWindowId,
                 workspaceName: strip.workspaceName
@@ -20,12 +20,18 @@ extension WindowTabStripView {
                 .contentShape(Rectangle())
                 .gesture(groupDragGesture(for: groupDragWindowId))
 
+            Color.clear
+                .frame(width: windowTabStripTrailingGroupDragGutterWidth)
+                .frame(maxHeight: .infinity)
+                .contentShape(Rectangle())
+                .gesture(groupDragGesture(for: groupDragWindowId))
+
             WindowTabGroupHandleView(
                 windowId: groupDragWindowId,
                 workspaceName: strip.workspaceName
             )
         }
-        .padding(.horizontal, 3)
+        .padding(.horizontal, 8)
         .padding(.vertical, 2)
         .frame(width: stripWidth, height: stripHeight)
         .background {

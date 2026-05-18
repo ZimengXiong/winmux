@@ -5,7 +5,7 @@ import SwiftUI
 extension WorkspaceSidebarProjectPager {
     func beginInlineRename(_ project: WorkspaceSidebarProjectViewModel) {
         if selectedProjectId != project.id {
-            selectWorkspaceSidebarProject(project.id)
+            onSelectProject(project.id)
         }
         WorkspaceSidebarPanel.shared.beginInlineTextEditing()
         editingProjectId = project.id
@@ -18,7 +18,7 @@ extension WorkspaceSidebarProjectPager {
         editingProjectId = nil
         WorkspaceSidebarPanel.shared.endInlineTextEditing()
         guard !trimmed.isEmpty, trimmed != project.displayName else { return }
-        renameWorkspaceSidebarProject(project, displayName: trimmed)
+        onRenameProject(project, trimmed)
     }
 
     func cancelInlineRename() {
@@ -64,41 +64,89 @@ extension WorkspaceSidebarProjectPager {
         if let selectedProject, editingProjectId == selectedProject.id {
             projectMenuInlineEditor(selectedProject)
         } else {
-            WorkspaceSidebarProjectMenuButton(
-                projects: projects,
-                selectedProjectId: selectedProjectId,
-                selectedProjectName: selectedProject?.displayName ?? "Project",
-                width: projectMenuWidth,
-                isHovered: isHovered,
-                canDeleteSelectedProject: selectedProject.map { canDeleteWorkspaceProject($0.id) } ?? false,
-                onSelectProject: { projectId in
-                    selectWorkspaceSidebarProject(projectId)
-                },
-                onCreateProject: {
-                    createWorkspaceSidebarProject()
-                },
-                onRenameSelectedProject: {
-                    if let selectedProject {
-                        beginInlineRename(selectedProject)
-                    }
-                },
-                onSetSelectedProjectColor: { colorHex in
-                    if let selectedProject {
-                        setWorkspaceSidebarProjectColor(selectedProject, colorHex: colorHex)
-                    }
-                },
-                onDeleteSelectedProject: {
-                    if let selectedProject {
-                        deleteWorkspaceSidebarProject(selectedProject)
-                    }
-                },
-            )
-            .frame(width: projectMenuWidth, height: workspaceSidebarPagerHeight, alignment: .leading)
+            projectMenuButton
+            .frame(width: projectMenuWidth, height: workspaceSidebarPagerHeight, alignment: .trailing)
             .contextMenu {
                 if let selectedProject {
                     projectContextMenuItems(for: selectedProject)
                 }
             }
+        }
+    }
+
+    var projectControls: some View {
+        HStack(alignment: .center, spacing: footerSpacing) {
+            projectDotTrack
+                .frame(width: projectTrackWidth, alignment: .leading)
+            projectMenu
+                .frame(width: projectMenuWidth, height: workspaceSidebarPagerHeight, alignment: .trailing)
+        }
+        .frame(width: sectionWidth, height: workspaceSidebarPagerHeight, alignment: .center)
+    }
+
+    private var projectMenuButton: some View {
+        Button {
+            isProjectMenuOpen.toggle()
+        } label: {
+            HStack(spacing: 4) {
+                Text(selectedProject?.displayName ?? "Project")
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(isHovered || isProjectMenuOpen ? 0.86 : 0.72))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(isHovered || isProjectMenuOpen ? 0.86 : 0.72))
+                    .rotationEffect(.degrees(isProjectMenuOpen ? 180 : 0))
+            }
+            .padding(.horizontal, 6)
+            .frame(height: workspaceSidebarDropdownHeight)
+            .background {
+                RoundedRectangle(cornerRadius: workspaceSidebarPlateCornerRadius, style: .continuous)
+                    .fill(isProjectMenuOpen ? Color.white.opacity(0.10) : Color.white.opacity(0.04))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: workspaceSidebarPlateCornerRadius, style: .continuous)
+                    .strokeBorder(isProjectMenuOpen ? Color.white.opacity(0.14) : Color.white.opacity(0.08), lineWidth: 0.5)
+            }
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, maxHeight: workspaceSidebarPagerHeight, alignment: .trailing)
+    }
+
+    @ViewBuilder
+    var projectPopup: some View {
+        if isProjectMenuOpen {
+            WorkspaceSidebarProjectPopup(
+                projects: projects,
+                selectedProjectId: selectedProjectId,
+                onSelect: { projectId in
+                    onSelectProject(projectId)
+                    isProjectMenuOpen = false
+                },
+                onCreate: {
+                    onCreateProject()
+                    isProjectMenuOpen = false
+                },
+                onRename: { project in
+                    beginInlineRename(project)
+                    isProjectMenuOpen = false
+                },
+                onSetColor: onSetProjectColor,
+                onDelete: { project in
+                    onDeleteProject(project)
+                    isProjectMenuOpen = false
+                },
+                menuWidth: 148,
+            )
+            .frame(width: 148)
+            .offset(y: -(workspaceSidebarPagerHeight + workspaceSidebarSectionGap))
+            .transition(.asymmetric(
+                insertion: .opacity.combined(with: .scale(scale: 0.98, anchor: .bottomTrailing)),
+                removal: .opacity,
+            ))
+            .animation(.interactiveSpring(response: 0.22, dampingFraction: 0.88), value: isProjectMenuOpen)
+            .zIndex(100)
         }
     }
 
@@ -110,7 +158,7 @@ extension WorkspaceSidebarProjectPager {
         Menu("Color") {
             let selectedColorHex = project.colorHex.flatMap(normalizedWorkspaceSidebarColorHex)
             Button {
-                setWorkspaceSidebarProjectColor(project, colorHex: nil)
+                onSetProjectColor(project, nil)
             } label: {
                 Label {
                     Text("Auto")
@@ -121,7 +169,7 @@ extension WorkspaceSidebarProjectPager {
             Divider()
             ForEach(workspaceSidebarProjectColorPresets) { preset in
                 Button {
-                    setWorkspaceSidebarProjectColor(project, colorHex: preset.hex)
+                    onSetProjectColor(project, preset.hex)
                 } label: {
                     Label {
                         Text(preset.name)
@@ -135,7 +183,7 @@ extension WorkspaceSidebarProjectPager {
             }
         }
         Button(role: .destructive) {
-            deleteWorkspaceSidebarProject(project)
+            onDeleteProject(project)
         } label: {
             Text("Delete Project")
         }

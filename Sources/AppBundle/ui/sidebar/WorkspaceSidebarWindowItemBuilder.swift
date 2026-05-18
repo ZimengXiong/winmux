@@ -16,6 +16,8 @@ func makeWorkspaceSidebarWindowViewModel(
         windowId: window.windowId,
         workspaceName: workspaceName,
         appName: appName,
+        appBundleId: window.app.rawAppBundleId,
+        appBundlePath: window.app.bundlePath,
         title: title,
         isFocused: currentFocus.windowOrNil == window,
     )

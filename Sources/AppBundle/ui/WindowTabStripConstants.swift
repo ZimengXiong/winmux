@@ -5,11 +5,12 @@ import SwiftUI
 // MARK: - Constants
 
 let windowTabPreviewCornerRadius: CGFloat = 12
-let windowTabStripContentHorizontalPadding: CGFloat = 2
-let windowTabStripGroupHandleWidth: CGFloat = 2
+let windowTabStripContentHorizontalPadding: CGFloat = 8
+let windowTabStripGroupHandleWidth: CGFloat = 26
+let windowTabStripTrailingGroupDragGutterWidth: CGFloat = 28
 let windowTabStripCornerRadius: CGFloat = 12
-let windowTabStripInnerCornerRadius: CGFloat = 12
-let windowTabStripTabSpacing: CGFloat = 8
+let windowTabStripInnerCornerRadius: CGFloat = 7
+let windowTabStripTabSpacing: CGFloat = 6
 let windowTabStripPreferredTabWidth: CGFloat = 240
 let windowTabStripMinimumTabWidth: CGFloat = 132
 let windowTabStripScrollFadeWidth: CGFloat = 22
@@ -35,6 +36,7 @@ func windowTabStripAvailableTabsWidth(stripWidth: CGFloat) -> CGFloat {
         0,
         stripWidth
             - (windowTabStripReservedGroupHandleWidth() * 2)
+            - windowTabStripTrailingGroupDragGutterWidth
             - (windowTabStripContentHorizontalPadding * 2),
     )
 }
@@ -61,4 +63,3 @@ func windowTabTrailingScrollFadeWidth(isScrollable: Bool, stripWidth: CGFloat) -
 // MARK: - Tab Strip View (manages reorder drag state for all tabs)
 
 let tabReorderVerticalEscapeThreshold: CGFloat = 18
-

@@ -2,11 +2,15 @@ import SwiftUI
 
 extension WorkspaceSidebarWorkspaceSection {
     func handleSectionClick() {
+        if isInUseOnOtherDisplay {
+            activeInUseOverrideWorkspaceName = workspace.name
+            return
+        }
         if shouldHandleWorkspaceSidebarActivation(
             isEditing: isEditingName,
             isSidebarDragInProgress: isWorkspaceSidebarDragInProgress()
         ) {
-            focusWorkspaceFromSidebar(workspace.name)
+            actions.send(.selectWorkspace(workspace.name))
         }
     }
 
@@ -22,7 +26,7 @@ extension WorkspaceSidebarWorkspaceSection {
         isEditingName = false
         WorkspaceSidebarPanel.shared.endInlineTextEditing()
         guard !trimmed.isEmpty, trimmed != workspace.displayName else { return }
-        renameWorkspaceFromSidebar(workspace, displayName: trimmed)
+        actions.send(.renameWorkspace(workspace.name, displayName: trimmed))
     }
 
     func cancelInlineRename() {

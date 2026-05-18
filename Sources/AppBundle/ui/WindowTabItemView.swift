@@ -15,25 +15,22 @@ struct WindowTabItemView: View {
     @Environment(\.accessibilityReduceMotion) var reduceMotion
 
     var body: some View {
-        let iconSize = min(max(height - 14, 14), 18)
-        let textWidth = max(width - iconSize - 34, 36)
+        let iconSize = min(max(height - 12, 14), 18)
+        let textWidth = max(width - iconSize - 32, 36)
 
         ZStack {
             RoundedRectangle(cornerRadius: windowTabStripInnerCornerRadius, style: .continuous)
                 .fill(baseTabFill)
-                .padding(.vertical, 2)
 
             RoundedRectangle(cornerRadius: windowTabStripInnerCornerRadius, style: .continuous)
                 .fill(feedbackFill)
                 .opacity(feedbackOpacity)
-                .padding(.vertical, 2)
                 .matchedGeometryEffect(id: feedbackId, in: feedbackNamespace)
                 .allowsHitTesting(false)
 
             if isHovered, !tab.isActive {
                 RoundedRectangle(cornerRadius: windowTabStripInnerCornerRadius, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.07), lineWidth: 0.5)
-                    .padding(.vertical, 2)
+                    .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
                     .allowsHitTesting(false)
             }
 
@@ -46,7 +43,7 @@ struct WindowTabItemView: View {
                     Text(tab.title)
                         .font(.system(size: 12, weight: tab.isActive ? .semibold : .medium))
                         .lineLimit(1)
-                        .truncationMode(.tail)
+                        .truncationMode(.middle)
                         .allowsTightening(false)
                         .foregroundStyle(foregroundColor)
                         .frame(width: textWidth, alignment: .leading)
@@ -54,7 +51,7 @@ struct WindowTabItemView: View {
 
                     Spacer(minLength: 0)
                 }
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, 10)
                     .frame(width: width, height: height, alignment: .leading)
                     .contentShape(Rectangle())
             }

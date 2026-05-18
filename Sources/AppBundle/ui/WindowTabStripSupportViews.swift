@@ -37,7 +37,15 @@ struct WindowTabGroupHandleView: View {
             guard let windowId, !isWindowTabStripDragInProgress() else { return }
             focusWindowFromTabStripClick(windowId, fallbackWorkspace: workspaceName)
         } label: {
-            Color.clear.contentShape(Rectangle())
+            HStack(spacing: 3) {
+                ForEach(0..<3, id: \.self) { _ in
+                    Circle()
+                        .fill(Color.white.opacity(0.28))
+                        .frame(width: 3.5, height: 3.5)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Focus Tab Group")

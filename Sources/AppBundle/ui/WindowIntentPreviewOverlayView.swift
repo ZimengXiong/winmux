@@ -4,14 +4,30 @@ struct WindowIntentPreviewOverlayView: View {
     let model: WindowTabDropPreviewViewModel
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            ForEach(localZones) { zone in
-                WindowIntentPreviewZoneView(zone: zone)
-            }
+        if let dropIntentOverlay = model.dropIntentOverlay {
+            WindowDropIntentOverlayView(model: dropIntentOverlay)
+                .frame(width: model.containerFrame.width, height: model.containerFrame.height)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        } else {
+            legacyPreview
+                .frame(width: model.containerFrame.width, height: model.containerFrame.height)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
         }
-        .frame(width: model.containerFrame.width, height: model.containerFrame.height)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private var legacyPreview: some View {
+        if model.zones.isEmpty {
+            ZStack(alignment: .topLeading) {
+                ForEach(localZones) { zone in
+                    WindowIntentPreviewZoneView(zone: zone)
+                }
+            }
+        } else {
+            WindowIntentPreviewGridView(zones: localZones)
+        }
     }
 
     private var localZones: [WindowIntentPreviewLocalZone] {

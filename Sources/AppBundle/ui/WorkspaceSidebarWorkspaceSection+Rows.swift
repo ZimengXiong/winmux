@@ -26,12 +26,7 @@ extension WorkspaceSidebarWorkspaceSection {
     @ViewBuilder
     var dropPreviewRow: some View {
         if dragPreview?.targetWorkspaceName == workspace.name {
-            WorkspaceSidebarPreviewRow(
-                preview: dragPreview.orDie(),
-                expansionProgress: expansionProgress,
-                rowHeight: rowHeight,
-                expandedContentWidth: contentWidth
-            )
+            WorkspaceSidebarDropPreviewView(preview: dragPreview.orDie(), rowHeight: rowHeight)
             .transition(.asymmetric(
                 insertion: .move(edge: .top).combined(with: .scale(scale: 0.96, anchor: .top)).combined(with: .opacity),
                 removal: .identity,

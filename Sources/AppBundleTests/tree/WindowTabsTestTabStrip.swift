@@ -172,6 +172,7 @@ import XCTest
         let stripWidth: CGFloat = 360
         let expectedTabsWidth = stripWidth
             - (windowTabStripReservedGroupHandleWidth() * 2)
+            - windowTabStripTrailingGroupDragGutterWidth
             - (windowTabStripContentPadding() * 2)
 
         XCTAssertEqual(windowTabStripAvailableTabsWidth(stripWidth: stripWidth), expectedTabsWidth)
