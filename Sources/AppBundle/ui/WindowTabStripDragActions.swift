@@ -37,7 +37,7 @@ private func startTabStripWindowMove(window: Window, subject: WindowDragSubject,
         detachOrigin: detachOrigin,
         startedInSidebar: false,
         anchorRect: resolvedDraggedWindowAnchorRect(for: window, subject: subject),
-        refreshActualRects: false,
+        refreshActualRects: true,
     )
     WindowMouseInteractionDriver.shared.startMove(
         windowId: window.windowId,

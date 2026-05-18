@@ -454,7 +454,7 @@ func updateSidebarWindowDrag(_ windowId: UInt32, subject: WindowDragSubject = .w
         detachOrigin: .window,
         startedInSidebar: true,
         anchorRect: resolvedDraggedWindowAnchorRect(for: window, subject: subject),
-        refreshActualRects: subject == .window,
+        refreshActualRects: true,
     )
     WindowMouseInteractionDriver.shared.startMove(
         windowId: window.windowId,
