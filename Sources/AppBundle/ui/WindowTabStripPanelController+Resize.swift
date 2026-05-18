@@ -13,8 +13,7 @@ extension WindowTabStripPanelController {
             orderOutPanels(id: transientStrip.id)
             return true
         }
-        visualPanel(for: transientStrip.id)
-            .update(with: transientStrip, drawsMockTabs: mouseInteractionChromeMode == .frameOnly)
+        visualPanel(for: transientStrip.id).update(with: transientStrip)
         updateInteractivePanelForResizingStrip(transientStrip)
         return true
     }

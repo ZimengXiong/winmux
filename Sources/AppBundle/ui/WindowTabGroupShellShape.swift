@@ -1,15 +1,70 @@
 import SwiftUI
 
 struct WindowTabGroupShellShape: Shape {
-    let outerRadii: PreviewCornerRadii
-    let innerRect: CGRect
-    let innerRadii: PreviewCornerRadii
+    var tabBarHeight: CGFloat
 
     func path(in rect: CGRect) -> Path {
-        var path = WindowTabDropOutlineShape(cornerRadii: outerRadii).path(in: rect)
+        var path = Path()
+        path.addRoundedRect(
+            in: rect,
+            cornerSize: CGSize(width: windowTabStripCornerRadius, height: windowTabStripCornerRadius),
+            style: .continuous,
+        )
+        let innerRect = Self.innerRect(in: rect, tabBarHeight: tabBarHeight)
         if innerRect.width > 0, innerRect.height > 0 {
-            path.addPath(WindowTabDropOutlineShape(cornerRadii: innerRadii).path(in: innerRect))
+            path.addPath(WindowTabGroupInnerBoundaryShape(tabBarHeight: tabBarHeight).path(in: rect))
         }
         return path
+    }
+
+    static func innerRect(in rect: CGRect, tabBarHeight: CGFloat) -> CGRect {
+        let horizontalInset = min(windowTabGroupShellHorizontalInset(), rect.width / 2)
+        let contentTop = min(tabBarHeight + windowTabGroupShellTopInset(), rect.height)
+        let availableHeight = max(rect.height - contentTop, 0)
+        let bottomInset = min(windowTabGroupShellBottomInset(), availableHeight)
+        return CGRect(
+            x: rect.minX + horizontalInset,
+            y: rect.minY + contentTop,
+            width: max(rect.width - horizontalInset * 2, 0),
+            height: max(availableHeight - bottomInset, 0),
+        )
+    }
+}
+
+struct WindowTabGroupInnerBoundaryShape: Shape {
+    var tabBarHeight: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let innerRect = WindowTabGroupShellShape.innerRect(in: rect, tabBarHeight: tabBarHeight)
+        guard innerRect.width > 0, innerRect.height > 0 else { return Path() }
+
+        let maxRadius = min(innerRect.width / 2, innerRect.height / 2)
+        let topRadius = min(windowTabGroupFrameMaxTopInnerCornerRadius - 6, maxRadius)
+        let bottomRadius = min(windowTabGroupFrameMaxInnerCornerRadius - 7, maxRadius)
+
+        return Path { path in
+            path.move(to: CGPoint(x: innerRect.minX + topRadius, y: innerRect.minY))
+            path.addLine(to: CGPoint(x: innerRect.maxX - topRadius, y: innerRect.minY))
+            path.addQuadCurve(
+                to: CGPoint(x: innerRect.maxX, y: innerRect.minY + topRadius),
+                control: CGPoint(x: innerRect.maxX, y: innerRect.minY),
+            )
+            path.addLine(to: CGPoint(x: innerRect.maxX, y: innerRect.maxY - bottomRadius))
+            path.addQuadCurve(
+                to: CGPoint(x: innerRect.maxX - bottomRadius, y: innerRect.maxY),
+                control: CGPoint(x: innerRect.maxX, y: innerRect.maxY),
+            )
+            path.addLine(to: CGPoint(x: innerRect.minX + bottomRadius, y: innerRect.maxY))
+            path.addQuadCurve(
+                to: CGPoint(x: innerRect.minX, y: innerRect.maxY - bottomRadius),
+                control: CGPoint(x: innerRect.minX, y: innerRect.maxY),
+            )
+            path.addLine(to: CGPoint(x: innerRect.minX, y: innerRect.minY + topRadius))
+            path.addQuadCurve(
+                to: CGPoint(x: innerRect.minX + topRadius, y: innerRect.minY),
+                control: CGPoint(x: innerRect.minX, y: innerRect.minY),
+            )
+            path.closeSubpath()
+        }
     }
 }

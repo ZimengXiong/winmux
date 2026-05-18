@@ -3,44 +3,37 @@ import SwiftUI
 struct WindowTabGroupFrameView: View {
     let strip: WindowTabStripViewModel
     let groupSize: CGSize
-    let drawsMockTabs: Bool
 
     var body: some View {
-        let metrics = WindowTabGroupFrameMetrics(strip: strip, groupSize: groupSize)
+        let tabHeight = min(resolvedWindowTabBarHeight(), groupSize.height)
         ZStack(alignment: .topLeading) {
-            WindowTabGroupShellShape(
-                outerRadii: metrics.outerRadii,
-                innerRect: metrics.innerFrame,
-                innerRadii: metrics.innerRadii
-            )
+            WindowTabGroupShellShape(tabBarHeight: tabHeight)
             .fill(mattePanelFill, style: FillStyle(eoFill: true))
 
-            WindowTabGroupCornerShieldShape(
-                innerRect: metrics.innerFrame,
-                topRadius: windowTabGroupTopCornerShieldRadius(metrics.topInnerCornerRadius),
-                bottomRadius: windowTabGroupBottomCornerShieldRadius(metrics.appCornerRadius)
-            )
-            .fill(mattePanelFill, style: FillStyle(eoFill: true))
+            WindowTabGroupShellShape(tabBarHeight: tabHeight)
+                .stroke(mattePanelFill, lineWidth: windowTabGroupFrameStrokeWidth)
+                .shadow(color: Color.black.opacity(0.22), radius: 12, x: 0, y: 6)
 
-            if drawsMockTabs {
-                WindowTabGroupMockTabsView(
-                    strip: strip,
-                    stripWidth: groupSize.width,
-                    stripHeight: metrics.tabHeight,
-                )
-                .frame(width: groupSize.width, height: metrics.tabHeight, alignment: .topLeading)
-            }
+            Rectangle()
+                .fill(mattePanelFill)
+                .frame(height: tabHeight)
+                .overlay(alignment: .bottom) {
+                    Rectangle()
+                        .fill(Color.white.opacity(0.16))
+                        .frame(height: 1)
+                }
+                .clipShape(UnevenRoundedRectangle(
+                    topLeadingRadius: windowTabStripCornerRadius,
+                    bottomLeadingRadius: 0,
+                    bottomTrailingRadius: 0,
+                    topTrailingRadius: windowTabStripCornerRadius,
+                    style: .continuous,
+                ))
 
-            metrics.outerShape
-                .strokeBorder(mattePanelBorder, lineWidth: windowTabGroupFrameStrokeWidth)
-
-            WindowTabDropOutlineShape(cornerRadii: metrics.innerRadii)
-                .strokeBorder(mattePanelInsetShadow, lineWidth: windowTabGroupFrameInnerStrokeWidth)
-                .frame(width: metrics.innerFrame.width, height: metrics.innerFrame.height)
-                .offset(x: metrics.innerFrame.minX, y: metrics.innerFrame.minY)
+            WindowTabGroupInnerBoundaryShape(tabBarHeight: tabHeight)
+                .stroke(mattePanelInsetShadow, lineWidth: windowTabGroupFrameInnerStrokeWidth)
         }
         .frame(width: groupSize.width, height: groupSize.height)
-        .shadow(color: Color.black.opacity(0.10), radius: 6, y: 2)
         .allowsHitTesting(false)
     }
 }

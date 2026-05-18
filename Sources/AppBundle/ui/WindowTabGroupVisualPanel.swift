@@ -26,16 +26,13 @@ final class WindowTabGroupVisualPanel: NSPanelHud {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 
-    func update(with strip: WindowTabStripViewModel, drawsMockTabs: Bool) {
+    func update(with strip: WindowTabStripViewModel) {
         let displayStrip = strip.alignedForWindowTabChrome()
         let panelFrame = displayStrip.groupFrame
-        let nextContent = WindowTabGroupChromeContent(strip: displayStrip, drawsMockTabs: drawsMockTabs)
+        let nextContent = WindowTabGroupChromeContent(strip: displayStrip)
         guard shouldUpdate(content: nextContent, frame: panelFrame) else { return }
         if currentContent != nextContent {
-            hostingView.rootView = AnyView(WindowTabGroupVisualView(
-                strip: displayStrip,
-                drawsMockTabs: drawsMockTabs,
-            ))
+            hostingView.rootView = AnyView(WindowTabGroupVisualView(strip: displayStrip))
             currentContent = nextContent
         }
         currentPanelFrame = panelFrame
