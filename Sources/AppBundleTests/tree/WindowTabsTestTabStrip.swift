@@ -183,16 +183,15 @@ import XCTest
         ))
     }
 
-    func testWindowTabStripLayoutReservesGroupDragHandleGutters() {
+    func testWindowTabStripLayoutMatchesNextChromeMetrics() {
         let stripWidth: CGFloat = 360
         let expectedTabsWidth = stripWidth
             - (windowTabStripReservedGroupHandleWidth() * 2)
-            - windowTabStripTrailingGroupDragGutterWidth
             - (windowTabStripContentPadding() * 2)
 
         XCTAssertEqual(windowTabStripAvailableTabsWidth(stripWidth: stripWidth), expectedTabsWidth)
         XCTAssertEqual(windowTabStripTabWidth(stripWidth: stripWidth, count: 1), 240)
-        XCTAssertEqual(windowTabStripTabWidth(stripWidth: stripWidth, count: 3), 240)
+        XCTAssertEqual(windowTabStripTabWidth(stripWidth: stripWidth, count: 3), 132)
         XCTAssertLessThan(windowTabStripAvailableTabsWidth(stripWidth: stripWidth), stripWidth)
     }
 
