@@ -42,6 +42,13 @@ enum WorkspaceSidebarAction: Equatable {
     case resetWorkspace(String)
     case deleteWorkspace(String)
     case hoverWorkspace(String, isHovering: Bool)
+    case moveWindow(UInt32, toWorkspace: String)
+    case moveTabGroup(UInt32, toWorkspace: String)
+    case moveWindowToNewWorkspace(UInt32)
+    case moveTabGroupToNewWorkspace(UInt32)
+    case previewWindowDrop(UInt32, target: WorkspaceSidebarDropTargetKind)
+    case previewTabGroupDrop(UInt32, target: WorkspaceSidebarDropTargetKind)
+    case clearDropPreview
     case updateWindowDrag(UInt32, subject: WindowDragSubject)
     case finishWindowDrag
     case setDropTargets([WorkspaceSidebarDropTargetFrame])
@@ -49,8 +56,16 @@ enum WorkspaceSidebarAction: Equatable {
 
 struct WorkspaceSidebarActions {
     var send: @MainActor (WorkspaceSidebarAction) -> Void
+    var windowDragChanged: @MainActor (UInt32) -> Void
+    var windowDragEnded: @MainActor (UInt32) -> Void
+    var tabGroupDragChanged: @MainActor (UInt32) -> Void
+    var tabGroupDragEnded: @MainActor (UInt32) -> Void
 
     init(send: @escaping @MainActor (WorkspaceSidebarAction) -> Void = { _ in }) {
         self.send = send
+        windowDragChanged = { send(.updateWindowDrag($0, subject: .window)) }
+        windowDragEnded = { _ in send(.finishWindowDrag) }
+        tabGroupDragChanged = { send(.updateWindowDrag($0, subject: .group)) }
+        tabGroupDragEnded = { _ in send(.finishWindowDrag) }
     }
 }

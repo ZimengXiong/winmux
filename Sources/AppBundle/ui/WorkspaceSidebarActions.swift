@@ -127,6 +127,126 @@ func createWorkspaceFromSidebarDrag(sourceNode: TreeNode, sourceWindow: Window) 
 }
 
 @MainActor
+func moveWindowFromSidebar(_ windowId: UInt32, toWorkspace workspaceName: String) {
+    moveSidebarSource(windowId, subject: .window, toWorkspace: workspaceName)
+}
+
+@MainActor
+func moveTabGroupFromSidebar(_ windowId: UInt32, toWorkspace workspaceName: String) {
+    moveSidebarSource(windowId, subject: .group, toWorkspace: workspaceName)
+}
+
+@MainActor
+func moveWindowToNewWorkspaceFromSidebar(_ windowId: UInt32) {
+    moveSidebarSourceToNewWorkspace(windowId, subject: .window)
+}
+
+@MainActor
+func moveTabGroupToNewWorkspaceFromSidebar(_ windowId: UInt32) {
+    moveSidebarSourceToNewWorkspace(windowId, subject: .group)
+}
+
+@MainActor
+private func moveSidebarSource(_ windowId: UInt32, subject: WindowDragSubject, toWorkspace workspaceName: String) {
+    runWorkspaceSidebarSession {
+        guard let sourceWindow = Window.get(byId: windowId),
+              let targetWorkspace = Workspace.existing(byName: workspaceName)
+        else { return }
+        let sourceNode = dragSubjectNode(for: sourceWindow, subject: subject)
+        syncClosedWindowsCacheToCurrentWorld()
+        suppressPostDragAxObserverEvents(for: sourceNode.allLeafWindowsRecursive.map(\.windowId))
+        applySidebarWorkspaceMove(sourceNode: sourceNode, sourceWindow: sourceWindow, targetWorkspace: targetWorkspace)
+        await updateWorkspaceSidebarModel()
+    }
+}
+
+@MainActor
+private func moveSidebarSourceToNewWorkspace(_ windowId: UInt32, subject: WindowDragSubject) {
+    runWorkspaceSidebarSession {
+        guard let sourceWindow = Window.get(byId: windowId) else { return }
+        let sourceNode = dragSubjectNode(for: sourceWindow, subject: subject)
+        syncClosedWindowsCacheToCurrentWorld()
+        suppressPostDragAxObserverEvents(for: sourceNode.allLeafWindowsRecursive.map(\.windowId))
+        _ = createWorkspaceFromSidebarDrag(sourceNode: sourceNode, sourceWindow: sourceWindow)
+        await updateWorkspaceSidebarModel()
+    }
+}
+
+@MainActor
+func previewWorkspaceSidebarDrop(_ windowId: UInt32, subject: WindowDragSubject, target: WorkspaceSidebarDropTargetKind) {
+    guard let sourceWindow = Window.get(byId: windowId) else {
+        clearWorkspaceSidebarDropPreview()
+        return
+    }
+    guard case .workspace(let workspaceName) = target else {
+        if target == .newWorkspace {
+            setWorkspaceSidebarDropPreviewIfChanged(workspaceSidebarDropPreview(
+                sourceWindow: sourceWindow,
+                subject: subject,
+                targetWorkspaceName: nil,
+                targetsNewWorkspace: true,
+            ))
+        } else {
+            clearWorkspaceSidebarDropPreview()
+        }
+        return
+    }
+    setWorkspaceSidebarDropPreviewIfChanged(workspaceSidebarDropPreview(
+        sourceWindow: sourceWindow,
+        subject: subject,
+        targetWorkspaceName: workspaceName,
+        targetsNewWorkspace: false,
+    ))
+}
+
+@MainActor
+func clearWorkspaceSidebarDropPreview() {
+    setWorkspaceSidebarDropPreviewIfChanged(nil)
+}
+
+@MainActor
+private func workspaceSidebarDropPreview(
+    sourceWindow: Window,
+    subject: WindowDragSubject,
+    targetWorkspaceName: String?,
+    targetsNewWorkspace: Bool,
+) -> WorkspaceSidebarDropPreviewViewModel {
+    let moveNode = dragSubjectNode(for: sourceWindow, subject: subject)
+    let isTabGroup = moveNode is TilingContainer
+    let sourceLabel = sidebarDragSourceTitle(for: sourceWindow, subject: subject)
+    let appName = sourceWindow.app.name ?? sourceWindow.app.rawAppBundleId ?? "Window"
+    return WorkspaceSidebarDropPreviewViewModel(
+        sourceWindowId: sourceWindow.windowId,
+        label: sourceLabel,
+        appName: appName,
+        appBundleIdentifier: sourceWindow.app.rawAppBundleId,
+        appBundlePath: sourceWindow.app.bundlePath,
+        targetWorkspaceName: targetWorkspaceName,
+        targetsNewWorkspace: targetsNewWorkspace,
+        isTabGroup: isTabGroup,
+        windowCount: max(moveNode.allLeafWindowsRecursive.count, 1),
+        tabItems: workspaceSidebarDropPreviewTabs(for: moveNode, isTabGroup: isTabGroup),
+    )
+}
+
+@MainActor
+private func workspaceSidebarDropPreviewTabs(
+    for moveNode: TreeNode,
+    isTabGroup: Bool,
+) -> [WorkspaceSidebarDropPreviewTabItem] {
+    guard isTabGroup else { return [] }
+    return moveNode.allLeafWindowsRecursive.map { window in
+        let appName = window.app.name ?? window.app.rawAppBundleId ?? "Window"
+        return WorkspaceSidebarDropPreviewTabItem(
+            title: cachedWindowTitle(for: window)?.takeIf { $0 != appName } ?? appName,
+            appName: appName,
+            appBundleIdentifier: window.app.rawAppBundleId,
+            appBundlePath: window.app.bundlePath,
+        )
+    }
+}
+
+@MainActor
 func sidebarWorkspaceTargetProjectId(targetMonitor: Monitor) -> WorkspaceProjectId {
     let selectedProjectId = TrayMenuModel.shared.workspaceSidebarSelectedProjectId
     guard workspaceProjects().contains(where: { $0.id == selectedProjectId }) else {

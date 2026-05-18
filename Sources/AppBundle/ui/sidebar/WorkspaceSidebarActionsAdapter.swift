@@ -52,6 +52,20 @@ func handleWorkspaceSidebarAction(_ action: WorkspaceSidebarAction) {
                 workspaceName: name,
                 isHovering: isHovering,
             )
+        case .moveWindow(let windowId, let workspaceName):
+            moveWindowFromSidebar(windowId, toWorkspace: workspaceName)
+        case .moveTabGroup(let windowId, let workspaceName):
+            moveTabGroupFromSidebar(windowId, toWorkspace: workspaceName)
+        case .moveWindowToNewWorkspace(let windowId):
+            moveWindowToNewWorkspaceFromSidebar(windowId)
+        case .moveTabGroupToNewWorkspace(let windowId):
+            moveTabGroupToNewWorkspaceFromSidebar(windowId)
+        case .previewWindowDrop(let windowId, let target):
+            previewWorkspaceSidebarDrop(windowId, subject: .window, target: target)
+        case .previewTabGroupDrop(let windowId, let target):
+            previewWorkspaceSidebarDrop(windowId, subject: .group, target: target)
+        case .clearDropPreview:
+            clearWorkspaceSidebarDropPreview()
         case .updateWindowDrag(let windowId, let subject):
             updateSidebarWindowDrag(windowId, subject: subject)
         case .finishWindowDrag:

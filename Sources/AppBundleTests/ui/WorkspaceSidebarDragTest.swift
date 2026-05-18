@@ -61,6 +61,26 @@ final class WorkspaceSidebarDragTest: XCTestCase {
         XCTAssertFalse(isWorkspaceSidebarDragInProgress(kind: .none, startedInSidebar: true))
     }
 
+    @MainActor
+    func testWorkspaceSidebarActionsExposeWindowAndTabGroupDragClosures() {
+        var received: [WorkspaceSidebarAction] = []
+        let actions = WorkspaceSidebarActions { action in
+            received.append(action)
+        }
+
+        actions.windowDragChanged(101)
+        actions.windowDragEnded(101)
+        actions.tabGroupDragChanged(202)
+        actions.tabGroupDragEnded(202)
+
+        XCTAssertEqual(received, [
+            .updateWindowDrag(101, subject: .window),
+            .finishWindowDrag,
+            .updateWindowDrag(202, subject: .group),
+            .finishWindowDrag,
+        ])
+    }
+
     func testWorkspaceSidebarActivationRequiresNoEditAndNoDrag() {
         XCTAssertTrue(shouldHandleWorkspaceSidebarActivation(isEditing: false, isSidebarDragInProgress: false))
         XCTAssertFalse(shouldHandleWorkspaceSidebarActivation(isEditing: true, isSidebarDragInProgress: false))

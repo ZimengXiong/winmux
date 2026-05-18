@@ -30,8 +30,8 @@ extension WorkspaceSidebarWorkspaceSection {
         .contentShape(Rectangle())
         .modifier(WorkspaceSidebarOptionalDragModifier(
             isEnabled: true,
-            onChanged: { updateSidebarWindowDrag(group.representativeWindowId, subject: .group) },
-            onEnded: finishSidebarWindowDrag,
+            onChanged: { actions.tabGroupDragChanged(group.representativeWindowId) },
+            onEnded: { actions.tabGroupDragEnded(group.representativeWindowId) },
         ))
         .onHover { hover in
             hoveredWindowId = nextWorkspaceSidebarHoveredWindowId(
