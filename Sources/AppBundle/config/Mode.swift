@@ -7,6 +7,16 @@ struct Mode: ConvenienceCopyable, Equatable, Sendable {
     var tapBindings: [String: TapBinding]
     var sequenceBindings: [String: SequenceBinding]
 
+    init(
+        bindings: [String: HotkeyBinding],
+        tapBindings: [String: TapBinding],
+        sequenceBindings: [String: SequenceBinding] = [:],
+    ) {
+        self.bindings = bindings
+        self.tapBindings = tapBindings
+        self.sequenceBindings = sequenceBindings
+    }
+
     static let zero = Mode(bindings: [:], tapBindings: [:], sequenceBindings: [:])
 }
 

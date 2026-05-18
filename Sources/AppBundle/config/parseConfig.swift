@@ -35,57 +35,6 @@ func readConfig(forceConfigUrl: URL? = nil) -> Result<(Config, URL), String> {
     }
 }
 
-enum TomlParseError: Error, CustomStringConvertible, Equatable {
-    case semantic(_ backtrace: TomlBacktrace, _ message: String)
-    case syntax(_ message: String)
-
-    var description: String {
-        return switch self {
-            // todo Make 'split' + flatten normalization prettier
-            case .semantic(let backtrace, let message) where backtrace.description.isEmpty: message
-            case .semantic(let backtrace, let message): "\(backtrace): \(message)"
-            case .syntax(let message): message
-        }
-    }
-}
-
-typealias ParsedToml<T> = Result<T, TomlParseError>
-
-extension ParserProtocol {
-    func transformRawConfig(_ raw: S,
-                            _ value: TOMLValueConvertible,
-                            _ backtrace: TomlBacktrace,
-                            _ errors: inout [TomlParseError]) -> S
-    {
-        if let value = parse(value, backtrace, &errors).getOrNil(appendErrorTo: &errors) {
-            return raw.copy(keyPath, value)
-        }
-        return raw
-    }
-}
-
-protocol ParserProtocol<S>: Sendable {
-    associatedtype T
-    associatedtype S where S: ConvenienceCopyable
-    var keyPath: SendableWritableKeyPath<S, T> { get }
-    var parse: @Sendable (TOMLValueConvertible, TomlBacktrace, inout [TomlParseError]) -> ParsedToml<T> { get }
-}
-
-struct Parser<S: ConvenienceCopyable, T>: ParserProtocol {
-    let keyPath: SendableWritableKeyPath<S, T>
-    let parse: @Sendable (TOMLValueConvertible, TomlBacktrace, inout [TomlParseError]) -> ParsedToml<T>
-
-    init(_ keyPath: SendableWritableKeyPath<S, T>, _ parse: @escaping @Sendable (TOMLValueConvertible, TomlBacktrace, inout [TomlParseError]) -> T) {
-        self.keyPath = keyPath
-        self.parse = { raw, backtrace, errors -> ParsedToml<T> in .success(parse(raw, backtrace, &errors)) }
-    }
-
-    init(_ keyPath: SendableWritableKeyPath<S, T>, _ parse: @escaping @Sendable (TOMLValueConvertible, TomlBacktrace) -> ParsedToml<T>) {
-        self.keyPath = keyPath
-        self.parse = { raw, backtrace, _ -> ParsedToml<T> in parse(raw, backtrace) }
-    }
-}
-
 private let keyMappingConfigRootKey = "key-mapping"
 private let modeConfigRootKey = "mode"
 private let persistentWorkspacesKey = "persistent-workspaces"
@@ -268,28 +217,6 @@ func parseSimpleType<T>(_ raw: TOMLValueConvertible) -> T? {
     (raw.int as? T) ?? (raw.string as? T) ?? (raw.bool as? T)
 }
 
-extension TOMLValueConvertible {
-    func unwrapTableWithSingleKey(expectedKey: String? = nil, _ backtrace: inout TomlBacktrace) -> ParsedToml<(key: String, value: TOMLValueConvertible)> {
-        guard let table else {
-            return .failure(expectedActualTypeError(expected: .table, actual: type, backtrace))
-        }
-        let singleKeyError: TomlParseError = .semantic(
-            backtrace,
-            expectedKey != nil
-                ? "The table is expected to have a single key '\(expectedKey.orDie())'"
-                : "The table is expected to have a single key",
-        )
-        guard let (actualKey, value): (String, TOMLValueConvertible) = table.count == 1 ? table.first : nil else {
-            return .failure(singleKeyError)
-        }
-        if expectedKey != nil && expectedKey != actualKey {
-            return .failure(singleKeyError)
-        }
-        backtrace = backtrace + .key(actualKey)
-        return .success((actualKey, value))
-    }
-}
-
 func parseTomlArray(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace) -> ParsedToml<TOMLArray> {
     raw.array.orFailure(expectedActualTypeError(expected: .array, actual: raw.type, backtrace))
 }
@@ -402,81 +329,4 @@ extension Parsed where Failure == String {
 
 func parseBool(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace) -> ParsedToml<Bool> {
     raw.bool.orFailure(expectedActualTypeError(expected: .bool, actual: raw.type, backtrace))
-}
-
-struct TomlBacktrace: CustomStringConvertible, Equatable {
-    private var path: [TomlBacktraceItem] = []
-    private init(_ path: [TomlBacktraceItem]) {
-        check(path.first?.isKey != false, "Tried to construct invalid TOML path: \(path)")
-        self.path = path
-    }
-
-    static func rootKey(_ key: String) -> Self { .init([.key(key)]) }
-    static let emptyRoot: Self = .init([])
-
-    var description: String {
-        var result = ""
-        for (i, elem) in path.enumerated() {
-            switch elem {
-                case .key(let rootKey) where i == 0: result += rootKey
-                case .key(let key): result += ".\(key)"
-                case .index(let index): result += "[\(index)]"
-            }
-        }
-        return result
-    }
-
-    var isRootKey: Bool { path.singleOrNil().map(\.isKey) == true }
-
-    static func + (lhs: Self, rhs: TomlBacktraceItem) -> Self {
-        var result = lhs
-        result.path += [rhs]
-        return result
-    }
-}
-
-enum TomlBacktraceItem: Equatable {
-    case key(String)
-    case index(Int)
-
-    var isKey: Bool {
-        switch self {
-            case .key: true
-            case .index: false
-        }
-    }
-}
-
-extension TOMLTable {
-    func parseTable<T: ConvenienceCopyable>(
-        _ initial: T,
-        _ fieldsParser: [String: any ParserProtocol<T>],
-        _ backtrace: TomlBacktrace,
-        _ errors: inout [TomlParseError],
-    ) -> T {
-        var raw = initial
-
-        for (key, value) in self {
-            let backtrace: TomlBacktrace = backtrace + .key(key)
-            if let parser = fieldsParser[key] {
-                raw = parser.transformRawConfig(raw, value, backtrace, &errors)
-            } else {
-                errors.append(unknownKeyError(backtrace))
-            }
-        }
-
-        return raw
-    }
-}
-
-func unknownKeyError(_ backtrace: TomlBacktrace) -> TomlParseError {
-    .semantic(backtrace, backtrace.isRootKey ? "Unknown top-level key" : "Unknown key")
-}
-
-func expectedActualTypeError(expected: TOMLType, actual: TOMLType, _ backtrace: TomlBacktrace) -> TomlParseError {
-    .semantic(backtrace, expectedActualTypeError(expected: expected, actual: actual))
-}
-
-func expectedActualTypeError(expected: [TOMLType], actual: TOMLType, _ backtrace: TomlBacktrace) -> TomlParseError {
-    .semantic(backtrace, expectedActualTypeError(expected: expected, actual: actual))
 }

@@ -148,21 +148,19 @@ import XCTest
     }
 
     @MainActor
-    func testWindowBodyIntentUsesFullHeightSideBandsAndCenteredVerticalBands() {
+    func testWindowDropIntentResolverUsesFullHeightSideBandsAndCenteredVerticalBands() {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
         let window = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
         window.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 360, height: 240)
 
-        let swapRect = window.swapDropZoneRect.orDie()
-
-        XCTAssertEqual(window.bodyDragIntent(at: CGPoint(x: 24, y: 90)), .stackSplit(.left))
-        XCTAssertEqual(window.bodyDragIntent(at: CGPoint(x: 24, y: 210)), .stackSplit(.left))
-        XCTAssertEqual(window.bodyDragIntent(at: CGPoint(x: 336, y: 90)), .stackSplit(.right))
-        XCTAssertEqual(window.bodyDragIntent(at: CGPoint(x: 336, y: 210)), .stackSplit(.right))
-        XCTAssertEqual(window.bodyDragIntent(at: CGPoint(x: swapRect.center.x, y: swapRect.minY - 10)), .stackSplit(.above))
-        XCTAssertEqual(window.bodyDragIntent(at: CGPoint(x: swapRect.center.x, y: swapRect.center.y)), .swap)
-        XCTAssertEqual(window.bodyDragIntent(at: CGPoint(x: swapRect.center.x, y: swapRect.maxY + 10)), .stackSplit(.below))
+        XCTAssertEqual(resolveDropZone(targetFrame: window.windowDragVisibleRect.orDie(), point: CGPoint(x: 24, y: 90)), .left)
+        XCTAssertEqual(resolveDropZone(targetFrame: window.windowDragVisibleRect.orDie(), point: CGPoint(x: 24, y: 210)), .left)
+        XCTAssertEqual(resolveDropZone(targetFrame: window.windowDragVisibleRect.orDie(), point: CGPoint(x: 336, y: 90)), .right)
+        XCTAssertEqual(resolveDropZone(targetFrame: window.windowDragVisibleRect.orDie(), point: CGPoint(x: 336, y: 210)), .right)
+        XCTAssertEqual(resolveDropZone(targetFrame: window.windowDragVisibleRect.orDie(), point: CGPoint(x: 180, y: 60)), .top)
+        XCTAssertEqual(resolveDropZone(targetFrame: window.windowDragVisibleRect.orDie(), point: CGPoint(x: 180, y: 140)), .middle)
+        XCTAssertEqual(resolveDropZone(targetFrame: window.windowDragVisibleRect.orDie(), point: CGPoint(x: 180, y: 220)), .bottom)
     }
 
     @MainActor
@@ -377,5 +375,14 @@ import XCTest
             targetWindow: target,
             detachOrigin: .tabStrip,
         ))
+    }
+
+    private func resolveDropZone(targetFrame: Rect, point: CGPoint) -> WindowDropZone? {
+        WindowDropIntentResolver().resolve(
+            sourceWindowId: 1,
+            targetWindowId: 2,
+            pointer: point,
+            targetFrame: targetFrame,
+        )?.intent.zone
     }
 }

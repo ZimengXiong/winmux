@@ -92,9 +92,6 @@ extension WorkspaceSidebarProjectPager {
                         deleteWorkspaceSidebarProject(selectedProject)
                     }
                 },
-                onOpenDeckProfile: { profileName, destination in
-                    launchDeckProfile(profileName, destination: destination)
-                },
             )
             .frame(width: projectMenuWidth, height: workspaceSidebarPagerHeight, alignment: .leading)
             .contextMenu {

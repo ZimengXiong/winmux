@@ -36,7 +36,6 @@ enum SettingsSidebarItem: Hashable, Identifiable {
     case commonShortcuts
     case unmanagedShortcuts
     case general
-    case deck
     case advanced
 
     var id: Self { self }
@@ -47,7 +46,6 @@ enum SettingsSidebarItem: Hashable, Identifiable {
             case .commonShortcuts: "Common Shortcuts"
             case .unmanagedShortcuts: "Unmanaged Shortcuts"
             case .general: "General"
-            case .deck: "Project Templates"
             case .advanced: "Advanced"
         }
     }
@@ -58,7 +56,6 @@ enum SettingsSidebarItem: Hashable, Identifiable {
             case .commonShortcuts: "keyboard"
             case .unmanagedShortcuts: "keyboard"
             case .general: "gearshape"
-            case .deck: "rectangle.stack"
             case .advanced: "slider.horizontal.3"
         }
     }
@@ -87,9 +84,6 @@ struct ShortcutSettingsView: View {
                     NavigationLink(value: SettingsSidebarItem.general) {
                         Label(SettingsSidebarItem.general.label, systemImage: SettingsSidebarItem.general.icon)
                     }
-                    NavigationLink(value: SettingsSidebarItem.deck) {
-                        Label(SettingsSidebarItem.deck.label, systemImage: SettingsSidebarItem.deck.icon)
-                    }
                     NavigationLink(value: SettingsSidebarItem.advanced) {
                         Label(SettingsSidebarItem.advanced.label, systemImage: SettingsSidebarItem.advanced.icon)
                     }
@@ -108,8 +102,6 @@ struct ShortcutSettingsView: View {
                         ShortcutCategoryView(model: model, category: .unmanaged)
                     case .general:
                         ShortcutGeneralView(model: model)
-                    case .deck:
-                        DeckSettingsView()
                     case .advanced:
                         ShortcutAdvancedView(model: model)
                     case nil:

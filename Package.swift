@@ -11,12 +11,10 @@ let package = Package(
     // Products define the executables and libraries a package produces, making them visible to other packages.
     products: [
         .executable(name: "winmux", targets: ["Cli"]),
-        .executable(name: "deck", targets: ["DeckCLI"]),
         // Don't use this build for release, use xcode instead
         .executable(name: "WinMuxApp", targets: ["WinMuxApp"]),
         // We only need to expose this as a product for xcode
         .library(name: "AppBundle", targets: ["AppBundle"]),
-        .library(name: "DeckCore", targets: ["DeckCore"]),
     ],
     dependencies: [
         .package(path: "./ShellParserGenerated"),
@@ -42,13 +40,6 @@ let package = Package(
             ],
         ),
         .target(
-            name: "DeckCore",
-            dependencies: [
-                .product(name: "TOMLKit", package: "TOMLKit"),
-                .target(name: "Common"),
-            ],
-        ),
-        .target(
             name: "AppBundle",
             dependencies: [
                 .product(name: "Collections", package: "swift-collections"),
@@ -58,7 +49,6 @@ let package = Package(
                 .product(name: "ShellParserGenerated", package: "ShellParserGenerated"),
                 .product(name: "TOMLKit", package: "TOMLKit"),
                 .target(name: "Common"),
-                .target(name: "DeckCore"),
                 .target(name: "PrivateApi"),
             ],
             swiftSettings: [
@@ -75,18 +65,6 @@ let package = Package(
             name: "Cli",
             dependencies: [
                 .target(name: "Common"),
-            ],
-        ),
-        .executableTarget(
-            name: "DeckCLI",
-            dependencies: [
-                .target(name: "DeckCore"),
-            ],
-        ),
-        .testTarget(
-            name: "DeckCoreTests",
-            dependencies: [
-                .target(name: "DeckCore"),
             ],
         ),
         .testTarget(

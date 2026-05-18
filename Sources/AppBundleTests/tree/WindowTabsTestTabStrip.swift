@@ -287,21 +287,8 @@ import XCTest
 
     @MainActor
     func testWindowIntentPreviewPanelRendersGrayTranslucentSurface() throws {
-        let frame = CGRect(x: 120, y: 120, width: 240, height: 160)
-        let background = NSWindow(
-            contentRect: frame.insetBy(dx: -12, dy: -12),
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false,
-        )
-        background.isOpaque = true
-        background.backgroundColor = .white
-        background.level = NSWindow.Level(rawValue: WinMuxPanelLayer.windowIntentPreview.level.rawValue - 1)
-        background.orderFrontRegardless()
-        defer { background.orderOut(nil) }
-
-        let panel = WindowTabDropPreviewPanel.shared
-        panel.show(WindowTabDropPreviewViewModel(
+        let frame = CGRect(x: 0, y: 0, width: 240, height: 160)
+        let bitmap = try renderIntentPreview(WindowTabDropPreviewViewModel(
             containerFrame: frame,
             frame: frame,
             title: "Preview",
@@ -313,20 +300,7 @@ import XCTest
             isPointerSettled: true,
             zones: [],
         ))
-        RunLoop.main.run(until: Date().addingTimeInterval(0.12))
-        defer { panel.hide() }
-        guard let panelBounds = cgWindowBounds(windowNumber: panel.windowNumber),
-              let cgImage = CGWindowListCreateImage(
-                  panelBounds,
-                  .optionIncludingWindow,
-                  CGWindowID(panel.windowNumber),
-                  [.nominalResolution],
-              )
-        else {
-            throw XCTSkip("Could not capture intent preview panel window")
-        }
 
-        let bitmap = NSBitmapImageRep(cgImage: cgImage)
         let sample = bitmap.colorAt(x: bitmap.pixelsWide / 2, y: bitmap.pixelsHigh / 2).orDie()
             .usingColorSpace(.deviceRGB).orDie()
         XCTAssertGreaterThan(min(sample.redComponent, sample.greenComponent, sample.blueComponent), 0.12)

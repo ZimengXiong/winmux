@@ -1,0 +1,30 @@
+import SwiftUI
+
+enum WorkspaceSidebarDropTargetKind: Equatable {
+    case workspace(String)
+    case newWorkspace
+    case monitor(String)
+}
+
+struct WorkspaceSidebarDropTarget {
+    let kind: WorkspaceSidebarDropTargetKind
+    let rect: Rect
+}
+
+struct WorkspaceSidebarDropTargetFrame: Equatable {
+    let kind: WorkspaceSidebarDropTargetKind
+    let frame: CGRect
+}
+
+struct WorkspaceSidebarDropTargetPreferenceKey: PreferenceKey {
+    static let defaultValue: [WorkspaceSidebarDropTargetFrame] = []
+
+    static func reduce(value: inout [WorkspaceSidebarDropTargetFrame], nextValue: () -> [WorkspaceSidebarDropTargetFrame]) {
+        value.append(contentsOf: nextValue())
+    }
+}
+
+@MainActor
+func workspaceSidebarDropTarget(at mouseLocation: CGPoint) -> WorkspaceSidebarDropTarget? {
+    workspaceSidebarDropTargets.last(where: { $0.rect.contains(mouseLocation) })
+}
