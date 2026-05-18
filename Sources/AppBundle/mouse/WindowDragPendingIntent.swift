@@ -115,6 +115,8 @@ func clearPendingWindowDragIntent() {
     setWorkspaceSidebarDropPreviewIfChanged(nil)
     WindowDropIntentOverlayPanelController.shared.hide()
     WindowDragCursorProxyPanel.shared.hide()
+    WindowResizePreviewPanel.shared.endStableFrame()
+    WindowResizePreviewPanel.shared.hide()
 }
 
 @MainActor
