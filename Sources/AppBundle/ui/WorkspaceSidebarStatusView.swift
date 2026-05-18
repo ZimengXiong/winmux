@@ -5,6 +5,8 @@ import SwiftUI
 struct WorkspaceSidebarStatusView: View {
     let sectionWidth: CGFloat
     let isCompact: Bool
+    let showsDate: Bool
+    let showsStatusPills: Bool
 
     @State private var systemStatus = WorkspaceSidebarSystemStatusSnapshot.current()
 
@@ -23,6 +25,8 @@ struct WorkspaceSidebarStatusView: View {
                         date: context.date,
                         systemStatus: systemStatus,
                         sectionWidth: sectionWidth,
+                        showsDate: showsDate,
+                        showsStatusPills: showsStatusPills,
                     )
                 }
             }

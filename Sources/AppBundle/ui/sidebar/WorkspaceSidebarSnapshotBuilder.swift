@@ -16,6 +16,7 @@ func buildWorkspaceSidebarSnapshot() async -> WorkspaceSidebarSnapshot {
         focusedMonitorScopeId: TrayMenuModel.shared.workspaceSidebarFocusedMonitorScopeId,
         showsMonitorSelector: TrayMenuModel.shared.workspaceSidebarShowsMonitorSelector,
         visibleWidth: TrayMenuModel.shared.workspaceSidebarVisibleWidth,
+        layout: workspaceSidebarLayoutSnapshot(),
         topPadding: TrayMenuModel.shared.workspaceSidebarTopPadding,
         hoveredWorkspaceName: TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName,
         dropPreview: TrayMenuModel.shared.workspaceSidebarDropPreview,
@@ -40,4 +41,14 @@ func applyWorkspaceSidebarSnapshotToTrayModel(_ snapshot: WorkspaceSidebarSnapsh
     TrayMenuModel.shared.workspaceSidebarTopPadding = snapshot.topPadding
     TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName = snapshot.hoveredWorkspaceName
     TrayMenuModel.shared.workspaceSidebarDropPreview = snapshot.dropPreview
+}
+
+@MainActor
+func workspaceSidebarLayoutSnapshot() -> WorkspaceSidebarLayoutSnapshot {
+    WorkspaceSidebarLayoutSnapshot(
+        collapsedWidth: CGFloat(config.workspaceSidebar.collapsedWidth),
+        expandedWidth: CGFloat(config.workspaceSidebar.width),
+        showsDate: config.workspaceSidebar.showDate,
+        showsStatusPills: config.workspaceSidebar.showStatusPills,
+    )
 }

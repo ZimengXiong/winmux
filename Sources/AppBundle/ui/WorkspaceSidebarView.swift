@@ -19,8 +19,8 @@ struct WorkspaceSidebarView: View {
     }
 
     var body: some View {
-        let collapsedWidth = CGFloat(config.workspaceSidebar.collapsedWidth)
-        let expandedWidth = CGFloat(config.workspaceSidebar.width)
+        let collapsedWidth = snapshot.layout.collapsedWidth
+        let expandedWidth = snapshot.layout.expandedWidth
         let expansionProgress = max(
             0,
             min(1, (snapshot.visibleWidth - collapsedWidth) / max(expandedWidth - collapsedWidth, 1)),

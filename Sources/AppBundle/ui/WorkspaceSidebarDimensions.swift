@@ -1,34 +1,34 @@
 import SwiftUI
 
 @MainActor
-func workspaceSidebarCompactSectionWidth() -> CGFloat {
+func workspaceSidebarCompactSectionWidth(layout: WorkspaceSidebarLayoutSnapshot) -> CGFloat {
     max(
-        CGFloat(config.workspaceSidebar.collapsedWidth) - (workspaceSidebarCompactRailHorizontalInset * 2),
+        layout.collapsedWidth - (workspaceSidebarCompactRailHorizontalInset * 2),
         workspaceSidebarBadgeWidth + (workspaceSidebarSectionInnerHorizontalInset * 2),
     )
 }
 
 @MainActor
-func workspaceSidebarExpandedSectionWidth() -> CGFloat {
+func workspaceSidebarExpandedSectionWidth(layout: WorkspaceSidebarLayoutSnapshot) -> CGFloat {
     max(
-        CGFloat(config.workspaceSidebar.width) -
+        layout.expandedWidth -
             workspaceSidebarContentLeadingInset -
             workspaceSidebarContentTrailingInset,
-        workspaceSidebarCompactSectionWidth(),
+        workspaceSidebarCompactSectionWidth(layout: layout),
     )
 }
 
 @MainActor
-func workspaceSidebarSectionWidth(_ expansionProgress: CGFloat) -> CGFloat {
-    let compact = workspaceSidebarCompactSectionWidth()
-    let expanded = workspaceSidebarExpandedSectionWidth()
+func workspaceSidebarSectionWidth(_ expansionProgress: CGFloat, layout: WorkspaceSidebarLayoutSnapshot) -> CGFloat {
+    let compact = workspaceSidebarCompactSectionWidth(layout: layout)
+    let expanded = workspaceSidebarExpandedSectionWidth(layout: layout)
     return compact + (expanded - compact) * expansionProgress
 }
 
 @MainActor
-func workspaceSidebarContentWidth(_ expansionProgress: CGFloat) -> CGFloat {
+func workspaceSidebarContentWidth(_ expansionProgress: CGFloat, layout: WorkspaceSidebarLayoutSnapshot) -> CGFloat {
     max(
-        workspaceSidebarSectionWidth(expansionProgress) -
+        workspaceSidebarSectionWidth(expansionProgress, layout: layout) -
             (workspaceSidebarSectionInnerHorizontalInset * 2) -
             workspaceSidebarBadgeWidth -
             workspaceSidebarHeaderSpacing,

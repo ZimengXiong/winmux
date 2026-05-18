@@ -6,6 +6,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
     let workspace: WorkspaceSidebarWorkspaceViewModel
     let dragPreview: WorkspaceSidebarDropPreviewViewModel?
     let expansionProgress: CGFloat
+    let layout: WorkspaceSidebarLayoutSnapshot
     let emitsDropTarget: Bool
     let isFromOtherDisplay: Bool
     let isInUseOnOtherDisplay: Bool
@@ -24,8 +25,8 @@ struct WorkspaceSidebarWorkspaceSection: View {
     let headerHeight: CGFloat = workspaceSidebarWorkspaceSectionHeaderHeight
     let rowHeight: CGFloat = workspaceSidebarWorkspaceRowHeight
 
-    var contentWidth: CGFloat { workspaceSidebarContentWidth(expansionProgress) }
-    var sectionWidth: CGFloat { workspaceSidebarSectionWidth(expansionProgress) }
+    var contentWidth: CGFloat { workspaceSidebarContentWidth(expansionProgress, layout: layout) }
+    var sectionWidth: CGFloat { workspaceSidebarSectionWidth(expansionProgress, layout: layout) }
     var isCompact: Bool { expansionProgress < workspaceSidebarRowsRevealProgress }
     var showsWindowRows: Bool { expansionProgress >= workspaceSidebarRowsRevealProgress }
     var isDropTarget: Bool { dragPreview?.targetWorkspaceName == workspace.name }

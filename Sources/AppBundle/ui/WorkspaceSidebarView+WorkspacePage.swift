@@ -62,6 +62,7 @@ extension WorkspaceSidebarView {
                         workspace: workspace,
                         dragPreview: snapshot.dropPreview,
                         expansionProgress: expansionProgress,
+                        layout: snapshot.layout,
                         emitsDropTarget: isInteractive,
                         isFromOtherDisplay: isFromOtherDisplay,
                         isInUseOnOtherDisplay: isInUseOnOtherDisplay,
@@ -72,6 +73,7 @@ extension WorkspaceSidebarView {
                 WorkspaceSidebarCreateWorkspaceSection(
                     dragPreview: snapshot.dropPreview,
                     expansionProgress: expansionProgress,
+                    layout: snapshot.layout,
                     emitsDropTarget: isInteractive,
                     onCreateWorkspace: {
                         actions.send(.createWorkspace(

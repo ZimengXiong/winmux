@@ -7,6 +7,7 @@ import SwiftUI
 struct WorkspaceSidebarCreateWorkspaceSection: View {
     let dragPreview: WorkspaceSidebarDropPreviewViewModel?
     let expansionProgress: CGFloat
+    let layout: WorkspaceSidebarLayoutSnapshot
     let emitsDropTarget: Bool
     let onCreateWorkspace: () -> Void
     let onDropPayload: @MainActor (WorkspaceSidebarDragPayload) -> Void
@@ -15,7 +16,7 @@ struct WorkspaceSidebarCreateWorkspaceSection: View {
     @State private var isDropTargeted = false
     @State private var isDropSettling = false
 
-    private var sectionWidth: CGFloat { workspaceSidebarSectionWidth(expansionProgress) }
+    private var sectionWidth: CGFloat { workspaceSidebarSectionWidth(expansionProgress, layout: layout) }
     private var isCompact: Bool { expansionProgress < workspaceSidebarRowsRevealProgress }
     private var showsDropTarget: Bool { dragPreview?.targetsNewWorkspace == true }
     private var sectionShape: RoundedRectangle {

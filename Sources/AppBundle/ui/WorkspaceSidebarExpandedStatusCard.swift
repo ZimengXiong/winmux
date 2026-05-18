@@ -5,9 +5,8 @@ struct WorkspaceSidebarExpandedStatusCard: View {
     let date: Date
     let systemStatus: WorkspaceSidebarSystemStatusSnapshot
     let sectionWidth: CGFloat
-
-    @MainActor private var showsDate: Bool { config.workspaceSidebar.showDate }
-    @MainActor private var showsStatusPills: Bool { config.workspaceSidebar.showStatusPills }
+    let showsDate: Bool
+    let showsStatusPills: Bool
 
     private var accessibilitySummary: String {
         var parts = [date.formatted(date: .omitted, time: .standard)]

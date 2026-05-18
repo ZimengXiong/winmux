@@ -22,7 +22,7 @@ extension WorkspaceSidebarView {
 
     func finishProjectSwipeNavigation(to projectId: WorkspaceProjectId, direction: Int) {
         let startProjectId = projectSwipeStartProjectId
-        let fullPageOffset = -CGFloat(direction) * max(projectPagerWidth, CGFloat(config.workspaceSidebar.width), 1)
+        let fullPageOffset = -CGFloat(direction) * max(projectPagerWidth, snapshot.layout.expandedWidth, 1)
         withAnimation(.easeOut(duration: 0.12)) {
             projectSwipeTranslation = fullPageOffset
         }

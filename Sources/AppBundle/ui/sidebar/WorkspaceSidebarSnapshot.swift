@@ -9,6 +9,7 @@ struct WorkspaceSidebarSnapshot: Equatable {
     var focusedMonitorScopeId: String
     var showsMonitorSelector: Bool
     var visibleWidth: CGFloat
+    var layout: WorkspaceSidebarLayoutSnapshot
     var topPadding: CGFloat
     var hoveredWorkspaceName: String?
     var dropPreview: WorkspaceSidebarDropPreviewViewModel?
@@ -22,9 +23,24 @@ struct WorkspaceSidebarSnapshot: Equatable {
         focusedMonitorScopeId: "",
         showsMonitorSelector: false,
         visibleWidth: 0,
+        layout: .empty,
         topPadding: 12,
         hoveredWorkspaceName: nil,
         dropPreview: nil,
+    )
+}
+
+struct WorkspaceSidebarLayoutSnapshot: Equatable {
+    var collapsedWidth: CGFloat
+    var expandedWidth: CGFloat
+    var showsDate: Bool
+    var showsStatusPills: Bool
+
+    static let empty = WorkspaceSidebarLayoutSnapshot(
+        collapsedWidth: 0,
+        expandedWidth: 0,
+        showsDate: false,
+        showsStatusPills: false,
     )
 }
 

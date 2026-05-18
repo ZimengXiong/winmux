@@ -14,6 +14,7 @@ extension WorkspaceSidebarView {
             projects: snapshot.projects,
             selectedProjectId: snapshot.selectedProjectId,
             expansionProgress: expansionProgress,
+            layout: snapshot.layout,
             isProjectMenuOpen: $isProjectMenuOpen,
             onSelectProject: { actions.send(.selectProject($0)) },
             onCreateProject: { actions.send(.createProject) },
