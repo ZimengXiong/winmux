@@ -19,13 +19,4 @@ extension WindowTabStripView {
                 finishMoveFromTabStrip()
             }
     }
-
-    func windowTabStripShape(outerTopRadius: CGFloat) -> WindowTabDropOutlineShape {
-        WindowTabDropOutlineShape(cornerRadii: PreviewCornerRadii(
-            topLeft: outerTopRadius,
-            topRight: outerTopRadius,
-            bottomRight: 0,
-            bottomLeft: 0
-        ))
-    }
 }

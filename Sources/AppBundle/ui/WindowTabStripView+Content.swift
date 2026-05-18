@@ -7,7 +7,6 @@ extension WindowTabStripView {
         let itemHeight = min(max(stripHeight - 10, 18), 26)
         let activeWindowId = strip.tabs.first(where: \.isActive)?.windowId
         let groupDragWindowId = activeWindowId ?? strip.tabs.first?.windowId
-        let shape = windowTabStripShape(outerTopRadius: context.outerTopRadius)
 
         return HStack(spacing: 6) {
             WindowTabGroupHandleView(
@@ -34,13 +33,13 @@ extension WindowTabStripView {
         .padding(.horizontal, 8)
         .padding(.vertical, 2)
         .frame(width: stripWidth, height: stripHeight)
-        .background {
-            if drawsChrome {
-                shape.fill(mattePanelFill)
-                shape.strokeBorder(mattePanelBorder, lineWidth: windowTabGroupFrameStrokeWidth)
-            }
-        }
-        .clipShape(shape)
+        .clipShape(UnevenRoundedRectangle(
+            topLeadingRadius: windowTabStripCornerRadius,
+            bottomLeadingRadius: 0,
+            bottomTrailingRadius: 0,
+            topTrailingRadius: windowTabStripCornerRadius,
+            style: .continuous,
+        ))
         .animation(reduceMotion ? windowTabReducedMotionAnimation : windowTabPillAnimation, value: hoveredTabId)
         .animation(reduceMotion ? windowTabReducedMotionAnimation : windowTabPillAnimation, value: activeWindowId)
         .onChange(of: context.tabOrder) { newOrder in
