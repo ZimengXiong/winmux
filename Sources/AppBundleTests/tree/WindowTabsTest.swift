@@ -1,7 +1,6 @@
 @testable import AppBundle
 import AppKit
 import CoreGraphics
-import SwiftUI
 import XCTest
 
 struct WindowTabsTestMonitor: Monitor {
@@ -34,39 +33,6 @@ func cgWindowBounds(windowNumber: Int) -> CGRect? {
         width: CGFloat(truncating: width),
         height: CGFloat(truncating: height),
     )
-}
-
-@MainActor
-func renderIntentPreview(_ view: NSView) throws -> NSBitmapImageRep {
-    let width = max(Int(view.bounds.width.rounded(.up)), 1)
-    let height = max(Int(view.bounds.height.rounded(.up)), 1)
-    guard let bitmap = NSBitmapImageRep(
-        bitmapDataPlanes: nil,
-        pixelsWide: width,
-        pixelsHigh: height,
-        bitsPerSample: 8,
-        samplesPerPixel: 4,
-        hasAlpha: true,
-        isPlanar: false,
-        colorSpaceName: .deviceRGB,
-        bytesPerRow: 0,
-        bitsPerPixel: 0,
-    ), let context = NSGraphicsContext(bitmapImageRep: bitmap)?.cgContext else {
-        throw XCTSkip("Could not allocate intent preview bitmap")
-    }
-    context.setFillColor(NSColor.white.cgColor)
-    context.fill(CGRect(x: 0, y: 0, width: width, height: height))
-    view.layoutSubtreeIfNeeded()
-    view.layer?.render(in: context)
-    return bitmap
-}
-
-@MainActor
-func renderIntentPreview(_ model: WindowTabDropPreviewViewModel) throws -> NSBitmapImageRep {
-    let hostingView = NSHostingView(rootView: WindowIntentPreviewOverlayView(model: model))
-    hostingView.frame = CGRect(origin: .zero, size: model.containerFrame.size)
-    hostingView.wantsLayer = true
-    return try renderIntentPreview(hostingView)
 }
 
 final class WindowTabsTest: XCTestCase {

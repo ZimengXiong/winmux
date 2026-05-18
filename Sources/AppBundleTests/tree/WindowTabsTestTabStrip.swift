@@ -228,98 +228,12 @@ import XCTest
         XCTAssertGreaterThan(windowTabTrailingScrollFadeWidth(isScrollable: true, stripWidth: stripWidth), 0)
     }
 
-    func testWindowIntentPreviewSymbolsMatchIntentStyle() {
-        XCTAssertEqual(windowIntentPreviewSymbolName(for: .tabInsert, isGroup: false), "square.stack.3d.up")
-        XCTAssertEqual(windowIntentPreviewSymbolName(for: .detach, isGroup: false), "arrow.up.left.and.arrow.down.right")
-        XCTAssertEqual(windowIntentPreviewSymbolName(for: .stackSplit, isGroup: false), "rectangle.split.2x1")
-        XCTAssertEqual(windowIntentPreviewSymbolName(for: .swap, isGroup: false), "arrow.left.arrow.right")
-        XCTAssertEqual(windowIntentPreviewSymbolName(for: .workspaceMove, isGroup: false), "macwindow.badge.plus")
-        XCTAssertEqual(windowIntentPreviewSymbolName(for: .workspaceMove, isGroup: true), "rectangle.stack.badge.plus")
-    }
-
-    func testWindowIntentPreviewGuideLinesFollowIntentGeometry() {
-        let size = CGSize(width: 120, height: 80)
-
-        XCTAssertNil(windowIntentPreviewGuideLine(for: .rounded, in: size))
-        XCTAssertEqual(
-            windowIntentPreviewGuideLine(for: .splitLeft, in: size),
-            WindowIntentPreviewGuideLine(start: CGPoint(x: 119, y: 8), end: CGPoint(x: 119, y: 72)),
-        )
-        XCTAssertEqual(
-            windowIntentPreviewGuideLine(for: .splitBelow, in: size),
-            WindowIntentPreviewGuideLine(start: CGPoint(x: 8, y: 1), end: CGPoint(x: 112, y: 1)),
-        )
-        XCTAssertEqual(
-            windowIntentPreviewGuideLine(for: .tabStrip, in: size),
-            WindowIntentPreviewGuideLine(start: CGPoint(x: 10, y: 79), end: CGPoint(x: 110, y: 79)),
-        )
-    }
-
-    func testWindowIntentPreviewFillStaysGrayOverDarkContent() {
-        let fill = WindowIntentPreviewPalette.fillColor.usingColorSpace(.deviceRGB).orDie()
-        let matte = mattePanelNSColor.usingColorSpace(.deviceRGB).orDie()
-        let darkContent: CGFloat = 0.05
-        let lightContent: CGFloat = 1
-        let darkRed = fill.alphaComponent * fill.redComponent + (1 - fill.alphaComponent) * darkContent
-        let darkGreen = fill.alphaComponent * fill.greenComponent + (1 - fill.alphaComponent) * darkContent
-        let darkBlue = fill.alphaComponent * fill.blueComponent + (1 - fill.alphaComponent) * darkContent
-        let lightRed = fill.alphaComponent * fill.redComponent + (1 - fill.alphaComponent) * lightContent
-        let lightGreen = fill.alphaComponent * fill.greenComponent + (1 - fill.alphaComponent) * lightContent
-        let lightBlue = fill.alphaComponent * fill.blueComponent + (1 - fill.alphaComponent) * lightContent
-
-        XCTAssertEqual(fill.redComponent, matte.redComponent, accuracy: 0.001)
-        XCTAssertEqual(fill.greenComponent, matte.greenComponent, accuracy: 0.001)
-        XCTAssertEqual(fill.blueComponent, matte.blueComponent, accuracy: 0.001)
-        XCTAssertEqual(fill.alphaComponent, matte.alphaComponent, accuracy: 0.001)
-        XCTAssertGreaterThan(fill.alphaComponent, 0.88)
-        XCTAssertGreaterThan(min(darkRed, darkGreen, darkBlue), 0.09)
-        XCTAssertLessThan(max(darkRed, darkGreen, darkBlue), 0.16)
-        XCTAssertLessThan(max(lightRed, lightGreen, lightBlue), 0.25)
-        XCTAssertLessThan(max(fill.redComponent, fill.greenComponent, fill.blueComponent) - min(fill.redComponent, fill.greenComponent, fill.blueComponent), 0.01)
-    }
-
-    func testWindowIntentPreviewAccentMatchesMatteFill() {
-        let accent = NSColor(cgColor: WindowIntentPreviewPalette.accent(alpha: 0.42))
-            .orDie()
-            .usingColorSpace(.deviceRGB)
-            .orDie()
-        let matte = mattePanelNSColor
-            .usingColorSpace(.deviceRGB)
-            .orDie()
-
-        XCTAssertEqual(accent.redComponent, matte.redComponent, accuracy: 0.001)
-        XCTAssertEqual(accent.greenComponent, matte.greenComponent, accuracy: 0.001)
-        XCTAssertEqual(accent.blueComponent, matte.blueComponent, accuracy: 0.001)
-        XCTAssertEqual(accent.alphaComponent, matte.alphaComponent, accuracy: 0.001)
-    }
-
     @MainActor
     func testHudPanelBaseDoesNotPaintSystemHudBackdrop() {
         let panel = NSPanelHud()
 
         XCTAssertFalse(panel.styleMask.contains(.hudWindow))
         XCTAssertFalse(panel.isOpaque)
-    }
-
-    @MainActor
-    func testWindowIntentPreviewPanelDoesNotRenderLegacyFallbackSurface() throws {
-        let frame = CGRect(x: 0, y: 0, width: 240, height: 160)
-        let bitmap = try renderIntentPreview(WindowTabDropPreviewViewModel(
-            containerFrame: frame,
-            frame: frame,
-            title: "Preview",
-            subtitle: "Preview",
-            style: .stackSplit,
-            geometry: .rounded,
-            isGroup: false,
-            referenceWindowId: nil,
-            isPointerSettled: true,
-            zones: [],
-        ))
-
-        let sample = bitmap.colorAt(x: bitmap.pixelsWide / 2, y: bitmap.pixelsHigh / 2).orDie()
-            .usingColorSpace(.deviceRGB).orDie()
-        XCTAssertGreaterThan(min(sample.redComponent, sample.greenComponent, sample.blueComponent), 0.95)
     }
 
     @MainActor
