@@ -1,8 +1,4 @@
-import AppKit
-import Common
 import SwiftUI
-
-// MARK: - Tab Item View
 
 struct WindowTabItemView: View {
     let tab: WindowTabItemViewModel
@@ -10,66 +6,39 @@ struct WindowTabItemView: View {
     let height: CGFloat
     let isDragSource: Bool
     let isHovered: Bool
-    let feedbackNamespace: Namespace.ID
-
-    @Environment(\.accessibilityReduceMotion) var reduceMotion
 
     var body: some View {
-        let iconSize = min(max(height - 12, 14), 18)
-        let textWidth = max(width - iconSize - 32, 36)
+        HStack(spacing: 6) {
+            appIcon(size: 14)
 
-        ZStack {
-            RoundedRectangle(cornerRadius: windowTabStripInnerCornerRadius, style: .continuous)
-                .fill(baseTabFill)
-
-            RoundedRectangle(cornerRadius: windowTabStripInnerCornerRadius, style: .continuous)
-                .fill(feedbackFill)
-                .opacity(feedbackOpacity)
-                .matchedGeometryEffect(id: feedbackId, in: feedbackNamespace)
-                .allowsHitTesting(false)
-
-            if isHovered, !tab.isActive {
-                RoundedRectangle(cornerRadius: windowTabStripInnerCornerRadius, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
-                    .allowsHitTesting(false)
-            }
-
-            Button {
-                focusWindowFromTabStripClick(tab.windowId, fallbackWorkspace: tab.workspaceName)
-            } label: {
-                HStack(spacing: 8) {
-                    appIcon(size: iconSize)
-
-                    Text(tab.title)
-                        .font(.system(size: 12, weight: tab.isActive ? .semibold : .medium))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .allowsTightening(false)
-                        .foregroundStyle(foregroundColor)
-                        .frame(width: textWidth, alignment: .leading)
-                        .clipped()
-
-                    Spacer(minLength: 0)
-                }
-                    .padding(.horizontal, 10)
-                    .frame(width: width, height: height, alignment: .leading)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .frame(width: width, height: height)
-
+            Text(tab.title)
+                .font(.system(size: 12, weight: tab.isActive ? .semibold : .medium))
+                .lineLimit(1)
+                .truncationMode(.middle)
         }
-        .frame(width: width, height: height)
-        .clipped()
+        .foregroundStyle(tabForegroundStyle)
+        .padding(.horizontal, 10)
+        .frame(width: width, height: height, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: windowTabStripInnerCornerRadius, style: .continuous)
+                .fill(tab.isActive ? Color.white.opacity(0.16) : Color.white.opacity(0.06))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: windowTabStripInnerCornerRadius, style: .continuous)
+                .stroke(tabStrokeStyle, lineWidth: 1)
+        }
         .opacity(isDragSource ? 0.55 : 1.0)
-        .scaleEffect(isDragSource ? 1.02 : 1.0)
-        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isDragSource)
         .contentShape(Rectangle())
-        .contextMenu {
-            Button("Remove Tab From Stack") {
-                removeWindowFromTabStrip(tab.windowId, fallbackWorkspace: tab.workspaceName)
-            }
-        }
     }
 
+    private var tabForegroundStyle: Color {
+        if tab.isActive { return Color.white.opacity(0.96) }
+        if isDragSource { return Color.white.opacity(0.80) }
+        return Color.white.opacity(isHovered ? 0.78 : 0.68)
+    }
+
+    private var tabStrokeStyle: Color {
+        if tab.isActive { return Color.white.opacity(0.24) }
+        return Color.white.opacity(isHovered ? 0.14 : 0.10)
+    }
 }
