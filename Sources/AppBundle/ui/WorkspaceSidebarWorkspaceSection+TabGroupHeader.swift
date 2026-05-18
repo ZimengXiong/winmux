@@ -1,7 +1,7 @@
 import SwiftUI
 
 extension WorkspaceSidebarWorkspaceSection {
-    func tabGroupHeaderButton(_ group: WorkspaceSidebarTabGroupViewModel, groupHoverId: UInt32) -> some View {
+    func tabGroupHeaderButton(_ group: WorkspaceSidebarTabGroupViewModel) -> some View {
         Button {
             guard shouldHandleWorkspaceSidebarActivation(isEditing: false, isSidebarDragInProgress: isWorkspaceSidebarDragInProgress()) else { return }
             if isInUseOnOtherDisplay {
@@ -16,7 +16,7 @@ extension WorkspaceSidebarWorkspaceSection {
                 badge: group.windowCount > 1 ? "\(group.windowCount)" : nil,
                 isFocused: group.isFocused,
                 rowHeight: rowHeight,
-                isHovered: hoveredWindowId == groupHoverId,
+                isHovered: hoveredTabGroupId == group.representativeWindowId,
                 style: .tabGroupHeader,
                 appBundleIds: group.tabs.map(\.appBundleId),
                 appBundlePaths: group.tabs.map(\.appBundlePath),
@@ -36,11 +36,8 @@ extension WorkspaceSidebarWorkspaceSection {
             WorkspaceSidebarDragPayload.tabGroup(group.representativeWindowId).itemProvider
         }
         .onHover { hover in
-            hoveredWindowId = nextWorkspaceSidebarHoveredWindowId(
-                currentHoveredWindowId: hoveredWindowId,
-                windowId: groupHoverId,
-                isHovering: hover,
-            )
+            hoveredTabGroupId = hover ? group.representativeWindowId :
+                (hoveredTabGroupId == group.representativeWindowId ? nil : hoveredTabGroupId)
         }
         .opacity(activeSidebarDragSourceWindowId == group.representativeWindowId ? 0.25 : 1)
         .scaleEffect(activeSidebarDragSourceWindowId == group.representativeWindowId ? 0.94 : 1)

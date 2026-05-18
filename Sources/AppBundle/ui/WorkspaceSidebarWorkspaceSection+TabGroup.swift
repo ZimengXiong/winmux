@@ -3,9 +3,8 @@ import SwiftUI
 extension WorkspaceSidebarWorkspaceSection {
     func workspaceTabGroupView(_ group: WorkspaceSidebarTabGroupViewModel) -> some View {
         let isDragging = activeSidebarDragSourceWindowId == group.representativeWindowId
-        let groupHoverId = UInt32.max - group.representativeWindowId
         return VStack(alignment: .leading, spacing: 1) {
-            tabGroupHeaderButton(group, groupHoverId: groupHoverId)
+            tabGroupHeaderButton(group)
             tabGroupTabs(group, isDragging: isDragging)
         }
         .padding(.vertical, 1)

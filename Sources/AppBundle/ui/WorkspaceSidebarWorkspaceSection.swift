@@ -14,6 +14,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
 
     @State var isHovered = false
     @State var hoveredWindowId: UInt32? = nil
+    @State var hoveredTabGroupId: UInt32? = nil
     @State var isDropTargeted = false
     @State var isDropSettling = false
     @State var isEditingName = false
@@ -78,6 +79,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
             .animation(.spring(response: 0.2, dampingFraction: 0.82), value: expansionProgress)
             .animation(reduceMotion ? workspaceSidebarReducedMotionHoverAnimation : workspaceSidebarHoverAnimation, value: isHovered)
             .animation(reduceMotion ? workspaceSidebarReducedMotionHoverAnimation : workspaceSidebarHoverAnimation, value: hoveredWindowId)
+            .animation(reduceMotion ? workspaceSidebarReducedMotionHoverAnimation : workspaceSidebarHoverAnimation, value: hoveredTabGroupId)
             .background {
                 ZStack {
                     sectionBackground
