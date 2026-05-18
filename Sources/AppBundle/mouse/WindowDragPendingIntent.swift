@@ -92,6 +92,8 @@ func setPendingWindowDragIntent(sourceWindowId: UInt32, sourceSubject: WindowDra
         "windowDragIntent.update mouse=\(debugDescribe(mouseLocation)) source=\(debugDescribe(Window.get(byId: sourceWindowId))) subject=\(debugDescribe(sourceSubject)) prevKind=\(previousIntent.map { debugDescribe($0.kind) } ?? "nil") prevPreview=\(debugDescribe(previousIntent?.previewRect)) newKind=\(debugDescribe(destination.kind)) newPreview=\(debugDescribe(destination.previewRect)) newInteraction=\(debugDescribe(destination.interactionRect)) style=\(destination.previewStyle) geometry=\(destination.previewGeometry)"
     )
     if let overlay = destination.dropIntentOverlay {
+        WindowResizePreviewPanel.shared.endStableFrame()
+        WindowResizePreviewPanel.shared.hide()
         WindowDropIntentOverlayPanelController.shared.show(overlay)
     } else {
         WindowDropIntentOverlayPanelController.shared.hide()

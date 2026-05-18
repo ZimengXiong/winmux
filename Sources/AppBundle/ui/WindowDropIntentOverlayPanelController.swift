@@ -33,7 +33,10 @@ final class WindowDropIntentOverlayPanelController {
     }
 
     func show(_ model: WindowDropIntentOverlayModel) {
-        let frame = model.targetFrame.alignedToBackingPixels()
+        guard let frame = Self.panelFrame(for: model.targetFrame)?.alignedToBackingPixels() else {
+            hide()
+            return
+        }
         if panel.frame.size == frame.size {
             panel.setFrameOrigin(frame.origin)
         } else {
@@ -51,5 +54,17 @@ final class WindowDropIntentOverlayPanelController {
         hostingView.rootView = AnyView(EmptyView())
         currentModel = nil
         panel.orderOut(nil)
+    }
+
+    private static func panelFrame(for frame: Rect) -> CGRect? {
+        let rect = frame.toAppKitScreenRect
+        let candidates = NSScreen.screens.compactMap { screen -> (CGRect, CGFloat)? in
+            let intersection = rect.intersection(screen.frame)
+            guard !intersection.isNull, intersection.width > 0, intersection.height > 0 else {
+                return nil
+            }
+            return (rect, intersection.width * intersection.height)
+        }
+        return candidates.max { $0.1 < $1.1 }?.0
     }
 }

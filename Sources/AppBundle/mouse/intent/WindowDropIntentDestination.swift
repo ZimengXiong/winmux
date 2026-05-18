@@ -18,7 +18,7 @@ func destinationFromWindowDropIntent(
             zones: previewZones
         )
         .withDropIntentOverlay(WindowDropIntentOverlayModel(
-            targetFrame: resolution.targetFrame.toAppKitScreenRect,
+            targetFrame: resolution.targetFrame,
             activeZone: resolution.intent.zone,
             cornerRadius: resolution.targetCornerRadius.map(CGFloat.init)
         ))

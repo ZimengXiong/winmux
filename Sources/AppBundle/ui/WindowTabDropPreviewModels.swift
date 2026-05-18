@@ -1,9 +1,18 @@
-import AppKit
+import CoreGraphics
 
 struct WindowDropIntentOverlayModel: Equatable {
-    let targetFrame: CGRect
+    let targetFrame: Rect
     let activeZone: WindowDropZone?
     let cornerRadius: CGFloat?
+
+    static func == (lhs: WindowDropIntentOverlayModel, rhs: WindowDropIntentOverlayModel) -> Bool {
+        lhs.targetFrame.topLeftX == rhs.targetFrame.topLeftX &&
+            lhs.targetFrame.topLeftY == rhs.targetFrame.topLeftY &&
+            lhs.targetFrame.width == rhs.targetFrame.width &&
+            lhs.targetFrame.height == rhs.targetFrame.height &&
+            lhs.activeZone == rhs.activeZone &&
+            lhs.cornerRadius == rhs.cornerRadius
+    }
 }
 
 enum WindowTabDropPreviewStyle: Equatable {
