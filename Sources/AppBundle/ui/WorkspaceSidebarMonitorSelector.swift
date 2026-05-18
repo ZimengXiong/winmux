@@ -21,9 +21,41 @@ struct WorkspaceSidebarMonitorSelector: View {
     private let coordinateSpaceName = "WorkspaceSidebarMonitorSelector"
 
     private var quickScopes: [WorkspaceSidebarMonitorScopeViewModel] {
-        let preferredIds = [workspaceSidebarFocusedScopeId, workspaceSidebarAllScopeId]
-        let preferred = preferredIds.compactMap { id in scopes.first { $0.id == id } }
-        return preferred.isEmpty ? scopes : preferred
+        var result = [
+            scopes.first { $0.id == workspaceSidebarDefaultScopeId }
+                ?? WorkspaceSidebarMonitorScopeViewModel(
+                    id: workspaceSidebarDefaultScopeId,
+                    displayName: "Default",
+                    subtitle: nil,
+                    systemImageName: "display",
+                    isFocusedMonitor: false
+                ),
+            scopes.first { $0.id == workspaceSidebarFocusedScopeId }
+                ?? WorkspaceSidebarMonitorScopeViewModel(
+                    id: workspaceSidebarFocusedScopeId,
+                    displayName: "Focus",
+                    subtitle: nil,
+                    systemImageName: "scope",
+                    isFocusedMonitor: false
+                ),
+        ]
+        if concreteMonitorScopeCount > 1 {
+            result.append(
+                scopes.first { $0.id == workspaceSidebarAllScopeId }
+                    ?? WorkspaceSidebarMonitorScopeViewModel(
+                        id: workspaceSidebarAllScopeId,
+                        displayName: "All",
+                        subtitle: nil,
+                        systemImageName: "rectangle.grid.2x2",
+                        isFocusedMonitor: false
+                    )
+            )
+        }
+        return result
+    }
+
+    private var concreteMonitorScopeCount: Int {
+        scopes.filter { !workspaceSidebarMonitorScopeIsSentinel($0.id) }.count
     }
 
     private var selectedProject: WorkspaceSidebarProjectViewModel? {
@@ -53,7 +85,7 @@ struct WorkspaceSidebarMonitorSelector: View {
                 HStack(spacing: 3) {
                     ForEach(Array(quickScopes.enumerated()), id: \.element.id) { index, scope in
                         monitorScopePill(scope)
-                        if index == 0, !otherProjects.isEmpty {
+                        if index == 1, !otherProjects.isEmpty {
                             projectSelector
                         }
                     }

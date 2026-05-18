@@ -24,13 +24,7 @@ func windowSurfaceDestination(
         return reentryDestination
     }
     guard config.enableWindowManagement else {
-        return legacyTabStackDestination(
-            sourceWindow: sourceWindow,
-            targetWindow: targetWindow,
-            mouseLocation: mouseLocation,
-            subject: subject,
-            detachOrigin: detachOrigin,
-        )
+        return nil
     }
 
     let resolvedIntent = resolveWindowDropIntent(
@@ -60,30 +54,4 @@ func windowSurfaceDestination(
         subject: subject,
         detachOrigin: detachOrigin,
     )
-}
-
-@MainActor
-private func legacyTabStackDestination(
-    sourceWindow: Window,
-    targetWindow: Window,
-    mouseLocation: CGPoint,
-    subject: WindowDragSubject,
-    detachOrigin: TabDetachOrigin,
-) -> WindowDragIntentDestination? {
-    guard subject == .window,
-          config.windowTabs.enabled,
-          let tabDestination = tabStackDestination(targetWindow: targetWindow, mouseLocation: mouseLocation)
-    else { return nil }
-
-    if case .tabStack(let targetWindowId) = tabDestination.kind,
-       let targetWindow = Window.get(byId: targetWindowId),
-       shouldSuppressSameTabGroupTabDestination(
-           sourceWindow: sourceWindow,
-           targetWindow: targetWindow,
-           detachOrigin: detachOrigin,
-       )
-    {
-        return nil
-    }
-    return tabDestination
 }

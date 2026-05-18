@@ -15,7 +15,12 @@ extension WorkspaceSidebarView {
             browsedProjectId: browsedProjectId,
             expansionProgress: expansionProgress,
             sectionWidth: workspaceSidebarSectionWidth(expansionProgress),
-            onSelectScope: { actions.send(.selectMonitorScope($0)) },
+            onSelectScope: { scopeId in
+                if scopeId == workspaceSidebarDefaultScopeId {
+                    browsedProjectId = nil
+                }
+                actions.send(.selectMonitorScope(scopeId))
+            },
             onSelectProject: { browsedProjectId = $0 },
         )
         .padding(.leading, leadingInset)

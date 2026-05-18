@@ -18,7 +18,7 @@ struct WorkspaceSidebarSnapshot: Equatable {
         projects: [],
         selectedProjectId: workspaceProjectDefaultId,
         monitorScopes: [],
-        selectedMonitorScopeId: workspaceSidebarAllScopeId,
+        selectedMonitorScopeId: workspaceSidebarDefaultScopeId,
         focusedMonitorScopeId: "",
         showsMonitorSelector: false,
         visibleWidth: 0,

@@ -15,7 +15,7 @@ public final class TrayMenuModel: ObservableObject {
     @Published var workspaceSidebarProjects: [WorkspaceSidebarProjectViewModel] = []
     @Published var workspaceSidebarSelectedProjectId: WorkspaceProjectId = workspaceProjectDefaultId
     @Published var workspaceSidebarMonitorScopes: [WorkspaceSidebarMonitorScopeViewModel] = []
-    @Published var workspaceSidebarSelectedMonitorScopeId: String = workspaceSidebarAllScopeId
+    @Published var workspaceSidebarSelectedMonitorScopeId: String = workspaceSidebarDefaultScopeId
     @Published var workspaceSidebarFocusedMonitorScopeId: String = ""
     @Published var workspaceSidebarShowsMonitorSelector: Bool = false
     @Published var workspaceSidebarDropPreview: WorkspaceSidebarDropPreviewViewModel? = nil

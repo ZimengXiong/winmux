@@ -6,7 +6,8 @@ func workspaceSidebarSelectedProjectMonitor(
     focusedMonitor: Monitor,
     sortedMonitors: [Monitor],
 ) -> Monitor {
-    guard selectedScopeId != workspaceSidebarFocusedScopeId,
+    guard selectedScopeId != workspaceSidebarDefaultScopeId,
+          selectedScopeId != workspaceSidebarFocusedScopeId,
           selectedScopeId != workspaceSidebarAllScopeId
     else {
         return focusedMonitor
@@ -28,6 +29,13 @@ func buildWorkspaceSidebarMonitorScopes(
     focusedMonitorScopeId: String,
 ) -> [WorkspaceSidebarMonitorScopeViewModel] {
     [
+        WorkspaceSidebarMonitorScopeViewModel(
+            id: workspaceSidebarDefaultScopeId,
+            displayName: "Default",
+            subtitle: nil,
+            systemImageName: "display",
+            isFocusedMonitor: false,
+        ),
         WorkspaceSidebarMonitorScopeViewModel(
             id: workspaceSidebarFocusedScopeId,
             displayName: "Focused",

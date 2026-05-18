@@ -59,5 +59,5 @@ func resolvedWorkspaceSidebarSelectedMonitorScopeId(
     if validScopeIds.contains(selectedScopeId) {
         return selectedScopeId
     }
-    return availableMonitorCount > 1 ? workspaceSidebarAllScopeId : workspaceSidebarFocusedScopeId
+    return workspaceSidebarDefaultScopeId
 }

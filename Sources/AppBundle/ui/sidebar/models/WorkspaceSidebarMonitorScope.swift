@@ -1,8 +1,15 @@
 import CoreGraphics
 
+let workspaceSidebarDefaultScopeId = "default"
 let workspaceSidebarFocusedScopeId = "focused"
 let workspaceSidebarAllScopeId = "all"
 private let workspaceSidebarMonitorScopePrefix = "monitor:"
+
+func workspaceSidebarMonitorScopeIsSentinel(_ scopeId: String) -> Bool {
+    scopeId == workspaceSidebarDefaultScopeId ||
+        scopeId == workspaceSidebarFocusedScopeId ||
+        scopeId == workspaceSidebarAllScopeId
+}
 
 func workspaceSidebarMonitorScopeId(for monitor: Monitor) -> String {
     workspaceSidebarMonitorScopeId(for: monitor.rect.topLeftCorner)
@@ -35,10 +42,12 @@ func workspaceSidebarWorkspaceMatchesScope(
     focusedMonitorScopeId: String,
 ) -> Bool {
     switch selectedScopeId {
+        case workspaceSidebarDefaultScopeId:
+            workspaceMonitorScopeId == focusedMonitorScopeId || workspaceMonitorScopeId == workspaceSidebarAllScopeId
         case workspaceSidebarAllScopeId:
             true
         case workspaceSidebarFocusedScopeId:
-            workspaceMonitorScopeId == focusedMonitorScopeId
+            workspaceMonitorScopeId == focusedMonitorScopeId || workspaceMonitorScopeId == workspaceSidebarAllScopeId
         default:
             workspaceMonitorScopeId == selectedScopeId
     }

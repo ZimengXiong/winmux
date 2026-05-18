@@ -7,8 +7,8 @@ struct WorkspaceSidebarOptionalDragModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         if isEnabled {
-            content.highPriorityGesture(
-                DragGesture(minimumDistance: 8)
+            content.simultaneousGesture(
+                DragGesture(minimumDistance: 4, coordinateSpace: .global)
                     .onChanged { _ in onChanged() }
                     .onEnded { _ in onEnded() },
             )

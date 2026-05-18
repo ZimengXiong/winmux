@@ -287,7 +287,7 @@ import XCTest
     }
 
     @MainActor
-    func testWindowIntentPreviewPanelRendersGrayTranslucentSurface() throws {
+    func testWindowIntentPreviewPanelDoesNotRenderLegacyFallbackSurface() throws {
         let frame = CGRect(x: 0, y: 0, width: 240, height: 160)
         let bitmap = try renderIntentPreview(WindowTabDropPreviewViewModel(
             containerFrame: frame,
@@ -304,8 +304,7 @@ import XCTest
 
         let sample = bitmap.colorAt(x: bitmap.pixelsWide / 2, y: bitmap.pixelsHigh / 2).orDie()
             .usingColorSpace(.deviceRGB).orDie()
-        XCTAssertGreaterThan(min(sample.redComponent, sample.greenComponent, sample.blueComponent), 0.12)
-        XCTAssertLessThan(max(sample.redComponent, sample.greenComponent, sample.blueComponent), 0.28)
+        XCTAssertGreaterThan(min(sample.redComponent, sample.greenComponent, sample.blueComponent), 0.95)
     }
 
     @MainActor

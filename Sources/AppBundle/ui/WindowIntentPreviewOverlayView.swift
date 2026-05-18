@@ -3,69 +3,13 @@ import SwiftUI
 struct WindowIntentPreviewOverlayView: View {
     let model: WindowTabDropPreviewViewModel
 
+    @ViewBuilder
     var body: some View {
         if let dropIntentOverlay = model.dropIntentOverlay {
             WindowDropIntentOverlayView(model: dropIntentOverlay)
                 .frame(width: model.containerFrame.width, height: model.containerFrame.height)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
-        } else {
-            legacyPreview
-                .frame(width: model.containerFrame.width, height: model.containerFrame.height)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
         }
     }
-
-    @ViewBuilder
-    private var legacyPreview: some View {
-        if model.zones.isEmpty {
-            ZStack(alignment: .topLeading) {
-                ForEach(localZones) { zone in
-                    WindowIntentPreviewZoneView(zone: zone)
-                }
-            }
-        } else {
-            WindowIntentPreviewGridView(zones: localZones)
-        }
-    }
-
-    private var localZones: [WindowIntentPreviewLocalZone] {
-        let zones = model.zones.isEmpty
-            ? [WindowTabDropPreviewZoneViewModel(
-                frame: model.frame,
-                style: model.style,
-                geometry: model.geometry,
-                isActive: true,
-            )]
-            : model.zones
-        return zones.map { zone in
-            WindowIntentPreviewLocalZone(
-                frame: localFrame(for: zone.frame),
-                style: zone.style,
-                geometry: zone.geometry,
-                isActive: zone.isActive,
-            )
-        }
-    }
-
-    private func localFrame(for screenFrame: CGRect) -> CGRect {
-        CGRect(
-            x: screenFrame.minX - model.containerFrame.minX,
-            y: model.containerFrame.height - (screenFrame.maxY - model.containerFrame.minY),
-            width: screenFrame.width,
-            height: screenFrame.height,
-        )
-    }
-}
-
-struct WindowIntentPreviewLocalZone: Identifiable {
-    var id: String {
-        "\(frame.debugDescription)-\(style)-\(geometry)-\(isActive)"
-    }
-
-    let frame: CGRect
-    let style: WindowTabDropPreviewStyle
-    let geometry: WindowTabDropPreviewGeometry
-    let isActive: Bool
 }

@@ -77,7 +77,8 @@ func workspaceSidebarTargetMonitor(
 @MainActor
 func selectedWorkspaceSidebarMonitorScope() -> Monitor? {
     let selectedScopeId = TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId
-    guard selectedScopeId != workspaceSidebarFocusedScopeId,
+    guard selectedScopeId != workspaceSidebarDefaultScopeId,
+          selectedScopeId != workspaceSidebarFocusedScopeId,
           selectedScopeId != workspaceSidebarAllScopeId
     else {
         return nil
