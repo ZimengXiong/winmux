@@ -33,33 +33,33 @@ struct WindowTabGroupHandleView: View {
     let workspaceName: String
 
     var body: some View {
-        Button {
-            guard let windowId, !isWindowTabStripDragInProgress() else { return }
-            focusWindowFromTabStripClick(windowId, fallbackWorkspace: workspaceName)
-        } label: {
-            HStack(spacing: 3) {
-                ForEach(0..<3, id: \.self) { _ in
-                    Circle()
-                        .fill(Color.white.opacity(0.28))
-                        .frame(width: 3.5, height: 3.5)
-                }
+        HStack(spacing: 3) {
+            ForEach(0..<3, id: \.self) { _ in
+                Circle()
+                    .fill(Color.white.opacity(0.28))
+                    .frame(width: 3.5, height: 3.5)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
         .accessibilityLabel("Focus Tab Group")
         .frame(width: windowTabStripReservedGroupHandleWidth())
         .contentShape(Rectangle())
+        .onTapGesture {
+            guard let windowId, !isWindowTabStripDragInProgress() else { return }
+            focusWindowFromTabStripClick(windowId, fallbackWorkspace: workspaceName)
+        }
         .gesture(
             DragGesture(minimumDistance: windowTabStripGroupDragMinimumDistance, coordinateSpace: .global)
                 .onChanged { _ in
+                    noteCurrentMousePointerSample()
                     guard let windowId,
                           shouldAllowTabStripChromeGroupDrag(windowId: windowId)
                     else { return }
                     updateMoveFromTabStrip(windowId)
                 }
                 .onEnded { _ in
+                    noteCurrentMousePointerSample()
                     guard let windowId,
                           shouldContinueCurrentGroupDrag(windowId: windowId)
                     else { return }

@@ -349,6 +349,11 @@ var mouseLocation: CGPoint {
     normalizeAppKitScreenPoint(NSEvent.mouseLocation)
 }
 
+@MainActor
+func noteCurrentMousePointerSample(timestamp: TimeInterval = ProcessInfo.processInfo.systemUptime) {
+    MousePointerTracker.shared.note(point: mouseLocation, timestamp: timestamp)
+}
+
 func normalizeAppKitScreenPoint(_ point: CGPoint) -> CGPoint {
     point.copy(\.y, mainMonitor.height - point.y)
 }

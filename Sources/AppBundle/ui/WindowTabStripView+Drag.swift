@@ -8,9 +8,11 @@ extension WindowTabStripView {
     ) -> some Gesture {
         DragGesture(minimumDistance: 4, coordinateSpace: .global)
             .onChanged { value in
+                noteCurrentMousePointerSample()
                 handleTabDragChanged(tab: tab, translation: value.translation)
             }
             .onEnded { _ in
+                noteCurrentMousePointerSample()
                 handleTabDragEnded(tab: tab, context: context)
             }
     }

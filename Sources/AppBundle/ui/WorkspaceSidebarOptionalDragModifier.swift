@@ -9,8 +9,14 @@ struct WorkspaceSidebarOptionalDragModifier: ViewModifier {
         if isEnabled {
             content.simultaneousGesture(
                 DragGesture(minimumDistance: 4, coordinateSpace: .global)
-                    .onChanged { _ in onChanged() }
-                    .onEnded { _ in onEnded() },
+                    .onChanged { _ in
+                        noteCurrentMousePointerSample()
+                        onChanged()
+                    }
+                    .onEnded { _ in
+                        noteCurrentMousePointerSample()
+                        onEnded()
+                    },
             )
         } else {
             content
