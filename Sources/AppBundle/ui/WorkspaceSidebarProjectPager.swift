@@ -6,6 +6,7 @@ struct WorkspaceSidebarProjectPager: View {
     let projects: [WorkspaceSidebarProjectViewModel]
     let selectedProjectId: WorkspaceProjectId
     let expansionProgress: CGFloat
+    @Binding var isProjectMenuOpen: Bool
     let onSelectProject: (WorkspaceProjectId) -> Void
     let onCreateProject: () -> Void
     let onRenameProject: (WorkspaceSidebarProjectViewModel, String) -> Void
@@ -16,7 +17,6 @@ struct WorkspaceSidebarProjectPager: View {
     @State var pressedProjectId: WorkspaceProjectId? = nil
     @State var editingProjectId: WorkspaceProjectId? = nil
     @State var editingProjectDraft = ""
-    @State var isProjectMenuOpen = false
 
     var sectionWidth: CGFloat { workspaceSidebarSectionWidth(expansionProgress) }
     var isCompact: Bool { expansionProgress < workspaceSidebarRowsRevealProgress }

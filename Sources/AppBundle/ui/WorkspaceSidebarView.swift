@@ -11,6 +11,7 @@ struct WorkspaceSidebarView: View {
     @State var projectPagerWidth: CGFloat = 0
     @State var browsedProjectId: WorkspaceProjectId? = nil
     @State var activeInUseOverrideWorkspaceName: String? = nil
+    @State var isProjectMenuOpen = false
 
     init(snapshot: WorkspaceSidebarSnapshot, actions: WorkspaceSidebarActions = WorkspaceSidebarActions()) {
         self.snapshot = snapshot
@@ -35,15 +36,22 @@ struct WorkspaceSidebarView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background(Color.clear)
+        .onChange(of: snapshot.visibleWidth) { visibleWidth in
+            if visibleWidth <= collapsedWidth + 0.5 {
+                resetTransientSidebarState()
+            }
+        }
         .onChange(of: snapshot.selectedProjectId) { _ in
             browsedProjectId = nil
             activeInUseOverrideWorkspaceName = nil
+            isProjectMenuOpen = false
             resetProjectSwipeWithoutAnimation()
         }
         .onChange(of: snapshot.projects) { _ in
             if let browsedProjectId, !snapshot.projects.contains(where: { $0.id == browsedProjectId }) {
                 self.browsedProjectId = nil
             }
+            isProjectMenuOpen = false
             resetProjectSwipeWithoutAnimation()
         }
     }

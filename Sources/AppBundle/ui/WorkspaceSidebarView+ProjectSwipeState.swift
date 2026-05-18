@@ -30,6 +30,13 @@ extension WorkspaceSidebarView {
         }
     }
 
+    func resetTransientSidebarState() {
+        browsedProjectId = nil
+        activeInUseOverrideWorkspaceName = nil
+        isProjectMenuOpen = false
+        resetProjectSwipeWithoutAnimation()
+    }
+
     func performWorkspaceSidebarProjectHaptic(_ pattern: NSHapticFeedbackManager.FeedbackPattern) {
         NSHapticFeedbackManager.defaultPerformer.perform(pattern, performanceTime: .now)
     }
