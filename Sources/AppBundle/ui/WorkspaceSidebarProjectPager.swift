@@ -6,7 +6,7 @@ struct WorkspaceSidebarProjectPager: View {
     let projects: [WorkspaceSidebarProjectViewModel]
     let selectedProjectId: WorkspaceProjectId
     let expansionProgress: CGFloat
-    let layout: WorkspaceSidebarLayoutSnapshot
+    let layout: WorkspaceSidebarConfiguration
     @Binding var isProjectMenuOpen: Bool
     let onSelectProject: (WorkspaceProjectId) -> Void
     let onCreateProject: () -> Void

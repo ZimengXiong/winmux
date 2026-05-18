@@ -7,7 +7,7 @@ extension WorkspaceSidebarView {
         let isCompact = expansionProgress < workspaceSidebarRowsRevealProgress
         let leadingInset = workspaceSidebarOuterLeadingPadding(isCompact: isCompact)
         let trailingInset = workspaceSidebarOuterTrailingPadding(isCompact: isCompact)
-        let showsMonitorSelector = !isCompact && snapshot.showsMonitorSelector
+        let showsMonitorSelector = !isCompact && snapshot.configuration.showMonitorSelector
         let projectSwipeDirection = workspaceSidebarProjectSwipeDirection(
             horizontalTranslation: projectSwipeTranslation,
             verticalTranslation: 0,
@@ -49,7 +49,7 @@ extension WorkspaceSidebarView {
                 expansionProgress: expansionProgress,
                 leadingInset: leadingInset,
                 trailingInset: trailingInset,
-                topPadding: showsMonitorSelector ? 0 : snapshot.topPadding,
+                topPadding: showsMonitorSelector ? 0 : snapshot.configuration.topPadding,
                 visibleWorkspacesByProject: visibleWorkspacesByProject,
                 swipeDirection: projectSwipeDirection,
             )

@@ -7,12 +7,10 @@ struct WorkspaceSidebarSnapshot: Equatable {
     var monitorScopes: [WorkspaceSidebarMonitorScopeViewModel]
     var selectedMonitorScopeId: String
     var focusedMonitorScopeId: String
-    var showsMonitorSelector: Bool
     var visibleWidth: CGFloat
-    var layout: WorkspaceSidebarLayoutSnapshot
-    var topPadding: CGFloat
     var hoveredWorkspaceName: String?
     var dropPreview: WorkspaceSidebarDropPreviewViewModel?
+    var configuration: WorkspaceSidebarConfiguration
 
     static let empty = WorkspaceSidebarSnapshot(
         workspaces: [],
@@ -21,24 +19,26 @@ struct WorkspaceSidebarSnapshot: Equatable {
         monitorScopes: [],
         selectedMonitorScopeId: workspaceSidebarDefaultScopeId,
         focusedMonitorScopeId: "",
-        showsMonitorSelector: false,
         visibleWidth: 0,
-        layout: .empty,
-        topPadding: 12,
         hoveredWorkspaceName: nil,
         dropPreview: nil,
+        configuration: .empty,
     )
 }
 
-struct WorkspaceSidebarLayoutSnapshot: Equatable {
+struct WorkspaceSidebarConfiguration: Equatable {
     var collapsedWidth: CGFloat
     var expandedWidth: CGFloat
+    var topPadding: CGFloat
+    var showMonitorSelector: Bool
     var showsDate: Bool
     var showsStatusPills: Bool
 
-    static let empty = WorkspaceSidebarLayoutSnapshot(
+    static let empty = WorkspaceSidebarConfiguration(
         collapsedWidth: 0,
         expandedWidth: 0,
+        topPadding: 12,
+        showMonitorSelector: false,
         showsDate: false,
         showsStatusPills: false,
     )

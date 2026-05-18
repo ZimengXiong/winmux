@@ -14,7 +14,7 @@ extension WorkspaceSidebarView {
             activeProjectId: snapshot.selectedProjectId,
             browsedProjectId: browsedProjectId,
             expansionProgress: expansionProgress,
-            sectionWidth: workspaceSidebarSectionWidth(expansionProgress, layout: snapshot.layout),
+            sectionWidth: workspaceSidebarSectionWidth(expansionProgress, layout: snapshot.configuration),
             onSelectScope: { scopeId in
                 if scopeId == workspaceSidebarDefaultScopeId {
                     browsedProjectId = nil
@@ -25,7 +25,7 @@ extension WorkspaceSidebarView {
         )
         .padding(.leading, leadingInset)
         .padding(.trailing, trailingInset)
-        .padding(.top, snapshot.topPadding)
+        .padding(.top, snapshot.configuration.topPadding)
         .padding(.bottom, 6)
     }
 
@@ -36,10 +36,10 @@ extension WorkspaceSidebarView {
         trailingInset: CGFloat,
     ) -> some View {
         WorkspaceSidebarStatusView(
-            sectionWidth: workspaceSidebarSectionWidth(expansionProgress, layout: snapshot.layout),
+            sectionWidth: workspaceSidebarSectionWidth(expansionProgress, layout: snapshot.configuration),
             isCompact: isCompact,
-            showsDate: snapshot.layout.showsDate,
-            showsStatusPills: snapshot.layout.showsStatusPills,
+            showsDate: snapshot.configuration.showsDate,
+            showsStatusPills: snapshot.configuration.showsStatusPills,
         )
         .padding(.leading, leadingInset)
         .padding(.trailing, trailingInset)

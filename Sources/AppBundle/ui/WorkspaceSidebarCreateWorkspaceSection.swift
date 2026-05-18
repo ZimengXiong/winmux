@@ -7,7 +7,7 @@ import SwiftUI
 struct WorkspaceSidebarCreateWorkspaceSection: View {
     let dragPreview: WorkspaceSidebarDropPreviewViewModel?
     let expansionProgress: CGFloat
-    let layout: WorkspaceSidebarLayoutSnapshot
+    let layout: WorkspaceSidebarConfiguration
     let emitsDropTarget: Bool
     let onCreateWorkspace: () -> Void
     let onDropPayload: @MainActor (WorkspaceSidebarDragPayload) -> Void

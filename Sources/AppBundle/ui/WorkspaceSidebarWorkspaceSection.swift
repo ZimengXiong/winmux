@@ -6,7 +6,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
     let workspace: WorkspaceSidebarWorkspaceViewModel
     let dragPreview: WorkspaceSidebarDropPreviewViewModel?
     let expansionProgress: CGFloat
-    let layout: WorkspaceSidebarLayoutSnapshot
+    let layout: WorkspaceSidebarConfiguration
     let emitsDropTarget: Bool
     let isFromOtherDisplay: Bool
     let isInUseOnOtherDisplay: Bool

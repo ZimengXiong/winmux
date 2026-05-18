@@ -14,12 +14,10 @@ func buildWorkspaceSidebarSnapshot() async -> WorkspaceSidebarSnapshot {
         monitorScopes: TrayMenuModel.shared.workspaceSidebarMonitorScopes,
         selectedMonitorScopeId: TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId,
         focusedMonitorScopeId: TrayMenuModel.shared.workspaceSidebarFocusedMonitorScopeId,
-        showsMonitorSelector: TrayMenuModel.shared.workspaceSidebarShowsMonitorSelector,
         visibleWidth: TrayMenuModel.shared.workspaceSidebarVisibleWidth,
-        layout: workspaceSidebarLayoutSnapshot(),
-        topPadding: TrayMenuModel.shared.workspaceSidebarTopPadding,
         hoveredWorkspaceName: TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName,
         dropPreview: TrayMenuModel.shared.workspaceSidebarDropPreview,
+        configuration: workspaceSidebarConfiguration(),
     )
 }
 
@@ -36,18 +34,20 @@ func applyWorkspaceSidebarSnapshotToTrayModel(_ snapshot: WorkspaceSidebarSnapsh
     TrayMenuModel.shared.workspaceSidebarMonitorScopes = snapshot.monitorScopes
     TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId = snapshot.selectedMonitorScopeId
     TrayMenuModel.shared.workspaceSidebarFocusedMonitorScopeId = snapshot.focusedMonitorScopeId
-    TrayMenuModel.shared.workspaceSidebarShowsMonitorSelector = snapshot.showsMonitorSelector
+    TrayMenuModel.shared.workspaceSidebarShowsMonitorSelector = snapshot.configuration.showMonitorSelector
     TrayMenuModel.shared.workspaceSidebarVisibleWidth = snapshot.visibleWidth
-    TrayMenuModel.shared.workspaceSidebarTopPadding = snapshot.topPadding
+    TrayMenuModel.shared.workspaceSidebarTopPadding = snapshot.configuration.topPadding
     TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName = snapshot.hoveredWorkspaceName
     TrayMenuModel.shared.workspaceSidebarDropPreview = snapshot.dropPreview
 }
 
 @MainActor
-func workspaceSidebarLayoutSnapshot() -> WorkspaceSidebarLayoutSnapshot {
-    WorkspaceSidebarLayoutSnapshot(
+func workspaceSidebarConfiguration() -> WorkspaceSidebarConfiguration {
+    WorkspaceSidebarConfiguration(
         collapsedWidth: CGFloat(config.workspaceSidebar.collapsedWidth),
         expandedWidth: CGFloat(config.workspaceSidebar.width),
+        topPadding: TrayMenuModel.shared.workspaceSidebarTopPadding,
+        showMonitorSelector: TrayMenuModel.shared.workspaceSidebarShowsMonitorSelector,
         showsDate: config.workspaceSidebar.showDate,
         showsStatusPills: config.workspaceSidebar.showStatusPills,
     )
