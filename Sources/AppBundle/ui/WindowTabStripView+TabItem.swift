@@ -23,7 +23,7 @@ extension WindowTabStripView {
             y: draggingTabId == tab.windowId ? 2 : 0,
         )
         .animation(.interactiveSpring(response: 0.2, dampingFraction: 0.8), value: reorderTargetIndex(context: context))
-        .highPriorityGesture(tabDragGesture(for: tab, context: context))
+        .gesture(tabDragGesture(for: tab, context: context))
         .onHover { hovering in
             updateHoveredTab(tab.windowId, hovering: hovering)
         }

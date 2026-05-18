@@ -52,12 +52,17 @@ struct WindowTabGroupHandleView: View {
         .frame(width: windowTabStripReservedGroupHandleWidth())
         .contentShape(Rectangle())
         .gesture(
-            DragGesture(minimumDistance: 10)
+            DragGesture(minimumDistance: 4, coordinateSpace: .global)
                 .onChanged { _ in
-                    guard let windowId else { return }
+                    guard let windowId,
+                          shouldAllowTabStripChromeGroupDrag(windowId: windowId)
+                    else { return }
                     updateMoveFromTabStrip(windowId)
                 }
                 .onEnded { _ in
+                    guard let windowId,
+                          shouldContinueCurrentGroupDrag(windowId: windowId)
+                    else { return }
                     finishMoveFromTabStrip()
                 },
         )

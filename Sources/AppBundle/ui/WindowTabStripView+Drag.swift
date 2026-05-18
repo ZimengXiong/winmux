@@ -6,7 +6,7 @@ extension WindowTabStripView {
         for tab: WindowTabItemViewModel,
         context: WindowTabStripLayoutContext,
     ) -> some Gesture {
-        DragGesture(minimumDistance: 8)
+        DragGesture(minimumDistance: 4, coordinateSpace: .global)
             .onChanged { value in
                 handleTabDragChanged(tab: tab, translation: value.translation)
             }
