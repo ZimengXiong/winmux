@@ -6,9 +6,6 @@ struct WorkspaceSidebarProjectPager: View {
     let projects: [WorkspaceSidebarProjectViewModel]
     let selectedProjectId: WorkspaceProjectId
     let expansionProgress: CGFloat
-    let swipeDirection: Int?
-    let switchProgress: CGFloat
-    let edgeProgress: CGFloat
     let onSelectProject: (WorkspaceProjectId) -> Void
     let onCreateProject: () -> Void
     let onRenameProject: (WorkspaceSidebarProjectViewModel, String) -> Void
@@ -42,14 +39,6 @@ struct WorkspaceSidebarProjectPager: View {
         let popupHeight = (rowCount * workspaceSidebarMenuRowHeight) + rowSpacing + dividerHeight + popupPadding
         return popupHeight + workspaceSidebarSectionGap + workspaceSidebarPagerHeight
     }
-    var swipeTargetIndex: Int? {
-        guard let swipeDirection else { return nil }
-        return workspaceSidebarProjectIndexAfterSwipe(
-            currentIndex: currentIndex,
-            projectCount: projects.count,
-            direction: swipeDirection,
-        )
-    }
     var footerSpacing: CGFloat { isCompact ? 2 : 8 }
     var projectMenuWidth: CGFloat {
         let selectedProjectName = selectedProject?.displayName ?? "Project"
@@ -75,7 +64,6 @@ struct WorkspaceSidebarProjectPager: View {
                 }
                 .animation(.interactiveSpring(response: 0.24, dampingFraction: 0.86), value: isHovered)
                 .animation(.interactiveSpring(response: 0.24, dampingFraction: 0.86), value: currentIndex)
-                .animation(.interactiveSpring(response: 0.18, dampingFraction: 0.88), value: edgeProgress)
                 .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .bottom)))
                 .zIndex(isProjectMenuOpen ? 20 : 0)
         }

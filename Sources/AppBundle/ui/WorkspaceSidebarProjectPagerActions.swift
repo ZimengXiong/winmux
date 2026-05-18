@@ -30,12 +30,7 @@ extension WorkspaceSidebarProjectPager {
     @ViewBuilder
     var compactProjectIndicator: some View {
         if let selectedProject, let currentIndex {
-            projectDot(
-                selectedProject,
-                index: currentIndex,
-                swipeProgress: 1,
-                edgeProgress: dotEdgeProgress(for: currentIndex),
-            )
+            projectDot(selectedProject, index: currentIndex)
             .frame(width: sectionWidth, height: workspaceSidebarPagerHeight, alignment: .center)
         }
     }
@@ -44,18 +39,13 @@ extension WorkspaceSidebarProjectPager {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .center, spacing: 6) {
                 ForEach(Array(projects.enumerated()), id: \.element.id) { index, project in
-                    projectDot(
-                        project,
-                        index: index,
-                        swipeProgress: dotSwipeProgress(for: index),
-                        edgeProgress: dotEdgeProgress(for: index),
-                    )
+                    projectDot(project, index: index)
                 }
             }
-            .padding(.horizontal, isCompact ? 2 : 5)
-            .frame(minWidth: projectTrackWidth, minHeight: workspaceSidebarPagerHeight, alignment: .center)
+            .padding(.horizontal, isCompact ? 2 : 0)
+            .frame(minWidth: projectTrackWidth, minHeight: workspaceSidebarPagerHeight, alignment: .leading)
         }
-        .frame(width: projectTrackWidth, height: workspaceSidebarPagerHeight, alignment: .center)
+        .frame(width: projectTrackWidth, height: workspaceSidebarPagerHeight, alignment: .leading)
         .clipped()
     }
 

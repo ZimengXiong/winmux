@@ -14,9 +14,6 @@ extension WorkspaceSidebarView {
             projects: snapshot.projects,
             selectedProjectId: snapshot.selectedProjectId,
             expansionProgress: expansionProgress,
-            swipeDirection: swipeDirection,
-            switchProgress: switchProgress,
-            edgeProgress: edgeProgress,
             onSelectProject: { actions.send(.selectProject($0)) },
             onCreateProject: { actions.send(.createProject) },
             onRenameProject: { project, displayName in
