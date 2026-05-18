@@ -91,10 +91,10 @@ func setPendingWindowDragIntent(sourceWindowId: UInt32, sourceSubject: WindowDra
         signature: signature,
         "windowDragIntent.update mouse=\(debugDescribe(mouseLocation)) source=\(debugDescribe(Window.get(byId: sourceWindowId))) subject=\(debugDescribe(sourceSubject)) prevKind=\(previousIntent.map { debugDescribe($0.kind) } ?? "nil") prevPreview=\(debugDescribe(previousIntent?.previewRect)) newKind=\(debugDescribe(destination.kind)) newPreview=\(debugDescribe(destination.previewRect)) newInteraction=\(debugDescribe(destination.interactionRect)) style=\(destination.previewStyle) geometry=\(destination.previewGeometry)"
     )
-    if destination.previewStyle == .sidebarWorkspaceMove {
-        WindowTabDropPreviewPanel.shared.hide()
+    if let overlay = destination.dropIntentOverlay {
+        WindowDropIntentOverlayPanelController.shared.show(overlay)
     } else {
-        WindowTabDropPreviewPanel.shared.show(destination.preview(sourceWindowId: sourceWindowId))
+        WindowDropIntentOverlayPanelController.shared.hide()
     }
     return true
 }
@@ -111,7 +111,7 @@ func clearPendingWindowDragIntent() {
     lastWindowDragIntentLogSignature = nil
     setPinnedDraggedWindowId(nil)
     setWorkspaceSidebarDropPreviewIfChanged(nil)
-    WindowTabDropPreviewPanel.shared.hide()
+    WindowDropIntentOverlayPanelController.shared.hide()
     WindowDragCursorProxyPanel.shared.hide()
 }
 

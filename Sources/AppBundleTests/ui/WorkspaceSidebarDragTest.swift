@@ -17,7 +17,7 @@ final class WorkspaceSidebarDragTest: XCTestCase {
     @MainActor
     func testWindowIntentPreviewRendersBelowWorkspaceSidebar() {
         XCTAssertLessThan(
-            WindowTabDropPreviewPanel.shared.level.rawValue,
+            WindowDropIntentOverlayPanelController.shared.level.rawValue,
             WorkspaceSidebarPanel.shared.level.rawValue,
         )
     }

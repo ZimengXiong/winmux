@@ -94,11 +94,11 @@ import XCTest
         let mouseLocation = target.tabDropInteractionRect.orDie().center
 
         XCTAssertTrue(updatePendingWindowDragIntent(sourceWindow: source, mouseLocation: mouseLocation))
-        XCTAssertTrue(WindowTabDropPreviewPanel.shared.isVisible)
+        XCTAssertTrue(WindowDropIntentOverlayPanelController.shared.isVisible)
 
         clearPendingUnmanagedWindowSnap()
 
-        XCTAssertTrue(WindowTabDropPreviewPanel.shared.isVisible)
+        XCTAssertTrue(WindowDropIntentOverlayPanelController.shared.isVisible)
         clearPendingWindowDragIntent()
     }
 
