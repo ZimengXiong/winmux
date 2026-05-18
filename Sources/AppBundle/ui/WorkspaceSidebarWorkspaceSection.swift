@@ -65,7 +65,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
             }
             .onHover { hover in
                 isHovered = hover
-                actions.send(.hoverWorkspace(workspace.name, isHovering: hover))
+                actions.hoverWorkspace(workspace.name, hover)
             }
             .onDrop(of: [workspaceSidebarDragPayloadType], delegate: WorkspaceSidebarDropDelegate(
                 target: .workspace(workspace.name),

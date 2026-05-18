@@ -57,7 +57,6 @@ enum WorkspaceSidebarAction: Equatable {
     case renameWorkspace(String, displayName: String)
     case resetWorkspace(String)
     case deleteWorkspace(String)
-    case hoverWorkspace(String, isHovering: Bool)
     case moveWindow(UInt32, toWorkspace: String)
     case moveTabGroup(UInt32, toWorkspace: String)
     case moveWindowToNewWorkspace(UInt32, projectId: WorkspaceProjectId, monitorScopeId: String)
@@ -72,6 +71,7 @@ enum WorkspaceSidebarAction: Equatable {
 struct WorkspaceSidebarActions {
     var send: @MainActor (WorkspaceSidebarAction) -> Void
     var setDropTargets: @MainActor ([WorkspaceSidebarDropTargetFrame]) -> Void
+    var hoverWorkspace: @MainActor (String, Bool) -> Void
     var windowDragChanged: @MainActor (UInt32, CGPoint) -> Void
     var windowDragEnded: @MainActor (UInt32, CGPoint) -> Void
     var tabGroupDragChanged: @MainActor (UInt32, CGPoint) -> Void
@@ -79,10 +79,12 @@ struct WorkspaceSidebarActions {
 
     init(
         send: @escaping @MainActor (WorkspaceSidebarAction) -> Void = { _ in },
-        setDropTargets: @escaping @MainActor ([WorkspaceSidebarDropTargetFrame]) -> Void = { _ in }
+        setDropTargets: @escaping @MainActor ([WorkspaceSidebarDropTargetFrame]) -> Void = { _ in },
+        hoverWorkspace: @escaping @MainActor (String, Bool) -> Void = { _, _ in }
     ) {
         self.send = send
         self.setDropTargets = setDropTargets
+        self.hoverWorkspace = hoverWorkspace
         windowDragChanged = { send(.updateWindowDrag($0, subject: .window, pointer: $1)) }
         windowDragEnded = { _, pointer in send(.finishWindowDrag(pointer)) }
         tabGroupDragChanged = { send(.updateWindowDrag($0, subject: .group, pointer: $1)) }

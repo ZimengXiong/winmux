@@ -9,6 +9,13 @@ func makeWorkspaceSidebarActionsAdapter() -> WorkspaceSidebarActions {
         setDropTargets: { targets in
             WorkspaceSidebarPanel.shared.updateDropTargets(targets)
         },
+        hoverWorkspace: { name, isHovering in
+            TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName = nextWorkspaceSidebarHoveredWorkspaceName(
+                currentHoveredWorkspaceName: TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName,
+                workspaceName: name,
+                isHovering: isHovering,
+            )
+        },
     )
 }
 
@@ -51,12 +58,6 @@ func handleWorkspaceSidebarAction(_ action: WorkspaceSidebarAction) {
             if let workspace = workspaceSidebarWorkspaceViewModel(name) {
                 deleteWorkspaceFromSidebar(workspace)
             }
-        case .hoverWorkspace(let name, let isHovering):
-            TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName = nextWorkspaceSidebarHoveredWorkspaceName(
-                currentHoveredWorkspaceName: TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName,
-                workspaceName: name,
-                isHovering: isHovering,
-            )
         case .moveWindow(let windowId, let workspaceName):
             moveWindowFromSidebar(windowId, toWorkspace: workspaceName)
         case .moveTabGroup(let windowId, let workspaceName):
