@@ -49,7 +49,7 @@ struct WindowTabGroupHandleView: View {
             guard let windowId, !isWindowTabStripDragInProgress() else { return }
             focusWindowFromTabStripClick(windowId, fallbackWorkspace: workspaceName)
         }
-        .gesture(
+        .simultaneousGesture(
             DragGesture(minimumDistance: windowTabStripGroupDragMinimumDistance, coordinateSpace: .global)
                 .onChanged { _ in
                     noteCurrentMousePointerSample()

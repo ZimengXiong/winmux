@@ -196,6 +196,31 @@ import XCTest
         XCTAssertLessThan(windowTabStripAvailableTabsWidth(stripWidth: stripWidth), stripWidth)
     }
 
+    func testWindowTabStripScrollBackgroundDragIgnoresTabPills() {
+        let tabWidth: CGFloat = 120
+        let tabsStart = windowTabStripContentHorizontalPadding
+        let tabsEnd = tabsStart + tabWidth * 2 + windowTabStripTabSpacing
+
+        XCTAssertFalse(isWindowTabStripScrollBackgroundDragStart(
+            localX: tabsStart + 12,
+            contentMinX: 0,
+            tabWidth: tabWidth,
+            tabCount: 2,
+        ))
+        XCTAssertFalse(isWindowTabStripScrollBackgroundDragStart(
+            localX: tabsEnd - 12,
+            contentMinX: 0,
+            tabWidth: tabWidth,
+            tabCount: 2,
+        ))
+        XCTAssertTrue(isWindowTabStripScrollBackgroundDragStart(
+            localX: tabsEnd + 12,
+            contentMinX: 0,
+            tabWidth: tabWidth,
+            tabCount: 2,
+        ))
+    }
+
     func testWindowTabStripLeadingFadeOnlyAppearsAfterScrollingFromLeftEdge() {
         let stripWidth: CGFloat = 240
 

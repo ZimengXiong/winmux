@@ -14,7 +14,11 @@ extension WindowTabStripView {
                 workspaceName: strip.workspaceName
             )
 
-            tabScrollView(context: context, itemHeight: itemHeight)
+            tabScrollView(
+                context: context,
+                itemHeight: itemHeight,
+                groupDragWindowId: groupDragWindowId,
+            )
                 .frame(maxWidth: .infinity)
 
             Color.clear
@@ -45,7 +49,11 @@ extension WindowTabStripView {
         }
     }
 
-    func tabScrollView(context: WindowTabStripLayoutContext, itemHeight: CGFloat) -> some View {
+    func tabScrollView(
+        context: WindowTabStripLayoutContext,
+        itemHeight: CGFloat,
+        groupDragWindowId: UInt32?,
+    ) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: windowTabStripTabSpacing) {
                 ForEach(strip.tabs) { tab in
@@ -73,6 +81,10 @@ extension WindowTabStripView {
                 trailingFadeWidth: context.trailingFadeWidth,
             )
         }
+        .simultaneousGesture(tabScrollBackgroundGroupDragGesture(
+            for: groupDragWindowId,
+            context: context,
+        ))
     }
 
 }

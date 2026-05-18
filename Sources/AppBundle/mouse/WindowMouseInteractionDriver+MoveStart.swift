@@ -20,11 +20,9 @@ extension WindowMouseInteractionDriver {
         moveSession = session
         WindowMouseInteractionOpacityController.shared.update(
             activeWindowId: windowId,
-            hidesPassiveTabGroupChrome: false,
+            hidesPassiveTabGroupChrome: session.startedInSidebar || session.subject == .group,
         )
-        if isNewSession {
-            configureMoveChrome(windowId: windowId, session: session)
-        }
+        configureMoveChrome(windowId: windowId, session: session)
         startDisplayLoop()
         renderMoveFrame(force: isNewSession)
     }
