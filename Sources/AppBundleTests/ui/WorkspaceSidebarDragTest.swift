@@ -63,11 +63,22 @@ final class WorkspaceSidebarDragTest: XCTestCase {
 
     @MainActor
     func testWorkspaceSidebarActionsExposeWindowAndTabGroupDragClosures() {
-        var received: [WorkspaceSidebarAction] = []
-        let actions = WorkspaceSidebarActions { action in
-            received.append(action)
-        }
+        var received: [String] = []
         let pointer = CGPoint(x: 12, y: 34)
+        let actions = WorkspaceSidebarActions(
+            windowDragChanged: { windowId, pointer in
+                received.append("window-changed:\(windowId):\(pointer.x),\(pointer.y)")
+            },
+            windowDragEnded: { _, pointer in
+                received.append("window-ended:\(pointer.x),\(pointer.y)")
+            },
+            tabGroupDragChanged: { windowId, pointer in
+                received.append("group-changed:\(windowId):\(pointer.x),\(pointer.y)")
+            },
+            tabGroupDragEnded: { _, pointer in
+                received.append("group-ended:\(pointer.x),\(pointer.y)")
+            },
+        )
 
         actions.windowDragChanged(101, pointer)
         actions.windowDragEnded(101, pointer)
@@ -75,10 +86,10 @@ final class WorkspaceSidebarDragTest: XCTestCase {
         actions.tabGroupDragEnded(202, pointer)
 
         XCTAssertEqual(received, [
-            .updateWindowDrag(101, subject: .window, pointer: pointer),
-            .finishWindowDrag(pointer),
-            .updateWindowDrag(202, subject: .group, pointer: pointer),
-            .finishWindowDrag(pointer),
+            "window-changed:101:12.0,34.0",
+            "window-ended:12.0,34.0",
+            "group-changed:202:12.0,34.0",
+            "group-ended:12.0,34.0",
         ])
     }
 

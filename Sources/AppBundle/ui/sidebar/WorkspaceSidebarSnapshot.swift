@@ -64,8 +64,6 @@ enum WorkspaceSidebarAction: Equatable {
     case previewWindowDrop(UInt32, target: WorkspaceSidebarDropTargetKind)
     case previewTabGroupDrop(UInt32, target: WorkspaceSidebarDropTargetKind)
     case clearDropPreview
-    case updateWindowDrag(UInt32, subject: WindowDragSubject, pointer: CGPoint)
-    case finishWindowDrag(CGPoint)
 }
 
 struct WorkspaceSidebarActions {
@@ -80,14 +78,18 @@ struct WorkspaceSidebarActions {
     init(
         send: @escaping @MainActor (WorkspaceSidebarAction) -> Void = { _ in },
         setDropTargets: @escaping @MainActor ([WorkspaceSidebarDropTargetFrame]) -> Void = { _ in },
-        hoverWorkspace: @escaping @MainActor (String, Bool) -> Void = { _, _ in }
+        hoverWorkspace: @escaping @MainActor (String, Bool) -> Void = { _, _ in },
+        windowDragChanged: @escaping @MainActor (UInt32, CGPoint) -> Void = { _, _ in },
+        windowDragEnded: @escaping @MainActor (UInt32, CGPoint) -> Void = { _, _ in },
+        tabGroupDragChanged: @escaping @MainActor (UInt32, CGPoint) -> Void = { _, _ in },
+        tabGroupDragEnded: @escaping @MainActor (UInt32, CGPoint) -> Void = { _, _ in }
     ) {
         self.send = send
         self.setDropTargets = setDropTargets
         self.hoverWorkspace = hoverWorkspace
-        windowDragChanged = { send(.updateWindowDrag($0, subject: .window, pointer: $1)) }
-        windowDragEnded = { _, pointer in send(.finishWindowDrag(pointer)) }
-        tabGroupDragChanged = { send(.updateWindowDrag($0, subject: .group, pointer: $1)) }
-        tabGroupDragEnded = { _, pointer in send(.finishWindowDrag(pointer)) }
+        self.windowDragChanged = windowDragChanged
+        self.windowDragEnded = windowDragEnded
+        self.tabGroupDragChanged = tabGroupDragChanged
+        self.tabGroupDragEnded = tabGroupDragEnded
     }
 }

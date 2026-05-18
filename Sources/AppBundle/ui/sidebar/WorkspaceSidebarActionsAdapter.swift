@@ -16,6 +16,18 @@ func makeWorkspaceSidebarActionsAdapter() -> WorkspaceSidebarActions {
                 isHovering: isHovering,
             )
         },
+        windowDragChanged: { windowId, pointer in
+            updateSidebarWindowDrag(windowId, subject: .window, pointer: pointer)
+        },
+        windowDragEnded: { _, pointer in
+            finishSidebarWindowDrag(pointer: pointer)
+        },
+        tabGroupDragChanged: { windowId, pointer in
+            updateSidebarWindowDrag(windowId, subject: .group, pointer: pointer)
+        },
+        tabGroupDragEnded: { _, pointer in
+            finishSidebarWindowDrag(pointer: pointer)
+        },
     )
 }
 
@@ -72,10 +84,6 @@ func handleWorkspaceSidebarAction(_ action: WorkspaceSidebarAction) {
             previewWorkspaceSidebarDrop(windowId, subject: .group, target: target)
         case .clearDropPreview:
             clearWorkspaceSidebarDropPreview()
-        case .updateWindowDrag(let windowId, let subject, let pointer):
-            updateSidebarWindowDrag(windowId, subject: subject, pointer: pointer)
-        case .finishWindowDrag(let pointer):
-            finishSidebarWindowDrag(pointer: pointer)
     }
 }
 
