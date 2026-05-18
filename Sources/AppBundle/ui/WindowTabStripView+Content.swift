@@ -16,8 +16,6 @@ extension WindowTabStripView {
 
             tabScrollView(context: context, itemHeight: itemHeight)
                 .frame(maxWidth: .infinity)
-                .contentShape(Rectangle())
-                .gesture(groupDragGesture(for: groupDragWindowId))
 
             Color.clear
                 .frame(width: windowTabStripTrailingGroupDragGutterWidth)
