@@ -73,7 +73,7 @@ extension WorkspaceSidebarView {
         }
         .coordinateSpace(name: "workspaceSidebarContent")
         .onPreferenceChange(WorkspaceSidebarDropTargetPreferenceKey.self) { frames in
-            actions.send(.setDropTargets(frames))
+            actions.setDropTargets(frames)
         }
         .background {
             sidebarSurface(in: sidebarShape)

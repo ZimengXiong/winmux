@@ -2,9 +2,14 @@ import Foundation
 
 @MainActor
 func makeWorkspaceSidebarActionsAdapter() -> WorkspaceSidebarActions {
-    WorkspaceSidebarActions { action in
-        handleWorkspaceSidebarAction(action)
-    }
+    WorkspaceSidebarActions(
+        send: { action in
+            handleWorkspaceSidebarAction(action)
+        },
+        setDropTargets: { targets in
+            WorkspaceSidebarPanel.shared.updateDropTargets(targets)
+        },
+    )
 }
 
 @MainActor
@@ -70,8 +75,6 @@ func handleWorkspaceSidebarAction(_ action: WorkspaceSidebarAction) {
             updateSidebarWindowDrag(windowId, subject: subject)
         case .finishWindowDrag:
             finishSidebarWindowDrag()
-        case .setDropTargets(let targets):
-            WorkspaceSidebarPanel.shared.updateDropTargets(targets)
     }
 }
 

@@ -67,18 +67,22 @@ enum WorkspaceSidebarAction: Equatable {
     case clearDropPreview
     case updateWindowDrag(UInt32, subject: WindowDragSubject)
     case finishWindowDrag
-    case setDropTargets([WorkspaceSidebarDropTargetFrame])
 }
 
 struct WorkspaceSidebarActions {
     var send: @MainActor (WorkspaceSidebarAction) -> Void
+    var setDropTargets: @MainActor ([WorkspaceSidebarDropTargetFrame]) -> Void
     var windowDragChanged: @MainActor (UInt32) -> Void
     var windowDragEnded: @MainActor (UInt32) -> Void
     var tabGroupDragChanged: @MainActor (UInt32) -> Void
     var tabGroupDragEnded: @MainActor (UInt32) -> Void
 
-    init(send: @escaping @MainActor (WorkspaceSidebarAction) -> Void = { _ in }) {
+    init(
+        send: @escaping @MainActor (WorkspaceSidebarAction) -> Void = { _ in },
+        setDropTargets: @escaping @MainActor ([WorkspaceSidebarDropTargetFrame]) -> Void = { _ in }
+    ) {
         self.send = send
+        self.setDropTargets = setDropTargets
         windowDragChanged = { send(.updateWindowDrag($0, subject: .window)) }
         windowDragEnded = { _ in send(.finishWindowDrag) }
         tabGroupDragChanged = { send(.updateWindowDrag($0, subject: .group)) }
