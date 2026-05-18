@@ -51,6 +51,9 @@ extension WorkspaceSidebarWorkspaceSection {
                 }
             },
         ))
+        .workspaceSidebarDrag(enabled: allowsDrag) {
+            WorkspaceSidebarDragPayload.window(window.windowId).itemProvider
+        }
         .onHover { hover in
             hoveredWindowId = nextWorkspaceSidebarHoveredWindowId(
                 currentHoveredWindowId: hoveredWindowId,

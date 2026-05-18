@@ -37,15 +37,15 @@ enum WorkspaceSidebarAction: Equatable {
     case setProjectColor(WorkspaceProjectId, colorHex: String?)
     case deleteProject(WorkspaceProjectId)
     case selectMonitorScope(String)
-    case createWorkspace
+    case createWorkspace(projectId: WorkspaceProjectId, monitorScopeId: String)
     case renameWorkspace(String, displayName: String)
     case resetWorkspace(String)
     case deleteWorkspace(String)
     case hoverWorkspace(String, isHovering: Bool)
     case moveWindow(UInt32, toWorkspace: String)
     case moveTabGroup(UInt32, toWorkspace: String)
-    case moveWindowToNewWorkspace(UInt32)
-    case moveTabGroupToNewWorkspace(UInt32)
+    case moveWindowToNewWorkspace(UInt32, projectId: WorkspaceProjectId, monitorScopeId: String)
+    case moveTabGroupToNewWorkspace(UInt32, projectId: WorkspaceProjectId, monitorScopeId: String)
     case previewWindowDrop(UInt32, target: WorkspaceSidebarDropTargetKind)
     case previewTabGroupDrop(UInt32, target: WorkspaceSidebarDropTargetKind)
     case clearDropPreview

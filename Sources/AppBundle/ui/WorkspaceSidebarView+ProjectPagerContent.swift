@@ -13,6 +13,7 @@ extension WorkspaceSidebarView {
     ) -> some View {
         if snapshot.projects.isEmpty {
             workspacePage(
+                projectId: snapshot.selectedProjectId,
                 workspaces: visibleWorkspacesByProject[snapshot.selectedProjectId] ?? [],
                 expansionProgress: expansionProgress,
                 leadingInset: leadingInset,

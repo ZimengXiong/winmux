@@ -34,4 +34,13 @@ extension WorkspaceSidebarWorkspaceSection {
         editingNameDraft = ""
         WorkspaceSidebarPanel.shared.endInlineTextEditing()
     }
+
+    func handlePayloadDrop(_ payload: WorkspaceSidebarDragPayload) {
+        switch payload {
+            case .window(let windowId):
+                actions.send(.moveWindow(windowId, toWorkspace: workspace.name))
+            case .tabGroup(let representativeWindowId):
+                actions.send(.moveTabGroup(representativeWindowId, toWorkspace: workspace.name))
+        }
+    }
 }

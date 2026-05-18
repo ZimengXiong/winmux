@@ -9,6 +9,11 @@ struct WorkspaceSidebarCreateWorkspaceSection: View {
     let expansionProgress: CGFloat
     let emitsDropTarget: Bool
     let onCreateWorkspace: () -> Void
+    let onDropPayload: @MainActor (WorkspaceSidebarDragPayload) -> Void
+    let actions: WorkspaceSidebarActions
+
+    @State private var isDropTargeted = false
+    @State private var isDropSettling = false
 
     private var sectionWidth: CGFloat { workspaceSidebarSectionWidth(expansionProgress) }
     private var isCompact: Bool { expansionProgress < workspaceSidebarRowsRevealProgress }
@@ -48,6 +53,13 @@ struct WorkspaceSidebarCreateWorkspaceSection: View {
                 )
             }
         }
+        .onDrop(of: [workspaceSidebarDragPayloadType], delegate: WorkspaceSidebarDropDelegate(
+            target: .newWorkspace,
+            actions: actions,
+            performPayloadDrop: onDropPayload,
+            isTargeted: $isDropTargeted,
+            isSettling: $isDropSettling,
+        ))
     }
 
     private var createButton: some View {

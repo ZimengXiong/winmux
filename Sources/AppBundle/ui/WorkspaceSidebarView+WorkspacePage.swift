@@ -22,6 +22,7 @@ extension WorkspaceSidebarView {
             projectCount: snapshot.projects.count,
         ) {
             workspacePage(
+                projectId: project.id,
                 workspaces: visibleWorkspacesByProject[project.id] ?? [],
                 expansionProgress: expansionProgress,
                 leadingInset: leadingInset,
@@ -39,6 +40,7 @@ extension WorkspaceSidebarView {
     }
 
     func workspacePage(
+        projectId: WorkspaceProjectId,
         workspaces: [WorkspaceSidebarWorkspaceViewModel],
         expansionProgress: CGFloat,
         leadingInset: CGFloat,
@@ -71,7 +73,36 @@ extension WorkspaceSidebarView {
                     dragPreview: snapshot.dropPreview,
                     expansionProgress: expansionProgress,
                     emitsDropTarget: isInteractive,
-                    onCreateWorkspace: { actions.send(.createWorkspace) },
+                    onCreateWorkspace: {
+                        actions.send(.createWorkspace(
+                            projectId: projectId,
+                            monitorScopeId: workspaceSidebarWorkspaceCreateScope(
+                                selectedScopeId: snapshot.selectedMonitorScopeId,
+                                focusedScopeId: snapshot.focusedMonitorScopeId,
+                            )
+                        ))
+                    },
+                    onDropPayload: { payload in
+                        let monitorScopeId = workspaceSidebarWorkspaceCreateScope(
+                            selectedScopeId: snapshot.selectedMonitorScopeId,
+                            focusedScopeId: snapshot.focusedMonitorScopeId,
+                        )
+                        switch payload {
+                            case .window(let windowId):
+                                actions.send(.moveWindowToNewWorkspace(
+                                    windowId,
+                                    projectId: projectId,
+                                    monitorScopeId: monitorScopeId,
+                                ))
+                            case .tabGroup(let representativeWindowId):
+                                actions.send(.moveTabGroupToNewWorkspace(
+                                    representativeWindowId,
+                                    projectId: projectId,
+                                    monitorScopeId: monitorScopeId,
+                                ))
+                        }
+                    },
+                    actions: actions,
                 )
             }
             .padding(.leading, leadingInset)

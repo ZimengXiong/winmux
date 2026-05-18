@@ -87,6 +87,41 @@ func selectedWorkspaceSidebarMonitorScope() -> Monitor? {
 }
 
 @MainActor
+func workspaceSidebarTargetMonitor(
+    scopeId: String,
+    fallbackWindow: Window? = nil,
+    fallbackPoint: CGPoint? = nil,
+) -> Monitor {
+    let selectedMonitor = workspaceSidebarMonitorForScopeId(scopeId)
+    return workspaceSidebarTargetMonitor(
+        selectedMonitor: selectedMonitor,
+        fallbackPoint: fallbackPoint,
+        fallbackWindowMonitor: fallbackWindow?.nodeMonitor,
+        focusedMonitor: focus.workspace.workspaceMonitor,
+    )
+}
+
+@MainActor
+private func workspaceSidebarMonitorForScopeId(_ scopeId: String) -> Monitor? {
+    guard scopeId != workspaceSidebarDefaultScopeId,
+          scopeId != workspaceSidebarFocusedScopeId,
+          scopeId != workspaceSidebarAllScopeId
+    else {
+        return nil
+    }
+    return sortedMonitors.first { workspaceSidebarMonitorScopeId(for: $0) == scopeId }
+}
+
+func workspaceSidebarWorkspaceCreateScope(selectedScopeId: String, focusedScopeId: String) -> String {
+    switch selectedScopeId {
+        case workspaceSidebarDefaultScopeId, workspaceSidebarFocusedScopeId, workspaceSidebarAllScopeId:
+            focusedScopeId
+        default:
+            selectedScopeId
+    }
+}
+
+@MainActor
 func selectWorkspaceSidebarMonitorScope(_ scopeId: String) {
     guard TrayMenuModel.shared.workspaceSidebarMonitorScopes.contains(where: { $0.id == scopeId }) else { return }
     guard TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId != scopeId else { return }
@@ -103,9 +138,17 @@ func selectWorkspaceSidebarMonitorScope(_ scopeId: String) {
 
 @MainActor
 func createWorkspaceFromSidebarButton() {
+    let targetMonitor = sidebarWorkspaceTargetMonitor()
+    createWorkspaceFromSidebarButton(
+        projectId: sidebarWorkspaceTargetProjectId(targetMonitor: targetMonitor),
+        monitorScopeId: TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId,
+    )
+}
+
+@MainActor
+func createWorkspaceFromSidebarButton(projectId: WorkspaceProjectId, monitorScopeId: String) {
     runWorkspaceSidebarSession {
-        let targetMonitor = sidebarWorkspaceTargetMonitor()
-        let projectId = sidebarWorkspaceTargetProjectId(targetMonitor: targetMonitor)
+        let targetMonitor = workspaceSidebarTargetMonitor(scopeId: monitorScopeId)
         let workspace = getOrCreateAdjacentBlankWorkspace(projectId: projectId, monitor: targetMonitor)
         _ = workspace.focusWorkspace()
     }
@@ -137,13 +180,13 @@ func moveTabGroupFromSidebar(_ windowId: UInt32, toWorkspace workspaceName: Stri
 }
 
 @MainActor
-func moveWindowToNewWorkspaceFromSidebar(_ windowId: UInt32) {
-    moveSidebarSourceToNewWorkspace(windowId, subject: .window)
+func moveWindowToNewWorkspaceFromSidebar(_ windowId: UInt32, projectId: WorkspaceProjectId, monitorScopeId: String) {
+    moveSidebarSourceToNewWorkspace(windowId, subject: .window, projectId: projectId, monitorScopeId: monitorScopeId)
 }
 
 @MainActor
-func moveTabGroupToNewWorkspaceFromSidebar(_ windowId: UInt32) {
-    moveSidebarSourceToNewWorkspace(windowId, subject: .group)
+func moveTabGroupToNewWorkspaceFromSidebar(_ windowId: UInt32, projectId: WorkspaceProjectId, monitorScopeId: String) {
+    moveSidebarSourceToNewWorkspace(windowId, subject: .group, projectId: projectId, monitorScopeId: monitorScopeId)
 }
 
 @MainActor
@@ -161,13 +204,28 @@ private func moveSidebarSource(_ windowId: UInt32, subject: WindowDragSubject, t
 }
 
 @MainActor
-private func moveSidebarSourceToNewWorkspace(_ windowId: UInt32, subject: WindowDragSubject) {
+private func moveSidebarSourceToNewWorkspace(
+    _ windowId: UInt32,
+    subject: WindowDragSubject,
+    projectId: WorkspaceProjectId,
+    monitorScopeId: String,
+) {
     runWorkspaceSidebarSession {
         guard let sourceWindow = Window.get(byId: windowId) else { return }
         let sourceNode = dragSubjectNode(for: sourceWindow, subject: subject)
+        let targetMonitor = workspaceSidebarTargetMonitor(
+            scopeId: monitorScopeId,
+            fallbackWindow: sourceWindow,
+            fallbackPoint: mouseLocation,
+        )
+        let workspace = getOrCreateAdjacentBlankWorkspace(projectId: projectId, monitor: targetMonitor)
+        let targetContainer: NonLeafTreeNodeObject = sourceNode is Window && sourceWindow.isFloating
+            ? workspace
+            : workspace.rootTilingContainer
         syncClosedWindowsCacheToCurrentWorld()
         suppressPostDragAxObserverEvents(for: sourceNode.allLeafWindowsRecursive.map(\.windowId))
-        _ = createWorkspaceFromSidebarDrag(sourceNode: sourceNode, sourceWindow: sourceWindow)
+        sourceNode.bind(to: targetContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+        _ = sourceWindow.focusWindow()
         await updateWorkspaceSidebarModel()
     }
 }

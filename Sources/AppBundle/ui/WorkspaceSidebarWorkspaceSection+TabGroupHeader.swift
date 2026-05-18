@@ -33,6 +33,9 @@ extension WorkspaceSidebarWorkspaceSection {
             onChanged: { actions.tabGroupDragChanged(group.representativeWindowId) },
             onEnded: { actions.tabGroupDragEnded(group.representativeWindowId) },
         ))
+        .workspaceSidebarDrag(enabled: true) {
+            WorkspaceSidebarDragPayload.tabGroup(group.representativeWindowId).itemProvider
+        }
         .onHover { hover in
             hoveredWindowId = nextWorkspaceSidebarHoveredWindowId(
                 currentHoveredWindowId: hoveredWindowId,

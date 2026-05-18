@@ -81,6 +81,37 @@ final class WorkspaceSidebarDragTest: XCTestCase {
         ])
     }
 
+    func testWorkspaceSidebarDragPayloadRoundTripsWindowAndTabGroupIds() {
+        XCTAssertEqual(
+            WorkspaceSidebarDragPayload(encodedValue: WorkspaceSidebarDragPayload.window(17).encodedValue),
+            .window(17),
+        )
+        XCTAssertEqual(
+            WorkspaceSidebarDragPayload(encodedValue: WorkspaceSidebarDragPayload.tabGroup(23).encodedValue),
+            .tabGroup(23),
+        )
+        XCTAssertNil(WorkspaceSidebarDragPayload(encodedValue: "bogus:23"))
+    }
+
+    func testWorkspaceSidebarCreateScopeUsesFocusedScopeForSyntheticSelections() {
+        XCTAssertEqual(workspaceSidebarWorkspaceCreateScope(
+            selectedScopeId: workspaceSidebarDefaultScopeId,
+            focusedScopeId: "monitor:a"
+        ), "monitor:a")
+        XCTAssertEqual(workspaceSidebarWorkspaceCreateScope(
+            selectedScopeId: workspaceSidebarFocusedScopeId,
+            focusedScopeId: "monitor:a"
+        ), "monitor:a")
+        XCTAssertEqual(workspaceSidebarWorkspaceCreateScope(
+            selectedScopeId: workspaceSidebarAllScopeId,
+            focusedScopeId: "monitor:a"
+        ), "monitor:a")
+        XCTAssertEqual(workspaceSidebarWorkspaceCreateScope(
+            selectedScopeId: "monitor:b",
+            focusedScopeId: "monitor:a"
+        ), "monitor:b")
+    }
+
     func testWorkspaceSidebarActivationRequiresNoEditAndNoDrag() {
         XCTAssertTrue(shouldHandleWorkspaceSidebarActivation(isEditing: false, isSidebarDragInProgress: false))
         XCTAssertFalse(shouldHandleWorkspaceSidebarActivation(isEditing: true, isSidebarDragInProgress: false))

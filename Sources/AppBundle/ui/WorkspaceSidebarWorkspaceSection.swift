@@ -14,6 +14,8 @@ struct WorkspaceSidebarWorkspaceSection: View {
 
     @State var isHovered = false
     @State var hoveredWindowId: UInt32? = nil
+    @State var isDropTargeted = false
+    @State var isDropSettling = false
     @State var isEditingName = false
     @State var editingNameDraft = ""
     @Namespace var rowHoverNamespace
@@ -64,6 +66,13 @@ struct WorkspaceSidebarWorkspaceSection: View {
                 isHovered = hover
                 actions.send(.hoverWorkspace(workspace.name, isHovering: hover))
             }
+            .onDrop(of: [workspaceSidebarDragPayloadType], delegate: WorkspaceSidebarDropDelegate(
+                target: .workspace(workspace.name),
+                actions: actions,
+                performPayloadDrop: handlePayloadDrop,
+                isTargeted: $isDropTargeted,
+                isSettling: $isDropSettling,
+            ))
             .help(isInUseOnOtherDisplay ? inUseOverrideText : workspace.displayName)
             .zIndex(isDropTarget ? 1 : 0)
             .animation(.spring(response: 0.2, dampingFraction: 0.82), value: dragPreview)

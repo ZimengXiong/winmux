@@ -32,8 +32,8 @@ func handleWorkspaceSidebarAction(_ action: WorkspaceSidebarAction) {
             }
         case .selectMonitorScope(let scopeId):
             selectWorkspaceSidebarMonitorScope(scopeId)
-        case .createWorkspace:
-            createWorkspaceFromSidebarButton()
+        case .createWorkspace(let projectId, let monitorScopeId):
+            createWorkspaceFromSidebarButton(projectId: projectId, monitorScopeId: monitorScopeId)
         case .renameWorkspace(let name, let displayName):
             if let workspace = workspaceSidebarWorkspaceViewModel(name) {
                 renameWorkspaceFromSidebar(workspace, displayName: displayName)
@@ -56,10 +56,10 @@ func handleWorkspaceSidebarAction(_ action: WorkspaceSidebarAction) {
             moveWindowFromSidebar(windowId, toWorkspace: workspaceName)
         case .moveTabGroup(let windowId, let workspaceName):
             moveTabGroupFromSidebar(windowId, toWorkspace: workspaceName)
-        case .moveWindowToNewWorkspace(let windowId):
-            moveWindowToNewWorkspaceFromSidebar(windowId)
-        case .moveTabGroupToNewWorkspace(let windowId):
-            moveTabGroupToNewWorkspaceFromSidebar(windowId)
+        case .moveWindowToNewWorkspace(let windowId, let projectId, let monitorScopeId):
+            moveWindowToNewWorkspaceFromSidebar(windowId, projectId: projectId, monitorScopeId: monitorScopeId)
+        case .moveTabGroupToNewWorkspace(let windowId, let projectId, let monitorScopeId):
+            moveTabGroupToNewWorkspaceFromSidebar(windowId, projectId: projectId, monitorScopeId: monitorScopeId)
         case .previewWindowDrop(let windowId, let target):
             previewWorkspaceSidebarDrop(windowId, subject: .window, target: target)
         case .previewTabGroupDrop(let windowId, let target):
