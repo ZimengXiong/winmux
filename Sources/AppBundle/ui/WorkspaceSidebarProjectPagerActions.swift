@@ -36,17 +36,13 @@ extension WorkspaceSidebarProjectPager {
     }
 
     var projectDotTrack: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(alignment: .center, spacing: 6) {
-                ForEach(Array(projects.enumerated()), id: \.element.id) { index, project in
-                    projectDot(project, index: index)
-                }
+        HStack(alignment: .center, spacing: 6) {
+            ForEach(Array(projects.enumerated()), id: \.element.id) { index, project in
+                projectDot(project, index: index)
             }
-            .padding(.horizontal, isCompact ? 2 : 0)
-            .frame(minWidth: projectTrackWidth, minHeight: workspaceSidebarPagerHeight, alignment: .leading)
         }
-        .frame(width: projectTrackWidth, height: workspaceSidebarPagerHeight, alignment: .leading)
-        .clipped()
+        .padding(.horizontal, isCompact ? 2 : 0)
+        .frame(minHeight: workspaceSidebarPagerHeight, alignment: .leading)
     }
 
     @ViewBuilder
@@ -101,7 +97,7 @@ extension WorkspaceSidebarProjectPager {
             }
         }
         .buttonStyle(.plain)
-        .frame(maxWidth: .infinity, maxHeight: workspaceSidebarPagerHeight, alignment: .trailing)
+        .frame(height: workspaceSidebarPagerHeight, alignment: .center)
     }
 
     @ViewBuilder
