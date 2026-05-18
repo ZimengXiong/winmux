@@ -18,7 +18,6 @@ struct WorkspaceSidebarWorkspaceSection: View {
     @State var isDropSettling = false
     @State var isEditingName = false
     @State var editingNameDraft = ""
-    @Namespace var rowHoverNamespace
     @Environment(\.accessibilityReduceMotion) var reduceMotion
 
     let headerHeight: CGFloat = workspaceSidebarWorkspaceSectionHeaderHeight

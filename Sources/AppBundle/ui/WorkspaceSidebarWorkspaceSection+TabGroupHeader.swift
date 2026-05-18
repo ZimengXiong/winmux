@@ -18,7 +18,6 @@ extension WorkspaceSidebarWorkspaceSection {
                 rowHeight: rowHeight,
                 isHovered: hoveredWindowId == groupHoverId,
                 style: .tabGroupHeader,
-                hoverNamespace: rowHoverNamespace,
                 appBundleIds: group.tabs.map(\.appBundleId),
                 appBundlePaths: group.tabs.map(\.appBundlePath),
             )

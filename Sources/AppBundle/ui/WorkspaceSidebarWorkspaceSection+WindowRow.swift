@@ -23,7 +23,6 @@ extension WorkspaceSidebarWorkspaceSection {
                 rowHeight: rowHeight,
                 isHovered: hoveredWindowId == window.windowId,
                 style: leadingHitInset > 0 ? .tabGroupChild : .window,
-                hoverNamespace: rowHoverNamespace,
                 appBundleIds: [window.appBundleId],
                 appBundlePaths: [window.appBundlePath],
             )

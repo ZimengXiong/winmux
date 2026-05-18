@@ -17,7 +17,6 @@ struct WorkspaceSidebarWindowRow: View {
     let rowHeight: CGFloat
     let isHovered: Bool
     let style: Style
-    let hoverNamespace: Namespace.ID
     let appBundleIds: [String?]
     let appBundlePaths: [String?]
 
@@ -53,7 +52,6 @@ struct WorkspaceSidebarWindowRow: View {
             if isHovered {
                 rowShape
                     .fill(rowHoverOverlayFill)
-                    .matchedGeometryEffect(id: "workspace-sidebar-row-hover", in: hoverNamespace)
             }
         }
         .contentShape(Rectangle())
