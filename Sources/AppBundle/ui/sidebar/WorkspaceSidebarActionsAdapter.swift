@@ -71,10 +71,10 @@ func handleWorkspaceSidebarAction(_ action: WorkspaceSidebarAction) {
             previewWorkspaceSidebarDrop(windowId, subject: .group, target: target)
         case .clearDropPreview:
             clearWorkspaceSidebarDropPreview()
-        case .updateWindowDrag(let windowId, let subject):
-            updateSidebarWindowDrag(windowId, subject: subject)
-        case .finishWindowDrag:
-            finishSidebarWindowDrag()
+        case .updateWindowDrag(let windowId, let subject, let pointer):
+            updateSidebarWindowDrag(windowId, subject: subject, pointer: pointer)
+        case .finishWindowDrag(let pointer):
+            finishSidebarWindowDrag(pointer: pointer)
     }
 }
 

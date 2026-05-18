@@ -67,17 +67,18 @@ final class WorkspaceSidebarDragTest: XCTestCase {
         let actions = WorkspaceSidebarActions { action in
             received.append(action)
         }
+        let pointer = CGPoint(x: 12, y: 34)
 
-        actions.windowDragChanged(101)
-        actions.windowDragEnded(101)
-        actions.tabGroupDragChanged(202)
-        actions.tabGroupDragEnded(202)
+        actions.windowDragChanged(101, pointer)
+        actions.windowDragEnded(101, pointer)
+        actions.tabGroupDragChanged(202, pointer)
+        actions.tabGroupDragEnded(202, pointer)
 
         XCTAssertEqual(received, [
-            .updateWindowDrag(101, subject: .window),
-            .finishWindowDrag,
-            .updateWindowDrag(202, subject: .group),
-            .finishWindowDrag,
+            .updateWindowDrag(101, subject: .window, pointer: pointer),
+            .finishWindowDrag(pointer),
+            .updateWindowDrag(202, subject: .group, pointer: pointer),
+            .finishWindowDrag(pointer),
         ])
     }
 

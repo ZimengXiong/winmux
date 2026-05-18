@@ -29,8 +29,8 @@ extension WorkspaceSidebarWorkspaceSection {
         .contentShape(Rectangle())
         .modifier(WorkspaceSidebarOptionalDragModifier(
             isEnabled: true,
-            onChanged: { actions.tabGroupDragChanged(group.representativeWindowId) },
-            onEnded: { actions.tabGroupDragEnded(group.representativeWindowId) },
+            onChanged: { actions.tabGroupDragChanged(group.representativeWindowId, $0) },
+            onEnded: { actions.tabGroupDragEnded(group.representativeWindowId, $0) },
         ))
         .workspaceSidebarDrag(enabled: true) {
             WorkspaceSidebarDragPayload.tabGroup(group.representativeWindowId).itemProvider

@@ -442,7 +442,10 @@ func focusWindowFromSidebar(_ windowId: UInt32, fallbackWorkspace: String) {
 }
 
 @MainActor
-func updateSidebarWindowDrag(_ windowId: UInt32, subject: WindowDragSubject = .window) {
+func updateSidebarWindowDrag(_ windowId: UInt32, subject: WindowDragSubject = .window, pointer: CGPoint? = nil) {
+    if let pointer {
+        MousePointerTracker.shared.note(point: pointer)
+    }
     guard let window = Window.get(byId: windowId) else {
         clearPendingWindowDragIntent()
         cancelManipulatedWithMouseState()
@@ -465,7 +468,10 @@ func updateSidebarWindowDrag(_ windowId: UInt32, subject: WindowDragSubject = .w
 }
 
 @MainActor
-func finishSidebarWindowDrag() {
+func finishSidebarWindowDrag(pointer: CGPoint? = nil) {
+    if let pointer {
+        MousePointerTracker.shared.note(point: pointer)
+    }
     Task { @MainActor in
         try? await resetManipulatedWithMouseIfPossible()
     }

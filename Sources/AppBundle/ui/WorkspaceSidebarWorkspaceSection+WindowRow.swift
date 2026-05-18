@@ -35,18 +35,18 @@ extension WorkspaceSidebarWorkspaceSection {
         .contentShape(Rectangle())
         .modifier(WorkspaceSidebarOptionalDragModifier(
             isEnabled: allowsDrag,
-            onChanged: {
+            onChanged: { pointer in
                 if subject == .group {
-                    actions.tabGroupDragChanged(window.windowId)
+                    actions.tabGroupDragChanged(window.windowId, pointer)
                 } else {
-                    actions.windowDragChanged(window.windowId)
+                    actions.windowDragChanged(window.windowId, pointer)
                 }
             },
-            onEnded: {
+            onEnded: { pointer in
                 if subject == .group {
-                    actions.tabGroupDragEnded(window.windowId)
+                    actions.tabGroupDragEnded(window.windowId, pointer)
                 } else {
-                    actions.windowDragEnded(window.windowId)
+                    actions.windowDragEnded(window.windowId, pointer)
                 }
             },
         ))

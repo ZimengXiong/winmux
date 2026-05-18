@@ -2,8 +2,8 @@ import SwiftUI
 
 struct WorkspaceSidebarOptionalDragModifier: ViewModifier {
     let isEnabled: Bool
-    let onChanged: () -> Void
-    let onEnded: () -> Void
+    let onChanged: (CGPoint) -> Void
+    let onEnded: (CGPoint) -> Void
 
     func body(content: Content) -> some View {
         if isEnabled {
@@ -11,11 +11,11 @@ struct WorkspaceSidebarOptionalDragModifier: ViewModifier {
                 DragGesture(minimumDistance: 4, coordinateSpace: .global)
                     .onChanged { _ in
                         noteCurrentMousePointerSample()
-                        onChanged()
+                        onChanged(MousePointerTracker.shared.currentSample.point)
                     }
                     .onEnded { _ in
                         noteCurrentMousePointerSample()
-                        onEnded()
+                        onEnded(MousePointerTracker.shared.currentSample.point)
                     },
             )
         } else {
