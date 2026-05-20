@@ -52,6 +52,41 @@ extension WindowTabStripView {
                 finishMoveFromTabStrip()
             }
     }
+
+    func tabChromeGroupDragGesture(
+        for windowId: UInt32?,
+        context: WindowTabStripLayoutContext,
+    ) -> some Gesture {
+        DragGesture(minimumDistance: windowTabStripGroupDragMinimumDistance, coordinateSpace: .local)
+            .onChanged { value in
+                guard isWindowTabStripChromeGroupDragStart(
+                    localX: value.startLocation.x,
+                    contentMinX: tabScrollContentMinX,
+                    contentMaxX: tabScrollContentMaxX,
+                    tabWidth: context.tabWidth,
+                    tabCount: strip.tabs.count,
+                ) else { return }
+                noteCurrentMousePointerSample()
+                guard let windowId,
+                      shouldAllowTabStripChromeGroupDrag(windowId: windowId)
+                else { return }
+                updateMoveFromTabStrip(windowId)
+            }
+            .onEnded { value in
+                guard isWindowTabStripChromeGroupDragStart(
+                    localX: value.startLocation.x,
+                    contentMinX: tabScrollContentMinX,
+                    contentMaxX: tabScrollContentMaxX,
+                    tabWidth: context.tabWidth,
+                    tabCount: strip.tabs.count,
+                ) else { return }
+                noteCurrentMousePointerSample()
+                guard let windowId,
+                      shouldContinueCurrentGroupDrag(windowId: windowId)
+                else { return }
+                finishMoveFromTabStrip()
+            }
+    }
 }
 
 func isWindowTabStripScrollBackgroundDragStart(
@@ -66,4 +101,23 @@ func isWindowTabStripScrollBackgroundDragStart(
         + CGFloat(max(tabCount - 1, 0)) * windowTabStripTabSpacing
     let tabsEnd = tabsStart + tabsWidth
     return localX < tabsStart || localX > tabsEnd
+}
+
+func isWindowTabStripChromeGroupDragStart(
+    localX: CGFloat,
+    contentMinX: CGFloat,
+    contentMaxX: CGFloat,
+    tabWidth: CGFloat,
+    tabCount: Int,
+) -> Bool {
+    guard tabCount > 0 else { return true }
+    let tabsStart = contentMinX + windowTabStripContentHorizontalPadding
+    let tabsWidth = CGFloat(tabCount) * tabWidth
+        + CGFloat(max(tabCount - 1, 0)) * windowTabStripTabSpacing
+    let tabsEnd = tabsStart + tabsWidth
+    let contentIsKnown = contentMaxX > contentMinX
+    if contentIsKnown, localX >= contentMinX, localX <= contentMaxX {
+        return localX < tabsStart || localX > tabsEnd
+    }
+    return true
 }

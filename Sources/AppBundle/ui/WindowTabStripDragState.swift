@@ -27,14 +27,16 @@ func isWindowTabStripDragInProgress() -> Bool {
 
 func shouldShowCompositedGroupMovePreview(
     subject: WindowDragSubject,
+    detachOrigin: TabDetachOrigin = .window,
     startedInSidebar: Bool,
 ) -> Bool {
-    subject == .group && !startedInSidebar
+    subject == .group && detachOrigin != .tabStrip && !startedInSidebar
 }
 
 func shouldShowCompositedGroupMovePreview(session: WindowMouseInteractionDriver.MoveSession) -> Bool {
     shouldShowCompositedGroupMovePreview(
         subject: session.subject,
+        detachOrigin: session.detachOrigin,
         startedInSidebar: session.startedInSidebar,
     )
 }

@@ -18,7 +18,7 @@ func updateMoveFromTabStrip(_ windowId: UInt32) {
     if shouldDeferWindowTabStripGroupDragToDetachedTabDrag() {
         return
     }
-    startTabStripWindowMove(window: window, subject: .group, detachOrigin: .window)
+    startTabStripWindowMove(window: window, subject: .group, detachOrigin: .tabStrip)
 }
 
 @MainActor

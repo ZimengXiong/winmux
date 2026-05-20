@@ -25,6 +25,10 @@ extension WindowTabStripView {
                 .frame(width: windowTabStripTrailingGroupDragGutterWidth)
                 .frame(maxHeight: .infinity)
                 .contentShape(Rectangle())
+                .onTapGesture {
+                    guard let groupDragWindowId, !isWindowTabStripDragInProgress() else { return }
+                    focusWindowFromTabStripClick(groupDragWindowId, fallbackWorkspace: strip.workspaceName)
+                }
                 .gesture(groupDragGesture(for: groupDragWindowId))
 
             WindowTabGroupHandleView(
@@ -84,6 +88,11 @@ extension WindowTabStripView {
                 leadingFadeWidth: context.leadingFadeWidth(contentMaxX: tabScrollContentMaxX),
                 trailingFadeWidth: context.trailingFadeWidth(contentMinX: tabScrollContentMinX),
             )
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard let groupDragWindowId, !isWindowTabStripDragInProgress() else { return }
+            focusWindowFromTabStripClick(groupDragWindowId, fallbackWorkspace: strip.workspaceName)
         }
         .simultaneousGesture(tabScrollBackgroundGroupDragGesture(
             for: groupDragWindowId,

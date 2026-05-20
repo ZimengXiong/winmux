@@ -34,7 +34,7 @@ extension WindowMouseInteractionDriver {
     }
 
     func shouldHideOtherWindowsDuringMove(session: MoveSession) -> Bool {
-        !(session.detachOrigin == .tabStrip && session.subject == .window)
+        session.detachOrigin != .tabStrip
     }
 
     func configureMoveChrome(windowId: UInt32, session: MoveSession) {
