@@ -61,4 +61,46 @@ final class WorkspaceSidebarSystemStatusTest: XCTestCase {
             "Offline"
         )
     }
+
+    func testExpandedStatusDateHidesWhenSidebarIsNarrow() {
+        XCTAssertFalse(
+            workspaceSidebarExpandedStatusShowsDate(
+                sectionWidth: workspaceSidebarExpandedStatusDateMinimumWidth - 1,
+                configured: true,
+            )
+        )
+        XCTAssertTrue(
+            workspaceSidebarExpandedStatusShowsDate(
+                sectionWidth: workspaceSidebarExpandedStatusDateMinimumWidth,
+                configured: true,
+            )
+        )
+        XCTAssertFalse(
+            workspaceSidebarExpandedStatusShowsDate(
+                sectionWidth: workspaceSidebarExpandedStatusDateMinimumWidth,
+                configured: false,
+            )
+        )
+    }
+
+    func testExpandedStatusPillsHideWhenSidebarIsVeryNarrow() {
+        XCTAssertFalse(
+            workspaceSidebarExpandedStatusShowsPills(
+                sectionWidth: workspaceSidebarExpandedStatusPillsMinimumWidth - 1,
+                configured: true,
+            )
+        )
+        XCTAssertTrue(
+            workspaceSidebarExpandedStatusShowsPills(
+                sectionWidth: workspaceSidebarExpandedStatusPillsMinimumWidth,
+                configured: true,
+            )
+        )
+        XCTAssertFalse(
+            workspaceSidebarExpandedStatusShowsPills(
+                sectionWidth: workspaceSidebarExpandedStatusPillsMinimumWidth,
+                configured: false,
+            )
+        )
+    }
 }
