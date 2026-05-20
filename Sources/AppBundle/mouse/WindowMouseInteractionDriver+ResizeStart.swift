@@ -28,9 +28,13 @@ extension WindowMouseInteractionDriver {
             WindowTabStripPanelController.shared.hideChromeDuringMouseInteraction()
             return
         }
-        let resizesTabGroup = window.nearestWindowTabGroup?.tabActiveWindow == window
+        let resizesTabGroup = windowResizeUsesActiveTabGroupChrome(window: window)
         logWindowDragLive("resize.configureChrome window=\(windowId) resizesTabGroup=\(resizesTabGroup) lastKnown=\(debugDescribe(window.lastKnownActualRect)) lastApplied=\(debugDescribe(window.lastAppliedLayoutPhysicalRect))")
-        WindowTabStripPanelController.shared.hideChromeDuringMouseInteraction(showFrameOnly: !resizesTabGroup)
+        if resizesTabGroup {
+            WindowTabStripPanelController.shared.showChromeDuringMouseInteraction()
+        } else {
+            WindowTabStripPanelController.shared.hideChromeDuringMouseInteraction(showFrameOnly: true)
+        }
         if resizeGesture == nil {
             let sample = MousePointerTracker.shared.currentSample
             resizeGesture = makeResizeGesture(window: window, observedRect: window.lastKnownActualRect, sample: sample)

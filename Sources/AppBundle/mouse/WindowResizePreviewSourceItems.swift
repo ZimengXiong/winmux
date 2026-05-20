@@ -13,12 +13,10 @@ func windowDragSourcePreviewItem(window: Window, subject: WindowDragSubject, fra
 }
 
 @MainActor
-func windowResizeSourceTabGroupPreviewItem(window: Window, activeWindowRect: Rect) -> WindowResizePreviewItem? {
+func windowResizeUsesActiveTabGroupChrome(window: Window) -> Bool {
     guard let tabGroup = window.nearestWindowTabGroup,
           tabGroup.usesWindowTabBehavior,
           tabGroup.tabActiveWindow == window
-    else { return nil }
-    let groupFrame = windowTabGroupFrameRect(forActiveWindowContentRect: activeWindowRect)
-    guard groupFrame.width > 0, groupFrame.height > 0 else { return nil }
-    return WindowResizePreviewItem(tabGroup: tabGroup, rect: groupFrame, drawsFrameOnly: true)
+    else { return false }
+    return true
 }
