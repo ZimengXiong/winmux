@@ -5,12 +5,18 @@ struct WindowTabGroupFrameView: View {
     let groupSize: CGSize
 
     var body: some View {
-        let tabHeight = min(resolvedWindowTabBarHeight(), groupSize.height)
+        let tabHeight = min(strip.frame.height, groupSize.height)
         ZStack(alignment: .topLeading) {
-            WindowTabGroupShellShape(tabBarHeight: tabHeight)
+            WindowTabGroupShellShape(
+                tabBarHeight: tabHeight,
+                activeWindowCornerRadius: strip.activeWindowCornerRadius
+            )
             .fill(mattePanelFill, style: FillStyle(eoFill: true))
 
-            WindowTabGroupShellShape(tabBarHeight: tabHeight)
+            WindowTabGroupShellShape(
+                tabBarHeight: tabHeight,
+                activeWindowCornerRadius: strip.activeWindowCornerRadius
+            )
                 .stroke(mattePanelFill, lineWidth: windowTabGroupFrameStrokeWidth)
                 .shadow(color: Color.black.opacity(0.22), radius: 12, x: 0, y: 6)
 
@@ -30,7 +36,10 @@ struct WindowTabGroupFrameView: View {
                     style: .continuous,
                 ))
 
-            WindowTabGroupInnerBoundaryShape(tabBarHeight: tabHeight)
+            WindowTabGroupInnerBoundaryShape(
+                tabBarHeight: tabHeight,
+                activeWindowCornerRadius: strip.activeWindowCornerRadius
+            )
                 .stroke(mattePanelInsetShadow, lineWidth: windowTabGroupFrameInnerStrokeWidth)
         }
         .frame(width: groupSize.width, height: groupSize.height)

@@ -32,7 +32,9 @@ final class WindowTabGroupVisualPanel: NSPanelHud {
         let nextContent = WindowTabGroupChromeContent(strip: displayStrip)
         guard shouldUpdate(content: nextContent, frame: panelFrame) else { return }
         if currentContent != nextContent {
-            hostingView.rootView = AnyView(WindowTabGroupVisualView(strip: displayStrip))
+            hostingView.rootView = AnyView(WindowTabGroupVisualView(
+                strip: displayStrip,
+            ))
             currentContent = nextContent
         }
         currentPanelFrame = panelFrame

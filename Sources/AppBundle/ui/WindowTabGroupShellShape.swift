@@ -2,6 +2,7 @@ import SwiftUI
 
 struct WindowTabGroupShellShape: Shape {
     var tabBarHeight: CGFloat
+    var activeWindowCornerRadius: CGFloat
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
@@ -12,7 +13,10 @@ struct WindowTabGroupShellShape: Shape {
         )
         let innerRect = Self.innerRect(in: rect, tabBarHeight: tabBarHeight)
         if innerRect.width > 0, innerRect.height > 0 {
-            path.addPath(WindowTabGroupInnerBoundaryShape(tabBarHeight: tabBarHeight).path(in: rect))
+            path.addPath(WindowTabGroupInnerBoundaryShape(
+                tabBarHeight: tabBarHeight,
+                activeWindowCornerRadius: activeWindowCornerRadius
+            ).path(in: rect))
         }
         return path
     }
@@ -33,14 +37,15 @@ struct WindowTabGroupShellShape: Shape {
 
 struct WindowTabGroupInnerBoundaryShape: Shape {
     var tabBarHeight: CGFloat
+    var activeWindowCornerRadius: CGFloat
 
     func path(in rect: CGRect) -> Path {
         let innerRect = WindowTabGroupShellShape.innerRect(in: rect, tabBarHeight: tabBarHeight)
         guard innerRect.width > 0, innerRect.height > 0 else { return Path() }
 
         let maxRadius = min(innerRect.width / 2, innerRect.height / 2)
-        let topRadius = min(windowTabGroupFrameMaxTopInnerCornerRadius - 6, maxRadius)
-        let bottomRadius = min(windowTabGroupFrameMaxInnerCornerRadius - 7, maxRadius)
+        let topRadius = min(windowTabGroupTopInnerCornerRadius(activeWindowCornerRadius), maxRadius)
+        let bottomRadius = min(activeWindowCornerRadius, maxRadius)
 
         return Path { path in
             path.move(to: CGPoint(x: innerRect.minX + topRadius, y: innerRect.minY))
