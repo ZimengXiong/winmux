@@ -208,6 +208,7 @@ private func deleteWorkspaceProjectMovingWindowsToFallback(_ projectId: Workspac
     winMuxWorkspaceState.projectsById.removeValue(forKey: projectId)
     config.workspaceSidebar.projectLabels.removeValue(forKey: projectId.rawValue)
     config.workspaceSidebar.projectColors.removeValue(forKey: projectId.rawValue)
+    ensureVisibleActiveProjectWorkspaces()
     if !isUnitTest {
         try persistWorkspaceSidebarProjectLabel(projectId: projectId.rawValue, label: nil)
         try persistWorkspaceSidebarProjectColor(projectId: projectId.rawValue, colorHex: nil)
@@ -251,6 +252,7 @@ private func closeWindowsAndDeleteWorkspaceProject(_ projectId: WorkspaceProject
     winMuxWorkspaceState.projectsById.removeValue(forKey: projectId)
     config.workspaceSidebar.projectLabels.removeValue(forKey: projectId.rawValue)
     config.workspaceSidebar.projectColors.removeValue(forKey: projectId.rawValue)
+    ensureVisibleActiveProjectWorkspaces()
     if !isUnitTest {
         try persistWorkspaceSidebarProjectLabel(projectId: projectId.rawValue, label: nil)
         try persistWorkspaceSidebarProjectColor(projectId: projectId.rawValue, colorHex: nil)

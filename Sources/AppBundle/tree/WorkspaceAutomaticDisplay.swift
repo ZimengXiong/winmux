@@ -1,6 +1,8 @@
 @MainActor
 func automaticWorkspaceDisplayIndex(_ workspace: Workspace, focusedWorkspace: Workspace?) -> Int? {
-    orderedUserFacingWorkspaces(in: workspace.scope, focusedWorkspace: focusedWorkspace)
+    orderedWorkspacesForPresentation()
+        .filter { $0.projectId == workspace.projectId }
+        .filter { userFacingWorkspaces([$0], focusedWorkspace: focusedWorkspace).contains($0) }
         .filter(\.usesAutomaticDisplayName)
         .firstIndex(of: workspace)
         .map { $0 + 1 }
@@ -12,7 +14,9 @@ func automaticWorkspaceDisplayIndexFallback(_ workspaceName: String) -> Int? {
 
 @MainActor
 func scopedAutomaticDisplayWorkspaces(current: Workspace) -> [Workspace] {
-    orderedUserFacingWorkspaces(in: current.scope, focusedWorkspace: current)
+    orderedWorkspacesForPresentation()
+        .filter { $0.projectId == current.projectId }
+        .filter { userFacingWorkspaces([$0], focusedWorkspace: current).contains($0) }
         .filter(\.usesAutomaticDisplayName)
 }
 

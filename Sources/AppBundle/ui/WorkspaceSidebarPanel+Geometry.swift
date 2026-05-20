@@ -8,11 +8,15 @@ struct WorkspaceSidebarPanelLayout {
 
 extension WorkspaceSidebarPanel {
     func currentSidebarPanelLayout() -> WorkspaceSidebarPanelLayout? {
+        currentSidebarPanelLayout(on: workspaceSidebarResolvedPanelMonitor())
+    }
+
+    func currentSidebarPanelLayout(on monitor: Monitor) -> WorkspaceSidebarPanelLayout? {
         guard TrayMenuModel.shared.isEnabled,
               config.workspaceSidebar.enabled,
-              let screen = workspaceSidebarPanelScreen()
+              let screen = workspaceSidebarPanelScreen(for: monitor)
         else { return nil }
-        guard !shouldSuppressChromeForFullscreenContent(on: workspaceSidebarResolvedPanelMonitor()) else { return nil }
+        guard !shouldSuppressChromeForFullscreenContent(on: monitor) else { return nil }
 
         let sidebarConfig = config.workspaceSidebar
         let expandedWidth = CGFloat(sidebarConfig.width)
@@ -33,8 +37,12 @@ extension WorkspaceSidebarPanel {
     }
 
     func workspaceSidebarPanelScreen() -> NSScreen? {
+        workspaceSidebarPanelScreen(for: workspaceSidebarResolvedPanelMonitor())
+    }
+
+    func workspaceSidebarPanelScreen(for monitor: Monitor) -> NSScreen? {
         NSScreen.screens.getOrNil(
-            atIndex: workspaceSidebarResolvedPanelMonitor().monitorAppKitNsScreenScreensId - 1
+            atIndex: monitor.monitorAppKitNsScreenScreensId - 1
         ) ?? NSScreen.screens.first
     }
 }

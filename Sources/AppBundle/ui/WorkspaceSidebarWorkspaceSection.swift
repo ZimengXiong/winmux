@@ -10,7 +10,9 @@ struct WorkspaceSidebarWorkspaceSection: View {
     let emitsDropTarget: Bool
     let isFromOtherDisplay: Bool
     let isInUseOnOtherDisplay: Bool
+    let allowsWorkspaceActivation: Bool
     let isPinnedActiveWorkspace: Bool
+    let isActiveOnTargetMonitor: Bool
     let projectContextLabel: String?
     let projectContextColor: Color?
     @Binding var activeInUseOverrideWorkspaceName: String?
@@ -30,6 +32,12 @@ struct WorkspaceSidebarWorkspaceSection: View {
     var sectionWidth: CGFloat { workspaceSidebarSectionWidth(expansionProgress, layout: layout) }
     var isCompact: Bool { expansionProgress < workspaceSidebarRowsRevealProgress }
     var showsWindowRows: Bool { expansionProgress >= workspaceSidebarRowsRevealProgress }
+    var sectionMinHeight: CGFloat? {
+        if !isCompact, allowsWorkspaceActivation, isInUseOnOtherDisplay, workspace.items.isEmpty {
+            return workspaceSidebarInUseOverrideEmptySectionMinHeight
+        }
+        return nil
+    }
     var isDropTarget: Bool { dragPreview?.targetWorkspaceName == workspace.name }
     var activeSidebarDragSourceWindowId: UInt32? { dragPreview?.sourceWindowId }
     var isShowingInUseOverlay: Bool { activeInUseOverrideWorkspaceName == workspace.name }
@@ -48,6 +56,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
             .padding(.vertical, isCompact ? 3 : 4)
             .padding(.horizontal, workspaceSidebarSectionInnerHorizontalInset)
             .frame(width: sectionWidth, alignment: .leading)
+            .frame(minHeight: sectionMinHeight, alignment: .top)
             .frame(maxWidth: .infinity, alignment: .leading)
             .clipped()
             .contentShape(Rectangle())
@@ -79,15 +88,15 @@ struct WorkspaceSidebarWorkspaceSection: View {
             .background {
                 ZStack {
                     sectionBackground
-                if !isCompact && !isInUseOnOtherDisplay {
+                if !isCompact && allowsWorkspaceActivation && !isInUseOnOtherDisplay {
                     sectionActivationButton
                 }
                 }
             }
             .overlay(alignment: .center) {
                 inUseOverrideOverlay
-                    .opacity(isShowingInUseOverlay ? 1 : 0)
-                    .allowsHitTesting(isShowingInUseOverlay)
+                    .opacity(allowsWorkspaceActivation && isShowingInUseOverlay ? 1 : 0)
+                    .allowsHitTesting(allowsWorkspaceActivation && isShowingInUseOverlay)
                     .zIndex(5)
             }
             .shadow(

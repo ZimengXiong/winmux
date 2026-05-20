@@ -53,7 +53,7 @@ func updatePendingDetachedTabIntent(sourceWindow: Window, mouseLocation: CGPoint
 
 @MainActor
 func refreshPendingWindowDragIntentFromGlobalMouseDrag() {
-    WorkspaceSidebarPanel.shared.refreshForCurrentDragIfNeeded()
+    WorkspaceSidebarPanel.refreshAll()
     guard isLeftMouseButtonDown, getCurrentMouseManipulationKind() == .move else {
         clearPendingWindowDragIntent()
         return
@@ -181,7 +181,7 @@ private func targetWindowForDropIntent(_ kind: WindowDragIntentKind) -> Window? 
              .stackSplit(let targetWindowId, _),
              .swap(let targetWindowId):
             Window.get(byId: targetWindowId)
-        case .detachTab, .moveToWorkspace, .createWorkspace, .sidebarHover:
+        case .detachTab, .moveToWorkspace, .moveToWorkspaceZone, .createWorkspace, .sidebarHover:
             nil
     }
 }
@@ -241,6 +241,12 @@ func applyPendingWindowDragIntentIfPossible() -> Bool {
             } else {
                 applyWorkspaceMove(sourceNode: sourceNode, sourceWindow: sourceWindow, mouseLocation: mouseLocation, targetWorkspace: targetWorkspace)
             }
+            return true
+        case .moveToWorkspaceZone(let workspaceName, let zone):
+            guard let targetWorkspace = Workspace.existing(byName: workspaceName) else { return false }
+            syncClosedWindowsCacheToCurrentWorld()
+            suppressPostDragAxObserverEvents(for: [sourceWindow.windowId])
+            applyWorkspaceZoneMove(sourceNode: sourceNode, sourceWindow: sourceWindow, targetWorkspace: targetWorkspace, zone: zone)
             return true
         case .createWorkspace:
             syncClosedWindowsCacheToCurrentWorld()

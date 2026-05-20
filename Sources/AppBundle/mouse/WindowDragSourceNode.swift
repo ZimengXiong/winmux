@@ -106,7 +106,7 @@ func updateSidebarDragFeedback(sourceWindow: Window, subject: WindowDragSubject,
         let hadPinnedWindow = hasPinnedDraggedWindow()
         setPinnedDraggedWindowId(nil)
         setWorkspaceSidebarDropPreviewIfChanged(nil)
-        if WorkspaceSidebarPanel.shared.visibleScreenRectNormalized()?.contains(MousePointerTracker.shared.currentSample.point) == true {
+        if WorkspaceSidebarPanel.panel(containing: MousePointerTracker.shared.currentSample.point) != nil {
             showWorkspaceSidebarDragCursorPreview(
                 sourceWindow: sourceWindow,
                 subject: subject,
@@ -129,9 +129,10 @@ func updateSidebarDragFeedback(sourceWindow: Window, subject: WindowDragSubject,
     let tabItems = sidebarDragPreviewTabItems(for: moveNode, isTabGroup: isTabGroup)
     let targetWorkspaceName: String? = switch destination.kind {
         case .moveToWorkspace(let workspaceName): workspaceName
+        case .moveToWorkspaceZone(let workspaceName, _): workspaceName
         case .createWorkspace, .sidebarHover, .tabStack, .detachTab, .stackSplit, .swap: nil
     }
-    if case .moveToWorkspace = destination.kind {
+    if targetWorkspaceName != nil {
         setWorkspaceSidebarDropPreviewIfChanged(WorkspaceSidebarDropPreviewViewModel(
             sourceWindowId: sourceWindow.windowId,
             label: sourceLabel,

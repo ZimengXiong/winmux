@@ -19,6 +19,7 @@ func buildWorkspaceSidebarModelState(previousSelectedMonitorScopeId: String) asy
         focusedMonitor: currentFocus.workspace.workspaceMonitor,
         sortedMonitors: availableMonitors,
     )
+    let activeProjectId = activeWorkspaceProjectId(for: projectMonitor)
     let projects = buildWorkspaceSidebarProjectViewModels()
     let workspaces = await buildWorkspaceSidebarWorkspaceViewModels(
         currentFocus: currentFocus,
@@ -36,8 +37,11 @@ func buildWorkspaceSidebarModelState(previousSelectedMonitorScopeId: String) asy
         projects: projects,
         selectedProjectId: resolvedWorkspaceSidebarSelectedProjectId(
             validProjectIds: Set(projects.map(\.id)),
-            activeProjectId: activeWorkspaceProjectId(for: projectMonitor),
+            previousSelectedProjectId: TrayMenuModel.shared.workspaceSidebarSelectedProjectId,
+            previousActiveProjectId: TrayMenuModel.shared.workspaceSidebarActiveProjectId,
+            fallbackProjectId: activeProjectId,
         ),
+        activeProjectId: activeProjectId,
         monitorScopes: monitorScopes,
         selectedMonitorScopeId: selectedMonitorScopeId,
         focusedMonitorScopeId: focusedMonitorScopeId,

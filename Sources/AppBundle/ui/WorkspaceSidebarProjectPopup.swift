@@ -61,7 +61,7 @@ struct WorkspaceSidebarProjectPopup: View {
             HStack(spacing: 8) {
                 Text(project.displayName)
                     .font(.system(size: 12, weight: project.id == selectedProjectId ? .semibold : .medium))
-                    .foregroundStyle(workspaceSidebarProjectColor(projectId: project.id, configuredHex: project.colorHex))
+                    .foregroundStyle(Color.white.opacity(project.id == selectedProjectId ? 0.90 : 0.78))
                     .lineLimit(1)
                 Spacer(minLength: 0)
                 checkmark(isVisible: project.id == selectedProjectId)

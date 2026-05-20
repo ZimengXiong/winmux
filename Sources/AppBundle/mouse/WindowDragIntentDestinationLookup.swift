@@ -44,7 +44,12 @@ func currentWindowDragIntentDestination(
         return detachDestination
     }
 
-    return workspaceMoveDestination(
+    return workspaceZoneMoveDestination(
+        targetWorkspace: targetWorkspace,
+        sourceWorkspace: sourceWorkspace,
+        mouseLocation: mouseLocation,
+        subject: subject,
+    ) ?? workspaceMoveDestination(
         targetWorkspace: targetWorkspace,
         sourceWorkspace: sourceWorkspace,
         subject: subject,
@@ -53,7 +58,7 @@ func currentWindowDragIntentDestination(
 
 @MainActor
 private func isMouseInsideWorkspaceSidebar(_ mouseLocation: CGPoint) -> Bool {
-    WorkspaceSidebarPanel.shared.visibleScreenRectNormalized()?.contains(mouseLocation) == true
+    WorkspaceSidebarPanel.panel(containing: mouseLocation) != nil
 }
 
 @MainActor
@@ -81,6 +86,90 @@ private func currentWindowSurfaceDestinationIfAllowed(
         subject: subject,
         detachOrigin: detachOrigin,
     )
+}
+
+@MainActor
+private func workspaceZoneMoveDestination(
+    targetWorkspace: Workspace,
+    sourceWorkspace: Workspace?,
+    mouseLocation: CGPoint,
+    subject: WindowDragSubject,
+) -> WindowDragIntentDestination? {
+    guard targetWorkspace != sourceWorkspace else { return nil }
+    let workspaceRect = targetWorkspace.workspaceMonitor.visibleRectPaddedByOuterGaps
+    guard let zone = WindowIntentZoneBuilder.zone(at: mouseLocation, in: workspaceRect),
+          zone.stackSplitPosition != nil,
+          let previewZone = WindowIntentZoneBuilder.zones(in: workspaceRect).first(where: { $0.zone == zone })
+    else {
+        return nil
+    }
+    let zones = WindowIntentZoneBuilder.zones(in: workspaceRect)
+    let previewZones = zones.map { candidate in
+        WindowDragIntentPreviewZone(
+            rect: candidate.frame,
+            style: candidate.zone.previewStyleForWorkspaceMove,
+            geometry: candidate.zone.previewGeometryForWorkspaceMove,
+            isActive: candidate.zone == zone
+        )
+    }
+    return WindowDragIntentDestination(
+        kind: .moveToWorkspaceZone(workspaceName: targetWorkspace.name, zone: zone),
+        previewContainerRect: workspaceRect,
+        previewRect: previewZone.frame,
+        interactionRect: workspaceRect,
+        title: zone.workspaceMoveTitle,
+        subtitle: "Drop to move this item to \(targetWorkspace.name)",
+        previewStyle: zone.previewStyleForWorkspaceMove,
+        previewGeometry: zone.previewGeometryForWorkspaceMove,
+        isGroup: subject == .group,
+        previewZones: previewZones,
+        dropIntentOverlay: WindowDropIntentOverlayModel(
+            targetFrame: workspaceRect,
+            activeZone: zone,
+            cornerRadius: nil,
+        ),
+    )
+}
+
+private extension WindowDropZone {
+    var previewStyleForWorkspaceMove: WindowTabDropPreviewStyle {
+        switch self {
+            case .left, .right, .top, .bottom:
+                .stackSplit
+            case .tab, .middle:
+                .workspaceMove
+        }
+    }
+
+    var previewGeometryForWorkspaceMove: WindowTabDropPreviewGeometry {
+        switch self {
+            case .left:
+                .splitLeft
+            case .right:
+                .splitRight
+            case .top:
+                .splitAbove
+            case .bottom:
+                .splitBelow
+            case .tab, .middle:
+                .rounded
+        }
+    }
+
+    var workspaceMoveTitle: String {
+        switch self {
+            case .left:
+                "Move Left"
+            case .right:
+                "Move Right"
+            case .top:
+                "Move Above"
+            case .bottom:
+                "Move Below"
+            case .tab, .middle:
+                "Move Here"
+        }
+    }
 }
 
 @MainActor

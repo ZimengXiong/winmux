@@ -1,13 +1,16 @@
 import Foundation
 
 @MainActor
-func makeWorkspaceSidebarActionsAdapter() -> WorkspaceSidebarActions {
+func makeWorkspaceSidebarActionsAdapter(
+    viewModel: TrayMenuModel = TrayMenuModel.shared,
+    targetMonitorScopeId: String? = nil,
+) -> WorkspaceSidebarActions {
     WorkspaceSidebarActions(
         send: { action in
-            handleWorkspaceSidebarAction(action)
+            handleWorkspaceSidebarAction(action, viewModel: viewModel, targetMonitorScopeId: targetMonitorScopeId)
         },
         setDropTargets: { targets in
-            WorkspaceSidebarPanel.shared.updateDropTargets(targets)
+            WorkspaceSidebarPanel.updateVisibleDropTargets(targets)
         },
         hoverWorkspace: { name, isHovering in
             TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName = nextWorkspaceSidebarHoveredWorkspaceName(
@@ -32,16 +35,22 @@ func makeWorkspaceSidebarActionsAdapter() -> WorkspaceSidebarActions {
 }
 
 @MainActor
-func handleWorkspaceSidebarAction(_ action: WorkspaceSidebarAction) {
+func handleWorkspaceSidebarAction(
+    _ action: WorkspaceSidebarAction,
+    viewModel: TrayMenuModel = TrayMenuModel.shared,
+    targetMonitorScopeId: String? = nil,
+) {
     switch action {
         case .selectWorkspace(let name):
-            focusWorkspaceFromSidebar(name)
+            focusWorkspaceFromSidebar(name, targetMonitorScopeId: targetMonitorScopeId)
+        case .overrideWorkspaceInUse(let name):
+            overrideWorkspaceInUseFromSidebar(name, targetMonitorScopeId: targetMonitorScopeId)
         case .selectWindow(let windowId):
             focusWindowFromSidebar(windowId)
         case .selectProject(let projectId):
-            selectWorkspaceSidebarProject(projectId)
+            selectWorkspaceSidebarProject(projectId, viewModel: viewModel, targetMonitorScopeId: targetMonitorScopeId)
         case .createProject:
-            createWorkspaceSidebarProject()
+            createWorkspaceSidebarProject(viewModel: viewModel, targetMonitorScopeId: targetMonitorScopeId)
         case .renameProject(let projectId, let displayName):
             renameWorkspaceSidebarProject(projectId, displayName: displayName)
         case .setProjectColor(let projectId, let colorHex):
@@ -53,9 +62,9 @@ func handleWorkspaceSidebarAction(_ action: WorkspaceSidebarAction) {
                 deleteWorkspaceSidebarProject(project)
             }
         case .selectMonitorScope(let scopeId):
-            selectWorkspaceSidebarMonitorScope(scopeId)
+            selectWorkspaceSidebarMonitorScope(scopeId, viewModel: viewModel)
         case .createWorkspace(let projectId, let monitorScopeId):
-            createWorkspaceFromSidebarButton(projectId: projectId, monitorScopeId: monitorScopeId)
+            createWorkspaceFromSidebarButton(projectId: projectId, monitorScopeId: targetMonitorScopeId ?? monitorScopeId)
         case .deleteWorkspace(let name):
             if let workspace = workspaceSidebarWorkspaceViewModel(name) {
                 deleteWorkspaceFromSidebar(workspace)
@@ -65,9 +74,9 @@ func handleWorkspaceSidebarAction(_ action: WorkspaceSidebarAction) {
         case .moveTabGroup(let windowId, let workspaceName):
             moveTabGroupFromSidebar(windowId, toWorkspace: workspaceName)
         case .moveWindowToNewWorkspace(let windowId, let projectId, let monitorScopeId):
-            moveWindowToNewWorkspaceFromSidebar(windowId, projectId: projectId, monitorScopeId: monitorScopeId)
+            moveWindowToNewWorkspaceFromSidebar(windowId, projectId: projectId, monitorScopeId: targetMonitorScopeId ?? monitorScopeId)
         case .moveTabGroupToNewWorkspace(let windowId, let projectId, let monitorScopeId):
-            moveTabGroupToNewWorkspaceFromSidebar(windowId, projectId: projectId, monitorScopeId: monitorScopeId)
+            moveTabGroupToNewWorkspaceFromSidebar(windowId, projectId: projectId, monitorScopeId: targetMonitorScopeId ?? monitorScopeId)
         case .previewWindowDrop(let windowId, let target):
             previewWorkspaceSidebarDrop(windowId, subject: .window, target: target)
         case .previewTabGroupDrop(let windowId, let target):

@@ -3,9 +3,33 @@ import Common
 import SwiftUI
 
 @MainActor
-func focusWorkspaceFromSidebar(_ workspaceName: String) {
+func focusWorkspaceFromSidebar(_ workspaceName: String, targetMonitorScopeId: String? = nil) {
     runWorkspaceSidebarSession {
-        _ = Workspace.existing(byName: workspaceName)?.focusWorkspace()
+        guard let workspace = Workspace.existing(byName: workspaceName) else { return }
+        guard let targetMonitorScopeId,
+              let targetMonitor = workspaceSidebarMonitor(forScopeId: targetMonitorScopeId),
+              workspace.workspaceMonitor.rect.topLeftCorner != targetMonitor.rect.topLeftCorner
+        else {
+            _ = workspace.focusWorkspace()
+            return
+        }
+        if workspace.isVisible {
+            return
+        } else if targetMonitor.setActiveWorkspace(workspace) {
+            _ = workspace.focusWorkspace()
+        }
+    }
+}
+
+@MainActor
+func overrideWorkspaceInUseFromSidebar(_ workspaceName: String, targetMonitorScopeId: String? = nil) {
+    runWorkspaceSidebarSession {
+        guard let workspace = Workspace.existing(byName: workspaceName),
+              let targetMonitorScopeId,
+              let targetMonitor = workspaceSidebarMonitor(forScopeId: targetMonitorScopeId)
+        else { return }
+        _ = overrideWorkspaceOnMonitorBySwappingActiveLanes(workspace, targetMonitor: targetMonitor)
+        _ = workspace.focusWorkspace()
     }
 }
 
@@ -92,9 +116,15 @@ private func workspaceSidebarMonitorForScopeId(_ scopeId: String) -> Monitor? {
     return sortedMonitors.first { workspaceSidebarMonitorScopeId(for: $0) == scopeId }
 }
 
-func workspaceSidebarWorkspaceCreateScope(selectedScopeId: String, focusedScopeId: String) -> String {
+func workspaceSidebarWorkspaceCreateScope(
+    selectedScopeId: String,
+    targetMonitorScopeId: String,
+    focusedScopeId: String,
+) -> String {
     switch selectedScopeId {
-        case workspaceSidebarDefaultScopeId, workspaceSidebarFocusedScopeId, workspaceSidebarAllScopeId:
+        case workspaceSidebarDefaultScopeId, workspaceSidebarAllScopeId:
+            targetMonitorScopeId
+        case workspaceSidebarFocusedScopeId:
             focusedScopeId
         default:
             selectedScopeId
@@ -102,17 +132,17 @@ func workspaceSidebarWorkspaceCreateScope(selectedScopeId: String, focusedScopeI
 }
 
 @MainActor
-func selectWorkspaceSidebarMonitorScope(_ scopeId: String) {
-    guard TrayMenuModel.shared.workspaceSidebarMonitorScopes.contains(where: { $0.id == scopeId }) else { return }
-    guard TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId != scopeId else { return }
-    TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId = scopeId
-    let visibleWorkspaceNames = Set(TrayMenuModel.shared.visibleWorkspaceSidebarWorkspaces.map(\.name))
+func selectWorkspaceSidebarMonitorScope(_ scopeId: String, viewModel: TrayMenuModel = TrayMenuModel.shared) {
+    guard viewModel.workspaceSidebarMonitorScopes.contains(where: { $0.id == scopeId }) else { return }
+    guard viewModel.workspaceSidebarSelectedMonitorScopeId != scopeId else { return }
+    viewModel.workspaceSidebarSelectedMonitorScopeId = scopeId
+    let visibleWorkspaceNames = Set(viewModel.visibleWorkspaceSidebarWorkspaces.map(\.name))
     let sanitizedHoveredWorkspaceName = sanitizedWorkspaceSidebarHoveredWorkspaceName(
         visibleWorkspaceNames: visibleWorkspaceNames,
-        hoveredWorkspaceName: TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName,
+        hoveredWorkspaceName: viewModel.workspaceSidebarHoveredWorkspaceName,
     )
-    if TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName != sanitizedHoveredWorkspaceName {
-        TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName = sanitizedHoveredWorkspaceName
+    if viewModel.workspaceSidebarHoveredWorkspaceName != sanitizedHoveredWorkspaceName {
+        viewModel.workspaceSidebarHoveredWorkspaceName = sanitizedHoveredWorkspaceName
     }
 }
 
@@ -120,7 +150,7 @@ func selectWorkspaceSidebarMonitorScope(_ scopeId: String) {
 func createWorkspaceFromSidebarButton() {
     let targetMonitor = sidebarWorkspaceTargetMonitor()
     createWorkspaceFromSidebarButton(
-        projectId: sidebarWorkspaceTargetProjectId(targetMonitor: targetMonitor),
+        projectId: sidebarWorkspaceTargetProjectId(targetMonitor: targetMonitor, viewModel: TrayMenuModel.shared),
         monitorScopeId: TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId,
     )
 }
@@ -137,7 +167,7 @@ func createWorkspaceFromSidebarButton(projectId: WorkspaceProjectId, monitorScop
 @MainActor
 func createWorkspaceFromSidebarDrag(sourceNode: TreeNode, sourceWindow: Window) -> Bool {
     let targetMonitor = sidebarWorkspaceTargetMonitor(fallbackWindow: sourceWindow, fallbackPoint: mouseLocation)
-    let projectId = sidebarWorkspaceTargetProjectId(targetMonitor: targetMonitor)
+    let projectId = sidebarWorkspaceTargetProjectId(targetMonitor: targetMonitor, viewModel: TrayMenuModel.shared)
     let workspace = getOrCreateAdjacentBlankWorkspace(projectId: projectId, monitor: targetMonitor)
     let targetContainer: NonLeafTreeNodeObject
     if sourceNode is Window, sourceWindow.isFloating {
@@ -320,8 +350,11 @@ private func workspaceSidebarDropPreviewTabs(
 }
 
 @MainActor
-func sidebarWorkspaceTargetProjectId(targetMonitor: Monitor) -> WorkspaceProjectId {
-    let selectedProjectId = TrayMenuModel.shared.workspaceSidebarSelectedProjectId
+func sidebarWorkspaceTargetProjectId(
+    targetMonitor: Monitor,
+    viewModel: TrayMenuModel = TrayMenuModel.shared,
+) -> WorkspaceProjectId {
+    let selectedProjectId = viewModel.workspaceSidebarSelectedProjectId
     guard workspaceProjects().contains(where: { $0.id == selectedProjectId }) else {
         return activeWorkspaceProjectId(for: targetMonitor)
     }
@@ -329,25 +362,24 @@ func sidebarWorkspaceTargetProjectId(targetMonitor: Monitor) -> WorkspaceProject
 }
 
 @MainActor
-func selectWorkspaceSidebarProject(_ projectId: WorkspaceProjectId) {
+func selectWorkspaceSidebarProject(
+    _ projectId: WorkspaceProjectId,
+    viewModel: TrayMenuModel = TrayMenuModel.shared,
+    targetMonitorScopeId: String? = nil,
+) {
     guard workspaceProjects().contains(where: { $0.id == projectId }) else { return }
-    TrayMenuModel.shared.workspaceSidebarSelectedProjectId = projectId
-    runWorkspaceSidebarSession {
-        TrayMenuModel.shared.workspaceSidebarSelectedProjectId = projectId
-        if let workspace = switchWorkspaceProject(projectId, on: sidebarWorkspaceTargetMonitor()) {
-            _ = workspace.focusWorkspace()
-        }
-    }
+    viewModel.workspaceSidebarSelectedProjectId = projectId
 }
 
 @MainActor
-func createWorkspaceSidebarProject() {
+func createWorkspaceSidebarProject(
+    viewModel: TrayMenuModel = TrayMenuModel.shared,
+    targetMonitorScopeId: String? = nil,
+) {
     runWorkspaceSidebarSession {
         let project = createWorkspaceProject()
-        TrayMenuModel.shared.workspaceSidebarSelectedProjectId = project.id
-        if let workspace = switchWorkspaceProject(project.id, on: sidebarWorkspaceTargetMonitor()) {
-            _ = workspace.focusWorkspace()
-        }
+        viewModel.workspaceSidebarSelectedProjectId = project.id
+        await updateWorkspaceSidebarModel()
     }
 }
 
@@ -502,8 +534,12 @@ func finishSidebarWindowDrag(pointer: CGPoint? = nil) {
                 fallbackWindow: sourceWindow,
                 fallbackPoint: MousePointerTracker.shared.currentSample.point,
             )
-            let projectId = sidebarWorkspaceTargetProjectId(targetMonitor: targetMonitor)
-            let monitorScopeId = TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId
+            let panelViewModel = WorkspaceSidebarPanel.panel(containing: MousePointerTracker.shared.currentSample.point)?.viewModel
+            let projectId = sidebarWorkspaceTargetProjectId(
+                targetMonitor: targetMonitor,
+                viewModel: panelViewModel ?? TrayMenuModel.shared
+            )
+            let monitorScopeId = (panelViewModel ?? TrayMenuModel.shared).workspaceSidebarSelectedMonitorScopeId
             if subject == .group {
                 moveTabGroupToNewWorkspaceFromSidebar(sourceWindow.windowId, projectId: projectId, monitorScopeId: monitorScopeId)
             } else {
@@ -517,7 +553,7 @@ func finishSidebarWindowDrag(pointer: CGPoint? = nil) {
 @MainActor
 private func workspaceSidebarDragTarget(for sourceWindow: Window, subject: WindowDragSubject) -> WorkspaceSidebarDropTargetKind? {
     let point = MousePointerTracker.shared.currentSample.point
-    guard WorkspaceSidebarPanel.shared.visibleScreenRectNormalized()?.contains(point) == true else { return nil }
+    guard WorkspaceSidebarPanel.panel(containing: point) != nil else { return nil }
     guard let target = workspaceSidebarDropTarget(at: point)?.kind else { return nil }
     guard isActionableSidebarDropTarget(sourceWindow: sourceWindow, subject: subject, target: target) else { return nil }
     return target

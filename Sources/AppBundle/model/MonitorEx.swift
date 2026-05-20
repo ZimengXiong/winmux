@@ -4,7 +4,7 @@ extension Monitor {
     @MainActor
     var workspaceSidebarInset: CGFloat {
         guard config.workspaceSidebar.enabled else { return 0 }
-        return workspaceSidebarResolvedPanelMonitor().rect.topLeftCorner == rect.topLeftCorner
+        return workspaceSidebarResolvedPanelMonitors().contains { $0.rect.topLeftCorner == rect.topLeftCorner }
             ? CGFloat(config.workspaceSidebar.collapsedWidth)
             : 0
     }

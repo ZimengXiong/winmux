@@ -2,7 +2,11 @@ import AppKit
 
 extension WorkspaceSidebarPanel {
     func refresh() {
-        guard let layout = currentSidebarPanelLayout() else {
+        refresh(on: workspaceSidebarResolvedPanelMonitor())
+    }
+
+    func refresh(on monitor: Monitor) {
+        guard let layout = currentSidebarPanelLayout(on: monitor) else {
             stopHoverMonitoring()
             resetHiddenSidebarState()
             return
@@ -12,8 +16,8 @@ extension WorkspaceSidebarPanel {
             workspaceSidebarDropTargets = []
             setFrame(layout.frame, display: true, animate: false)
         }
-        if TrayMenuModel.shared.workspaceSidebarVisibleWidth == 0 {
-            TrayMenuModel.shared.workspaceSidebarVisibleWidth = TrayMenuModel.shared.isWorkspaceSidebarExpanded
+        if viewModel.workspaceSidebarVisibleWidth == 0 {
+            viewModel.workspaceSidebarVisibleWidth = viewModel.isWorkspaceSidebarExpanded
                 ? layout.expandedWidth
                 : layout.collapsedWidth
         }
@@ -24,17 +28,14 @@ extension WorkspaceSidebarPanel {
 
     func refreshForCurrentDragIfNeeded() {
         guard isMouseWindowDragInProgress() else { return }
-        let targetMonitor = mouseLocation.monitorApproximation
-        let screen = NSScreen.screens.getOrNil(atIndex: targetMonitor.monitorAppKitNsScreenScreensId - 1) ?? NSScreen.screens.first
-        guard let screen, frame.minX != screen.frame.minX || frame.minY != screen.frame.minY else { return }
-        refresh()
+        WorkspaceSidebarPanel.refreshAll()
     }
 
     func resetHiddenSidebarState() {
         workspaceSidebarDropTargets = []
         TrayMenuModel.shared.workspaceSidebarDropPreview = nil
         TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName = nil
-        TrayMenuModel.shared.workspaceSidebarVisibleWidth = 0
+        viewModel.workspaceSidebarVisibleWidth = 0
         orderOut(nil)
     }
 }

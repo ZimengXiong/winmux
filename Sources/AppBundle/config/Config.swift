@@ -79,7 +79,7 @@ struct WorkspaceSidebarConfig: ConvenienceCopyable, Equatable, Sendable {
     var enabled: Bool = false
     var collapsedWidth: Int = 44
     var width: Int = 240
-    var monitor: [MonitorDescription] = [.main]
+    var monitor: [MonitorDescription] = []
     var showStatusPills: Bool = true
     var showDate: Bool = true
     var menuBarReserveHeight: Int = 28
@@ -107,5 +107,17 @@ extension WorkspaceSidebarConfig {
         monitor.lazy
             .compactMap { $0.resolveMonitor(sortedMonitors: sortedMonitors) }
             .first
+    }
+
+    @MainActor
+    func resolvedMonitors(sortedMonitors: [Monitor]) -> [Monitor] {
+        guard !monitor.isEmpty else { return sortedMonitors }
+        if monitor == [.main] {
+            return sortedMonitors
+        }
+        var seenTopLeftCorners = Set<CGPoint>()
+        return monitor
+            .compactMap { $0.resolveMonitor(sortedMonitors: sortedMonitors) }
+            .filter { seenTopLeftCorners.insert($0.rect.topLeftCorner).inserted }
     }
 }

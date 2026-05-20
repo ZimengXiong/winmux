@@ -15,6 +15,7 @@ func retainedEmptyWorkspaceIdsByScope() -> [WorkspaceScope: WorkspaceId] {
 
 @MainActor
 func retainedEmptyWorkspaceId(in scope: WorkspaceScope) -> WorkspaceId? {
+    guard workspaceScopeIsVisibleActiveProject(scope) else { return nil }
     let orderedWorkspaces = orderedWorkspaces(in: scope)
     let ordinaryEmptyWorkspaces = orderedWorkspaces.filter(\.isOrdinaryEmptySlot)
     guard !ordinaryEmptyWorkspaces.isEmpty else { return nil }
@@ -30,6 +31,17 @@ func retainedEmptyWorkspaceId(in scope: WorkspaceScope) -> WorkspaceId? {
         return visibleEmptyWorkspace.id
     }
     return nil
+}
+
+@MainActor
+func workspaceScopeIsVisibleActiveProject(_ scope: WorkspaceScope) -> Bool {
+    guard let lane = winMuxWorkspaceState.lanesById[scope.laneId],
+          let activeWorkspaceId = lane.activeWorkspaceId,
+          let activeWorkspace = winMuxWorkspaceState.workspaceById[activeWorkspaceId]
+    else {
+        return false
+    }
+    return activeWorkspace.projectId == scope.projectId
 }
 
 @MainActor

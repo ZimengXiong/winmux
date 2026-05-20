@@ -6,8 +6,8 @@ extension WorkspaceSidebarPanel {
         pendingExpand = nil
         guard !shouldLockExpansionForSidebarDrag() else { return }
         let needsCollapse =
-            TrayMenuModel.shared.isWorkspaceSidebarExpanded ||
-            TrayMenuModel.shared.workspaceSidebarVisibleWidth != collapsedWidth
+            viewModel.isWorkspaceSidebarExpanded ||
+            viewModel.workspaceSidebarVisibleWidth != collapsedWidth
         guard needsCollapse, pendingCollapse == nil else { return }
         scheduleCollapse(collapsedWidth: collapsedWidth)
     }
@@ -22,7 +22,7 @@ extension WorkspaceSidebarPanel {
             self.scheduleCollapseFinalize()
         }
         pendingCollapse = collapse
-        let collapseDelay: TimeInterval = TrayMenuModel.shared.isWorkspaceSidebarExpanded ? 0.08 : 0
+        let collapseDelay: TimeInterval = viewModel.isWorkspaceSidebarExpanded ? 0.08 : 0
         DispatchQueue.main.asyncAfter(deadline: .now() + collapseDelay, execute: collapse)
     }
 
@@ -31,7 +31,7 @@ extension WorkspaceSidebarPanel {
             guard let self else { return }
             self.pendingCollapseFinalize = nil
             guard !self.isMouseInsideHoverRegion(), !self.shouldLockExpansionForSidebarDrag() else { return }
-            TrayMenuModel.shared.isWorkspaceSidebarExpanded = false
+            viewModel.isWorkspaceSidebarExpanded = false
             self.updateMousePassthrough()
         }
         pendingCollapseFinalize = finalize

@@ -19,14 +19,14 @@ extension WorkspaceSidebarWorkspaceSection {
         if isDropTarget {
             return Color.accentColor.opacity(0.12)
         }
-        if isInUseOnOtherDisplay {
+        if allowsWorkspaceActivation && isInUseOnOtherDisplay {
             return Color(nsColor: .systemRed).opacity(isHovered ? 0.18 : 0.10)
         }
         if isPinnedActiveWorkspace {
             return workspaceSidebarActiveWorkspaceTint.opacity(isHovered ? 0.12 : 0.075)
         }
         let activeTint = isFromOtherDisplay ? Color(nsColor: .systemPink) : workspaceSidebarActiveWorkspaceTint
-        if workspace.isFocused {
+        if isActiveOnTargetMonitor {
             return activeTint.opacity(isCompact ? 0.24 : 0.12)
         }
         if isFromOtherDisplay {
@@ -41,7 +41,7 @@ extension WorkspaceSidebarWorkspaceSection {
     var inUseOverrideOverlay: some View {
         WorkspaceSidebarInUseOverrideOverlay(text: inUseOverrideText) {
             activeInUseOverrideWorkspaceName = nil
-            actions.send(.selectWorkspace(workspace.name))
+            actions.send(.overrideWorkspaceInUse(workspace.name))
         }
     }
 }

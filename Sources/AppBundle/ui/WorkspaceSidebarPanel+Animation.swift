@@ -3,7 +3,7 @@ import SwiftUI
 extension WorkspaceSidebarPanel {
     func animateVisibleSidebarWidth(_ width: CGFloat, animation: Animation) {
         withAnimation(animation) {
-            TrayMenuModel.shared.workspaceSidebarVisibleWidth = width
+            viewModel.workspaceSidebarVisibleWidth = width
         }
         updateMousePassthrough()
     }
@@ -12,11 +12,11 @@ extension WorkspaceSidebarPanel {
         pendingExpand?.cancel()
         pendingExpand = nil
         NotificationCenter.default.post(name: workspaceSidebarWillExpandNotification, object: nil)
-        TrayMenuModel.shared.isWorkspaceSidebarExpanded = true
+        viewModel.isWorkspaceSidebarExpanded = true
         if !isVisible {
             refresh()
         }
-        guard TrayMenuModel.shared.workspaceSidebarVisibleWidth != expandedWidth else {
+        guard viewModel.workspaceSidebarVisibleWidth != expandedWidth else {
             updateMousePassthrough()
             return
         }

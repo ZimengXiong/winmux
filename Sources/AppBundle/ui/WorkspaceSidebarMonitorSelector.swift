@@ -29,7 +29,7 @@ struct WorkspaceSidebarMonitorSelector: View {
         let maxTextWidth = names.map {
             ($0 as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium)]).width
         }.max() ?? 0
-        return min(max(ceil(maxTextWidth) + 50, 92), sectionWidth)
+        return max(ceil(maxTextWidth) + 50, 92)
     }
     private var hasMultipleMonitors: Bool {
         scopes.count { workspaceSidebarMonitorScopePoint($0.id) != nil } > 1
@@ -191,6 +191,7 @@ struct WorkspaceSidebarMonitorSelector: View {
                         transaction.disablesAnimations = true
                         withTransaction(transaction) {
                             onSelectProject(projectId)
+                            isProjectMenuOpen = false
                         }
                     },
                     onCreate: {

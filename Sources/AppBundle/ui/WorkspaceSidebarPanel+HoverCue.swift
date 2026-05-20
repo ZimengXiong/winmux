@@ -5,7 +5,7 @@ extension WorkspaceSidebarPanel {
         if !isVisible {
             refresh()
         }
-        if TrayMenuModel.shared.workspaceSidebarVisibleWidth < cueWidth {
+        if viewModel.workspaceSidebarVisibleWidth < cueWidth {
             animateVisibleSidebarWidth(
                 cueWidth,
                 animation: .spring(response: hoverCueAnimationResponse, dampingFraction: 0.72),

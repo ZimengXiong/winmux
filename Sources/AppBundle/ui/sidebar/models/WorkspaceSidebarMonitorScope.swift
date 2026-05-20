@@ -43,9 +43,9 @@ func workspaceSidebarWorkspaceMatchesScope(
 ) -> Bool {
     switch selectedScopeId {
         case workspaceSidebarDefaultScopeId:
-            workspaceMonitorScopeId == focusedMonitorScopeId || workspaceMonitorScopeId == workspaceSidebarAllScopeId
+            workspaceMonitorScopeId != workspaceSidebarAllScopeId
         case workspaceSidebarAllScopeId:
-            true
+            workspaceMonitorScopeId != workspaceSidebarAllScopeId
         case workspaceSidebarFocusedScopeId:
             workspaceMonitorScopeId == focusedMonitorScopeId || workspaceMonitorScopeId == workspaceSidebarAllScopeId
         default:
@@ -58,6 +58,12 @@ func workspaceSidebarWorkspaceMatchesScope(
     selectedScopeId: String,
     focusedMonitorScopeId: String,
 ) -> Bool {
+    if selectedScopeId == workspaceSidebarDefaultScopeId {
+        return workspace.monitorScopeId != workspaceSidebarAllScopeId
+    }
+    if selectedScopeId == workspaceSidebarAllScopeId {
+        return workspace.monitorScopeId != workspaceSidebarAllScopeId
+    }
     if selectedScopeId == workspaceSidebarFocusedScopeId {
         return workspace.isVisible &&
             (workspace.monitorScopeId == focusedMonitorScopeId || workspace.monitorScopeId == workspaceSidebarAllScopeId)

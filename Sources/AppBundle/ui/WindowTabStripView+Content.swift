@@ -81,7 +81,7 @@ extension WindowTabStripView {
         }
         .mask {
             WindowTabStripScrollFadeMask(
-                leadingFadeWidth: context.leadingFadeWidth(contentMaxX: tabScrollContentMaxX),
+                leadingFadeWidth: context.leadingFadeWidth(contentMinX: tabScrollContentMinX),
                 trailingFadeWidth: context.trailingFadeWidth(contentMinX: tabScrollContentMinX),
             )
         }

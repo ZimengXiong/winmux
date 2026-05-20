@@ -54,23 +54,25 @@ extension WorkspaceSidebarView {
                     displayedProjectId: projectId,
                     pageWorkspaces: workspaces
                 ) {
-                    workspaceSection(
-                        workspace: pinnedActiveWorkspace,
-                        expansionProgress: expansionProgress,
-                        isInteractive: isInteractive,
-                        isPinnedActiveWorkspace: true,
-                        projectContextLabel: "Current",
-                        projectContextColor: projectColor(snapshot.selectedProjectId)
-                    )
-                }
+            workspaceSection(
+                workspace: pinnedActiveWorkspace,
+                expansionProgress: expansionProgress,
+                isInteractive: isInteractive,
+                allowsWorkspaceActivation: false,
+                isPinnedActiveWorkspace: true,
+                projectContextLabel: "Current",
+                projectContextColor: projectColor(snapshot.selectedProjectId)
+            )
+        }
                 ForEach(workspaces) { workspace in
                     workspaceSection(
-                        workspace: workspace,
-                        expansionProgress: expansionProgress,
-                        isInteractive: isInteractive,
-                        isPinnedActiveWorkspace: false,
-                        projectContextLabel: browsedProjectId != nil && projectId != snapshot.selectedProjectId ? "Selected" : nil,
-                        projectContextColor: browsedProjectId != nil && projectId != snapshot.selectedProjectId ? projectColor(projectId) : nil
+                    workspace: workspace,
+                    expansionProgress: expansionProgress,
+                    isInteractive: isInteractive,
+                    allowsWorkspaceActivation: allowsWorkspaceActivation(projectId: projectId),
+                    isPinnedActiveWorkspace: false,
+                    projectContextLabel: browsedProjectId != nil && projectId != snapshot.selectedProjectId ? "Selected" : nil,
+                    projectContextColor: browsedProjectId != nil && projectId != snapshot.selectedProjectId ? projectColor(projectId) : nil
                     )
                 }
                 if workspaceSidebarShowsCreateWorkspace(selectedScopeId: snapshot.selectedMonitorScopeId) && browsedProjectId == nil {
@@ -84,6 +86,7 @@ extension WorkspaceSidebarView {
                                 projectId: projectId,
                                 monitorScopeId: workspaceSidebarWorkspaceCreateScope(
                                     selectedScopeId: snapshot.selectedMonitorScopeId,
+                                    targetMonitorScopeId: snapshot.targetMonitorScopeId,
                                     focusedScopeId: snapshot.focusedMonitorScopeId,
                                 )
                             ))
@@ -91,6 +94,7 @@ extension WorkspaceSidebarView {
                         onDropPayload: { payload in
                             let monitorScopeId = workspaceSidebarWorkspaceCreateScope(
                                 selectedScopeId: snapshot.selectedMonitorScopeId,
+                                targetMonitorScopeId: snapshot.targetMonitorScopeId,
                                 focusedScopeId: snapshot.focusedMonitorScopeId,
                             )
                             switch payload {
@@ -125,17 +129,20 @@ extension WorkspaceSidebarView {
         workspace: WorkspaceSidebarWorkspaceViewModel,
         expansionProgress: CGFloat,
         isInteractive: Bool,
+        allowsWorkspaceActivation: Bool,
         isPinnedActiveWorkspace: Bool,
         projectContextLabel: String? = nil,
         projectContextColor: Color? = nil
     ) -> some View {
         let isFromOtherDisplay = snapshot.selectedMonitorScopeId == workspaceSidebarAllScopeId &&
-            workspace.monitorScopeId != snapshot.focusedMonitorScopeId &&
+            workspace.monitorScopeId != snapshot.targetMonitorScopeId &&
             workspace.monitorScopeId != workspaceSidebarAllScopeId
-        let isInUseOnOtherDisplay = !isPinnedActiveWorkspace && workspaceSidebarWorkspaceIsInUseOnOtherDisplay(
-            workspace,
-            selectedScopeId: snapshot.selectedMonitorScopeId
-        )
+        let isInUseOnOtherDisplay = allowsWorkspaceActivation &&
+            !isPinnedActiveWorkspace &&
+            workspaceSidebarWorkspaceIsInUseOnOtherDisplay(
+                workspace,
+                selectedScopeId: snapshot.targetMonitorScopeId
+            )
         WorkspaceSidebarWorkspaceSection(
             workspace: workspace,
             dragPreview: snapshot.dropPreview,
@@ -144,12 +151,20 @@ extension WorkspaceSidebarView {
             emitsDropTarget: isInteractive,
             isFromOtherDisplay: isFromOtherDisplay,
             isInUseOnOtherDisplay: isInUseOnOtherDisplay,
+            allowsWorkspaceActivation: allowsWorkspaceActivation,
             isPinnedActiveWorkspace: isPinnedActiveWorkspace,
+            isActiveOnTargetMonitor: workspace.monitorScopeId == snapshot.targetMonitorScopeId && workspace.isVisible,
             projectContextLabel: projectContextLabel,
             projectContextColor: projectContextColor,
             activeInUseOverrideWorkspaceName: $activeInUseOverrideWorkspaceName,
             actions: actions,
         )
+    }
+
+    private func allowsWorkspaceActivation(projectId: WorkspaceProjectId) -> Bool {
+        snapshot.selectedMonitorScopeId == workspaceSidebarDefaultScopeId &&
+            browsedProjectId == nil &&
+            projectId == snapshot.activeProjectId
     }
 
     private func projectColorHex(_ projectId: WorkspaceProjectId) -> String? {

@@ -2,7 +2,7 @@ import AppKit
 
 @MainActor
 func workspaceSidebarCursorPreviewRect(at mouseLocation: CGPoint) -> Rect {
-    workspaceSidebarCursorPreviewRect(at: mouseLocation, sidebarRect: WorkspaceSidebarPanel.shared.visibleScreenRectNormalized())
+    workspaceSidebarCursorPreviewRect(at: mouseLocation, sidebarRect: WorkspaceSidebarPanel.panel(containing: mouseLocation)?.visibleScreenRectNormalized())
 }
 
 func workspaceSidebarCursorPreviewRect(at mouseLocation: CGPoint, sidebarRect: Rect?) -> Rect {

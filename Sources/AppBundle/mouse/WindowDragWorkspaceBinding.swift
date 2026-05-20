@@ -1,4 +1,5 @@
 import AppKit
+import Common
 
 @MainActor
 func workspaceMoveBindingData(
@@ -39,15 +40,26 @@ func workspaceAppendBindingData(targetWorkspace: Workspace, index: Int) -> Bindi
 
 @MainActor
 func workspaceSiblingInsertionRoot(_ workspace: Workspace) -> TilingContainer {
+    workspaceSiblingInsertionRoot(workspace, orientation: nil)
+}
+
+@MainActor
+func workspaceSiblingInsertionRoot(_ workspace: Workspace, orientation: Orientation?) -> TilingContainer {
     let root = workspace.rootTilingContainer
-    guard root.layout == .tabGroup, !root.children.isEmpty else { return root }
+    guard !root.children.isEmpty else {
+        if let orientation, root.orientation != orientation {
+            root.changeOrientation(orientation)
+        }
+        return root
+    }
+    guard root.layout == .tabGroup || orientation.map({ root.orientation != $0 }) == true else { return root }
 
     let previousRoot = root
     previousRoot.unbindFromParent()
     _ = TilingContainer(
         parent: workspace,
         adaptiveWeight: WEIGHT_AUTO,
-        previousRoot.orientation.opposite,
+        orientation ?? previousRoot.orientation.opposite,
         .tiles,
         index: 0,
     )

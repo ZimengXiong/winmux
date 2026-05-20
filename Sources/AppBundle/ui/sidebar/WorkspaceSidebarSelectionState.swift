@@ -12,10 +12,20 @@ func sanitizedWorkspaceSidebarHoveredWorkspaceName(
 
 func resolvedWorkspaceSidebarSelectedProjectId(
     validProjectIds: Set<WorkspaceProjectId>,
-    activeProjectId: WorkspaceProjectId,
+    previousSelectedProjectId: WorkspaceProjectId,
+    previousActiveProjectId: WorkspaceProjectId,
+    fallbackProjectId: WorkspaceProjectId,
 ) -> WorkspaceProjectId {
-    if validProjectIds.contains(activeProjectId) {
-        return activeProjectId
+    if previousSelectedProjectId == previousActiveProjectId,
+       validProjectIds.contains(fallbackProjectId)
+    {
+        return fallbackProjectId
+    }
+    if validProjectIds.contains(previousSelectedProjectId) {
+        return previousSelectedProjectId
+    }
+    if validProjectIds.contains(fallbackProjectId) {
+        return fallbackProjectId
     }
     if validProjectIds.contains(workspaceProjectDefaultId) {
         return workspaceProjectDefaultId

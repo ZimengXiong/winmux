@@ -26,5 +26,6 @@ struct WorkspaceSidebarDropTargetPreferenceKey: PreferenceKey {
 
 @MainActor
 func workspaceSidebarDropTarget(at mouseLocation: CGPoint) -> WorkspaceSidebarDropTarget? {
-    workspaceSidebarDropTargets.last(where: { $0.rect.contains(mouseLocation) })
+    WorkspaceSidebarPanel.panel(containing: mouseLocation)
+        .flatMap { panel in workspaceSidebarDropTargets.last(where: { panel.visibleScreenRectNormalized()?.contains($0.rect.center) == true && $0.rect.contains(mouseLocation) }) }
 }

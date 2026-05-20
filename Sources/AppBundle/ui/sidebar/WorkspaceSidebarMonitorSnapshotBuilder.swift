@@ -24,6 +24,12 @@ func workspaceSidebarResolvedPanelMonitor() -> Monitor {
 }
 
 @MainActor
+func workspaceSidebarResolvedPanelMonitors() -> [Monitor] {
+    let resolved = config.workspaceSidebar.resolvedMonitors(sortedMonitors: sortedMonitors)
+    return resolved.isEmpty ? [mainMonitor] : resolved
+}
+
+@MainActor
 func buildWorkspaceSidebarMonitorScopes(
     sortedMonitors: [Monitor],
     focusedMonitorScopeId: String,

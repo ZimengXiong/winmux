@@ -134,18 +134,17 @@ struct WinMuxWorkspaceState {
         return lanesById[laneId]?.activeWorkspaceId.flatMap { workspaceById[$0] }
     }
 
+    func isWorkspaceActive(_ workspaceId: WorkspaceId, outside laneId: DisplayLaneId) -> Bool {
+        lanesById.contains { otherLaneId, lane in
+            otherLaneId != laneId && lane.activeWorkspaceId == workspaceId
+        }
+    }
+
     mutating func setActiveWorkspace(_ workspace: Workspace, on laneId: DisplayLaneId) -> Bool {
         ensureLaneExists(laneId)
         ensureProjectExists(workspace.projectId)
         if workspace.laneId != laneId {
             moveWorkspace(workspace, to: laneId)
-        }
-
-        for (otherLaneId, otherLane) in lanesById where otherLane.activeWorkspaceId == workspace.id && otherLaneId != laneId {
-            var otherLane = otherLane
-            otherLane.previousWorkspaceId = workspace.id
-            otherLane.activeWorkspaceId = nil
-            lanesById[otherLaneId] = otherLane
         }
 
         var lane = lanesById[laneId] ?? DisplayLane(id: laneId)

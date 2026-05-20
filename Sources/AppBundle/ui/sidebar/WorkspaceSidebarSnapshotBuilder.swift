@@ -11,8 +11,10 @@ func buildWorkspaceSidebarSnapshot() async -> WorkspaceSidebarSnapshot {
         workspaces: TrayMenuModel.shared.workspaceSidebarWorkspaces,
         projects: TrayMenuModel.shared.workspaceSidebarProjects,
         selectedProjectId: TrayMenuModel.shared.workspaceSidebarSelectedProjectId,
+        activeProjectId: TrayMenuModel.shared.workspaceSidebarActiveProjectId,
         monitorScopes: TrayMenuModel.shared.workspaceSidebarMonitorScopes,
         selectedMonitorScopeId: TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId,
+        targetMonitorScopeId: TrayMenuModel.shared.workspaceSidebarTargetMonitorScopeId,
         focusedMonitorScopeId: TrayMenuModel.shared.workspaceSidebarFocusedMonitorScopeId,
         visibleWidth: TrayMenuModel.shared.workspaceSidebarVisibleWidth,
         hoveredWorkspaceName: TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName,
@@ -31,8 +33,10 @@ func applyWorkspaceSidebarSnapshotToTrayModel(_ snapshot: WorkspaceSidebarSnapsh
     TrayMenuModel.shared.workspaceSidebarWorkspaces = snapshot.workspaces
     TrayMenuModel.shared.workspaceSidebarProjects = snapshot.projects
     TrayMenuModel.shared.workspaceSidebarSelectedProjectId = snapshot.selectedProjectId
+    TrayMenuModel.shared.workspaceSidebarActiveProjectId = snapshot.activeProjectId
     TrayMenuModel.shared.workspaceSidebarMonitorScopes = snapshot.monitorScopes
     TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId = snapshot.selectedMonitorScopeId
+    TrayMenuModel.shared.workspaceSidebarTargetMonitorScopeId = snapshot.targetMonitorScopeId
     TrayMenuModel.shared.workspaceSidebarFocusedMonitorScopeId = snapshot.focusedMonitorScopeId
     TrayMenuModel.shared.workspaceSidebarShowsMonitorSelector = snapshot.configuration.showMonitorSelector
     TrayMenuModel.shared.workspaceSidebarVisibleWidth = snapshot.visibleWidth

@@ -4,12 +4,12 @@ import SwiftUI
 
 @MainActor
 final class WorkspaceSidebarPanel: NSPanelHud {
-    static let shared = WorkspaceSidebarPanel()
+    static let shared = WorkspaceSidebarPanel(monitor: mainMonitor)
+    private static var panelsByMonitorScopeId: [String: WorkspaceSidebarPanel] = [:]
 
-    let hostingView = NSHostingView(rootView: WorkspaceSidebarContainerView(
-        viewModel: TrayMenuModel.shared,
-        actions: makeWorkspaceSidebarActionsAdapter()
-    ))
+    let viewModel: TrayMenuModel
+    let hostingView: NSHostingView<WorkspaceSidebarContainerView>
+    let monitorScopeId: String
     var pendingExpand: DispatchWorkItem?
     var pendingCollapse: DispatchWorkItem?
     var pendingCollapseFinalize: DispatchWorkItem?
@@ -26,16 +26,29 @@ final class WorkspaceSidebarPanel: NSPanelHud {
     var inlineTextEditingStartedAt: Date = .distantPast
     var inlineTextEditingPointerEnteredVisibleRegion = false
     var menuTrackingObservers: [NSObjectProtocol] = []
+    var lastEdgeTrapSample: MousePointerSample?
+    var edgeTrapStartedAt: TimeInterval?
+    var edgeTrapSuppressedUntil: TimeInterval = 0
     let hoverExitTolerance: CGFloat = 20
     let hoverPollInterval: TimeInterval = 1.0 / 30.0
     let hoverOpenDelay: TimeInterval = 0.05
     let hoverCueAnimationResponse: TimeInterval = 0.18
     let animationDuration: TimeInterval = 0.14
     let menuTrackingEndGrace: TimeInterval = 0.75
+    let edgeTrapBandWidth: CGFloat = 18
+    let edgeTrapReleaseVelocityThreshold: CGFloat = 4
+    let edgeTrapReleaseDelay: TimeInterval = 0.2
+    let edgeTrapCrossingGrace: TimeInterval = 0.25
 
-    override private init() {
+    private init(monitor: Monitor) {
+        monitorScopeId = workspaceSidebarMonitorScopeId(for: monitor)
+        viewModel = TrayMenuModel()
+        hostingView = NSHostingView(rootView: WorkspaceSidebarContainerView(
+            viewModel: viewModel,
+            actions: makeWorkspaceSidebarActionsAdapter(viewModel: viewModel, targetMonitorScopeId: monitorScopeId)
+        ))
         super.init()
-        identifier = NSUserInterfaceItemIdentifier(workspaceSidebarPanelId)
+        identifier = NSUserInterfaceItemIdentifier("\(workspaceSidebarPanelId).\(monitorScopeId)")
         styleMask.remove(.nonactivatingPanel)
         titleVisibility = .hidden
         titlebarAppearsTransparent = true
@@ -52,6 +65,84 @@ final class WorkspaceSidebarPanel: NSPanelHud {
         standardWindowButton(.miniaturizeButton)?.isHidden = true
         standardWindowButton(.zoomButton)?.isHidden = true
         installMenuTrackingObservers()
+    }
+
+    static var visiblePanels: [WorkspaceSidebarPanel] {
+        panelsByMonitorScopeId.values.filter(\.isVisible)
+    }
+
+    static func panel(containing point: CGPoint) -> WorkspaceSidebarPanel? {
+        visiblePanels.first { $0.visibleScreenRectNormalized()?.contains(point) == true }
+    }
+
+    static func updateVisibleDropTargets(_ targets: [WorkspaceSidebarDropTargetFrame]) {
+        workspaceSidebarDropTargets = visiblePanels.flatMap { $0.convertDropTargets(targets) }
+    }
+
+    static func refreshAll() {
+        let activeMonitorScopeIds = Set(workspaceSidebarResolvedPanelMonitors().map { workspaceSidebarMonitorScopeId(for: $0) })
+        for monitor in workspaceSidebarResolvedPanelMonitors() {
+            let scopeId = workspaceSidebarMonitorScopeId(for: monitor)
+            let panel = panelsByMonitorScopeId[scopeId] ?? WorkspaceSidebarPanel(monitor: monitor)
+            panelsByMonitorScopeId[scopeId] = panel
+            panel.syncModelFromShared()
+            panel.refresh(on: monitor)
+        }
+        for (scopeId, panel) in panelsByMonitorScopeId where !activeMonitorScopeIds.contains(scopeId) {
+            panel.resetHiddenSidebarState()
+        }
+    }
+
+    static func syncVisiblePanelModelsFromShared() {
+        for panel in panelsByMonitorScopeId.values {
+            panel.syncModelFromShared()
+        }
+    }
+
+    func syncModelFromShared() {
+        let visibleWidth = viewModel.workspaceSidebarVisibleWidth
+        let isExpanded = viewModel.isWorkspaceSidebarExpanded
+        viewModel.trayText = TrayMenuModel.shared.trayText
+        viewModel.trayItems = TrayMenuModel.shared.trayItems
+        viewModel.isEnabled = TrayMenuModel.shared.isEnabled
+        viewModel.workspaces = TrayMenuModel.shared.workspaces
+        viewModel.workspaceSidebarWorkspaces = TrayMenuModel.shared.workspaceSidebarWorkspaces
+        viewModel.workspaceSidebarProjects = TrayMenuModel.shared.workspaceSidebarProjects
+        viewModel.workspaceSidebarSelectedProjectId = resolvedLocalSelectedProjectId()
+        viewModel.workspaceSidebarActiveProjectId = resolvedLocalActiveProjectId()
+        viewModel.workspaceSidebarMonitorScopes = TrayMenuModel.shared.workspaceSidebarMonitorScopes
+        viewModel.workspaceSidebarSelectedMonitorScopeId = resolvedLocalSelectedMonitorScopeId()
+        viewModel.workspaceSidebarTargetMonitorScopeId = monitorScopeId
+        viewModel.workspaceSidebarFocusedMonitorScopeId = TrayMenuModel.shared.workspaceSidebarFocusedMonitorScopeId
+        viewModel.workspaceSidebarShowsMonitorSelector = TrayMenuModel.shared.workspaceSidebarShowsMonitorSelector
+        viewModel.workspaceSidebarDropPreview = TrayMenuModel.shared.workspaceSidebarDropPreview
+        viewModel.windowTabStrips = TrayMenuModel.shared.windowTabStrips
+        viewModel.workspaceSidebarTopPadding = TrayMenuModel.shared.workspaceSidebarTopPadding
+        viewModel.workspaceSidebarHoveredWorkspaceName = TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName
+        viewModel.experimentalUISettings = TrayMenuModel.shared.experimentalUISettings
+        viewModel.workspaceSidebarVisibleWidth = visibleWidth
+        viewModel.isWorkspaceSidebarExpanded = isExpanded
+    }
+
+    private func resolvedLocalSelectedProjectId() -> WorkspaceProjectId {
+        let validProjectIds = Set(TrayMenuModel.shared.workspaceSidebarProjects.map(\.id))
+        if validProjectIds.contains(viewModel.workspaceSidebarSelectedProjectId) {
+            return viewModel.workspaceSidebarSelectedProjectId
+        }
+        return resolvedLocalActiveProjectId()
+    }
+
+    private func resolvedLocalActiveProjectId() -> WorkspaceProjectId {
+        let monitor = workspaceSidebarMonitor(forScopeId: monitorScopeId)
+        return monitor.map { activeWorkspaceProjectId(for: $0) } ?? workspaceProjectDefaultId
+    }
+
+    private func resolvedLocalSelectedMonitorScopeId() -> String {
+        let validScopeIds = Set(TrayMenuModel.shared.workspaceSidebarMonitorScopes.map(\.id))
+        if validScopeIds.contains(viewModel.workspaceSidebarSelectedMonitorScopeId) {
+            return viewModel.workspaceSidebarSelectedMonitorScopeId
+        }
+        return workspaceSidebarDefaultScopeId
     }
 
     override var canBecomeKey: Bool { true }

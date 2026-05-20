@@ -172,18 +172,22 @@ final class WorkspaceSidebarDragTest: XCTestCase {
     func testWorkspaceSidebarCreateScopeUsesFocusedScopeForSyntheticSelections() {
         XCTAssertEqual(workspaceSidebarWorkspaceCreateScope(
             selectedScopeId: workspaceSidebarDefaultScopeId,
+            targetMonitorScopeId: "monitor:target",
             focusedScopeId: "monitor:a"
-        ), "monitor:a")
+        ), "monitor:target")
         XCTAssertEqual(workspaceSidebarWorkspaceCreateScope(
             selectedScopeId: workspaceSidebarFocusedScopeId,
+            targetMonitorScopeId: "monitor:target",
             focusedScopeId: "monitor:a"
         ), "monitor:a")
         XCTAssertEqual(workspaceSidebarWorkspaceCreateScope(
             selectedScopeId: workspaceSidebarAllScopeId,
+            targetMonitorScopeId: "monitor:target",
             focusedScopeId: "monitor:a"
-        ), "monitor:a")
+        ), "monitor:target")
         XCTAssertEqual(workspaceSidebarWorkspaceCreateScope(
             selectedScopeId: "monitor:b",
+            targetMonitorScopeId: "monitor:target",
             focusedScopeId: "monitor:a"
         ), "monitor:b")
     }
@@ -389,11 +393,25 @@ final class WorkspaceSidebarDragTest: XCTestCase {
         )
     }
 
-    func testSidebarSelectedProjectFollowsActiveProject() {
+    func testSidebarSelectedProjectKeepsPreviousProject() {
         XCTAssertEqual(
             resolvedWorkspaceSidebarSelectedProjectId(
                 validProjectIds: [workspaceProjectDefaultId, "project-1", "project-2"],
-                activeProjectId: "project-2",
+                previousSelectedProjectId: "project-1",
+                previousActiveProjectId: workspaceProjectDefaultId,
+                fallbackProjectId: "project-2",
+            ),
+            "project-1",
+        )
+    }
+
+    func testSidebarSelectedProjectFollowsActualProjectWhenNotBrowsing() {
+        XCTAssertEqual(
+            resolvedWorkspaceSidebarSelectedProjectId(
+                validProjectIds: [workspaceProjectDefaultId, "project-1", "project-2"],
+                previousSelectedProjectId: "project-1",
+                previousActiveProjectId: "project-1",
+                fallbackProjectId: "project-2",
             ),
             "project-2",
         )
@@ -403,9 +421,11 @@ final class WorkspaceSidebarDragTest: XCTestCase {
         XCTAssertEqual(
             resolvedWorkspaceSidebarSelectedProjectId(
                 validProjectIds: [workspaceProjectDefaultId, "project-1"],
-                activeProjectId: "project-2",
+                previousSelectedProjectId: "project-2",
+                previousActiveProjectId: workspaceProjectDefaultId,
+                fallbackProjectId: "project-1",
             ),
-            workspaceProjectDefaultId,
+            "project-1",
         )
     }
 
@@ -426,6 +446,16 @@ final class WorkspaceSidebarDragTest: XCTestCase {
         )
     }
 
+    func testWorkspaceSidebarDefaultScopeShowsWholeProject() {
+        XCTAssertTrue(
+            workspaceSidebarWorkspaceMatchesScope(
+                workspaceMonitorScopeId: "monitor:1440.0,0.0",
+                selectedScopeId: workspaceSidebarDefaultScopeId,
+                focusedMonitorScopeId: "monitor:0.0,0.0",
+            ),
+        )
+    }
+
     func testWorkspaceSidebarAllMonitorScopeMatchesAnyMonitor() {
         XCTAssertTrue(
             workspaceSidebarWorkspaceMatchesScope(
@@ -433,6 +463,29 @@ final class WorkspaceSidebarDragTest: XCTestCase {
                 selectedScopeId: workspaceSidebarAllScopeId,
                 focusedMonitorScopeId: "monitor:0.0,0.0",
             ),
+        )
+    }
+
+    func testWorkspaceSidebarAllMonitorScopeShowsNonVisibleWorkspaces() {
+        let workspace = WorkspaceSidebarWorkspaceViewModel(
+            name: "2",
+            projectId: workspaceProjectDefaultId,
+            displayName: "2",
+            sidebarLabel: "2",
+            isGeneratedName: false,
+            monitorScopeId: "monitor:1440.0,0.0",
+            monitorName: "Secondary",
+            isFocused: false,
+            isVisible: false,
+            items: [],
+        )
+
+        XCTAssertTrue(
+            workspaceSidebarWorkspaceMatchesScope(
+                workspace,
+                selectedScopeId: workspaceSidebarAllScopeId,
+                focusedMonitorScopeId: "monitor:0.0,0.0",
+            )
         )
     }
 

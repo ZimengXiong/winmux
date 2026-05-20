@@ -5,9 +5,27 @@ import SwiftUI
 extension WorkspaceSidebarProjectPager {
     @ViewBuilder
     var compactProjectIndicator: some View {
-        if let selectedProject, let currentIndex {
-            projectDot(selectedProject, index: currentIndex)
-            .frame(width: sectionWidth, height: workspaceSidebarPagerHeight, alignment: .center)
+        ScrollViewReader { proxy in
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .center, spacing: 0) {
+                    ForEach(Array(projects.enumerated()), id: \.element.id) { index, project in
+                        projectDot(project, index: index)
+                            .id(project.id)
+                    }
+                }
+                .frame(width: sectionWidth, alignment: .center)
+            }
+            .frame(width: sectionWidth, height: compactProjectControlsHeight, alignment: .center)
+            .clipped()
+            .onAppear {
+                scrollCompactProjectTrackToCurrent(proxy)
+            }
+            .onChange(of: selectedProjectId) { _ in
+                scrollCompactProjectTrackToCurrent(proxy)
+            }
+            .onChange(of: compactProjectControlsHeight) { _ in
+                scrollCompactProjectTrackToCurrent(proxy)
+            }
         }
     }
 
@@ -94,6 +112,11 @@ extension WorkspaceSidebarProjectPager {
                 proxy.scrollTo(projectId, anchor: .center)
             }
         }
+    }
+
+    private func scrollCompactProjectTrackToCurrent(_ proxy: ScrollViewProxy) {
+        guard let selectedProject else { return }
+        scrollProjectTrack(to: selectedProject.id, proxy: proxy, animated: true)
     }
 
     @ViewBuilder

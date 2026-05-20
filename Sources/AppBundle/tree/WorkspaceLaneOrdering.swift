@@ -17,6 +17,20 @@ func workspaceScope(projectId: WorkspaceProjectId, monitor: Monitor) -> Workspac
         projectId: projectId,
         laneId: DisplayLaneId(monitor),
         monitor: monitor,
+        excluding: nil,
+    )
+}
+
+@MainActor func getOrCreateLaneFallbackWorkspace(
+    projectId: WorkspaceProjectId,
+    for monitor: Monitor,
+    excluding excludedWorkspace: Workspace?,
+) -> Workspace {
+    getOrCreateFallbackWorkspace(
+        projectId: projectId,
+        laneId: DisplayLaneId(monitor),
+        monitor: monitor,
+        excluding: excludedWorkspace,
     )
 }
 
@@ -27,6 +41,7 @@ func getOrCreateLaneFallbackWorkspace(forPoint point: CGPoint) -> Workspace {
         projectId: activeWorkspaceProjectId(for: monitor),
         laneId: DisplayLaneId(topLeftCorner: point),
         monitor: monitor,
+        excluding: nil,
     )
 }
 
@@ -35,16 +50,23 @@ func getOrCreateFallbackWorkspace(
     projectId: WorkspaceProjectId,
     laneId: DisplayLaneId,
     monitor: Monitor,
+    excluding excludedWorkspace: Workspace?,
 ) -> Workspace {
     let scope = WorkspaceScope(projectId: projectId, laneId: laneId)
     if let workspaceId = retainedEmptyWorkspaceId(in: scope),
        let workspace = winMuxWorkspaceState.workspaceById[workspaceId],
+       workspace != excludedWorkspace,
        isValidAssignment(workspace: workspace, screen: monitor.rect.topLeftCorner)
     {
         return workspace
     }
     if let workspace = workspaceProjectLaneWorkspaces(projectId: projectId, laneId: laneId)
-        .first(where: { $0.isEffectivelyEmpty && !$0.isArchived && isValidAssignment(workspace: $0, screen: monitor.rect.topLeftCorner) })
+        .first(where: {
+            $0 != excludedWorkspace &&
+                $0.isEffectivelyEmpty &&
+                !$0.isArchived &&
+                isValidAssignment(workspace: $0, screen: monitor.rect.topLeftCorner)
+        })
     {
         return workspace
     }

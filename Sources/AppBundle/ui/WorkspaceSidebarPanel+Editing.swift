@@ -214,7 +214,7 @@ extension WorkspaceSidebarPanel {
         let visibleRegion = NSRect(
             x: frame.minX,
             y: frame.minY,
-            width: TrayMenuModel.shared.workspaceSidebarVisibleWidth,
+            width: viewModel.workspaceSidebarVisibleWidth,
             height: frame.height,
         )
         return visibleRegion.contains(point)

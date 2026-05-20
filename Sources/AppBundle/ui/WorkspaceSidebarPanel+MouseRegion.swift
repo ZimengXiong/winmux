@@ -11,7 +11,7 @@ extension WorkspaceSidebarPanel {
     func isMouseInsideHoverRegion() -> Bool {
         guard isVisible else { return false }
         let hoverWidth = max(
-            TrayMenuModel.shared.workspaceSidebarVisibleWidth,
+            viewModel.workspaceSidebarVisibleWidth,
             CGFloat(config.workspaceSidebar.collapsedWidth),
         ) + hoverExitTolerance
         let hoverRegion = NSRect(x: frame.minX, y: frame.minY, width: hoverWidth, height: frame.height)
@@ -23,7 +23,7 @@ extension WorkspaceSidebarPanel {
         let visibleRegion = NSRect(
             x: frame.minX,
             y: frame.minY,
-            width: TrayMenuModel.shared.workspaceSidebarVisibleWidth,
+            width: viewModel.workspaceSidebarVisibleWidth,
             height: frame.height,
         )
         return visibleRegion.contains(NSEvent.mouseLocation)

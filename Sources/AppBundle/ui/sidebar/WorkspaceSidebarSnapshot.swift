@@ -4,8 +4,10 @@ struct WorkspaceSidebarSnapshot: Equatable {
     var workspaces: [WorkspaceSidebarWorkspaceViewModel]
     var projects: [WorkspaceSidebarProjectViewModel]
     var selectedProjectId: WorkspaceProjectId
+    var activeProjectId: WorkspaceProjectId
     var monitorScopes: [WorkspaceSidebarMonitorScopeViewModel]
     var selectedMonitorScopeId: String
+    var targetMonitorScopeId: String
     var focusedMonitorScopeId: String
     var visibleWidth: CGFloat
     var hoveredWorkspaceName: String?
@@ -16,8 +18,10 @@ struct WorkspaceSidebarSnapshot: Equatable {
         workspaces: [],
         projects: [],
         selectedProjectId: workspaceProjectDefaultId,
+        activeProjectId: workspaceProjectDefaultId,
         monitorScopes: [],
         selectedMonitorScopeId: workspaceSidebarDefaultScopeId,
+        targetMonitorScopeId: workspaceSidebarDefaultScopeId,
         focusedMonitorScopeId: "",
         visibleWidth: 0,
         hoveredWorkspaceName: nil,
@@ -46,6 +50,7 @@ struct WorkspaceSidebarConfiguration: Equatable {
 
 enum WorkspaceSidebarAction: Equatable {
     case selectWorkspace(String)
+    case overrideWorkspaceInUse(String)
     case selectWindow(UInt32)
     case selectProject(WorkspaceProjectId)
     case createProject

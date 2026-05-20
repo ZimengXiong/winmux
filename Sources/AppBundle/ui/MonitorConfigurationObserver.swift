@@ -30,7 +30,7 @@ final class MonitorConfigurationObserver {
     }
 
     private func refreshMonitorPolicy(refreshReason: String) {
-        WorkspaceSidebarPanel.shared.refresh()
+        WorkspaceSidebarPanel.refreshAll()
         WindowTabStripPanelController.shared.refresh()
         if TrayMenuModel.shared.isEnabled {
             scheduleRefreshSession(.globalObserver(refreshReason))

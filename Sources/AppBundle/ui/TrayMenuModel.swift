@@ -4,7 +4,7 @@ import Common
 public final class TrayMenuModel: ObservableObject {
     @MainActor public static let shared = TrayMenuModel()
 
-    private init() {}
+    init() {}
 
     @Published var trayText: String = ""
     @Published var trayItems: [TrayItem] = []
@@ -14,8 +14,10 @@ public final class TrayMenuModel: ObservableObject {
     @Published var workspaceSidebarWorkspaces: [WorkspaceSidebarWorkspaceViewModel] = []
     @Published var workspaceSidebarProjects: [WorkspaceSidebarProjectViewModel] = []
     @Published var workspaceSidebarSelectedProjectId: WorkspaceProjectId = workspaceProjectDefaultId
+    @Published var workspaceSidebarActiveProjectId: WorkspaceProjectId = workspaceProjectDefaultId
     @Published var workspaceSidebarMonitorScopes: [WorkspaceSidebarMonitorScopeViewModel] = []
     @Published var workspaceSidebarSelectedMonitorScopeId: String = workspaceSidebarDefaultScopeId
+    @Published var workspaceSidebarTargetMonitorScopeId: String = workspaceSidebarDefaultScopeId
     @Published var workspaceSidebarFocusedMonitorScopeId: String = ""
     @Published var workspaceSidebarShowsMonitorSelector: Bool = false
     @Published var workspaceSidebarDropPreview: WorkspaceSidebarDropPreviewViewModel? = nil

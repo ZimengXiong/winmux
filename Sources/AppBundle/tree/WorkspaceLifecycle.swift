@@ -9,9 +9,9 @@ func switchWorkspaceProject(_ projectId: WorkspaceProjectId, on monitor: Monitor
     let rememberedWorkspace = winMuxWorkspaceState.projectsById[projectId]?
         .lastActiveWorkspaceByLane[laneId]
         .flatMap { winMuxWorkspaceState.workspaceById[$0] }
-        .flatMap { isValidAssignment(workspace: $0, screen: monitor.rect.topLeftCorner) ? $0 : nil }
+        .flatMap { workspaceIsAvailableForMonitor($0, monitor: monitor) ? $0 : nil }
     let workspace = rememberedWorkspace
-        ?? preferredWorkspace(projectId: projectId, monitor: monitor)
+        ?? availablePreferredWorkspace(projectId: projectId, monitor: monitor)
         ?? createBlankWorkspace(projectId: projectId, monitor: monitor)
     return monitor.setActiveWorkspace(workspace) ? workspace : nil
 }
@@ -229,10 +229,25 @@ func replacementWorkspaceForPrunedWorkspace(
 func ensureVisibleActiveProjectWorkspaces() {
     for monitor in monitors where winMuxWorkspaceState.visibleWorkspace(for: monitor) == nil {
         let projectId = activeWorkspaceProjectId(for: monitor)
-        let workspace = preferredWorkspace(projectId: projectId, monitor: monitor)
+        let workspace = availablePreferredWorkspace(projectId: projectId, monitor: monitor)
             ?? createBlankWorkspace(projectId: projectId, monitor: monitor)
         check(monitor.setActiveWorkspace(workspace))
     }
+}
+
+@MainActor
+func availablePreferredWorkspace(projectId: WorkspaceProjectId, monitor: Monitor) -> Workspace? {
+    orderedWorkspacesForPresentation()
+        .filter { $0.projectId == projectId }
+        .filter { !$0.isArchived }
+        .filter { isValidAssignment(workspace: $0, screen: monitor.rect.topLeftCorner) }
+        .first { workspaceIsAvailableForMonitor($0, monitor: monitor) }
+}
+
+@MainActor
+func workspaceIsAvailableForMonitor(_ workspace: Workspace, monitor: Monitor) -> Bool {
+    isValidAssignment(workspace: workspace, screen: monitor.rect.topLeftCorner) &&
+        (!workspace.isVisible || workspace.workspaceMonitor.rect.topLeftCorner == monitor.rect.topLeftCorner)
 }
 
 @MainActor
@@ -268,4 +283,3 @@ func repairInvalidVisibleWorkspaceAssignments() {
         winMuxWorkspaceState.lanesById[laneId] = lane
     }
 }
-

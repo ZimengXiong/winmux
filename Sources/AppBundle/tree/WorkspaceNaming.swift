@@ -26,10 +26,8 @@ func nextInternalAutomaticWorkspaceName() -> String {
 
 @MainActor
 func nextAutomaticWorkspaceDisplayIndex(projectId: WorkspaceProjectId, monitor: Monitor) -> Int {
-    let usedIndices = orderedUserFacingWorkspaces(
-        in: workspaceScope(projectId: projectId, monitor: monitor),
-        focusedWorkspace: nil,
-    )
+    let usedIndices = orderedWorkspacesForPresentation()
+        .filter { $0.projectId == projectId }
         .filter(\.usesAutomaticDisplayName)
         .compactMap { automaticWorkspaceDisplayIndex($0, focusedWorkspace: nil) }
         .toSet()

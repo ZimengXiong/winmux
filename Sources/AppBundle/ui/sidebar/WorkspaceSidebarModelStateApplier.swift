@@ -12,7 +12,7 @@ func clearWorkspaceSidebarModelState() {
         TrayMenuModel.shared.workspaceSidebarProjects = []
     }
     TrayMenuModel.shared.workspaceSidebarShowsMonitorSelector = false
-    WorkspaceSidebarPanel.shared.refresh()
+    WorkspaceSidebarPanel.refreshAll()
 }
 
 @MainActor
@@ -27,17 +27,19 @@ func applyWorkspaceSidebarModelState(_ state: WorkspaceSidebarModelState, previo
         TrayMenuModel.shared.workspaceSidebarSelectedProjectId != state.selectedProjectId
 
     updateWorkspaceSidebarTrayModel(with: state)
+    WorkspaceSidebarPanel.syncVisiblePanelModelsFromShared()
     let didWorkspaceChange = TrayMenuModel.shared.workspaceSidebarWorkspaces != state.workspaces
     if didWorkspaceChange {
         TrayMenuModel.shared.workspaceSidebarWorkspaces = state.workspaces
+        WorkspaceSidebarPanel.syncVisiblePanelModelsFromShared()
     }
     if didWorkspaceChange ||
         state.topPadding != previousTopPadding ||
         didMonitorScopeChange ||
         didProjectChange ||
-        !WorkspaceSidebarPanel.shared.isVisible
+        WorkspaceSidebarPanel.visiblePanels.isEmpty
     {
-        WorkspaceSidebarPanel.shared.refresh()
+        WorkspaceSidebarPanel.refreshAll()
     }
 }
 
@@ -47,6 +49,7 @@ private func updateWorkspaceSidebarTrayModel(with state: WorkspaceSidebarModelSt
     TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName = state.hoveredWorkspaceName
     TrayMenuModel.shared.workspaceSidebarProjects = state.projects
     TrayMenuModel.shared.workspaceSidebarSelectedProjectId = state.selectedProjectId
+    TrayMenuModel.shared.workspaceSidebarActiveProjectId = state.activeProjectId
     TrayMenuModel.shared.workspaceSidebarMonitorScopes = state.monitorScopes
     TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId = state.selectedMonitorScopeId
     TrayMenuModel.shared.workspaceSidebarFocusedMonitorScopeId = state.focusedMonitorScopeId

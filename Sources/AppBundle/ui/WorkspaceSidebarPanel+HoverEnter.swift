@@ -16,7 +16,7 @@ extension WorkspaceSidebarPanel {
             return
         }
         if !shouldDelayWorkspaceSidebarExpansion(
-            isExpanded: TrayMenuModel.shared.isWorkspaceSidebarExpanded,
+            isExpanded: viewModel.isWorkspaceSidebarExpanded,
             isExpansionLocked: isExpansionLocked,
             isMouseWindowDragInProgress: isExternalWindowDrag,
         ) {
@@ -32,7 +32,7 @@ extension WorkspaceSidebarPanel {
         if !isVisible {
             refresh()
         }
-        if TrayMenuModel.shared.workspaceSidebarVisibleWidth != collapsedWidth {
+        if viewModel.workspaceSidebarVisibleWidth != collapsedWidth {
             animateVisibleSidebarWidth(collapsedWidth, animation: .easeInOut(duration: animationDuration))
         } else {
             updateMousePassthrough()

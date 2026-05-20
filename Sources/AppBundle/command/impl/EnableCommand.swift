@@ -25,7 +25,7 @@ struct EnableCommand: Command {
             clearPendingWindowDragIntent()
             cancelManipulatedWithMouseState()
         }
-        WorkspaceSidebarPanel.shared.refresh()
+        WorkspaceSidebarPanel.refreshAll()
         WindowTabStripPanelController.shared.refresh()
         if newState {
             for workspace in Workspace.all {

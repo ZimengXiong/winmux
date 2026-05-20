@@ -4,6 +4,7 @@ struct WorkspaceSidebarModelState {
     let workspaces: [WorkspaceSidebarWorkspaceViewModel]
     let projects: [WorkspaceSidebarProjectViewModel]
     let selectedProjectId: WorkspaceProjectId
+    let activeProjectId: WorkspaceProjectId
     let monitorScopes: [WorkspaceSidebarMonitorScopeViewModel]
     let selectedMonitorScopeId: String
     let focusedMonitorScopeId: String

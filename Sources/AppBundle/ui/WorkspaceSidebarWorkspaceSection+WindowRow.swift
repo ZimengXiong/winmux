@@ -8,6 +8,7 @@ extension WorkspaceSidebarWorkspaceSection {
         leadingHitInset: CGFloat = 0,
     ) -> some View {
         Button {
+            guard allowsWorkspaceActivation else { return }
             guard shouldHandleWorkspaceSidebarActivation(isEditing: false, isSidebarDragInProgress: isWorkspaceSidebarDragInProgress()) else { return }
             if isInUseOnOtherDisplay {
                 activeInUseOverrideWorkspaceName = workspace.name

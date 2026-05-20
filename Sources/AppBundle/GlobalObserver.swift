@@ -74,6 +74,7 @@ enum GlobalObserver {
         let point = normalizeAppKitScreenPoint(screenPoint)
         Task { @MainActor in
             MousePointerTracker.shared.note(point: point, timestamp: timestamp)
+            WorkspaceSidebarPanel.trapCursorForVisiblePanelsIfNeeded()
             if isLeftMouseDownEvent {
                 await WindowMouseInteractionDriver.shared.capturePendingResizeCandidate()
             }
@@ -122,11 +123,13 @@ enum GlobalObserver {
             let point = normalizeAppKitScreenPoint(NSEvent.mouseLocation)
             Task { @MainActor in
                 MousePointerTracker.shared.note(point: point, timestamp: timestamp)
+                WorkspaceSidebarPanel.trapCursorForVisiblePanelsIfNeeded()
                 refreshPendingWindowDragIntentFromGlobalMouseDrag()
             }
         })
 
         let pointerActivityMask: NSEvent.EventTypeMask = [
+            .mouseMoved,
             .leftMouseDown, .rightMouseDown, .otherMouseDown,
             .leftMouseDragged, .rightMouseDragged, .otherMouseDragged,
             .scrollWheel,

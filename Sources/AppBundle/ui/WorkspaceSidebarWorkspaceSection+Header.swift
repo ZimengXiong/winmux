@@ -28,8 +28,8 @@ extension WorkspaceSidebarWorkspaceSection {
     var expandedHeader: some View {
         HStack(spacing: workspaceSidebarHeaderSpacing) {
             Text(workspace.displayName)
-                .font(.system(size: 15, weight: workspace.isFocused ? .bold : .semibold))
-                .foregroundStyle(workspace.isFocused ? Color.white : Color.white.opacity(0.85))
+                .font(.system(size: 15, weight: isActiveOnTargetMonitor ? .bold : .semibold))
+                .foregroundStyle(isActiveOnTargetMonitor ? Color.white : Color.white.opacity(0.85))
                 .lineLimit(1)
                 .truncationMode(.tail)
             if let projectContextLabel, let projectContextColor {

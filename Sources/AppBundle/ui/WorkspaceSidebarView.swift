@@ -67,6 +67,10 @@ struct WorkspaceSidebarView: View {
             resetProjectSwipeWithoutAnimation()
         }
         .onReceive(NotificationCenter.default.publisher(for: workspaceSidebarWillCollapseNotification)) { _ in
+            guard snapshot.visibleWidth > collapsedWidth + 0.5 else {
+                isSidebarCollapsing = false
+                return
+            }
             withAnimation(.easeOut(duration: 0.08)) {
                 isProjectMenuOpen = false
                 isSidebarCollapsing = true
@@ -74,6 +78,10 @@ struct WorkspaceSidebarView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: workspaceSidebarWillExpandNotification)) { _ in
+            guard snapshot.visibleWidth > collapsedWidth + 0.5 else {
+                isSidebarExpanding = false
+                return
+            }
             isSidebarCollapsing = false
             isSidebarExpanding = true
         }

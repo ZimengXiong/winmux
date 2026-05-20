@@ -35,7 +35,9 @@ on-mode-changed = []
     enabled = true
     collapsed-width = 44
     width = 240
-    monitor = 'main'
+    # Omit monitor to show an independent sidebar on every display.
+    # Legacy monitor = 'main' is also treated as all displays for this sidebar.
+    # Use monitor = 1, 'secondary', 2, or a list to restrict it.
     menu-bar-reserve-height = 28
     project-deletion-action = 'close-windows'
     show-status-pills = true

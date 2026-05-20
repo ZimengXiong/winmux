@@ -63,7 +63,7 @@ struct WorkspaceSidebarProjectPager: View {
         let maxTextWidth = names.map {
             ($0 as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium)]).width
         }.max() ?? 0
-        return min(max(ceil(maxTextWidth) + 50, projectMenuWidth), sectionWidth)
+        return max(ceil(maxTextWidth) + 50, projectMenuWidth)
     }
     var projectMenuWidth: CGFloat {
         let selectedProjectName = selectedProject?.displayName ?? "Project"
@@ -77,6 +77,11 @@ struct WorkspaceSidebarProjectPager: View {
             return max(sectionWidth - 4, 12)
         }
         return max(sectionWidth, 24)
+    }
+    var compactProjectControlsHeight: CGFloat {
+        let contentHeight = CGFloat(projects.count) * workspaceSidebarProjectDotFrameHeight
+        let maxVisibleHeight = workspaceSidebarProjectDotFrameHeight * 5
+        return min(max(contentHeight, workspaceSidebarPagerHeight), maxVisibleHeight)
     }
 
     var body: some View {

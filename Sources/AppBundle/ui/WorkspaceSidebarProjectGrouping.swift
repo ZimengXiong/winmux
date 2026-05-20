@@ -4,13 +4,10 @@ func workspaceSidebarVisibleWorkspacesByProject(
     workspaces: [WorkspaceSidebarWorkspaceViewModel],
     selectedScopeId: String,
     focusedMonitorScopeId: String,
+    browsedProjectId: WorkspaceProjectId? = nil,
 ) -> [WorkspaceProjectId: [WorkspaceSidebarWorkspaceViewModel]] {
     var result: [WorkspaceProjectId: [WorkspaceSidebarWorkspaceViewModel]] = [:]
-    for workspace in workspaces where workspaceSidebarWorkspaceMatchesScope(
-        workspace,
-        selectedScopeId: selectedScopeId,
-        focusedMonitorScopeId: focusedMonitorScopeId,
-    ) {
+    for workspace in workspaces {
         result[workspace.projectId, default: []].append(workspace)
     }
     return result

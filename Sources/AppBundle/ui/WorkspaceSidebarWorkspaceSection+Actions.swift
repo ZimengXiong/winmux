@@ -2,6 +2,7 @@ import SwiftUI
 
 extension WorkspaceSidebarWorkspaceSection {
     func handleSectionClick() {
+        guard allowsWorkspaceActivation else { return }
         if isInUseOnOtherDisplay {
             activeInUseOverrideWorkspaceName = workspace.name
             return

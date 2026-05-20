@@ -107,7 +107,7 @@ struct ShortcutGeneralView: View {
             do {
                 let targetUrl = try persistWorkspaceSidebarMenuBarReserveHeight(height)
                 _ = try await reloadConfig(forceConfigUrl: targetUrl)
-                WorkspaceSidebarPanel.shared.refresh()
+                WorkspaceSidebarPanel.refreshAll()
             } catch {
                 model.errorMessage = error.localizedDescription
             }

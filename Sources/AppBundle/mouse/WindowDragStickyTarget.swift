@@ -3,7 +3,7 @@ func stickyTargetWindow(for sticky: PendingWindowDragIntent) -> Window? {
     switch sticky.kind {
         case .tabStack(let targetWindowId), .stackSplit(let targetWindowId, _), .swap(let targetWindowId):
             Window.get(byId: targetWindowId)
-        case .detachTab, .moveToWorkspace, .createWorkspace, .sidebarHover:
+        case .detachTab, .moveToWorkspace, .moveToWorkspaceZone, .createWorkspace, .sidebarHover:
             nil
     }
 }

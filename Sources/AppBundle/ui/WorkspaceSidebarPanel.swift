@@ -32,6 +32,7 @@ let workspaceSidebarWorkspaceSectionHeaderHeight: CGFloat = 32
 let workspaceSidebarWorkspaceRowHeight: CGFloat = 24
 let workspaceSidebarWorkspaceSectionHeightCompact: CGFloat = 32
 let workspaceSidebarWorkspaceSectionHeightExpanded: CGFloat = 32
+let workspaceSidebarInUseOverrideEmptySectionMinHeight: CGFloat = 76
 let workspaceSidebarProjectDotFrameHeight: CGFloat = 32
 let workspaceSidebarMenuRowHeight: CGFloat = 28
 let workspaceSidebarMenuRowSpacing: CGFloat = 3

@@ -20,7 +20,7 @@ struct WorkspaceSidebarInUseOverrideOverlay: View {
 
             shape.strokeBorder(Color(nsColor: .systemRed).opacity(0.45), lineWidth: 0.8)
 
-            VStack(spacing: 7) {
+            VStack(spacing: 8) {
                 Text(text)
                     .font(.system(size: 10.5, weight: .medium))
                     .foregroundStyle(Color.white.opacity(0.88))
@@ -48,6 +48,7 @@ struct WorkspaceSidebarInUseOverrideOverlay: View {
                     isOverrideHovered = hovering
                 }
             }
+            .padding(.vertical, 10)
         }
         .contentShape(Rectangle())
     }

@@ -34,6 +34,7 @@ extension WorkspaceSidebarView {
             workspaces: snapshot.workspaces,
             selectedScopeId: snapshot.selectedMonitorScopeId,
             focusedMonitorScopeId: snapshot.focusedMonitorScopeId,
+            browsedProjectId: browsedProjectId,
         )
 
         return VStack(alignment: .leading, spacing: 0) {

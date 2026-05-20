@@ -21,18 +21,74 @@ extension Monitor {
 func activateWorkspaceOnMonitorPreservingSourceLane(_ workspace: Workspace, targetMonitor: Monitor) -> Bool {
     let sourceMonitor = workspace.isVisible ? workspace.workspaceMonitor : nil
     let sourceProjectId = workspace.projectId
-    guard targetMonitor.setActiveWorkspace(workspace) else { return false }
-
     if let sourceMonitor,
        sourceMonitor.rect.topLeftCorner != targetMonitor.rect.topLeftCorner
     {
-        let fallbackWorkspace = getOrCreateLaneFallbackWorkspace(projectId: sourceProjectId, for: sourceMonitor)
+        let fallbackWorkspace = getOrCreateLaneFallbackWorkspace(
+            projectId: sourceProjectId,
+            for: sourceMonitor,
+            excluding: workspace,
+        )
         check(
             sourceMonitor.setActiveWorkspace(fallbackWorkspace),
             "Generated incompatible fallback workspace (\(fallbackWorkspace)) for the monitor (\(sourceMonitor))",
         )
     }
+    guard targetMonitor.setActiveWorkspace(workspace) else { return false }
     return true
+}
+
+@MainActor
+func overrideWorkspaceOnMonitorBySwappingActiveLanes(_ workspace: Workspace, targetMonitor: Monitor) -> Bool {
+    guard isValidAssignment(workspace: workspace, screen: targetMonitor.rect.topLeftCorner) else {
+        return false
+    }
+    guard workspace.isVisible else {
+        return targetMonitor.setActiveWorkspace(workspace)
+    }
+
+    let sourceMonitor = workspace.workspaceMonitor
+    guard sourceMonitor.rect.topLeftCorner != targetMonitor.rect.topLeftCorner else {
+        return true
+    }
+
+    let sourceReplacement = nearestWorkspaceForOverrideSourceMonitor(
+        excluding: workspace,
+        sourceMonitor: sourceMonitor,
+        targetMonitor: targetMonitor,
+    )
+    if let sourceReplacement {
+        _ = winMuxWorkspaceState.setActiveWorkspace(sourceReplacement, on: DisplayLaneId(sourceMonitor))
+    } else {
+        let fallback = createBlankWorkspace(projectId: workspace.projectId, monitor: sourceMonitor)
+        _ = winMuxWorkspaceState.setActiveWorkspace(fallback, on: DisplayLaneId(sourceMonitor))
+    }
+    _ = winMuxWorkspaceState.setActiveWorkspace(workspace, on: DisplayLaneId(targetMonitor))
+    checkWorkspaceHierarchyInvariants()
+    return true
+}
+
+@MainActor
+func nearestWorkspaceForOverrideSourceMonitor(
+    excluding workspace: Workspace,
+    sourceMonitor: Monitor,
+    targetMonitor: Monitor,
+) -> Workspace? {
+    let candidates = orderedWorkspacesForPresentation()
+        .filter { candidate in
+            candidate.projectId == workspace.projectId &&
+                candidate != workspace &&
+                !candidate.isArchived &&
+                isValidAssignment(workspace: candidate, screen: sourceMonitor.rect.topLeftCorner) &&
+                (!candidate.isVisible || candidate.workspaceMonitor.rect.topLeftCorner == targetMonitor.rect.topLeftCorner)
+        }
+    guard let workspaceIndex = orderedWorkspacesForPresentation().firstIndex(of: workspace) else {
+        return candidates.first
+    }
+    return candidates.min {
+        abs((orderedWorkspacesForPresentation().firstIndex(of: $0) ?? Int.max) - workspaceIndex) <
+            abs((orderedWorkspacesForPresentation().firstIndex(of: $1) ?? Int.max) - workspaceIndex)
+    }
 }
 
 @MainActor
@@ -47,6 +103,9 @@ extension CGPoint {
             return false
         }
         let laneId = DisplayLaneId(topLeftCorner: self)
+        guard !winMuxWorkspaceState.isWorkspaceActive(workspace.id, outside: laneId) else {
+            return false
+        }
         _ = winMuxWorkspaceState.setActiveWorkspace(workspace, on: laneId)
         checkWorkspaceHierarchyInvariants()
         return true
