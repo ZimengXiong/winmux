@@ -7,13 +7,13 @@ extension WindowTabStripPanelController {
         guard mouseInteractionChromeMode != nextMode || transientResizeTabGroupId != nil else { return }
         mouseInteractionChromeMode = nextMode
         transientResizeTabGroupId = nil
+        transientResizeTabGroupStrip = nil
         refresh()
     }
 
     func showChromeDuringMouseInteraction() {
-        guard mouseInteractionChromeMode != nil || transientResizeTabGroupId != nil else { return }
+        guard mouseInteractionChromeMode != nil || !hiddenPassiveTabGroupChromeIds.isEmpty else { return }
         mouseInteractionChromeMode = nil
-        transientResizeTabGroupId = nil
         hiddenPassiveTabGroupChromeIds.removeAll()
         refresh()
     }

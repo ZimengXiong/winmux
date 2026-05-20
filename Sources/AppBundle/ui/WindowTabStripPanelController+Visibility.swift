@@ -15,6 +15,7 @@ extension WindowTabStripPanelController {
 
     func hideAll() {
         transientResizeTabGroupId = nil
+        transientResizeTabGroupStrip = nil
         mouseInteractionChromeMode = nil
         hiddenPassiveTabGroupChromeIds.removeAll()
         for panel in visualPanels.values {

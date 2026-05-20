@@ -5,10 +5,12 @@ extension WindowTabStripPanelController {
     func updateResizingTabGroupChrome(window: Window, activeWindowRect: Rect) -> Bool {
         guard let transientStrip = resizingTabGroupStrip(window: window, activeWindowRect: activeWindowRect) else {
             transientResizeTabGroupId = nil
+            transientResizeTabGroupStrip = nil
             return false
         }
 
         transientResizeTabGroupId = transientStrip.id
+        transientResizeTabGroupStrip = transientStrip
         if hiddenPassiveTabGroupChromeIds.contains(transientStrip.id) {
             orderOutPanels(id: transientStrip.id)
             return true
@@ -19,8 +21,9 @@ extension WindowTabStripPanelController {
     }
 
     func clearTransientResizeChrome() {
-        guard transientResizeTabGroupId != nil else { return }
+        guard transientResizeTabGroupId != nil || transientResizeTabGroupStrip != nil else { return }
         transientResizeTabGroupId = nil
+        transientResizeTabGroupStrip = nil
     }
 
     func updateInteractivePanelForResizingStrip(_ strip: WindowTabStripViewModel) {
