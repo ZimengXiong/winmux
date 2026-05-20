@@ -161,7 +161,7 @@ extension WorkspaceSidebarDragTest {
         )
 
         XCTAssertEqual(grouped["default"]?.map(\.name), ["1"])
-        XCTAssertEqual(grouped["project-b"]?.map(\.name), ["2"])
+        XCTAssertNil(grouped["project-b"])
     }
 
     func testProjectPagerRendersOnlyCurrentAndSwipeTargetPages() {

@@ -65,8 +65,7 @@ func workspaceSidebarWorkspaceMatchesScope(
         return workspace.monitorScopeId != workspaceSidebarAllScopeId
     }
     if selectedScopeId == workspaceSidebarFocusedScopeId {
-        return workspace.isVisible &&
-            (workspace.monitorScopeId == focusedMonitorScopeId || workspace.monitorScopeId == workspaceSidebarAllScopeId)
+        return workspace.isFocused
     }
     return workspaceSidebarWorkspaceMatchesScope(
         workspaceMonitorScopeId: workspace.monitorScopeId,

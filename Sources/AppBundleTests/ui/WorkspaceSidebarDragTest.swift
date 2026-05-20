@@ -15,6 +15,25 @@ struct WorkspaceSidebarDragTestMonitor: Monitor {
 
 final class WorkspaceSidebarDragTest: XCTestCase {
     @MainActor
+    func testWorkspaceSidebarSnapshotIncludesEmptyWorkspaceInBrowsedProject() async {
+        setUpWorkspacesForTests()
+        let project = createWorkspaceProject()
+        let projectWorkspaceNames = Set(Workspace.all.filter { $0.projectId == project.id }.map(\.name))
+
+        XCTAssertFalse(projectWorkspaceNames.isEmpty)
+        XCTAssertFalse(projectWorkspaceNames.contains(focus.workspace.name))
+
+        let sidebarWorkspaces = await buildWorkspaceSidebarWorkspaceViewModels(
+            currentFocus: focus,
+            workspaceLabels: [:],
+            availableMonitors: sortedMonitors,
+        )
+        let sidebarProjectWorkspaceNames = Set(sidebarWorkspaces.filter { $0.projectId == project.id }.map(\.name))
+
+        XCTAssertEqual(sidebarProjectWorkspaceNames, projectWorkspaceNames)
+    }
+
+    @MainActor
     func testWindowIntentPreviewRendersBelowWorkspaceSidebar() {
         XCTAssertLessThan(
             WindowDropIntentOverlayPanelController.shared.level.rawValue,

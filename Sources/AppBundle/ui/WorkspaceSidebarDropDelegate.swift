@@ -44,6 +44,15 @@ struct WorkspaceSidebarDropDelegate: DropDelegate {
         isTargeted = false
         isSettling = true
         clearPreviewAfterProviderCallbacksSettle()
+        if isWorkspaceSidebarDragInProgress(
+            kind: getCurrentMouseManipulationKind(),
+            startedInSidebar: getCurrentMouseDragStartedInSidebar()
+        ) {
+            Task { @MainActor in
+                try? await resetManipulatedWithMouseIfPossible()
+            }
+            return true
+        }
         loadPayload(from: info, completion: performPayloadDrop)
         return true
     }
@@ -71,9 +80,11 @@ struct WorkspaceSidebarDropDelegate: DropDelegate {
     }
 
     private func clearPreviewAfterProviderCallbacksSettle() {
-        actions.send(.clearDropPreview)
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 80_000_000)
+            guard workspaceSidebarDropTarget(at: MousePointerTracker.shared.currentSample.point) == nil else {
+                return
+            }
             actions.send(.clearDropPreview)
         }
     }

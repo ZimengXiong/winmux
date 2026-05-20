@@ -13,7 +13,7 @@ func updatePendingWindowDragIntent(
     subject: WindowDragSubject,
     detachOrigin: TabDetachOrigin,
 ) -> Bool {
-    if detachOrigin != .tabStrip {
+    if detachOrigin != .tabStrip, !getCurrentMouseDragStartedInSidebar() {
         WindowDragCursorProxyPanel.shared.hide()
     }
 
@@ -29,13 +29,13 @@ func updatePendingWindowDragIntent(
         )
         updateSidebarDragFeedback(sourceWindow: sourceWindow, subject: subject, destination: nil)
         clearPendingWindowDragIntent()
-        if detachOrigin == .tabStrip {
+        if detachOrigin == .tabStrip || getCurrentMouseDragStartedInSidebar() {
             showWorkspaceSidebarDragCursorPreview(sourceWindow: sourceWindow, subject: subject, point: mouseLocation)
         }
         return false
     }
     updateSidebarDragFeedback(sourceWindow: sourceWindow, subject: subject, destination: destination)
-    if detachOrigin == .tabStrip {
+    if detachOrigin == .tabStrip || getCurrentMouseDragStartedInSidebar() {
         showWorkspaceSidebarDragCursorPreview(sourceWindow: sourceWindow, subject: subject, point: mouseLocation)
     }
     return setPendingWindowDragIntent(
@@ -135,6 +135,7 @@ func setPendingWindowDragIntent(
 
 @MainActor
 func clearPendingWindowDragIntent() {
+    let preservesSidebarDragUI = currentActiveWorkspaceSidebarDrag() != nil
     if let pendingWindowDragIntent {
         logWindowDragIntentIfNeeded(
             signature: "intent-cleared:source=\(pendingWindowDragIntent.sourceWindowId):kind=\(debugDescribe(pendingWindowDragIntent.kind))",
@@ -144,10 +145,14 @@ func clearPendingWindowDragIntent() {
     pendingWindowDragIntent = nil
     lastWindowDragIntentLogSignature = nil
     setPinnedDraggedWindowId(nil)
-    setWorkspaceSidebarDropPreviewIfChanged(nil)
+    if !preservesSidebarDragUI {
+        setWorkspaceSidebarDropPreviewIfChanged(nil)
+    }
     WindowDropIntentOverlayPanelController.shared.hide()
     WindowTabStripPanelController.shared.clearHiddenPassiveTabGroupChrome()
-    WindowDragCursorProxyPanel.shared.hide()
+    if !preservesSidebarDragUI {
+        WindowDragCursorProxyPanel.shared.hide()
+    }
     if getCurrentMouseManipulationKind() == .resize, isLeftMouseButtonDown {
         logWindowDragLive("dragIntent.clear preserving resizePreview during active resize manipulated=\(currentlyManipulatedWithMouseWindowId?.description ?? "nil")")
     } else {

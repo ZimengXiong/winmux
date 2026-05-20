@@ -61,8 +61,7 @@ extension WorkspaceSidebarWorkspaceSection {
                 isHovering: hover,
             )
         }
-        .opacity(activeSidebarDragSourceWindowId == window.windowId ? 0.25 : 1)
-        .scaleEffect(activeSidebarDragSourceWindowId == window.windowId ? 0.94 : 1)
+        .opacity(1)
         .animation(.spring(response: 0.2, dampingFraction: 0.78), value: activeSidebarDragSourceWindowId == window.windowId)
     }
 }

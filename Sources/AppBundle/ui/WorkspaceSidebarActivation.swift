@@ -2,6 +2,13 @@ import AppKit
 
 @MainActor
 private var workspaceSidebarItemDragActiveCount = 0
+@MainActor
+private var activeWorkspaceSidebarDrag: ActiveWorkspaceSidebarDrag?
+
+struct ActiveWorkspaceSidebarDrag: Equatable {
+    let windowId: UInt32
+    let subject: WindowDragSubject
+}
 
 @MainActor
 func beginWorkspaceSidebarItemDrag() {
@@ -16,6 +23,21 @@ func endWorkspaceSidebarItemDrag() {
 @MainActor
 func isWorkspaceSidebarItemDragActive() -> Bool {
     workspaceSidebarItemDragActiveCount > 0
+}
+
+@MainActor
+func beginActiveWorkspaceSidebarDrag(windowId: UInt32, subject: WindowDragSubject) {
+    activeWorkspaceSidebarDrag = ActiveWorkspaceSidebarDrag(windowId: windowId, subject: subject)
+}
+
+@MainActor
+func currentActiveWorkspaceSidebarDrag() -> ActiveWorkspaceSidebarDrag? {
+    activeWorkspaceSidebarDrag
+}
+
+@MainActor
+func clearActiveWorkspaceSidebarDrag() {
+    activeWorkspaceSidebarDrag = nil
 }
 
 func shouldLockWorkspaceSidebarExpansion(

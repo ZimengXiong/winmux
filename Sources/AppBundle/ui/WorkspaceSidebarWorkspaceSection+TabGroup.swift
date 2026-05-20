@@ -22,6 +22,6 @@ extension WorkspaceSidebarWorkspaceSection {
                 )
             }
         }
-        .opacity(isDragging ? 0.4 : 1)
+        .opacity(1)
     }
 }

@@ -369,6 +369,20 @@ func selectWorkspaceSidebarProject(
 ) {
     guard workspaceProjects().contains(where: { $0.id == projectId }) else { return }
     viewModel.workspaceSidebarSelectedProjectId = projectId
+    TrayMenuModel.shared.workspaceSidebarSelectedProjectId = projectId
+    WorkspaceSidebarPanel.syncVisiblePanelModelsFromShared()
+    runWorkspaceSidebarSession {
+        viewModel.workspaceSidebarSelectedProjectId = projectId
+        TrayMenuModel.shared.workspaceSidebarSelectedProjectId = projectId
+        let monitor = workspaceSidebarTargetMonitor(
+            scopeId: targetMonitorScopeId ?? viewModel.workspaceSidebarTargetMonitorScopeId
+        )
+        if let workspace = switchWorkspaceProject(projectId, on: monitor) {
+            _ = workspace.focusWorkspace()
+            viewModel.workspaceSidebarActiveProjectId = projectId
+        }
+        await updateWorkspaceSidebarModel()
+    }
 }
 
 @MainActor
@@ -379,6 +393,14 @@ func createWorkspaceSidebarProject(
     runWorkspaceSidebarSession {
         let project = createWorkspaceProject()
         viewModel.workspaceSidebarSelectedProjectId = project.id
+        TrayMenuModel.shared.workspaceSidebarSelectedProjectId = project.id
+        let monitor = workspaceSidebarTargetMonitor(
+            scopeId: targetMonitorScopeId ?? viewModel.workspaceSidebarTargetMonitorScopeId
+        )
+        if let workspace = switchWorkspaceProject(project.id, on: monitor) {
+            _ = workspace.focusWorkspace()
+            viewModel.workspaceSidebarActiveProjectId = project.id
+        }
         await updateWorkspaceSidebarModel()
     }
 }
@@ -496,16 +518,34 @@ func updateSidebarWindowDrag(_ windowId: UInt32, subject: WindowDragSubject = .w
     }
     guard let window = Window.get(byId: windowId) else {
         clearWorkspaceSidebarDropPreview()
+        clearPendingWindowDragIntent()
         WindowDragCursorProxyPanel.shared.hide()
+        clearActiveWorkspaceSidebarDrag()
         return
     }
+    beginActiveWorkspaceSidebarDrag(windowId: window.windowId, subject: subject)
     let point = MousePointerTracker.shared.currentSample.point
-    showWorkspaceSidebarDragCursorPreview(sourceWindow: window, subject: subject, point: point)
-    guard let target = workspaceSidebarDragTarget(for: window, subject: subject) else {
-        clearWorkspaceSidebarDropPreview()
-        return
-    }
-    previewWorkspaceSidebarDrop(window.windowId, subject: subject, target: target)
+    updateActiveWorkspaceSidebarDragPreview(sourceWindow: window, subject: subject)
+    beginWindowMoveWithMouseSessionIfNeeded(
+        windowId: window.windowId,
+        subject: subject,
+        detachOrigin: .window,
+        startedInSidebar: true,
+        anchorRect: resolvedDraggedWindowAnchorRect(for: window, subject: subject),
+        refreshActualRects: true,
+    )
+    WindowMouseInteractionDriver.shared.startMove(
+        windowId: window.windowId,
+        subject: subject,
+        detachOrigin: .window,
+        startedInSidebar: true,
+    )
+    _ = updatePendingWindowDragIntent(
+        sourceWindow: window,
+        mouseLocation: point,
+        subject: subject,
+        detachOrigin: .window,
+    )
 }
 
 @MainActor
@@ -513,41 +553,19 @@ func finishSidebarWindowDrag(pointer: CGPoint? = nil) {
     if let pointer {
         MousePointerTracker.shared.note(point: pointer)
     }
-    defer {
-        clearWorkspaceSidebarDropPreview()
-        WindowDragCursorProxyPanel.shared.hide()
+    let didCommitSidebarDrop = commitActiveWorkspaceSidebarDragIfPossible()
+    clearActiveWorkspaceSidebarDrag()
+    if didCommitSidebarDrop {
+        clearPendingWindowDragIntent()
+        cancelManipulatedWithMouseState()
+        scheduleRefreshSession(.resetManipulatedWithMouse, optimisticallyPreLayoutWorkspaces: true)
+        return
     }
-    guard let preview = TrayMenuModel.shared.workspaceSidebarDropPreview,
-          let sourceWindow = Window.get(byId: preview.sourceWindowId)
-    else { return }
-    let subject: WindowDragSubject = preview.isTabGroup ? .group : .window
-    guard let target = workspaceSidebarDragTarget(for: sourceWindow, subject: subject) else { return }
-    switch target {
-        case .workspace(let workspaceName):
-            if subject == .group {
-                moveTabGroupFromSidebar(sourceWindow.windowId, toWorkspace: workspaceName)
-            } else {
-                moveWindowFromSidebar(sourceWindow.windowId, toWorkspace: workspaceName)
-            }
-        case .newWorkspace:
-            let targetMonitor = sidebarWorkspaceTargetMonitor(
-                fallbackWindow: sourceWindow,
-                fallbackPoint: MousePointerTracker.shared.currentSample.point,
-            )
-            let panelViewModel = WorkspaceSidebarPanel.panel(containing: MousePointerTracker.shared.currentSample.point)?.viewModel
-            let projectId = sidebarWorkspaceTargetProjectId(
-                targetMonitor: targetMonitor,
-                viewModel: panelViewModel ?? TrayMenuModel.shared
-            )
-            let monitorScopeId = (panelViewModel ?? TrayMenuModel.shared).workspaceSidebarSelectedMonitorScopeId
-            if subject == .group {
-                moveTabGroupToNewWorkspaceFromSidebar(sourceWindow.windowId, projectId: projectId, monitorScopeId: monitorScopeId)
-            } else {
-                moveWindowToNewWorkspaceFromSidebar(sourceWindow.windowId, projectId: projectId, monitorScopeId: monitorScopeId)
-            }
-        case .monitor:
-            break
+    Task { @MainActor in
+        try? await resetManipulatedWithMouseIfPossible()
     }
+    clearWorkspaceSidebarDropPreview()
+    WindowDragCursorProxyPanel.shared.hide()
 }
 
 @MainActor
@@ -557,4 +575,68 @@ private func workspaceSidebarDragTarget(for sourceWindow: Window, subject: Windo
     guard let target = workspaceSidebarDropTarget(at: point)?.kind else { return nil }
     guard isActionableSidebarDropTarget(sourceWindow: sourceWindow, subject: subject, target: target) else { return nil }
     return target
+}
+
+@MainActor
+func refreshActiveWorkspaceSidebarDragPreviewIfNeeded() {
+    guard let activeDrag = currentActiveWorkspaceSidebarDrag(),
+          let sourceWindow = Window.get(byId: activeDrag.windowId)
+    else { return }
+    updateActiveWorkspaceSidebarDragPreview(sourceWindow: sourceWindow, subject: activeDrag.subject)
+}
+
+@MainActor
+private func updateActiveWorkspaceSidebarDragPreview(sourceWindow: Window, subject: WindowDragSubject) {
+    showWorkspaceSidebarDragCursorPreview(
+        sourceWindow: sourceWindow,
+        subject: subject,
+        point: MousePointerTracker.shared.currentSample.point
+    )
+    guard let target = workspaceSidebarDragTarget(for: sourceWindow, subject: subject) else {
+        clearWorkspaceSidebarDropPreview()
+        return
+    }
+    previewWorkspaceSidebarDrop(sourceWindow.windowId, subject: subject, target: target)
+}
+
+@MainActor
+private func commitActiveWorkspaceSidebarDragIfPossible() -> Bool {
+    guard let activeDrag = currentActiveWorkspaceSidebarDrag(),
+          let sourceWindow = Window.get(byId: activeDrag.windowId),
+          let target = workspaceSidebarDragTarget(for: sourceWindow, subject: activeDrag.subject)
+    else {
+        clearWorkspaceSidebarDropPreview()
+        WindowDragCursorProxyPanel.shared.hide()
+        return false
+    }
+    clearWorkspaceSidebarDropPreview()
+    WindowDragCursorProxyPanel.shared.hide()
+    switch target {
+        case .workspace(let workspaceName):
+            if activeDrag.subject == .group {
+                moveTabGroupFromSidebar(sourceWindow.windowId, toWorkspace: workspaceName)
+            } else {
+                moveWindowFromSidebar(sourceWindow.windowId, toWorkspace: workspaceName)
+            }
+            return true
+        case .newWorkspace:
+            let targetMonitor = sidebarWorkspaceTargetMonitor(
+                fallbackWindow: sourceWindow,
+                fallbackPoint: MousePointerTracker.shared.currentSample.point
+            )
+            let panelViewModel = WorkspaceSidebarPanel.panel(containing: MousePointerTracker.shared.currentSample.point)?.viewModel
+            let projectId = sidebarWorkspaceTargetProjectId(
+                targetMonitor: targetMonitor,
+                viewModel: panelViewModel ?? TrayMenuModel.shared
+            )
+            let monitorScopeId = (panelViewModel ?? TrayMenuModel.shared).workspaceSidebarSelectedMonitorScopeId
+            if activeDrag.subject == .group {
+                moveTabGroupToNewWorkspaceFromSidebar(sourceWindow.windowId, projectId: projectId, monitorScopeId: monitorScopeId)
+            } else {
+                moveWindowToNewWorkspaceFromSidebar(sourceWindow.windowId, projectId: projectId, monitorScopeId: monitorScopeId)
+            }
+            return true
+        case .monitor:
+            return false
+    }
 }

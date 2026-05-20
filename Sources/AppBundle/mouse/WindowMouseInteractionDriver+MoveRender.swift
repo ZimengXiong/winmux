@@ -14,7 +14,8 @@ extension WindowMouseInteractionDriver {
 
         let mouse = MousePointerTracker.shared.currentSample.point
         updateCompositedMovePreview(sourceWindow: sourceWindow, mouseLocation: mouse)
-        let shouldProcess = WindowDragFrameGate.shared.shouldProcess(
+        let isPointerInsideSidebar = WorkspaceSidebarPanel.panel(containing: mouse) != nil
+        let shouldProcess = session.startedInSidebar || isPointerInsideSidebar || WindowDragFrameGate.shared.shouldProcess(
             windowId: sourceWindow.windowId,
             point: mouse,
             force: force,
@@ -30,6 +31,25 @@ extension WindowMouseInteractionDriver {
     }
 
     func renderManagedMoveFrame(sourceWindow: Window, mouseLocation: CGPoint, session: MoveSession) {
+        if WorkspaceSidebarPanel.panel(containing: mouseLocation) != nil {
+            _ = updatePendingWindowDragIntent(
+                sourceWindow: sourceWindow,
+                mouseLocation: mouseLocation,
+                subject: session.subject,
+                detachOrigin: session.detachOrigin,
+            )
+            return
+        }
+        if session.startedInSidebar {
+            refreshActiveWorkspaceSidebarDragPreviewIfNeeded()
+            _ = updatePendingWindowDragIntent(
+                sourceWindow: sourceWindow,
+                mouseLocation: mouseLocation,
+                subject: session.subject,
+                detachOrigin: session.detachOrigin,
+            )
+            return
+        }
         switch sourceWindow.parent?.cases {
             case .workspace:
                 moveFloatingWindowWithMouse(sourceWindow)

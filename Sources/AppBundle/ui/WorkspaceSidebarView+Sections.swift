@@ -11,7 +11,7 @@ extension WorkspaceSidebarView {
             scopes: snapshot.monitorScopes,
             projects: snapshot.projects,
             selectedScopeId: snapshot.selectedMonitorScopeId,
-            activeProjectId: snapshot.selectedProjectId,
+            activeProjectId: snapshot.activeProjectId,
             browsedProjectId: browsedProjectId,
             expansionProgress: expansionProgress,
             sectionWidth: workspaceSidebarSectionWidth(expansionProgress, layout: snapshot.configuration),
@@ -22,7 +22,7 @@ extension WorkspaceSidebarView {
                 actions.send(.selectMonitorScope(scopeId))
             },
             onSelectProject: { projectId in
-                browsedProjectId = projectId == snapshot.selectedProjectId ? nil : projectId
+                browsedProjectId = projectId == snapshot.activeProjectId ? nil : projectId
             },
             onCreateProject: {
                 actions.send(.createProject)

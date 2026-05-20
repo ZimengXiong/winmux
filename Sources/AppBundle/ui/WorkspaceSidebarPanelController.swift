@@ -8,7 +8,7 @@ final class WorkspaceSidebarPanel: NSPanelHud {
     private static var panelsByMonitorScopeId: [String: WorkspaceSidebarPanel] = [:]
 
     let viewModel: TrayMenuModel
-    let hostingView: NSHostingView<WorkspaceSidebarContainerView>
+    let hostingView: WorkspaceSidebarHostingView
     let monitorScopeId: String
     var pendingExpand: DispatchWorkItem?
     var pendingCollapse: DispatchWorkItem?
@@ -43,7 +43,7 @@ final class WorkspaceSidebarPanel: NSPanelHud {
     private init(monitor: Monitor) {
         monitorScopeId = workspaceSidebarMonitorScopeId(for: monitor)
         viewModel = TrayMenuModel()
-        hostingView = NSHostingView(rootView: WorkspaceSidebarContainerView(
+        hostingView = WorkspaceSidebarHostingView(rootView: WorkspaceSidebarContainerView(
             viewModel: viewModel,
             actions: makeWorkspaceSidebarActionsAdapter(viewModel: viewModel, targetMonitorScopeId: monitorScopeId)
         ))
@@ -161,5 +161,11 @@ final class WorkspaceSidebarPanel: NSPanelHud {
     override func keyDown(with event: NSEvent) {
         debugWorkspaceSidebarRenameLog("panel keyDown keyCode=\(event.keyCode) chars=\(event.charactersIgnoringModifiers ?? "nil") firstResponder=\(String(describing: firstResponder)) inline=\(inlineTextEditingActive)")
         super.keyDown(with: event)
+    }
+}
+
+final class WorkspaceSidebarHostingView: NSHostingView<WorkspaceSidebarContainerView> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
     }
 }

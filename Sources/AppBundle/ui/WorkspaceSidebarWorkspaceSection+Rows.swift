@@ -3,12 +3,9 @@ import SwiftUI
 extension WorkspaceSidebarWorkspaceSection {
     @ViewBuilder
     var windowRows: some View {
-        let items = workspace.items.filter { item in
-            !workspaceSidebarItemIsActiveDragSource(item, dragPreview: dragPreview)
-        }
-        if showsWindowRows, !items.isEmpty {
+        if showsWindowRows, !workspace.items.isEmpty {
             VStack(alignment: .leading, spacing: 1) {
-                ForEach(items) { item in
+                ForEach(workspace.items) { item in
                     workspaceItemView(item)
                 }
             }
@@ -35,18 +32,5 @@ extension WorkspaceSidebarWorkspaceSection {
                 removal: .identity,
             ))
         }
-    }
-}
-
-private func workspaceSidebarItemIsActiveDragSource(
-    _ item: WorkspaceSidebarItemViewModel,
-    dragPreview: WorkspaceSidebarDropPreviewViewModel?,
-) -> Bool {
-    guard let dragPreview else { return false }
-    switch item.kind {
-        case .window(let window):
-            return !dragPreview.isTabGroup && window.windowId == dragPreview.sourceWindowId
-        case .tabGroup(let group):
-            return dragPreview.isTabGroup && group.representativeWindowId == dragPreview.sourceWindowId
     }
 }

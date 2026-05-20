@@ -34,13 +34,13 @@ extension WindowMouseInteractionDriver {
     }
 
     func shouldHideOtherWindowsDuringMove(session: MoveSession) -> Bool {
-        session.detachOrigin != .tabStrip
+        false
     }
 
     func configureMoveChrome(windowId: UInt32, session: MoveSession) {
         if session.startedInSidebar {
             clearMovePreview()
-            WindowTabStripPanelController.shared.hideChromeDuringMouseInteraction(showFrameOnly: false)
+            WindowTabStripPanelController.shared.showChromeDuringMouseInteraction()
         } else if shouldShowCompositedGroupMovePreview(session: session) {
             WindowTabStripPanelController.shared.hideChromeDuringMouseInteraction(showFrameOnly: false)
             if let sourceWindow = Window.get(byId: windowId) {

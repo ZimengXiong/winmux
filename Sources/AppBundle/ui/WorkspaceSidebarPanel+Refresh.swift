@@ -13,7 +13,6 @@ extension WorkspaceSidebarPanel {
         }
 
         if frame != layout.frame {
-            workspaceSidebarDropTargets = []
             setFrame(layout.frame, display: true, animate: false)
         }
         if viewModel.workspaceSidebarVisibleWidth == 0 {

@@ -40,7 +40,6 @@ extension WorkspaceSidebarWorkspaceSection {
             hoveredTabGroupId = hover ? group.representativeWindowId :
                 (hoveredTabGroupId == group.representativeWindowId ? nil : hoveredTabGroupId)
         }
-        .opacity(activeSidebarDragSourceWindowId == group.representativeWindowId ? 0.25 : 1)
-        .scaleEffect(activeSidebarDragSourceWindowId == group.representativeWindowId ? 0.94 : 1)
+        .opacity(1)
     }
 }

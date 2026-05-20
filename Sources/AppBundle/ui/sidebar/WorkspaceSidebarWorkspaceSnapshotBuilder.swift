@@ -6,9 +6,6 @@ func buildWorkspaceSidebarWorkspaceViewModels(
 ) async -> [WorkspaceSidebarWorkspaceViewModel] {
     var workspaces: [WorkspaceSidebarWorkspaceViewModel] = []
     for workspace in orderedWorkspacesForPresentation() {
-        guard shouldShowWorkspaceInSidebar(workspace, currentFocus: currentFocus, isEditingWorkspace: false) else {
-            continue
-        }
         workspaces.append(await makeWorkspaceSidebarWorkspaceViewModel(
             workspace,
             currentFocus: currentFocus,

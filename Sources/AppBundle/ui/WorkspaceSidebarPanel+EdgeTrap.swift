@@ -11,6 +11,8 @@ extension WorkspaceSidebarPanel {
         guard isVisible,
               config.workspaceSidebar.enabled,
               !currentSessionModifierFlags().contains(.maskShift),
+              !isMouseWindowDragInProgress(),
+              !isWorkspaceSidebarItemDragActive(),
               viewModel.workspaceSidebarVisibleWidth <= CGFloat(config.workspaceSidebar.collapsedWidth) + 0.5
         else {
             edgeTrapStartedAt = nil
