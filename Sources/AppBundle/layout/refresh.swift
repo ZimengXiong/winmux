@@ -101,6 +101,7 @@ func runRefreshSessionBlocking(
                 let nativeFocused = try await getNativeFocusedWindow()
                 try checkCancellation()
                 if let nativeFocused { try await debugWindowsIfRecording(nativeFocused) }
+                await updateNativeFullscreenChromeSuppression(nativeFocused: nativeFocused)
                 updateFocusCache(nativeFocused)
                 try checkCancellation()
 
@@ -176,6 +177,7 @@ func runLightSession<T>(
                 let nativeFocused = try await getNativeFocusedWindow()
                 try checkCancellation()
                 if let nativeFocused { try await debugWindowsIfRecording(nativeFocused) }
+                await updateNativeFullscreenChromeSuppression(nativeFocused: nativeFocused)
                 updateFocusCache(nativeFocused)
                 try checkCancellation()
                 let focusBefore = focus.windowOrNil

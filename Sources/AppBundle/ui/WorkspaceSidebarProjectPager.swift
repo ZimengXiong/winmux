@@ -53,7 +53,7 @@ struct WorkspaceSidebarProjectPager: View {
         let popupPadding = (workspaceSidebarMenuRowSpacing + 1) * 2
         let rowSpacing = CGFloat(max(projects.count - 1, 0)) * workspaceSidebarMenuRowSpacing
         let dividerHeight = 0.5 + (workspaceSidebarMenuRowSpacing * 2)
-        let popupHeight = (rowCount * workspaceSidebarMenuRowHeight) + rowSpacing + dividerHeight + popupPadding
+        let popupHeight = (rowCount * workspaceSidebarDropdownHeight) + rowSpacing + dividerHeight + popupPadding
         return popupHeight + workspaceSidebarSectionGap + controlsHeight
     }
     var footerSpacing: CGFloat { isCompact ? 2 : 8 }

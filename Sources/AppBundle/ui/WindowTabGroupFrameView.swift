@@ -18,15 +18,15 @@ struct WindowTabGroupFrameView: View {
                 activeWindowCornerRadius: strip.activeWindowCornerRadius
             )
                 .stroke(mattePanelFill, lineWidth: windowTabGroupFrameStrokeWidth)
-                .shadow(color: Color.black.opacity(0.22), radius: 12, x: 0, y: 6)
+                .shadow(color: Color.black.opacity(0.18), radius: 8, x: 0, y: 4)
 
             Rectangle()
                 .fill(mattePanelFill)
                 .frame(height: tabHeight)
                 .overlay(alignment: .bottom) {
                     Rectangle()
-                        .fill(Color.white.opacity(0.16))
-                        .frame(height: 1)
+                        .fill(Color.white.opacity(0.10))
+                        .frame(height: 0.5)
                 }
                 .clipShape(UnevenRoundedRectangle(
                     topLeadingRadius: windowTabStripCornerRadius,

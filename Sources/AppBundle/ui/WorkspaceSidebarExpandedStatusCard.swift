@@ -24,7 +24,7 @@ struct WorkspaceSidebarExpandedStatusCard: View {
     var body: some View {
         HStack(alignment: .center, spacing: 0) {
             VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .firstTextBaseline, spacing: 1) {
+                HStack(alignment: .top, spacing: 1) {
                     Text(date, format: .dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
                         .font(.system(size: 20, weight: .semibold, design: .rounded))
                         .monospacedDigit()
@@ -35,7 +35,7 @@ struct WorkspaceSidebarExpandedStatusCard: View {
                         .monospacedDigit()
                         .foregroundStyle(Color.white.opacity(0.32))
                         .lineLimit(1)
-                        .baselineOffset(4)
+                        .padding(.top, 3)
                         .padding(.leading, 1)
                 }
                 if showsDate {

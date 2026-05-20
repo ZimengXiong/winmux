@@ -25,11 +25,11 @@ struct WorkspaceSidebarMonitorSelector: View {
 
     @State private var isProjectMenuOpen = false
     private var projectPopupWidth: CGFloat {
-        let names = browsableProjects.map(\.displayName) + ["Other Projects"]
+        let names = browsableProjects.map(\.displayName) + ["Project"]
         let maxTextWidth = names.map {
             ($0 as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium)]).width
         }.max() ?? 0
-        return max(ceil(maxTextWidth) + 50, 148)
+        return min(max(ceil(maxTextWidth) + 50, 92), sectionWidth)
     }
     private var hasMultipleMonitors: Bool {
         scopes.count { workspaceSidebarMonitorScopePoint($0.id) != nil } > 1
@@ -116,7 +116,7 @@ struct WorkspaceSidebarMonitorSelector: View {
             onSelectScope(scope.id)
         } label: {
             Text(scope.id == workspaceSidebarFocusedScopeId ? "Focus" : scope.displayName)
-                .font(.system(size: workspaceSidebarDropdownLabelSize, weight: isActive ? .semibold : .medium))
+                .font(.system(size: 12.5, weight: isActive ? .semibold : .medium))
                 .lineLimit(1)
                 .foregroundStyle(isActive ? Color.white : Color.white.opacity(0.68))
                 .modifier(WorkspaceSidebarDropdownControlStyle(isActive: isActive))
@@ -159,13 +159,14 @@ struct WorkspaceSidebarMonitorSelector: View {
             HStack(spacing: 4) {
                 Text(selectedProject?.displayName ?? "Other Projects")
                     .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(isActive ? 0.86 : 0.72))
                     .lineLimit(1)
                     .truncationMode(.tail)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(isActive ? 0.86 : 0.72))
                     .rotationEffect(.degrees(isProjectMenuOpen ? 180 : 0))
             }
-            .foregroundStyle(Color.white.opacity(isActive ? 0.86 : 0.72))
             .modifier(WorkspaceSidebarDropdownControlStyle(isActive: isActive))
         }
         .buttonStyle(.plain)

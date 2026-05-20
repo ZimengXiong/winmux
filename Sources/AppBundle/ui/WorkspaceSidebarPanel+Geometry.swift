@@ -12,6 +12,7 @@ extension WorkspaceSidebarPanel {
               config.workspaceSidebar.enabled,
               let screen = workspaceSidebarPanelScreen()
         else { return nil }
+        guard !shouldSuppressChromeForFullscreenContent(on: workspaceSidebarResolvedPanelMonitor()) else { return nil }
 
         let sidebarConfig = config.workspaceSidebar
         let expandedWidth = CGFloat(sidebarConfig.width)

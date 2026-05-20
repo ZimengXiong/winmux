@@ -64,8 +64,8 @@ extension WorkspaceSidebarView {
     }
 }
 
-private let sidebarGlassTint = Color(hue: 0.61, saturation: 0.45, brightness: 0.55)
-private let sidebarGlassTintOpacity: Double = 0.14
-private let sidebarGlassScrimOpacity: Double = 0.55
-private let sidebarGlassHighlightPeak: Double = 0.12
+private let sidebarGlassTint = Color(hue: 0, saturation: 0, brightness: 0.50)
+private let sidebarGlassTintOpacity: Double = 0.06
+private let sidebarGlassScrimOpacity: Double = 0.58
+private let sidebarGlassHighlightPeak: Double = 0.08
 private let sidebarGlassBorderOpacity: Double = 0.10

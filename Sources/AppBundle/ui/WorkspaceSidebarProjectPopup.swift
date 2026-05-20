@@ -11,7 +11,18 @@ struct WorkspaceSidebarProjectPopup: View {
     var showsCreateAction = true
     var allowsContextMenu = true
     var menuWidth: CGFloat? = nil
+    var rowHeight: CGFloat = workspaceSidebarDropdownHeight
     var disabledProjectIds: Set<WorkspaceProjectId> = []
+    private var rowCount: Int {
+        projects.count + (showsCreateAction ? 1 : 0)
+    }
+    private var contentHeight: CGFloat {
+        let rowsHeight = CGFloat(rowCount) * rowHeight
+        let rowSpacing = CGFloat(max(rowCount - 1, 0)) * workspaceSidebarMenuRowSpacing
+        let dividerHeight = showsCreateAction ? 0.5 + 2 : 0
+        let verticalPadding = (workspaceSidebarMenuRowSpacing + 1) * 2
+        return rowsHeight + rowSpacing + dividerHeight + CGFloat(verticalPadding)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: workspaceSidebarMenuRowSpacing) {
@@ -25,6 +36,7 @@ struct WorkspaceSidebarProjectPopup: View {
         }
         .padding(workspaceSidebarMenuRowSpacing + 1)
         .frame(minWidth: menuWidth, idealWidth: menuWidth, maxWidth: menuWidth, alignment: .leading)
+        .frame(height: contentHeight, alignment: .top)
         .fixedSize(horizontal: menuWidth != nil, vertical: false)
         .background {
             ZStack {
@@ -54,7 +66,7 @@ struct WorkspaceSidebarProjectPopup: View {
                 Spacer(minLength: 0)
                 checkmark(isVisible: project.id == selectedProjectId)
             }
-            .modifier(WorkspaceSidebarDropdownMenuRowStyle(isSelected: project.id == selectedProjectId))
+            .modifier(WorkspaceSidebarDropdownMenuRowStyle(isSelected: project.id == selectedProjectId, rowHeight: rowHeight))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -87,7 +99,7 @@ struct WorkspaceSidebarProjectPopup: View {
                 checkmark(isVisible: false)
             }
             .foregroundStyle(Color.white.opacity(0.78))
-            .modifier(WorkspaceSidebarDropdownMenuRowStyle(isSelected: false))
+            .modifier(WorkspaceSidebarDropdownMenuRowStyle(isSelected: false, rowHeight: rowHeight))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

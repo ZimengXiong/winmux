@@ -8,7 +8,7 @@ extension TilingContainer {
 
     @MainActor
     var showsWindowTabs: Bool {
-        usesWindowTabBehavior
+        usesWindowTabBehavior && !hasFullscreenTab
     }
 
     @MainActor

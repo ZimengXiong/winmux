@@ -203,7 +203,7 @@ extension WorkspaceSidebarProjectPager {
             )
             .frame(width: projectPopupWidth)
             .offset(
-                x: -(projectCreateButtonWidth + footerSpacing),
+                x: -(projectCreateButtonWidth + 6),
                 y: -(expandedProjectControlsHeight + workspaceSidebarSectionGap)
             )
             .transition(.asymmetric(

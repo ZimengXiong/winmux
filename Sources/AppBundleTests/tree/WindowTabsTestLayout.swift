@@ -148,7 +148,7 @@ import XCTest
     }
 
     @MainActor
-    func testFullscreenActiveTabKeepsTabStripVisible() {
+    func testFullscreenActiveTabHidesTabStrip() {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
         let tabGroup = workspace.rootTilingContainer
@@ -160,12 +160,12 @@ import XCTest
         active.markAsMostRecentChild()
 
         XCTAssertTrue(tabGroup.usesWindowTabBehavior)
-        XCTAssertTrue(tabGroup.showsWindowTabs)
-        XCTAssertGreaterThan(tabGroup.windowTabBarHeight, 0)
+        XCTAssertFalse(tabGroup.showsWindowTabs)
+        XCTAssertEqual(tabGroup.windowTabBarHeight, 0)
     }
 
     @MainActor
-    func testFullscreenWindowInTabGroupKeepsChromeAndCoversSiblingWindows() async throws {
+    func testFullscreenWindowInTabGroupHidesChromeAndCoversSiblingWindows() async throws {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
         let root = workspace.rootTilingContainer
@@ -194,7 +194,7 @@ import XCTest
         XCTAssertEqual(fullscreenRect.topLeftY, contentRect.topLeftY)
         XCTAssertEqual(fullscreenRect.width, contentRect.width)
         XCTAssertEqual(fullscreenRect.height, contentRect.height)
-        XCTAssertGreaterThan(fullscreenRect.topLeftY, groupRect.topLeftY)
+        XCTAssertEqual(fullscreenRect.topLeftY, groupRect.topLeftY)
 
         secondTab.markAsMostRecentChild()
         try await workspace.layoutWorkspace()
@@ -205,7 +205,7 @@ import XCTest
         XCTAssertEqual(secondTabRect.topLeftY, secondTabContentRect.topLeftY)
         XCTAssertEqual(secondTabRect.width, secondTabContentRect.width)
         XCTAssertEqual(secondTabRect.height, secondTabContentRect.height)
-        XCTAssertGreaterThan(secondTabRect.topLeftY, groupRect.topLeftY)
+        XCTAssertEqual(secondTabRect.topLeftY, groupRect.topLeftY)
         XCTAssertNil(fullscreenWindow.lastAppliedLayoutPhysicalRect)
     }
 
@@ -228,7 +228,7 @@ import XCTest
     }
 
     @MainActor
-    func testWorkspaceWithFullscreenTabGroupWindowShowsTabStrip() async {
+    func testWorkspaceWithFullscreenTabGroupWindowShowsNoTabStrips() async {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
         let root = workspace.rootTilingContainer
@@ -242,6 +242,6 @@ import XCTest
 
         await updateWindowTabModel()
 
-        XCTAssertEqual(TrayMenuModel.shared.windowTabStrips.count, 1)
+        XCTAssertTrue(TrayMenuModel.shared.windowTabStrips.isEmpty)
     }
 }

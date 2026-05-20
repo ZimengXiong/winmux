@@ -46,12 +46,13 @@ struct WorkspaceSidebarDropdownControlStyle: ViewModifier {
 
 struct WorkspaceSidebarDropdownMenuRowStyle: ViewModifier {
     let isSelected: Bool
+    var rowHeight: CGFloat = workspaceSidebarDropdownHeight
     @State private var isHovered = false
 
     func body(content: Content) -> some View {
         content
             .padding(.horizontal, workspaceSidebarDropdownPadding)
-            .frame(height: workspaceSidebarMenuRowHeight)
+            .frame(height: rowHeight)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)

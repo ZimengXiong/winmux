@@ -52,6 +52,7 @@ func setUpWorkspacesForTests() {
     check(mainMonitor.setActiveWorkspace(focus.workspace))
 
     resetFocusCacheForTests()
+    shouldSuppressChromeForNativeFullscreenContent = false
     setScheduledRefreshOverrideForTests(nil)
     setBlockingRefreshOverridesForTests()
     TestApp.shared.focusedWindow = nil
