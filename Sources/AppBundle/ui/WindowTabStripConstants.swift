@@ -5,7 +5,7 @@ import SwiftUI
 // MARK: - Constants
 
 let windowTabPreviewCornerRadius: CGFloat = 12
-let windowTabStripContentHorizontalPadding: CGFloat = 10
+let windowTabStripContentHorizontalPadding: CGFloat = 3
 let windowTabStripGroupHandleWidth: CGFloat = 26
 let windowTabStripReservedHandleWidth: CGFloat = 24
 let windowTabStripTrailingGroupDragGutterWidth: CGFloat = 28
@@ -37,7 +37,7 @@ func windowTabStripAvailableTabsWidth(stripWidth: CGFloat) -> CGFloat {
     max(
         0,
         stripWidth
-            - (windowTabStripReservedGroupHandleWidth() * 2)
+            - windowTabStripReservedGroupHandleWidth()
             - (windowTabStripContentHorizontalPadding * 2),
     )
 }

@@ -8,16 +8,14 @@ extension WorkspaceSidebarWorkspaceSection {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: isCompact ? .center : .leading)
         .contentShape(Rectangle())
-        .simultaneousGesture(TapGesture(count: 2).onEnded { beginInlineRename() })
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     var header: some View {
         Group {
-            if isEditingName && !isCompact {
-                workspaceRenameEditor
-            } else if isCompact {
+            if isCompact {
                 workspaceBadge
                     .frame(width: workspaceSidebarBadgeWidth, height: workspaceSidebarBadgeWidth)
                     .frame(maxWidth: .infinity, alignment: .center)

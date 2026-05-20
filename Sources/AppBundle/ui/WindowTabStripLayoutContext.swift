@@ -25,7 +25,7 @@ struct WindowTabStripLayoutContext {
             0,
             width
                 - 16
-                - (windowTabStripReservedGroupHandleWidth() * 2)
+                - windowTabStripReservedGroupHandleWidth()
                 - windowTabStripTrailingGroupDragGutterWidth
                 - 18,
         )

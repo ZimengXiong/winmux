@@ -42,10 +42,6 @@ func handleWorkspaceSidebarAction(_ action: WorkspaceSidebarAction) {
             selectWorkspaceSidebarProject(projectId)
         case .createProject:
             createWorkspaceSidebarProject()
-        case .renameProject(let projectId, let displayName):
-            if let project = workspaceSidebarProjectViewModel(projectId) {
-                renameWorkspaceSidebarProject(project, displayName: displayName)
-            }
         case .setProjectColor(let projectId, let colorHex):
             if let project = workspaceSidebarProjectViewModel(projectId) {
                 setWorkspaceSidebarProjectColor(project, colorHex: colorHex)
@@ -58,14 +54,6 @@ func handleWorkspaceSidebarAction(_ action: WorkspaceSidebarAction) {
             selectWorkspaceSidebarMonitorScope(scopeId)
         case .createWorkspace(let projectId, let monitorScopeId):
             createWorkspaceFromSidebarButton(projectId: projectId, monitorScopeId: monitorScopeId)
-        case .renameWorkspace(let name, let displayName):
-            if let workspace = workspaceSidebarWorkspaceViewModel(name) {
-                renameWorkspaceFromSidebar(workspace, displayName: displayName)
-            }
-        case .resetWorkspace(let name):
-            if let workspace = workspaceSidebarWorkspaceViewModel(name) {
-                resetWorkspaceNameFromSidebar(workspace)
-            }
         case .deleteWorkspace(let name):
             if let workspace = workspaceSidebarWorkspaceViewModel(name) {
                 deleteWorkspaceFromSidebar(workspace)

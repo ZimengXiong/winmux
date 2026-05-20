@@ -183,17 +183,14 @@ final class WorkspaceNamingTest: XCTestCase {
         XCTAssertEqual(workspaceDisplayName(third.name), "Workspace 2")
     }
 
-    func testResettingCustomWorkspaceNameAfterCompactionUsesCurrentAutomaticName() throws {
+    func testWorkspaceNameAfterCompactionUsesCurrentAutomaticName() throws {
         let deleted = Workspace.get(byName: "10")
         deleted.markAsAutomaticallyNamed()
         _ = TestWindow.new(id: 206, parent: deleted.rootTilingContainer)
         let survivor = Workspace.get(byName: "2")
         survivor.markAsAutomaticallyNamed()
         _ = TestWindow.new(id: 207, parent: survivor.rootTilingContainer)
-        try renameWorkspaceForSidebar(workspaceName: survivor.name, displayName: "Code")
-
         try deleteWorkspaceForSidebar(workspaceName: deleted.name)
-        try resetWorkspaceSidebarName(workspaceName: survivor.name)
 
         XCTAssertEqual(survivor.name, "2")
         XCTAssertEqual(workspaceDisplayName(survivor.name), "Workspace 1")
@@ -237,7 +234,7 @@ final class WorkspaceNamingTest: XCTestCase {
         XCTAssertTrue(createWorkspaceFromSidebarDrag(sourceNode: window, sourceWindow: window))
         XCTAssertNotNil(Workspace.existing(byName: "2"))
         XCTAssertNil(Workspace.existing(byName: "__sidebar_draft_workspace_1"))
-        XCTAssertEqual(focus.workspace.name, "2")
+        XCTAssertEqual(focus.workspace.name, "1")
     }
 
     func testAutomaticWorkspaceDisplayNamesAreScopedPerDisplay() {
@@ -288,7 +285,7 @@ final class WorkspaceNamingTest: XCTestCase {
         XCTAssertEqual(workspaceDisplayName(projectWorkspace.name), "Workspace 1")
     }
 
-    func testRenamingWorkspaceFromSidebarUsesDisplayLabel() throws {
+    func testWorkspaceSidebarRenameIsIgnored() throws {
         let workspace = Workspace.get(byName: "1")
         workspace.markAsAutomaticallyNamed()
         _ = TestWindow.new(id: 14, parent: workspace.rootTilingContainer)
@@ -296,8 +293,8 @@ final class WorkspaceNamingTest: XCTestCase {
         try renameWorkspaceForSidebar(workspaceName: workspace.name, displayName: "Code")
 
         XCTAssertEqual(workspace.name, "1")
-        XCTAssertEqual(workspaceDisplayName(workspace.name), "Code")
-        XCTAssertEqual(config.workspaceSidebar.workspaceLabels[workspace.name], "Code")
+        XCTAssertEqual(workspaceDisplayName(workspace.name), "Workspace 1")
+        XCTAssertNil(config.workspaceSidebar.workspaceLabels[workspace.name])
     }
 
     func testResettingWorkspaceNameFromSidebarUsesDefaultDisplayName() throws {
@@ -404,12 +401,12 @@ final class WorkspaceNamingTest: XCTestCase {
         XCTAssertFalse(defaultWorkspace.allLeafWindowsRecursive.contains(projectWindow))
     }
 
-    func testCreatedProjectPersistsNameAndDeleteRemovesPersistedName() throws {
+    func testCreatedProjectPersistsIdentityAndDeleteRemovesPersistedIdentity() throws {
         let project = createWorkspaceProject()
 
-        XCTAssertEqual(config.workspaceSidebar.projectLabels[project.id.rawValue], "Project 1")
+        XCTAssertEqual(config.workspaceSidebar.projectLabels[project.id.rawValue], project.id.rawValue)
         try renameWorkspaceProject(project.id, displayName: "Work")
-        XCTAssertEqual(config.workspaceSidebar.projectLabels[project.id.rawValue], "Work")
+        XCTAssertEqual(config.workspaceSidebar.projectLabels[project.id.rawValue], project.id.rawValue)
         config.workspaceSidebar.projectColors[project.id.rawValue] = "#60A5FA"
         try deleteWorkspaceProject(project.id)
 
@@ -423,18 +420,74 @@ final class WorkspaceNamingTest: XCTestCase {
 
         let project = workspaceProjects().first { $0.id == "project-7" }
 
-        XCTAssertEqual(project?.name, "Research")
+        XCTAssertEqual(project?.name, "Project 1")
         XCTAssertTrue(canDeleteWorkspaceProject("project-7"))
     }
 
-    func testProjectCreationUsesUniqueIdsAfterRename() throws {
+    func testPersistedProjectMaterializesWithEmptyWorkspace() {
+        let originalFocus = focus.workspace
+        let projectId = WorkspaceProjectId("project-empty")
+        config.workspaceSidebar.projectLabels[projectId.rawValue] = "Empty Project"
+
+        _ = workspaceProjects()
+
+        let projectWorkspaces = Workspace.all.filter { $0.projectId == projectId }
+        XCTAssertEqual(projectWorkspaces.count, 1)
+        XCTAssertTrue(projectWorkspaces[0].isEffectivelyEmpty)
+        XCTAssertEqual(focus.workspace, originalFocus)
+    }
+
+    func testCreatedProjectStartsWithEmptyWorkspace() {
+        let originalFocus = focus.workspace
+
+        let project = createWorkspaceProject()
+
+        let projectWorkspaces = Workspace.all.filter { $0.projectId == project.id }
+        XCTAssertEqual(projectWorkspaces.count, 1)
+        XCTAssertTrue(projectWorkspaces[0].isEffectivelyEmpty)
+        XCTAssertEqual(focus.workspace, originalFocus)
+    }
+
+    func testProjectCreationUsesUniqueIds() throws {
         let first = createWorkspaceProject()
-        try renameWorkspaceProject(first.id, displayName: "Work")
         let second = createWorkspaceProject()
 
         XCTAssertEqual(first.id, "project-1")
         XCTAssertEqual(second.id, "project-2")
         XCTAssertEqual(workspaceProjects().map(\.id).filter { $0.hasPrefix("project-") }.sorted(), ["project-1", "project-2"])
+    }
+
+    func testProjectCreationAppendsAfterDeletedMiddleProject() throws {
+        let first = createWorkspaceProject()
+        let second = createWorkspaceProject()
+        let third = createWorkspaceProject()
+
+        try deleteWorkspaceProject(second.id)
+        let fourth = createWorkspaceProject()
+
+        XCTAssertEqual(first.id, "project-1")
+        XCTAssertEqual(second.id, "project-2")
+        XCTAssertEqual(third.id, "project-3")
+        XCTAssertEqual(fourth.id, "project-4")
+        XCTAssertEqual(
+            workspaceProjects().map(\.id).filter { $0.hasPrefix("project-") },
+            ["project-1", "project-3", "project-4"],
+        )
+    }
+
+    func testProjectNamesFollowStableInsertionOrder() throws {
+        let first = createWorkspaceProject()
+        let second = createWorkspaceProject()
+        let third = createWorkspaceProject()
+
+        XCTAssertEqual(
+            workspaceProjects().map(\.id).filter { $0.hasPrefix("project-") },
+            [first.id, second.id, third.id],
+        )
+        XCTAssertEqual(
+            workspaceProjects().filter { $0.id.hasPrefix("project-") }.map(\.name),
+            ["Project 1", "Project 2", "Project 3"],
+        )
     }
 
     func testDeletingProjectFallsBackToClosestProject() throws {

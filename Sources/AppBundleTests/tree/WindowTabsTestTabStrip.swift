@@ -191,7 +191,7 @@ import XCTest
     func testWindowTabStripLayoutMatchesNextChromeMetrics() {
         let stripWidth: CGFloat = 360
         let expectedTabsWidth = stripWidth
-            - (windowTabStripReservedGroupHandleWidth() * 2)
+            - windowTabStripReservedGroupHandleWidth()
             - (windowTabStripContentPadding() * 2)
 
         XCTAssertEqual(windowTabStripAvailableTabsWidth(stripWidth: stripWidth), expectedTabsWidth)

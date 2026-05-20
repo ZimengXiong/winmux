@@ -3,30 +3,6 @@ import Common
 import SwiftUI
 
 extension WorkspaceSidebarProjectPager {
-    func beginInlineRename(_ project: WorkspaceSidebarProjectViewModel) {
-        if selectedProjectId != project.id {
-            onSelectProject(project.id)
-        }
-        WorkspaceSidebarPanel.shared.beginInlineTextEditing()
-        editingProjectId = project.id
-        editingProjectDraft = project.displayName
-    }
-
-    func commitInlineRename(_ project: WorkspaceSidebarProjectViewModel) {
-        guard editingProjectId == project.id else { return }
-        let trimmed = editingProjectDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        editingProjectId = nil
-        WorkspaceSidebarPanel.shared.endInlineTextEditing()
-        guard !trimmed.isEmpty, trimmed != project.displayName else { return }
-        onRenameProject(project, trimmed)
-    }
-
-    func cancelInlineRename() {
-        editingProjectId = nil
-        editingProjectDraft = ""
-        WorkspaceSidebarPanel.shared.endInlineTextEditing()
-    }
-
     @ViewBuilder
     var compactProjectIndicator: some View {
         if let selectedProject, let currentIndex {
@@ -47,17 +23,13 @@ extension WorkspaceSidebarProjectPager {
 
     @ViewBuilder
     var projectMenu: some View {
-        if let selectedProject, editingProjectId == selectedProject.id {
-            projectMenuInlineEditor(selectedProject)
-        } else {
-            projectMenuButton
+        projectMenuButton
             .frame(width: projectMenuWidth, height: workspaceSidebarPagerHeight, alignment: .trailing)
             .contextMenu {
                 if let selectedProject {
                     projectContextMenuItems(for: selectedProject)
                 }
             }
-        }
     }
 
     var projectControls: some View {
@@ -115,7 +87,6 @@ extension WorkspaceSidebarProjectPager {
                     isProjectMenuOpen = false
                 },
                 onRename: { project in
-                    beginInlineRename(project)
                     isProjectMenuOpen = false
                 },
                 onSetColor: onSetProjectColor,
@@ -138,9 +109,6 @@ extension WorkspaceSidebarProjectPager {
 
     @ViewBuilder
     func projectContextMenuItems(for project: WorkspaceSidebarProjectViewModel) -> some View {
-        Button("Rename Project") {
-            beginInlineRename(project)
-        }
         Menu("Color") {
             let selectedColorHex = project.colorHex.flatMap(normalizedWorkspaceSidebarColorHex)
             Button {
@@ -174,29 +142,5 @@ extension WorkspaceSidebarProjectPager {
             Text("Delete Project")
         }
         .disabled(!canDeleteWorkspaceProject(project.id))
-    }
-
-    func projectMenuInlineEditor(_ project: WorkspaceSidebarProjectViewModel) -> some View {
-        WorkspaceSidebarProjectRenameField(
-            text: $editingProjectDraft,
-            focusId: project.id.rawValue,
-            alignment: .left,
-            fontSize: 11.5,
-            fontWeight: .semibold,
-            onCommit: {
-                commitInlineRename(project)
-            },
-            onCancel: cancelInlineRename,
-        )
-            .padding(.horizontal, 7)
-            .frame(width: projectMenuWidth, height: 28, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Color.white.opacity(0.07))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .strokeBorder(Color.accentColor.opacity(0.32), lineWidth: 0.5)
-                    }
-            )
     }
 }

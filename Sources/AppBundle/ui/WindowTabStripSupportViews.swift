@@ -33,11 +33,11 @@ struct WindowTabGroupHandleView: View {
     let workspaceName: String
 
     var body: some View {
-        HStack(spacing: 3) {
-            ForEach(0..<3, id: \.self) { _ in
-                Circle()
-                    .fill(Color.white.opacity(0.28))
-                    .frame(width: 3.5, height: 3.5)
+        VStack(spacing: 3) {
+            ForEach(0..<2, id: \.self) { _ in
+                Capsule(style: .continuous)
+                    .fill(Color.white.opacity(0.30))
+                    .frame(width: 10, height: 2)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

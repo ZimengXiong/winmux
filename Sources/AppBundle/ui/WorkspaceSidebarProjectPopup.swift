@@ -11,6 +11,7 @@ struct WorkspaceSidebarProjectPopup: View {
     var showsCreateAction = true
     var allowsContextMenu = true
     var menuWidth: CGFloat? = nil
+    var disabledProjectIds: Set<WorkspaceProjectId> = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: workspaceSidebarMenuRowSpacing) {
@@ -53,6 +54,7 @@ struct WorkspaceSidebarProjectPopup: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(disabledProjectIds.contains(project.id))
         .frame(maxWidth: .infinity, alignment: .leading)
         .contextMenu {
             if allowsContextMenu {

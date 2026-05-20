@@ -39,8 +39,6 @@ extension WorkspaceSidebarWorkspaceSection {
     var headerSlot: some View {
         if isCompact {
             header.frame(maxWidth: .infinity, alignment: .center)
-        } else if isEditingName {
-            header
         } else {
             headerButton
         }

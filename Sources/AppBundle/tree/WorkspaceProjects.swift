@@ -4,33 +4,40 @@ import Common
 @MainActor
 func workspaceProjects() -> [WorkspaceProject] {
     materializePersistedWorkspaceProjects()
-    return winMuxWorkspaceState.projectsById.values.map {
-        var project = $0
-        project = WorkspaceProject(
+    ensureMinimumWorkspaceForAllProjects()
+    let projects = winMuxWorkspaceState.projectsById.values.sorted {
+        if $0.id == workspaceProjectDefaultId { return true }
+        if $1.id == workspaceProjectDefaultId { return false }
+        return workspaceProjectOrderPrecedes($0, $1)
+    }
+    var numberedProjectIndex = 0
+    return projects.map { project in
+        let displayName: String
+        if project.id == workspaceProjectDefaultId {
+            displayName = "Default"
+        } else {
+            numberedProjectIndex += 1
+            displayName = "Project \(numberedProjectIndex)"
+        }
+        return WorkspaceProject(
             id: project.id,
-            name: workspaceProjectDisplayName(project.id, fallbackName: project.name),
+            name: displayName,
+            order: project.order,
             workspaceOrderByLane: project.workspaceOrderByLane,
             lastActiveWorkspaceByLane: project.lastActiveWorkspaceByLane,
             linkedLaneIds: project.linkedLaneIds,
         )
-        return project
-    }.sorted {
-        if $0.id == workspaceProjectDefaultId { return true }
-        if $1.id == workspaceProjectDefaultId { return false }
-        return $0.name.localizedStandardCompare($1.name) == .orderedAscending
     }
 }
 
 @MainActor
 func workspaceProjectName(_ projectId: WorkspaceProjectId) -> String {
-    materializePersistedWorkspaceProjects()
-    return workspaceProjectDisplayName(projectId, fallbackName: winMuxWorkspaceState.projectsById[projectId]?.name ?? "Project")
+    workspaceProjects().first { $0.id == projectId }?.name ?? "Project"
 }
 
 @MainActor
 func workspaceProjectDisplayName(_ projectId: WorkspaceProjectId, fallbackName: String) -> String {
-    let label = config.workspaceSidebar.projectLabels[projectId.rawValue]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    return label.isEmpty ? fallbackName : label
+    workspaceProjects().first { $0.id == projectId }?.name ?? fallbackName
 }
 
 @MainActor
@@ -42,28 +49,23 @@ func activeWorkspaceProjectId(for monitor: Monitor) -> WorkspaceProjectId {
 @MainActor
 func createWorkspaceProject() -> WorkspaceProject {
     materializePersistedWorkspaceProjects()
-    let usedNumbers = (
-        winMuxWorkspaceState.projectsById.keys.compactMap(workspaceProjectIdIndex) +
-            winMuxWorkspaceState.projectsById.values.compactMap(workspaceProjectNameIndex)
-    ).toSet()
-    let index = lowestUnusedPositiveIndex(usedNumbers)
-    let project = WorkspaceProject(id: WorkspaceProjectId("project-\(index)"), name: "Project \(index)")
-    winMuxWorkspaceState.projectsById[project.id] = project
-    config.workspaceSidebar.projectLabels[project.id.rawValue] = project.name
+    let identity = winMuxWorkspaceState.nextGeneratedProjectIdentity()
+    let order = winMuxWorkspaceState.nextProjectOrder()
+    let project = WorkspaceProject(id: identity.id, name: identity.name, order: order)
+    winMuxWorkspaceState.registerProject(project)
+    ensureMinimumWorkspace(for: project.id)
+    config.workspaceSidebar.projectLabels[project.id.rawValue] = project.id.rawValue
     if !isUnitTest {
-        try? persistWorkspaceSidebarProjectLabel(projectId: project.id.rawValue, label: project.name)
+        try? persistWorkspaceSidebarProjectLabel(projectId: project.id.rawValue, label: project.id.rawValue)
     }
     return project
 }
 
-func workspaceProjectNameIndex(_ project: WorkspaceProject) -> Int? {
-    guard project.name.hasPrefix("Project ") else { return nil }
-    return Int(project.name.replacingOccurrences(of: "Project ", with: ""))
-}
-
-func workspaceProjectIdIndex(_ projectId: WorkspaceProjectId) -> Int? {
-    guard projectId.rawValue.hasPrefix("project-") else { return nil }
-    return Int(projectId.rawValue.replacingOccurrences(of: "project-", with: ""))
+func workspaceProjectOrderPrecedes(_ lhs: WorkspaceProject, _ rhs: WorkspaceProject) -> Bool {
+    if lhs.order != rhs.order {
+        return lhs.order < rhs.order
+    }
+    return lhs.id < rhs.id
 }
 
 @MainActor
@@ -72,28 +74,30 @@ func materializePersistedWorkspaceProjects() {
         let projectId = WorkspaceProjectId(rawProjectId)
         let name = label.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, winMuxWorkspaceState.projectsById[projectId] == nil else { continue }
-        winMuxWorkspaceState.projectsById[projectId] = WorkspaceProject(id: projectId, name: name)
+        let order = winMuxWorkspaceState.nextProjectOrder()
+        winMuxWorkspaceState.registerProject(WorkspaceProject(id: projectId, name: name, order: order))
+    }
+    ensureMinimumWorkspaceForAllProjects()
+}
+
+@MainActor
+func ensureMinimumWorkspaceForAllProjects(monitor: Monitor = mainMonitor) {
+    for projectId in winMuxWorkspaceState.projectsById.keys {
+        ensureMinimumWorkspace(for: projectId, monitor: monitor)
     }
 }
 
 @MainActor
-func renameWorkspaceForSidebar(workspaceName: String, displayName: String) throws {
-    guard Workspace.existing(byName: workspaceName) != nil else {
-        throw WorkspaceMutationError.workspaceNotFound(workspaceName)
-    }
-    let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmedName.isEmpty else { throw WorkspaceMutationError.emptyName }
+func ensureMinimumWorkspace(for projectId: WorkspaceProjectId, monitor: Monitor = mainMonitor) {
+    guard winMuxWorkspaceState.projectsById[projectId] != nil else { return }
+    guard !Workspace.all.contains(where: { $0.projectId == projectId && !$0.isArchived }) else { return }
+    _ = createBlankWorkspace(projectId: projectId, monitor: monitor)
+}
 
-    let defaultName = workspaceDefaultDisplayName(workspaceName)
-    let label = trimmedName == defaultName ? nil : trimmedName
-    if let label {
-        config.workspaceSidebar.workspaceLabels[workspaceName] = label
-    } else {
-        config.workspaceSidebar.workspaceLabels.removeValue(forKey: workspaceName)
-    }
-    if !isUnitTest {
-        try persistWorkspaceSidebarLabel(workspaceName: workspaceName, label: label)
-    }
+@MainActor
+func renameWorkspaceForSidebar(workspaceName: String, displayName: String) throws {
+    guard Workspace.existing(byName: workspaceName) != nil else { throw WorkspaceMutationError.workspaceNotFound(workspaceName) }
+    _ = displayName
 }
 
 @MainActor
@@ -110,34 +114,10 @@ func resetWorkspaceSidebarName(workspaceName: String) throws {
 @MainActor
 func renameWorkspaceProject(_ projectId: WorkspaceProjectId, displayName: String) throws {
     materializePersistedWorkspaceProjects()
-    guard var project = winMuxWorkspaceState.projectsById[projectId] else {
+    guard winMuxWorkspaceState.projectsById[projectId] != nil else {
         throw WorkspaceMutationError.projectNotFound(projectId.rawValue)
     }
-    let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmedName.isEmpty else { throw WorkspaceMutationError.emptyName }
-    let duplicate = workspaceProjects().contains {
-        $0.id != projectId && $0.name.caseInsensitiveCompare(trimmedName) == .orderedSame
-    }
-    guard !duplicate else { throw WorkspaceMutationError.duplicateProjectName(trimmedName) }
-
-    let defaultName = project.id == workspaceProjectDefaultId ? "Default" : project.name
-    project = WorkspaceProject(
-        id: projectId,
-        name: trimmedName,
-        workspaceOrderByLane: project.workspaceOrderByLane,
-        lastActiveWorkspaceByLane: project.lastActiveWorkspaceByLane,
-        linkedLaneIds: project.linkedLaneIds,
-    )
-    winMuxWorkspaceState.projectsById[projectId] = project
-    let label = trimmedName == defaultName ? nil : trimmedName
-    if let label {
-        config.workspaceSidebar.projectLabels[projectId.rawValue] = label
-    } else {
-        config.workspaceSidebar.projectLabels.removeValue(forKey: projectId.rawValue)
-    }
-    if !isUnitTest {
-        try persistWorkspaceSidebarProjectLabel(projectId: projectId.rawValue, label: label)
-    }
+    _ = displayName
 }
 
 @MainActor

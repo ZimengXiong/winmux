@@ -64,9 +64,5 @@ func workspaceDefaultDisplayName(_ workspaceName: String) -> String {
 
 @MainActor
 func workspaceDisplayName(_ workspaceName: String) -> String {
-    let sidebarLabel = config.workspaceSidebar.workspaceLabels[workspaceName]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    if !sidebarLabel.isEmpty {
-        return sidebarLabel
-    }
     return workspaceDefaultDisplayName(workspaceName)
 }

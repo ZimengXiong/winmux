@@ -3,9 +3,6 @@ import SwiftUI
 extension WorkspaceSidebarProjectPopup {
     @ViewBuilder
     func projectContextMenuItems(for project: WorkspaceSidebarProjectViewModel) -> some View {
-        Button("Rename Project") {
-            onRename(project)
-        }
         Menu("Color") {
             Button("Auto") {
                 onSetColor(project, nil)

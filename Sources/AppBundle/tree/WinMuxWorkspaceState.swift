@@ -12,16 +12,20 @@ struct WinMuxWorkspaceState {
     var workspaceById: [WorkspaceId: Workspace] = [:]
     var workspaceIdByName: [String: WorkspaceId] = [:]
     var projectsById: [WorkspaceProjectId: WorkspaceProject] = [
-        workspaceProjectDefaultId: WorkspaceProject(id: workspaceProjectDefaultId, name: "Default"),
+        workspaceProjectDefaultId: WorkspaceProject(id: workspaceProjectDefaultId, name: "Default", order: 0),
     ]
     var lanesById: [DisplayLaneId: DisplayLane] = [:]
 
     private var nextWorkspaceCounter = 1
+    private var nextProjectCounter = 1
+    private var nextProjectOrderCounter = 1
 
     mutating func resetProjects(defaultProjectName: String) {
         projectsById = [
-            workspaceProjectDefaultId: WorkspaceProject(id: workspaceProjectDefaultId, name: defaultProjectName),
+            workspaceProjectDefaultId: WorkspaceProject(id: workspaceProjectDefaultId, name: defaultProjectName, order: 0),
         ]
+        nextProjectCounter = 1
+        nextProjectOrderCounter = 1
         for workspace in workspaceById.values {
             workspace.projectId = workspaceProjectDefaultId
         }
@@ -37,9 +41,11 @@ struct WinMuxWorkspaceState {
         workspaceIdByName = [:]
         lanesById = [:]
         projectsById = [
-            workspaceProjectDefaultId: WorkspaceProject(id: workspaceProjectDefaultId, name: defaultProjectName),
+            workspaceProjectDefaultId: WorkspaceProject(id: workspaceProjectDefaultId, name: defaultProjectName, order: 0),
         ]
         nextWorkspaceCounter = 1
+        nextProjectCounter = 1
+        nextProjectOrderCounter = 1
     }
 
     mutating func nextWorkspaceId() -> WorkspaceId {
@@ -48,6 +54,27 @@ struct WinMuxWorkspaceState {
         }
         defer { nextWorkspaceCounter += 1 }
         return WorkspaceId("workspace-\(nextWorkspaceCounter)")
+    }
+
+    mutating func nextProjectOrder() -> Int {
+        while projectsById.values.contains(where: { $0.order == nextProjectOrderCounter }) {
+            nextProjectOrderCounter += 1
+        }
+        defer { nextProjectOrderCounter += 1 }
+        return nextProjectOrderCounter
+    }
+
+    mutating func registerProject(_ project: WorkspaceProject) {
+        projectsById[project.id] = project
+        nextProjectOrderCounter = max(nextProjectOrderCounter, project.order + 1)
+    }
+
+    mutating func nextGeneratedProjectIdentity() -> (id: WorkspaceProjectId, name: String) {
+        while projectsById[WorkspaceProjectId("project-\(nextProjectCounter)")] != nil {
+            nextProjectCounter += 1
+        }
+        defer { nextProjectCounter += 1 }
+        return (WorkspaceProjectId("project-\(nextProjectCounter)"), "Project \(nextProjectCounter)")
     }
 
     func workspace(named name: String) -> Workspace? {
@@ -84,7 +111,8 @@ struct WinMuxWorkspaceState {
 
     mutating func ensureProjectExists(_ projectId: WorkspaceProjectId) {
         if projectsById[projectId] == nil {
-            projectsById[projectId] = WorkspaceProject(id: projectId, name: "Project")
+            let order = nextProjectOrder()
+            registerProject(WorkspaceProject(id: projectId, name: "Project", order: order))
         }
     }
 

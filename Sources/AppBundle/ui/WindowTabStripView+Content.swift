@@ -9,11 +9,6 @@ extension WindowTabStripView {
         let groupDragWindowId = activeWindowId ?? strip.tabs.first?.windowId
 
         return HStack(spacing: 6) {
-            WindowTabGroupHandleView(
-                windowId: groupDragWindowId,
-                workspaceName: strip.workspaceName
-            )
-
             tabScrollView(
                 context: context,
                 itemHeight: itemHeight,
@@ -36,7 +31,8 @@ extension WindowTabStripView {
                 workspaceName: strip.workspaceName
             )
         }
-        .padding(.horizontal, 8)
+        .padding(.leading, 2)
+        .padding(.trailing, 8)
         .padding(.vertical, 2)
         .frame(width: stripWidth, height: stripHeight)
         .clipShape(UnevenRoundedRectangle(

@@ -10,14 +10,11 @@ struct WorkspaceSidebarProjectPager: View {
     @Binding var isProjectMenuOpen: Bool
     let onSelectProject: (WorkspaceProjectId) -> Void
     let onCreateProject: () -> Void
-    let onRenameProject: (WorkspaceSidebarProjectViewModel, String) -> Void
     let onSetProjectColor: (WorkspaceSidebarProjectViewModel, String?) -> Void
     let onDeleteProject: (WorkspaceSidebarProjectViewModel) -> Void
 
     @State var isHovered = false
     @State var pressedProjectId: WorkspaceProjectId? = nil
-    @State var editingProjectId: WorkspaceProjectId? = nil
-    @State var editingProjectDraft = ""
 
     var sectionWidth: CGFloat { workspaceSidebarSectionWidth(expansionProgress, layout: layout) }
     var isCompact: Bool { expansionProgress < workspaceSidebarRowsRevealProgress }

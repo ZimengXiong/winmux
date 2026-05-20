@@ -15,10 +15,10 @@ extension WorkspaceSidebarPanel {
 
     func beginMenuTrackingIfNeeded() {
         guard isVisible,
-              TrayMenuModel.shared.workspaceSidebarVisibleWidth > 0,
-              isMouseInsideHoverRegion()
+              TrayMenuModel.shared.workspaceSidebarVisibleWidth > 0
         else { return }
         menuTrackingDepth += 1
+        menuTrackingGraceUntil = .distantFuture
         pendingCollapse?.cancel()
         pendingCollapse = nil
         pendingCollapseFinalize?.cancel()
@@ -30,8 +30,13 @@ extension WorkspaceSidebarPanel {
         guard menuTrackingDepth > 0 else { return }
         menuTrackingDepth -= 1
         guard menuTrackingDepth == 0 else { return }
+        menuTrackingGraceUntil = Date().addingTimeInterval(menuTrackingEndGrace)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
             self?.updateHoverStateFromMousePosition()
         }
+    }
+
+    func isMenuTrackingOrInGracePeriod(now: Date = .now) -> Bool {
+        menuTrackingDepth > 0 || now < menuTrackingGraceUntil
     }
 }

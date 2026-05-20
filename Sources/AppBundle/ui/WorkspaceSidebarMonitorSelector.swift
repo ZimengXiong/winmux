@@ -14,11 +14,13 @@ struct WorkspaceSidebarMonitorSelector: View {
     let sectionWidth: CGFloat
     var onSelectScope: (String) -> Void = { selectWorkspaceSidebarMonitorScope($0) }
     var onSelectProject: (WorkspaceProjectId) -> Void = { _ in }
+    var onCreateProject: () -> Void = {}
+    var onRenameProject: (WorkspaceSidebarProjectViewModel) -> Void = { _ in }
+    var onSetProjectColor: (WorkspaceSidebarProjectViewModel, String?) -> Void = { _, _ in }
+    var onDeleteProject: (WorkspaceSidebarProjectViewModel) -> Void = { _ in }
 
     @State private var isProjectMenuOpen = false
-    @State private var projectSelectorLeading: CGFloat = 0
     private let projectPopupWidth: CGFloat = 148
-    private let coordinateSpaceName = "WorkspaceSidebarMonitorSelector"
 
     private var quickScopes: [WorkspaceSidebarMonitorScopeViewModel] {
         var result = [
@@ -39,23 +41,17 @@ struct WorkspaceSidebarMonitorSelector: View {
                     isFocusedMonitor: false
                 ),
         ]
-        if concreteMonitorScopeCount > 1 {
-            result.append(
-                scopes.first { $0.id == workspaceSidebarAllScopeId }
-                    ?? WorkspaceSidebarMonitorScopeViewModel(
-                        id: workspaceSidebarAllScopeId,
-                        displayName: "All",
-                        subtitle: nil,
-                        systemImageName: "rectangle.grid.2x2",
-                        isFocusedMonitor: false
-                    )
-            )
-        }
+        result.append(
+            scopes.first { $0.id == workspaceSidebarAllScopeId }
+                ?? WorkspaceSidebarMonitorScopeViewModel(
+                    id: workspaceSidebarAllScopeId,
+                    displayName: "All",
+                    subtitle: nil,
+                    systemImageName: "rectangle.grid.2x2",
+                    isFocusedMonitor: false
+                )
+        )
         return result
-    }
-
-    private var concreteMonitorScopeCount: Int {
-        scopes.filter { !workspaceSidebarMonitorScopeIsSentinel($0.id) }.count
     }
 
     private var selectedProject: WorkspaceSidebarProjectViewModel? {
@@ -63,53 +59,25 @@ struct WorkspaceSidebarMonitorSelector: View {
         return projects.first { $0.id == browsedProjectId }
     }
 
-    private var otherProjects: [WorkspaceSidebarProjectViewModel] {
+    private var browsableProjects: [WorkspaceSidebarProjectViewModel] {
         projects.filter { $0.id != activeProjectId }
     }
 
-    private var selectedProjectColor: Color {
-        guard let selectedProject else { return Color.accentColor }
-        return workspaceSidebarProjectColor(projectId: selectedProject.id, configuredHex: selectedProject.colorHex)
-    }
-
-    private var projectPopupHeight: CGFloat {
-        let rowCount = CGFloat(otherProjects.count)
-        let popupPadding = (workspaceSidebarMenuRowSpacing + 1) * 2
-        let rowSpacing = CGFloat(max(otherProjects.count - 1, 0)) * workspaceSidebarMenuRowSpacing
-        return (rowCount * workspaceSidebarMenuRowHeight) + rowSpacing + popupPadding
-    }
-
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 3) {
-                    ForEach(Array(quickScopes.enumerated()), id: \.element.id) { index, scope in
-                        monitorScopePill(scope)
-                        if index == 1, !otherProjects.isEmpty {
-                            projectSelector
-                        }
-                    }
-                    Spacer(minLength: 0)
+        HStack(spacing: 3) {
+            ForEach(Array(quickScopes.enumerated()), id: \.element.id) { index, scope in
+                monitorScopePill(scope)
+                if index == 1, !browsableProjects.isEmpty {
+                    projectSelector
                 }
-                .frame(minWidth: sectionWidth, alignment: .leading)
             }
-            .frame(height: workspaceSidebarDropdownHeight)
-
-            if isProjectMenuOpen {
-                projectPopup
-                    .offset(y: workspaceSidebarDropdownHeight + workspaceSidebarSectionGap)
-            }
+            Spacer(minLength: 0)
         }
-        .frame(
-            height: workspaceSidebarDropdownHeight + (isProjectMenuOpen ? workspaceSidebarSectionGap + projectPopupHeight : 0),
-            alignment: .topLeading
-        )
+        .frame(width: sectionWidth, alignment: .leading)
+        .frame(height: workspaceSidebarDropdownHeight)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .coordinateSpace(name: coordinateSpaceName)
-        .onPreferenceChange(WorkspaceSidebarProjectSelectorLeadingKey.self) { leading in
-            projectSelectorLeading = leading
-        }
         .opacity(expansionProgress)
+        .zIndex(isProjectMenuOpen ? 200 : 0)
     }
 
     private func monitorScopePill(_ scope: WorkspaceSidebarMonitorScopeViewModel) -> some View {
@@ -142,55 +110,74 @@ struct WorkspaceSidebarMonitorSelector: View {
     }
 
     private var projectSelector: some View {
-        Button {
+        let isActive = selectedProject != nil || isProjectMenuOpen
+        return Button {
             isProjectMenuOpen.toggle()
         } label: {
             HStack(spacing: 4) {
                 Text(selectedProject?.displayName ?? "Other Projects")
-                    .font(.system(size: workspaceSidebarDropdownLabelSize, weight: selectedProject == nil ? .medium : .semibold))
+                    .font(.system(size: 12.5, weight: .medium))
                     .lineLimit(1)
+                    .truncationMode(.tail)
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 8, weight: .bold))
-                    .opacity(0.72)
+                    .font(.system(size: 9, weight: .semibold))
+                    .rotationEffect(.degrees(isProjectMenuOpen ? 180 : 0))
             }
-            .foregroundStyle(selectedProject == nil ? Color.white.opacity(0.68) : Color.white)
-            .modifier(WorkspaceSidebarDropdownControlStyle(
-                isActive: selectedProject != nil,
-                activeFill: selectedProjectColor.opacity(0.38),
-                activeStroke: selectedProjectColor.opacity(0.58)
-            ))
+            .foregroundStyle(Color.white.opacity(isActive ? 0.86 : 0.72))
+            .padding(.horizontal, 6)
+            .frame(height: workspaceSidebarDropdownHeight)
+            .background {
+                RoundedRectangle(cornerRadius: workspaceSidebarPlateCornerRadius, style: .continuous)
+                    .fill(isActive ? Color.white.opacity(0.10) : Color.white.opacity(0.04))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: workspaceSidebarPlateCornerRadius, style: .continuous)
+                    .strokeBorder(isActive ? Color.white.opacity(0.14) : Color.white.opacity(0.08), lineWidth: 0.5)
+            }
         }
         .buttonStyle(.plain)
         .fixedSize(horizontal: true, vertical: false)
-        .background {
-            GeometryReader { proxy in
-                Color.clear.preference(
-                    key: WorkspaceSidebarProjectSelectorLeadingKey.self,
-                    value: proxy.frame(in: .named(coordinateSpaceName)).minX
-                )
-            }
+        .overlay(alignment: .topTrailing) {
+            projectPopup
+                .offset(y: workspaceSidebarDropdownHeight + workspaceSidebarSectionGap)
         }
+        .zIndex(isProjectMenuOpen ? 200 : 0)
         .help("Browse project workspaces")
     }
 
     private var projectPopup: some View {
-        WorkspaceSidebarProjectPopup(
-            projects: otherProjects,
-            selectedProjectId: browsedProjectId ?? WorkspaceProjectId(rawValue: ""),
-            onSelect: { projectId in
-                onSelectProject(projectId)
-                isProjectMenuOpen = false
-            },
-            onCreate: {},
-            onRename: { _ in },
-            onSetColor: { _, _ in },
-            onDelete: { _ in },
-            showsCreateAction: false,
-            allowsContextMenu: false,
-            menuWidth: projectPopupWidth
-        )
-        .padding(.leading, min(projectSelectorLeading, max(sectionWidth - projectPopupWidth, 0)))
-        .zIndex(200)
+        Group {
+            if isProjectMenuOpen {
+                WorkspaceSidebarProjectPopup(
+                    projects: browsableProjects,
+                    selectedProjectId: browsedProjectId ?? activeProjectId,
+                    onSelect: { projectId in
+                        onSelectProject(projectId)
+                        isProjectMenuOpen = false
+                    },
+                    onCreate: {
+                        onCreateProject()
+                        isProjectMenuOpen = false
+                    },
+                    onRename: { project in
+                        onRenameProject(project)
+                        isProjectMenuOpen = false
+                    },
+                    onSetColor: onSetProjectColor,
+                    onDelete: { project in
+                        onDeleteProject(project)
+                        isProjectMenuOpen = false
+                    },
+                    menuWidth: projectPopupWidth
+                )
+                .transition(.asymmetric(
+                    insertion: .opacity.combined(with: .scale(scale: 0.98, anchor: .topTrailing)),
+                    removal: .opacity
+                ))
+                .animation(.interactiveSpring(response: 0.22, dampingFraction: 0.88), value: isProjectMenuOpen)
+                .zIndex(200)
+            }
+        }
     }
 
     private func scopeAccessibilityLabel(_ scope: WorkspaceSidebarMonitorScopeViewModel) -> String {
@@ -198,13 +185,5 @@ struct WorkspaceSidebarMonitorSelector: View {
             return "\(scope.displayName), \(subtitle)"
         }
         return scope.displayName
-    }
-}
-
-private struct WorkspaceSidebarProjectSelectorLeadingKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
     }
 }

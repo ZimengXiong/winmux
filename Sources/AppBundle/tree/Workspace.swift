@@ -7,6 +7,7 @@ let workspaceProjectDefaultId = WorkspaceProjectId.defaultProject
 struct WorkspaceProject: Hashable, Identifiable {
     let id: WorkspaceProjectId
     let name: String
+    let order: Int
     var workspaceOrderByLane: [DisplayLaneId: [WorkspaceId]] = [:]
     var lastActiveWorkspaceByLane: [DisplayLaneId: WorkspaceId] = [:]
     var linkedLaneIds: Set<DisplayLaneId> = []

@@ -16,7 +16,7 @@ extension WorkspaceSidebarPanel {
             hasDropPreview: TrayMenuModel.shared.workspaceSidebarDropPreview != nil,
             hasPinnedDraggedWindow: hasPinnedDraggedWindow(),
             isSidebarDragInProgress: getCurrentMouseManipulationKind() == .move && getCurrentMouseDragStartedInSidebar(),
-            hasActiveEditor: menuTrackingDepth > 0 || inlineTextEditingActive,
+            hasActiveEditor: isMenuTrackingOrInGracePeriod() || inlineTextEditingActive,
         ) || isMouseWindowDragInProgress()
     }
 }

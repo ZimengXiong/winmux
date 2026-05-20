@@ -21,12 +21,27 @@ extension WorkspaceSidebarView {
                 }
                 actions.send(.selectMonitorScope(scopeId))
             },
-            onSelectProject: { browsedProjectId = $0 },
+            onSelectProject: { projectId in
+                browsedProjectId = projectId == snapshot.selectedProjectId ? nil : projectId
+            },
+            onCreateProject: {
+                actions.send(.createProject)
+            },
+            onRenameProject: { project in
+                _ = project
+            },
+            onSetProjectColor: { project, colorHex in
+                actions.send(.setProjectColor(project.id, colorHex: colorHex))
+            },
+            onDeleteProject: { project in
+                actions.send(.deleteProject(project.id))
+            },
         )
         .padding(.leading, leadingInset)
         .padding(.trailing, trailingInset)
         .padding(.top, snapshot.configuration.topPadding)
-        .padding(.bottom, 6)
+        .padding(.bottom, workspaceSidebarSectionGap)
+        .zIndex(100)
     }
 
     func statusSection(
@@ -43,7 +58,7 @@ extension WorkspaceSidebarView {
         )
         .padding(.leading, leadingInset)
         .padding(.trailing, trailingInset)
-        .padding(.top, 8)
+        .padding(.top, workspaceSidebarSectionGap)
         .padding(.bottom, workspaceSidebarStatusBottomPadding(isCompact: isCompact))
     }
 }

@@ -32,26 +32,6 @@ func showWorkspaceSidebarError(_ body: String) {
 }
 
 @MainActor
-func promptWorkspaceSidebarName(title: String, currentName: String) -> String? {
-    let field = NSTextField(string: currentName)
-    field.frame = NSRect(x: 0, y: 0, width: 260, height: 24)
-    field.lineBreakMode = .byTruncatingTail
-
-    let alert = NSAlert()
-    alert.messageText = title
-    alert.informativeText = "Enter a name."
-    alert.accessoryView = field
-    alert.addButton(withTitle: "Rename")
-    alert.addButton(withTitle: "Cancel")
-
-    let window = WorkspaceSidebarPanel.shared
-    window.makeKey()
-    field.becomeFirstResponder()
-    guard alert.runModal() == .alertFirstButtonReturn else { return nil }
-    return field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-}
-
-@MainActor
 func sidebarWorkspaceTargetMonitor(fallbackWindow: Window? = nil, fallbackPoint: CGPoint? = nil) -> Monitor {
     workspaceSidebarTargetMonitor(
         selectedMonitor: selectedWorkspaceSidebarMonitorScope(),
@@ -166,7 +146,7 @@ func createWorkspaceFromSidebarDrag(sourceNode: TreeNode, sourceWindow: Window) 
         targetContainer = workspace.rootTilingContainer
     }
     sourceNode.bind(to: targetContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
-    return sourceWindow.focusWindow()
+    return true
 }
 
 @MainActor
@@ -225,7 +205,6 @@ private func moveSidebarSourceToNewWorkspace(
         syncClosedWindowsCacheToCurrentWorld()
         suppressPostDragAxObserverEvents(for: sourceNode.allLeafWindowsRecursive.map(\.windowId))
         sourceNode.bind(to: targetContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
-        _ = sourceWindow.focusWindow()
         await updateWorkspaceSidebarModel()
     }
 }
@@ -373,14 +352,6 @@ func createWorkspaceSidebarProject() {
 }
 
 @MainActor
-func renameWorkspaceSidebarProject(_ project: WorkspaceSidebarProjectViewModel, displayName: String) {
-    runWorkspaceSidebarSession {
-        try renameWorkspaceProject(project.id, displayName: displayName)
-        await updateWorkspaceSidebarModel()
-    }
-}
-
-@MainActor
 func setWorkspaceSidebarProjectColor(_ project: WorkspaceSidebarProjectViewModel, colorHex: String?) {
     runWorkspaceSidebarSession {
         let normalizedColorHex = colorHex.flatMap(normalizedWorkspaceSidebarColorHex)
@@ -431,28 +402,6 @@ private func confirmWorkspaceSidebarProjectDeletion(_ project: WorkspaceSidebarP
     alert.addButton(withTitle: "Cancel")
     alert.alertStyle = .warning
     return alert.runModal() == .alertFirstButtonReturn
-}
-
-@MainActor
-func renameWorkspaceFromSidebar(_ workspace: WorkspaceSidebarWorkspaceViewModel) {
-    guard let newName = promptWorkspaceSidebarName(title: "Rename Workspace", currentName: workspace.displayName) else { return }
-    renameWorkspaceFromSidebar(workspace, displayName: newName)
-}
-
-@MainActor
-func renameWorkspaceFromSidebar(_ workspace: WorkspaceSidebarWorkspaceViewModel, displayName: String) {
-    runWorkspaceSidebarSession {
-        try renameWorkspaceForSidebar(workspaceName: workspace.name, displayName: displayName)
-        await updateWorkspaceSidebarModel()
-    }
-}
-
-@MainActor
-func resetWorkspaceNameFromSidebar(_ workspace: WorkspaceSidebarWorkspaceViewModel) {
-    runWorkspaceSidebarSession {
-        try resetWorkspaceSidebarName(workspaceName: workspace.name)
-        await updateWorkspaceSidebarModel()
-    }
 }
 
 @MainActor

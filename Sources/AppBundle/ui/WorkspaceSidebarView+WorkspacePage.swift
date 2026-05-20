@@ -50,62 +50,63 @@ extension WorkspaceSidebarView {
     ) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 6) {
-                ForEach(workspaces) { workspace in
-                    let isFromOtherDisplay = snapshot.selectedMonitorScopeId == workspaceSidebarAllScopeId &&
-                        workspace.monitorScopeId != snapshot.focusedMonitorScopeId &&
-                        workspace.monitorScopeId != workspaceSidebarAllScopeId
-                    let isInUseOnOtherDisplay = workspaceSidebarWorkspaceIsInUseOnOtherDisplay(
-                        workspace,
-                        selectedScopeId: snapshot.selectedMonitorScopeId
+                if let pinnedActiveWorkspace = pinnedActiveWorkspace(
+                    displayedProjectId: projectId,
+                    pageWorkspaces: workspaces
+                ) {
+                    workspaceSection(
+                        workspace: pinnedActiveWorkspace,
+                        expansionProgress: expansionProgress,
+                        isInteractive: isInteractive,
+                        isPinnedActiveWorkspace: true
                     )
-                    WorkspaceSidebarWorkspaceSection(
+                }
+                ForEach(workspaces) { workspace in
+                    workspaceSection(
                         workspace: workspace,
+                        expansionProgress: expansionProgress,
+                        isInteractive: isInteractive,
+                        isPinnedActiveWorkspace: false
+                    )
+                }
+                if workspaceSidebarShowsCreateWorkspace(selectedScopeId: snapshot.selectedMonitorScopeId) && browsedProjectId == nil {
+                    WorkspaceSidebarCreateWorkspaceSection(
                         dragPreview: snapshot.dropPreview,
                         expansionProgress: expansionProgress,
                         layout: snapshot.configuration,
                         emitsDropTarget: isInteractive,
-                        isFromOtherDisplay: isFromOtherDisplay,
-                        isInUseOnOtherDisplay: isInUseOnOtherDisplay,
-                        activeInUseOverrideWorkspaceName: $activeInUseOverrideWorkspaceName,
-                        actions: actions,
-                    )
-                }
-                WorkspaceSidebarCreateWorkspaceSection(
-                    dragPreview: snapshot.dropPreview,
-                    expansionProgress: expansionProgress,
-                    layout: snapshot.configuration,
-                    emitsDropTarget: isInteractive,
-                    onCreateWorkspace: {
-                        actions.send(.createWorkspace(
-                            projectId: projectId,
-                            monitorScopeId: workspaceSidebarWorkspaceCreateScope(
+                        onCreateWorkspace: {
+                            actions.send(.createWorkspace(
+                                projectId: projectId,
+                                monitorScopeId: workspaceSidebarWorkspaceCreateScope(
+                                    selectedScopeId: snapshot.selectedMonitorScopeId,
+                                    focusedScopeId: snapshot.focusedMonitorScopeId,
+                                )
+                            ))
+                        },
+                        onDropPayload: { payload in
+                            let monitorScopeId = workspaceSidebarWorkspaceCreateScope(
                                 selectedScopeId: snapshot.selectedMonitorScopeId,
                                 focusedScopeId: snapshot.focusedMonitorScopeId,
                             )
-                        ))
-                    },
-                    onDropPayload: { payload in
-                        let monitorScopeId = workspaceSidebarWorkspaceCreateScope(
-                            selectedScopeId: snapshot.selectedMonitorScopeId,
-                            focusedScopeId: snapshot.focusedMonitorScopeId,
-                        )
-                        switch payload {
-                            case .window(let windowId):
-                                actions.send(.moveWindowToNewWorkspace(
-                                    windowId,
-                                    projectId: projectId,
-                                    monitorScopeId: monitorScopeId,
-                                ))
-                            case .tabGroup(let representativeWindowId):
-                                actions.send(.moveTabGroupToNewWorkspace(
-                                    representativeWindowId,
-                                    projectId: projectId,
-                                    monitorScopeId: monitorScopeId,
-                                ))
-                        }
-                    },
-                    actions: actions,
-                )
+                            switch payload {
+                                case .window(let windowId):
+                                    actions.send(.moveWindowToNewWorkspace(
+                                        windowId,
+                                        projectId: projectId,
+                                        monitorScopeId: monitorScopeId,
+                                    ))
+                                case .tabGroup(let representativeWindowId):
+                                    actions.send(.moveTabGroupToNewWorkspace(
+                                        representativeWindowId,
+                                        projectId: projectId,
+                                        monitorScopeId: monitorScopeId,
+                                    ))
+                            }
+                        },
+                        actions: actions,
+                    )
+                }
             }
             .padding(.leading, leadingInset)
             .padding(.trailing, trailingInset)
@@ -113,5 +114,52 @@ extension WorkspaceSidebarView {
             .padding(.bottom, 10)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private func workspaceSection(
+        workspace: WorkspaceSidebarWorkspaceViewModel,
+        expansionProgress: CGFloat,
+        isInteractive: Bool,
+        isPinnedActiveWorkspace: Bool
+    ) -> some View {
+        let isFromOtherDisplay = snapshot.selectedMonitorScopeId == workspaceSidebarAllScopeId &&
+            workspace.monitorScopeId != snapshot.focusedMonitorScopeId &&
+            workspace.monitorScopeId != workspaceSidebarAllScopeId
+        let isInUseOnOtherDisplay = !isPinnedActiveWorkspace && workspaceSidebarWorkspaceIsInUseOnOtherDisplay(
+            workspace,
+            selectedScopeId: snapshot.selectedMonitorScopeId
+        )
+        WorkspaceSidebarWorkspaceSection(
+            workspace: workspace,
+            dragPreview: snapshot.dropPreview,
+            expansionProgress: expansionProgress,
+            layout: snapshot.configuration,
+            emitsDropTarget: isInteractive,
+            isFromOtherDisplay: isFromOtherDisplay,
+            isInUseOnOtherDisplay: isInUseOnOtherDisplay,
+            isPinnedActiveWorkspace: isPinnedActiveWorkspace,
+            activeInUseOverrideWorkspaceName: $activeInUseOverrideWorkspaceName,
+            actions: actions,
+        )
+    }
+
+    private func pinnedActiveWorkspace(
+        displayedProjectId: WorkspaceProjectId,
+        pageWorkspaces: [WorkspaceSidebarWorkspaceViewModel]
+    ) -> WorkspaceSidebarWorkspaceViewModel? {
+        guard browsedProjectId != nil,
+              displayedProjectId != snapshot.selectedProjectId,
+              !pageWorkspaces.contains(where: \.isFocused),
+              let focusedWorkspace = snapshot.workspaces.first(where: \.isFocused),
+              workspaceSidebarWorkspaceMatchesScope(
+                workspaceMonitorScopeId: focusedWorkspace.monitorScopeId,
+                selectedScopeId: snapshot.selectedMonitorScopeId,
+                focusedMonitorScopeId: snapshot.focusedMonitorScopeId
+              )
+        else {
+            return nil
+        }
+        return focusedWorkspace
     }
 }

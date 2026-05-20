@@ -16,6 +16,7 @@ final class WorkspaceSidebarPanel: NSPanelHud {
     var isHoverMonitoring = false
     var lastHoverMonitorTimestamp: CFTimeInterval = 0
     var menuTrackingDepth = 0
+    var menuTrackingGraceUntil: Date = .distantPast
     var inlineTextEditingActive = false
     var menuTrackingObservers: [NSObjectProtocol] = []
     let hoverExitTolerance: CGFloat = 20
@@ -23,6 +24,7 @@ final class WorkspaceSidebarPanel: NSPanelHud {
     let hoverOpenDelay: TimeInterval = 0.05
     let hoverCueAnimationResponse: TimeInterval = 0.18
     let animationDuration: TimeInterval = 0.14
+    let menuTrackingEndGrace: TimeInterval = 0.75
 
     override private init() {
         super.init()

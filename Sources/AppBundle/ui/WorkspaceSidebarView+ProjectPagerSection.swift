@@ -18,9 +18,6 @@ extension WorkspaceSidebarView {
             isProjectMenuOpen: $isProjectMenuOpen,
             onSelectProject: { actions.send(.selectProject($0)) },
             onCreateProject: { actions.send(.createProject) },
-            onRenameProject: { project, displayName in
-                actions.send(.renameProject(project.id, displayName: displayName))
-            },
             onSetProjectColor: { project, colorHex in
                 actions.send(.setProjectColor(project.id, colorHex: colorHex))
             },

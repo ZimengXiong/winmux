@@ -10,6 +10,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
     let emitsDropTarget: Bool
     let isFromOtherDisplay: Bool
     let isInUseOnOtherDisplay: Bool
+    let isPinnedActiveWorkspace: Bool
     @Binding var activeInUseOverrideWorkspaceName: String?
     let actions: WorkspaceSidebarActions
 
@@ -18,8 +19,6 @@ struct WorkspaceSidebarWorkspaceSection: View {
     @State var hoveredTabGroupId: UInt32? = nil
     @State var isDropTargeted = false
     @State var isDropSettling = false
-    @State var isEditingName = false
-    @State var editingNameDraft = ""
     @Environment(\.accessibilityReduceMotion) var reduceMotion
 
     let headerHeight: CGFloat = workspaceSidebarWorkspaceSectionHeaderHeight
@@ -51,12 +50,6 @@ struct WorkspaceSidebarWorkspaceSection: View {
             .clipped()
             .contentShape(Rectangle())
             .contextMenu {
-                Button("Rename Workspace") {
-                    beginInlineRename()
-                }
-                Button("Reset Workspace Name") {
-                    actions.send(.resetWorkspace(workspace.name))
-                }
                 Button(role: .destructive) {
                     actions.send(.deleteWorkspace(workspace.name))
                 } label: {
@@ -91,8 +84,8 @@ struct WorkspaceSidebarWorkspaceSection: View {
             }
             .overlay(alignment: .center) {
                 inUseOverrideOverlay
-                    .opacity(isShowingInUseOverlay && !isEditingName ? 1 : 0)
-                    .allowsHitTesting(isShowingInUseOverlay && !isEditingName)
+                    .opacity(isShowingInUseOverlay ? 1 : 0)
+                    .allowsHitTesting(isShowingInUseOverlay)
                     .zIndex(5)
             }
             .shadow(

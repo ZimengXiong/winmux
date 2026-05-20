@@ -4,6 +4,15 @@ extension WorkspaceSidebarWorkspaceSection {
     var sectionBackground: some View {
         sectionShape
             .fill(sectionBackgroundFill)
+            .overlay {
+                if isPinnedActiveWorkspace {
+                    sectionShape
+                        .strokeBorder(
+                            Color.white.opacity(0.24),
+                            style: StrokeStyle(lineWidth: 1, dash: [5, 4])
+                        )
+                }
+            }
     }
 
     var sectionBackgroundFill: Color {
@@ -12,6 +21,9 @@ extension WorkspaceSidebarWorkspaceSection {
         }
         if isInUseOnOtherDisplay {
             return Color(nsColor: .systemRed).opacity(isHovered ? 0.18 : 0.10)
+        }
+        if isPinnedActiveWorkspace {
+            return workspaceSidebarActiveWorkspaceTint.opacity(isHovered ? 0.12 : 0.075)
         }
         let activeTint = isFromOtherDisplay ? Color(nsColor: .systemPink) : workspaceSidebarActiveWorkspaceTint
         if workspace.isFocused {
