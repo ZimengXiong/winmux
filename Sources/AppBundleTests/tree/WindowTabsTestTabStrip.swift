@@ -230,7 +230,7 @@ import XCTest
         ), 0)
         XCTAssertEqual(windowTabLeadingScrollFadeWidth(
             isScrollable: true,
-            contentMinX: -0.5,
+            contentMinX: -windowTabStripContentHorizontalPadding - 0.5,
             stripWidth: stripWidth,
         ), 0)
         XCTAssertEqual(windowTabLeadingScrollFadeWidth(
@@ -240,7 +240,7 @@ import XCTest
         ), 0)
         XCTAssertGreaterThan(windowTabLeadingScrollFadeWidth(
             isScrollable: true,
-            contentMinX: -2,
+            contentMinX: -windowTabStripContentHorizontalPadding - 2,
             stripWidth: stripWidth,
         ), 0)
     }
@@ -263,13 +263,13 @@ import XCTest
         ), 0)
         XCTAssertEqual(windowTabTrailingScrollFadeWidth(
             isScrollable: true,
-            contentMaxX: viewportWidth + 0.5,
+            contentMaxX: viewportWidth + windowTabStripContentHorizontalPadding + 0.5,
             viewportWidth: viewportWidth,
             stripWidth: stripWidth,
         ), 0)
         XCTAssertGreaterThan(windowTabTrailingScrollFadeWidth(
             isScrollable: true,
-            contentMaxX: viewportWidth + 2,
+            contentMaxX: viewportWidth + windowTabStripContentHorizontalPadding + 2,
             viewportWidth: viewportWidth,
             stripWidth: stripWidth,
         ), 0)
