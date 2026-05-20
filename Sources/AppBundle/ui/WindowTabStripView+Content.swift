@@ -64,22 +64,31 @@ extension WindowTabStripView {
             .background {
                 GeometryReader { proxy in
                     Color.clear.preference(
-                        key: WindowTabStripScrollContentMinXPreferenceKey.self,
-                        value: proxy.frame(in: .named(context.scrollCoordinateSpaceName)).minX,
+                        key: WindowTabStripScrollContentFramePreferenceKey.self,
+                        value: proxy.frame(in: .named(context.scrollCoordinateSpaceName)),
                     )
                 }
             }
         }
         .coordinateSpace(name: context.scrollCoordinateSpaceName)
-        .onPreferenceChange(WindowTabStripScrollContentMinXPreferenceKey.self) { nextMinX in
-            guard abs(tabScrollContentMinX - nextMinX) > 0.5 else { return }
-            tabScrollContentMinX = nextMinX
+        .onPreferenceChange(WindowTabStripScrollContentFramePreferenceKey.self) { nextFrame in
+            if abs(tabScrollContentMinX - nextFrame.minX) > 0.5 {
+                tabScrollContentMinX = nextFrame.minX
+            }
+            if abs(tabScrollContentMaxX - nextFrame.maxX) > 0.5 {
+                tabScrollContentMaxX = nextFrame.maxX
+            }
         }
         .mask {
-            WindowTabStripScrollFadeMask(
-                leadingFadeWidth: context.leadingFadeWidth(contentMinX: tabScrollContentMinX),
-                trailingFadeWidth: context.trailingFadeWidth,
-            )
+            GeometryReader { proxy in
+                WindowTabStripScrollFadeMask(
+                    leadingFadeWidth: context.leadingFadeWidth(contentMinX: tabScrollContentMinX),
+                    trailingFadeWidth: context.trailingFadeWidth(
+                        contentMaxX: tabScrollContentMaxX,
+                        viewportWidth: proxy.size.width,
+                    ),
+                )
+            }
         }
         .simultaneousGesture(tabScrollBackgroundGroupDragGesture(
             for: groupDragWindowId,

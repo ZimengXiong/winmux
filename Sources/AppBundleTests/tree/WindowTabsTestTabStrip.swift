@@ -247,9 +247,32 @@ import XCTest
 
     func testWindowTabStripTrailingFadeTracksScrollableContent() {
         let stripWidth: CGFloat = 240
+        let viewportWidth: CGFloat = 180
 
-        XCTAssertEqual(windowTabTrailingScrollFadeWidth(isScrollable: false, stripWidth: stripWidth), 0)
-        XCTAssertGreaterThan(windowTabTrailingScrollFadeWidth(isScrollable: true, stripWidth: stripWidth), 0)
+        XCTAssertEqual(windowTabTrailingScrollFadeWidth(
+            isScrollable: false,
+            contentMaxX: viewportWidth + 24,
+            viewportWidth: viewportWidth,
+            stripWidth: stripWidth,
+        ), 0)
+        XCTAssertEqual(windowTabTrailingScrollFadeWidth(
+            isScrollable: true,
+            contentMaxX: viewportWidth,
+            viewportWidth: viewportWidth,
+            stripWidth: stripWidth,
+        ), 0)
+        XCTAssertEqual(windowTabTrailingScrollFadeWidth(
+            isScrollable: true,
+            contentMaxX: viewportWidth + 0.5,
+            viewportWidth: viewportWidth,
+            stripWidth: stripWidth,
+        ), 0)
+        XCTAssertGreaterThan(windowTabTrailingScrollFadeWidth(
+            isScrollable: true,
+            contentMaxX: viewportWidth + 2,
+            viewportWidth: viewportWidth,
+            stripWidth: stripWidth,
+        ), 0)
     }
 
     @MainActor

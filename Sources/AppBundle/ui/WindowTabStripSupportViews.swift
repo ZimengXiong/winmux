@@ -20,10 +20,10 @@ struct WindowTabStripScrollFadeMask: View {
     }
 }
 
-struct WindowTabStripScrollContentMinXPreferenceKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
+struct WindowTabStripScrollContentFramePreferenceKey: PreferenceKey {
+    static let defaultValue: CGRect = .zero
 
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
         value = nextValue()
     }
 }

@@ -61,8 +61,14 @@ func windowTabLeadingScrollFadeWidth(isScrollable: Bool, contentMinX: CGFloat, s
     return windowTabResolvedScrollFadeWidth(stripWidth: stripWidth)
 }
 
-func windowTabTrailingScrollFadeWidth(isScrollable: Bool, stripWidth: CGFloat) -> CGFloat {
-    isScrollable ? windowTabResolvedScrollFadeWidth(stripWidth: stripWidth) : 0
+func windowTabTrailingScrollFadeWidth(
+    isScrollable: Bool,
+    contentMaxX: CGFloat,
+    viewportWidth: CGFloat,
+    stripWidth: CGFloat,
+) -> CGFloat {
+    guard isScrollable, contentMaxX > viewportWidth + windowTabStripScrollOriginTolerance else { return 0 }
+    return windowTabResolvedScrollFadeWidth(stripWidth: stripWidth)
 }
 
 // MARK: - Tab Strip View (manages reorder drag state for all tabs)
