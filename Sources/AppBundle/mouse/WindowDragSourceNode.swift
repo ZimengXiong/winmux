@@ -106,6 +106,15 @@ func updateSidebarDragFeedback(sourceWindow: Window, subject: WindowDragSubject,
         let hadPinnedWindow = hasPinnedDraggedWindow()
         setPinnedDraggedWindowId(nil)
         setWorkspaceSidebarDropPreviewIfChanged(nil)
+        if WorkspaceSidebarPanel.shared.visibleScreenRectNormalized()?.contains(MousePointerTracker.shared.currentSample.point) == true {
+            showWorkspaceSidebarDragCursorPreview(
+                sourceWindow: sourceWindow,
+                subject: subject,
+                point: MousePointerTracker.shared.currentSample.point,
+            )
+        } else {
+            WindowDragCursorProxyPanel.shared.hide()
+        }
         if hadPinnedWindow {
             scheduleRefreshSession(.globalObserver("sidebarGhostExit"), optimisticallyPreLayoutWorkspaces: true)
         }
@@ -152,20 +161,10 @@ func updateSidebarDragFeedback(sourceWindow: Window, subject: WindowDragSubject,
         setWorkspaceSidebarDropPreviewIfChanged(nil)
     }
 
-    let pinnedWindowId = currentlyManipulatedWithMouseWindowId == sourceWindow.windowId ? sourceWindow.windowId : nil
-    let previousPinnedWindowId = isPinnedDraggedWindow(sourceWindow.windowId) ? sourceWindow.windowId : nil
-    if let pinnedWindowId, let anchorRect = draggedWindowAnchorRect(for: pinnedWindowId) {
-        let pinnedWindowRect = pinnedDraggedWindowRect(
-            for: sourceWindow,
-            subject: subject,
-            fallbackAnchorRect: anchorRect,
-        )
-        sourceWindow.setAxFrame(pinnedWindowRect.topLeftCorner, pinnedWindowRect.size)
-    }
-    if pinnedWindowId != previousPinnedWindowId {
-        setPinnedDraggedWindowId(pinnedWindowId)
-        scheduleRefreshSession(.globalObserver("sidebarGhostEnter"), optimisticallyPreLayoutWorkspaces: true)
-    } else {
-        setPinnedDraggedWindowId(pinnedWindowId)
-    }
+    setPinnedDraggedWindowId(nil)
+    showWorkspaceSidebarDragCursorPreview(
+        sourceWindow: sourceWindow,
+        subject: subject,
+        point: MousePointerTracker.shared.currentSample.point,
+    )
 }

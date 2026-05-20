@@ -148,7 +148,7 @@ import XCTest
     }
 
     @MainActor
-    func testFullscreenActiveTabHidesTabStripWithoutDisablingTabGroupBehavior() {
+    func testFullscreenActiveTabKeepsTabStripVisible() {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
         let tabGroup = workspace.rootTilingContainer
@@ -160,19 +160,18 @@ import XCTest
         active.markAsMostRecentChild()
 
         XCTAssertTrue(tabGroup.usesWindowTabBehavior)
-        XCTAssertFalse(tabGroup.showsWindowTabs)
-        XCTAssertEqual(tabGroup.windowTabBarHeight, 0)
-        XCTAssertNil(tabGroup.windowTabBarRect)
+        XCTAssertTrue(tabGroup.showsWindowTabs)
+        XCTAssertGreaterThan(tabGroup.windowTabBarHeight, 0)
     }
 
     @MainActor
-    func testFullscreenWindowInTabGroupCoversSiblingWindows() async throws {
+    func testFullscreenWindowInTabGroupKeepsChromeAndCoversSiblingWindows() async throws {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")
         let root = workspace.rootTilingContainer
         let tabGroup = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
         let fullscreenWindow = TestWindow.new(id: 1, parent: tabGroup)
-        _ = TestWindow.new(id: 2, parent: tabGroup)
+        let secondTab = TestWindow.new(id: 2, parent: tabGroup)
         let siblingWindow = TestWindow.new(id: 3, parent: root)
 
         fullscreenWindow.isFullscreen = true
@@ -182,13 +181,32 @@ import XCTest
 
         XCTAssertNil(siblingWindow.lastAppliedLayoutPhysicalRect)
         XCTAssertNil(siblingWindow.lastAppliedLayoutVirtualRect)
-        XCTAssertNil(fullscreenWindow.lastAppliedLayoutPhysicalRect)
+        let groupRect = tabGroup.lastAppliedLayoutPhysicalRect.orDie()
+        let expectedGroupRect = workspace.workspaceMonitor.visibleRectPaddedByOuterGaps
+        XCTAssertEqual(groupRect.topLeftX, expectedGroupRect.topLeftX)
+        XCTAssertEqual(groupRect.topLeftY, expectedGroupRect.topLeftY)
+        XCTAssertEqual(groupRect.width, expectedGroupRect.width)
+        XCTAssertEqual(groupRect.height, expectedGroupRect.height)
+        XCTAssertNotNil(fullscreenWindow.lastAppliedLayoutPhysicalRect)
         let fullscreenRect = try await fullscreenWindow.getAxRect().orDie()
-        let expectedRect = workspace.workspaceMonitor.visibleRectPaddedByOuterGaps
-        XCTAssertEqual(fullscreenRect.topLeftX, expectedRect.topLeftX)
-        XCTAssertEqual(fullscreenRect.topLeftY, expectedRect.topLeftY)
-        XCTAssertEqual(fullscreenRect.width, expectedRect.width)
-        XCTAssertEqual(fullscreenRect.height, expectedRect.height)
+        let contentRect = fullscreenWindow.lastAppliedLayoutPhysicalRect.orDie()
+        XCTAssertEqual(fullscreenRect.topLeftX, contentRect.topLeftX)
+        XCTAssertEqual(fullscreenRect.topLeftY, contentRect.topLeftY)
+        XCTAssertEqual(fullscreenRect.width, contentRect.width)
+        XCTAssertEqual(fullscreenRect.height, contentRect.height)
+        XCTAssertGreaterThan(fullscreenRect.topLeftY, groupRect.topLeftY)
+
+        secondTab.markAsMostRecentChild()
+        try await workspace.layoutWorkspace()
+
+        let secondTabRect = try await secondTab.getAxRect().orDie()
+        let secondTabContentRect = secondTab.lastAppliedLayoutPhysicalRect.orDie()
+        XCTAssertEqual(secondTabRect.topLeftX, secondTabContentRect.topLeftX)
+        XCTAssertEqual(secondTabRect.topLeftY, secondTabContentRect.topLeftY)
+        XCTAssertEqual(secondTabRect.width, secondTabContentRect.width)
+        XCTAssertEqual(secondTabRect.height, secondTabContentRect.height)
+        XCTAssertGreaterThan(secondTabRect.topLeftY, groupRect.topLeftY)
+        XCTAssertNil(fullscreenWindow.lastAppliedLayoutPhysicalRect)
     }
 
     @MainActor
@@ -207,5 +225,23 @@ import XCTest
         await updateWindowTabModel()
 
         XCTAssertTrue(TrayMenuModel.shared.windowTabStrips.isEmpty)
+    }
+
+    @MainActor
+    func testWorkspaceWithFullscreenTabGroupWindowShowsTabStrip() async {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let tabGroup = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let fullscreenWindow = TestWindow.new(id: 1, parent: tabGroup)
+        _ = TestWindow.new(id: 2, parent: tabGroup)
+        tabGroup.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
+        fullscreenWindow.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
+        fullscreenWindow.isFullscreen = true
+        TrayMenuModel.shared.isEnabled = true
+
+        await updateWindowTabModel()
+
+        XCTAssertEqual(TrayMenuModel.shared.windowTabStrips.count, 1)
     }
 }

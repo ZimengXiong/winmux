@@ -236,6 +236,10 @@ func previewWorkspaceSidebarDrop(_ windowId: UInt32, subject: WindowDragSubject,
         clearWorkspaceSidebarDropPreview()
         return
     }
+    guard isActionableSidebarDropTarget(sourceWindow: sourceWindow, subject: subject, target: target) else {
+        clearWorkspaceSidebarDropPreview()
+        return
+    }
     guard case .workspace(let workspaceName) = target else {
         if target == .newWorkspace {
             setWorkspaceSidebarDropPreviewIfChanged(workspaceSidebarDropPreview(
@@ -260,6 +264,38 @@ func previewWorkspaceSidebarDrop(_ windowId: UInt32, subject: WindowDragSubject,
 @MainActor
 func clearWorkspaceSidebarDropPreview() {
     setWorkspaceSidebarDropPreviewIfChanged(nil)
+}
+
+@MainActor
+func workspaceSidebarSourcePreview(sourceWindow: Window, subject: WindowDragSubject) -> WorkspaceSidebarDropPreviewViewModel {
+    workspaceSidebarDropPreview(
+        sourceWindow: sourceWindow,
+        subject: subject,
+        targetWorkspaceName: nil,
+        targetsNewWorkspace: false,
+    )
+}
+
+@MainActor
+func showWorkspaceSidebarDragCursorPreview(sourceWindow: Window, subject: WindowDragSubject, point: CGPoint) {
+    WindowDragCursorProxyPanel.shared.show(
+        preview: workspaceSidebarSourcePreview(sourceWindow: sourceWindow, subject: subject),
+        mouseScreenPoint: denormalizedAppKitScreenPoint(point),
+    )
+}
+
+func denormalizedAppKitScreenPoint(_ point: CGPoint) -> CGPoint {
+    normalizeAppKitScreenPoint(point)
+}
+
+@MainActor
+private func isActionableSidebarDropTarget(
+    sourceWindow: Window,
+    subject: WindowDragSubject,
+    target: WorkspaceSidebarDropTargetKind,
+) -> Bool {
+    let sourceWorkspaceName = dragSubjectNode(for: sourceWindow, subject: subject).nodeWorkspace?.name
+    return isActionableSidebarWorkspaceDropTarget(sourceWorkspaceName: sourceWorkspaceName, targetKind: target)
 }
 
 @MainActor
@@ -470,24 +506,17 @@ func updateSidebarWindowDrag(_ windowId: UInt32, subject: WindowDragSubject = .w
         MousePointerTracker.shared.note(point: pointer)
     }
     guard let window = Window.get(byId: windowId) else {
-        clearPendingWindowDragIntent()
-        cancelManipulatedWithMouseState()
+        clearWorkspaceSidebarDropPreview()
+        WindowDragCursorProxyPanel.shared.hide()
         return
     }
-    beginWindowMoveWithMouseSessionIfNeeded(
-        windowId: window.windowId,
-        subject: subject,
-        detachOrigin: .window,
-        startedInSidebar: true,
-        anchorRect: resolvedDraggedWindowAnchorRect(for: window, subject: subject),
-        refreshActualRects: true,
-    )
-    WindowMouseInteractionDriver.shared.startMove(
-        windowId: window.windowId,
-        subject: subject,
-        detachOrigin: .window,
-        startedInSidebar: true,
-    )
+    let point = MousePointerTracker.shared.currentSample.point
+    showWorkspaceSidebarDragCursorPreview(sourceWindow: window, subject: subject, point: point)
+    guard let target = workspaceSidebarDragTarget(for: window, subject: subject) else {
+        clearWorkspaceSidebarDropPreview()
+        return
+    }
+    previewWorkspaceSidebarDrop(window.windowId, subject: subject, target: target)
 }
 
 @MainActor
@@ -495,7 +524,44 @@ func finishSidebarWindowDrag(pointer: CGPoint? = nil) {
     if let pointer {
         MousePointerTracker.shared.note(point: pointer)
     }
-    Task { @MainActor in
-        try? await resetManipulatedWithMouseIfPossible()
+    defer {
+        clearWorkspaceSidebarDropPreview()
+        WindowDragCursorProxyPanel.shared.hide()
     }
+    guard let preview = TrayMenuModel.shared.workspaceSidebarDropPreview,
+          let sourceWindow = Window.get(byId: preview.sourceWindowId)
+    else { return }
+    let subject: WindowDragSubject = preview.isTabGroup ? .group : .window
+    guard let target = workspaceSidebarDragTarget(for: sourceWindow, subject: subject) else { return }
+    switch target {
+        case .workspace(let workspaceName):
+            if subject == .group {
+                moveTabGroupFromSidebar(sourceWindow.windowId, toWorkspace: workspaceName)
+            } else {
+                moveWindowFromSidebar(sourceWindow.windowId, toWorkspace: workspaceName)
+            }
+        case .newWorkspace:
+            let targetMonitor = sidebarWorkspaceTargetMonitor(
+                fallbackWindow: sourceWindow,
+                fallbackPoint: MousePointerTracker.shared.currentSample.point,
+            )
+            let projectId = sidebarWorkspaceTargetProjectId(targetMonitor: targetMonitor)
+            let monitorScopeId = TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId
+            if subject == .group {
+                moveTabGroupToNewWorkspaceFromSidebar(sourceWindow.windowId, projectId: projectId, monitorScopeId: monitorScopeId)
+            } else {
+                moveWindowToNewWorkspaceFromSidebar(sourceWindow.windowId, projectId: projectId, monitorScopeId: monitorScopeId)
+            }
+        case .monitor:
+            break
+    }
+}
+
+@MainActor
+private func workspaceSidebarDragTarget(for sourceWindow: Window, subject: WindowDragSubject) -> WorkspaceSidebarDropTargetKind? {
+    let point = MousePointerTracker.shared.currentSample.point
+    guard WorkspaceSidebarPanel.shared.visibleScreenRectNormalized()?.contains(point) == true else { return nil }
+    guard let target = workspaceSidebarDropTarget(at: point)?.kind else { return nil }
+    guard isActionableSidebarDropTarget(sourceWindow: sourceWindow, subject: subject, target: target) else { return nil }
+    return target
 }

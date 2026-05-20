@@ -8,7 +8,7 @@ extension TilingContainer {
 
     @MainActor
     var showsWindowTabs: Bool {
-        usesWindowTabBehavior && tabActiveWindow?.isFullscreen != true
+        usesWindowTabBehavior
     }
 
     @MainActor
@@ -31,5 +31,10 @@ extension TilingContainer {
     @MainActor
     var tabActiveWindow: Window? {
         mostRecentChild?.tabRepresentativeWindow ?? mostRecentWindowRecursive
+    }
+
+    @MainActor
+    var hasFullscreenTab: Bool {
+        usesWindowTabBehavior && allLeafWindowsRecursive.contains(where: \.isFullscreen)
     }
 }

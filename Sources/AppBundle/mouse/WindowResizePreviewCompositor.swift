@@ -85,4 +85,3 @@ final class WindowResizePreviewCompositorView: NSView {
         return cgImage
     }
 }
-

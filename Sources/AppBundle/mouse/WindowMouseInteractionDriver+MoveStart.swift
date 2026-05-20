@@ -18,15 +18,23 @@ extension WindowMouseInteractionDriver {
             WindowDragFrameGate.shared.reset(windowId: windowId)
         }
         moveSession = session
-        WindowMouseInteractionOpacityController.shared.update(
-            activeWindowId: windowId,
-            hidesPassiveTabGroupChrome: false,
-        )
+        if shouldHideOtherWindowsDuringMove(session: session) {
+            WindowMouseInteractionOpacityController.shared.update(
+                activeWindowId: windowId,
+                hidesPassiveTabGroupChrome: false,
+            )
+        } else {
+            WindowMouseInteractionOpacityController.shared.restore()
+        }
         if isNewSession {
             configureMoveChrome(windowId: windowId, session: session)
         }
         startDisplayLoop()
         renderMoveFrame(force: isNewSession)
+    }
+
+    func shouldHideOtherWindowsDuringMove(session: MoveSession) -> Bool {
+        !(session.detachOrigin == .tabStrip && session.subject == .window)
     }
 
     func configureMoveChrome(windowId: UInt32, session: MoveSession) {
@@ -40,7 +48,7 @@ extension WindowMouseInteractionDriver {
             }
         } else if session.detachOrigin == .tabStrip {
             clearMovePreview()
-            WindowTabStripPanelController.shared.hideChromeDuringMouseInteraction()
+            WindowTabStripPanelController.shared.showChromeDuringMouseInteraction()
         } else {
             clearMovePreview()
             WindowTabStripPanelController.shared.showChromeDuringMouseInteraction()

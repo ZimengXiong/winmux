@@ -7,7 +7,9 @@ func buildWindowTabChromeItemsFromSource10Tree() async -> [WindowTabChromeItem] 
 
     var items: [WindowTabChromeItem] = []
     for workspace in Workspace.all where workspace.isVisible {
-        guard !workspace.allLeafWindowsRecursive.contains(where: \.isFullscreen) else { continue }
+        guard !workspace.allLeafWindowsRecursive.contains(where: {
+            $0.isFullscreen && $0.nearestWindowTabGroup?.usesWindowTabBehavior != true
+        }) else { continue }
         for container in workspace.rootTilingContainer.allTabbedContainersRecursive {
             if let item = await makeWindowTabChromeItem(container: container, workspace: workspace) {
                 items.append(item)

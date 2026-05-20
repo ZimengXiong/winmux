@@ -71,6 +71,7 @@ struct WorkspaceSidebarProjectSwipeScrollCapture: NSViewRepresentable {
 
         func handle(_ event: NSEvent) -> NSEvent? {
             guard isEnabled,
+                  !isWorkspaceSidebarDragInProgress(),
                   event.hasPreciseScrollingDeltas,
                   event.momentumPhase.isEmpty,
                   let view,

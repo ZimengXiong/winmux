@@ -10,36 +10,27 @@ struct WorkspaceSidebarCompactClockCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(components.hour)
-                .foregroundStyle(Color.white.opacity(0.88))
+                .foregroundStyle(Color.white.opacity(0.86))
 
             Text(components.minute)
-                .foregroundStyle(Color.white.opacity(0.88))
+                .foregroundStyle(Color.white.opacity(0.86))
 
             Text(components.second)
-                .foregroundStyle(Color.white.opacity(0.48))
+                .foregroundStyle(Color.white.opacity(0.62))
         }
-        .font(.system(size: 18, weight: .bold, design: .rounded))
+        .font(.system(size: 18, weight: .semibold))
         .monospacedDigit()
         .padding(.leading, 7)
         .frame(width: sectionWidth, alignment: .leading)
-        .frame(minHeight: 78)
+        .frame(minHeight: 84)
         .background(
             RoundedRectangle(cornerRadius: workspaceSidebarStatusCornerRadius, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.075),
-                            Color.white.opacity(0.035),
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing,
-                    )
-                )
+                .fill(Color.white.opacity(0.06))
                 .overlay {
                     RoundedRectangle(cornerRadius: workspaceSidebarStatusCornerRadius, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.07), lineWidth: 0.5)
+                        .strokeBorder(Color.white.opacity(0.04), lineWidth: 0.5)
                 }
         )
         .accessibilityElement(children: .ignore)

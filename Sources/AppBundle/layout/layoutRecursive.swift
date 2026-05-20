@@ -7,6 +7,17 @@ extension Workspace {
         if isEffectivelyEmpty { return }
         let rect = workspaceMonitor.visibleRectPaddedByOuterGaps
         let context = LayoutContext(self)
+        if let tabGroup = rootTilingContainer.allTabbedContainersRecursive.first(where: \.hasFullscreenTab) {
+            lastAppliedLayoutPhysicalRect = rect
+            lastAppliedLayoutVirtualRect = rect
+            rootTilingContainer.lastAppliedLayoutPhysicalRect = rect
+            rootTilingContainer.lastAppliedLayoutVirtualRect = rect
+            tabGroup.lastAppliedLayoutPhysicalRect = rect
+            tabGroup.lastAppliedLayoutVirtualRect = rect
+            try await hideAllWindowsExcept(tabGroup)
+            try await tabGroup.layoutRecursive(rect.topLeftCorner, width: rect.width, height: rect.height, virtual: rect, context)
+            return
+        }
         if let fullscreenWindow = rootTilingContainer.mostRecentWindowRecursive, fullscreenWindow.isFullscreen {
             lastAppliedLayoutPhysicalRect = rect
             lastAppliedLayoutVirtualRect = rect
@@ -43,12 +54,15 @@ extension TreeNode {
                 if window.windowId != currentlyManipulatedWithMouseWindowId || isPinnedDraggedWindow(window.windowId) {
                     let previousPhysicalRect = lastAppliedLayoutPhysicalRect
                     lastAppliedLayoutVirtualRect = virtual
-                    if window.isFullscreen && window == context.workspace.rootTilingContainer.mostRecentWindowRecursive {
+                    let isFullscreenTab = window.nearestWindowTabGroup?.hasFullscreenTab == true
+                    if window.isFullscreen && !isFullscreenTab && window == context.workspace.rootTilingContainer.mostRecentWindowRecursive {
                         lastAppliedLayoutPhysicalRect = nil
                         window.layoutFullscreen(context)
                     } else {
                         lastAppliedLayoutPhysicalRect = physicalRect
-                        window.isFullscreen = false
+                        if !isFullscreenTab {
+                            window.isFullscreen = false
+                        }
                         if config.enableWindowManagement &&
                             !canReuseLastAppliedWindowFrame(previousPhysicalRect: previousPhysicalRect, nextPhysicalRect: physicalRect)
                         {
@@ -277,6 +291,30 @@ extension TreeNode {
             case .workspace(let workspace):
                 for child in workspace.children {
                     try await child.hideAllWindowsExcept(targetWindow)
+                }
+            case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer,
+                 .macosPopupWindowsContainer, .macosHiddenAppsWindowsContainer:
+                return
+        }
+    }
+
+    @MainActor
+    fileprivate func hideAllWindowsExcept(_ targetNode: TreeNode) async throws {
+        if self === targetNode { return }
+        switch nodeCases {
+            case .window(let window):
+                window.lastAppliedLayoutPhysicalRect = nil
+                window.lastAppliedLayoutVirtualRect = nil
+                if let macWindow = window as? MacWindow {
+                    try await macWindow.hideInCorner(.bottomRightCorner)
+                }
+            case .tilingContainer(let container):
+                for child in container.children {
+                    try await child.hideAllWindowsExcept(targetNode)
+                }
+            case .workspace(let workspace):
+                for child in workspace.children {
+                    try await child.hideAllWindowsExcept(targetNode)
                 }
             case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer,
                  .macosPopupWindowsContainer, .macosHiddenAppsWindowsContainer:

@@ -61,9 +61,10 @@ private func selfTabGroupSurfaceDestination(
           sourceParent.windowDragVisibleRect?.contains(mouseLocation) == true
     else { return nil }
     let targetWindow =
-        sourceParent.tabActiveWindow ??
-        sourceParent.mostRecentWindowRecursive ??
-        sourceParent.anyLeafWindowRecursive ??
+        sourceParent.tabActiveWindow?.takeIf { $0 != sourceWindow } ??
+        sourceParent.children.compactMap { $0 as? Window }.first { $0 != sourceWindow } ??
+        sourceParent.mostRecentWindowRecursive?.takeIf { $0 != sourceWindow } ??
+        sourceParent.anyLeafWindowRecursive?.takeIf { $0 != sourceWindow } ??
         sourceWindow
     logWindowDragHitTestIfNeeded(
         signature: "surface:self-tab-group-direct:source=\(sourceWindow.windowId)",

@@ -1,5 +1,23 @@
 import AppKit
 
+@MainActor
+private var workspaceSidebarItemDragActiveCount = 0
+
+@MainActor
+func beginWorkspaceSidebarItemDrag() {
+    workspaceSidebarItemDragActiveCount += 1
+}
+
+@MainActor
+func endWorkspaceSidebarItemDrag() {
+    workspaceSidebarItemDragActiveCount = max(workspaceSidebarItemDragActiveCount - 1, 0)
+}
+
+@MainActor
+func isWorkspaceSidebarItemDragActive() -> Bool {
+    workspaceSidebarItemDragActiveCount > 0
+}
+
 func shouldLockWorkspaceSidebarExpansion(
     hasDropPreview: Bool,
     hasPinnedDraggedWindow: Bool,
@@ -15,7 +33,7 @@ func isWorkspaceSidebarDragInProgress(kind: MouseManipulationKind, startedInSide
 
 @MainActor
 func isWorkspaceSidebarDragInProgress() -> Bool {
-    isWorkspaceSidebarDragInProgress(
+    isWorkspaceSidebarItemDragActive() || isWorkspaceSidebarDragInProgress(
         kind: getCurrentMouseManipulationKind(),
         startedInSidebar: getCurrentMouseDragStartedInSidebar(),
     )
