@@ -24,7 +24,7 @@ final class WindowTabStripPanel: NSPanelHud {
         hostingView.autoresizingMask = [.width, .height]
     }
 
-    override var canBecomeKey: Bool { true }
+    override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 
     func update(with strip: WindowTabStripViewModel) {

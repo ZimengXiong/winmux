@@ -13,8 +13,10 @@ extension WindowTabStripPanel {
     }
 
     func updateMousePolicy() {
+        let ignoresForMouseManipulation = currentlyManipulatedWithMouseWindowId != nil &&
+            shouldIgnoreWindowTabStripMouseEventsDuringDrag(detachOrigin: getCurrentMouseTabDetachOrigin())
         ignoresMouseEvents = externallyIgnoresMouseEvents ||
-            currentlyManipulatedWithMouseWindowId != nil ||
+            ignoresForMouseManipulation ||
             tabStripIsOccludedByFloatingWindow
     }
 }

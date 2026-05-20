@@ -233,7 +233,9 @@ func beginWindowMoveWithMouseSessionIfNeeded(
     setCurrentMouseTabDetachOrigin(detachOrigin)
     setCurrentMouseDragStartedInSidebar(startedInSidebar)
     setDraggedWindowAnchorRect(anchorRect, for: windowId)
-    WindowTabStripPanelController.shared.setIgnoresMouseEvents(true)
+    WindowTabStripPanelController.shared.setIgnoresMouseEvents(
+        shouldIgnoreWindowTabStripMouseEventsDuringDrag(detachOrigin: detachOrigin)
+    )
     if refreshActualRects {
         refreshVisibleWindowActualRectsForCurrentDrag(sourceWindowId: windowId)
     } else {
@@ -330,6 +332,10 @@ func shouldIgnoreMovedObsForManagedWindowDragSession(
           observedWindowId == currentWindowId
     else { return false }
     return startedInSidebar || detachOrigin == .tabStrip || subject == .group
+}
+
+func shouldIgnoreWindowTabStripMouseEventsDuringDrag(detachOrigin: TabDetachOrigin) -> Bool {
+    detachOrigin != .tabStrip
 }
 
 @MainActor

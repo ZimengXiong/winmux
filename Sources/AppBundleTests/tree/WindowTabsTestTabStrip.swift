@@ -168,6 +168,11 @@ import XCTest
         ))
     }
 
+    func testTabStripOriginatedDragKeepsTabStripMouseEventsEnabled() {
+        XCTAssertFalse(shouldIgnoreWindowTabStripMouseEventsDuringDrag(detachOrigin: .tabStrip))
+        XCTAssertTrue(shouldIgnoreWindowTabStripMouseEventsDuringDrag(detachOrigin: .window))
+    }
+
     func testCompositedGroupPreviewOnlyRunsForTabStripOriginatedGroupDrags() {
         XCTAssertTrue(shouldShowCompositedGroupMovePreview(
             subject: .group,
