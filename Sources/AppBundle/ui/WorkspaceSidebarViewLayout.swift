@@ -55,14 +55,19 @@ extension WorkspaceSidebarView {
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
-            projectPagerSection(
-                expansionProgress: expansionProgress,
-                leadingInset: leadingInset,
-                trailingInset: trailingInset,
-                swipeDirection: projectSwipeDirection,
-                switchProgress: projectSwitchProgress,
-                edgeProgress: projectSwipeProgress,
-            )
+            if (isSidebarCollapsing && !isCompact) || (isSidebarExpanding && isCompact) {
+                Color.clear
+                    .frame(height: isCompact ? workspaceSidebarPagerHeight + 8 : workspaceSidebarCollapseReservedProjectPagerHeight)
+            } else {
+                projectPagerSection(
+                    expansionProgress: expansionProgress,
+                    leadingInset: leadingInset,
+                    trailingInset: trailingInset,
+                    swipeDirection: projectSwipeDirection,
+                    switchProgress: projectSwitchProgress,
+                    edgeProgress: projectSwipeProgress,
+                )
+            }
 
             statusSection(
                 expansionProgress: expansionProgress,
@@ -77,18 +82,22 @@ extension WorkspaceSidebarView {
         }
         .background {
             sidebarSurface(in: sidebarShape)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    NotificationCenter.default.post(name: workspaceSidebarDismissProjectMenusNotification, object: nil)
+                }
         }
         .environment(\.colorScheme, .dark)
         .clipShape(sidebarShape)
         .overlay(alignment: .trailing) {
             Rectangle()
-                .fill(mattePanelSeparator.opacity(0.72))
+                .fill(Color.white.opacity(0.08))
                 .frame(width: 0.5)
         }
         .shadow(
-            color: Color.black.opacity(0.28),
-            radius: 14,
-            x: 2,
+            color: Color.black.opacity(0.24),
+            radius: 20,
+            x: 3,
             y: 0
         )
         .overlay {
@@ -97,3 +106,5 @@ extension WorkspaceSidebarView {
         .simultaneousGesture(projectSwipeGesture(expansionProgress: expansionProgress))
     }
 }
+
+private let workspaceSidebarCollapseReservedProjectPagerHeight = (workspaceSidebarPagerHeight * 2) + 10

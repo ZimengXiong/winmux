@@ -19,7 +19,7 @@ func workspaceSidebarProjectColor(projectId: WorkspaceProjectId, configuredHex: 
     }
     return Color(
         hue: workspaceSidebarProjectHue(projectId: projectId),
-        saturation: 0.42,
-        brightness: 0.96,
+        saturation: 0.30,
+        brightness: 0.82,
     )
 }

@@ -16,11 +16,24 @@ struct WorkspaceSidebarMonitorSelector: View {
     var onSelectProject: (WorkspaceProjectId) -> Void = { _ in }
     var onCreateProject: () -> Void = {}
     var onRenameProject: (WorkspaceSidebarProjectViewModel) -> Void = { _ in }
+    @Binding var renamingProjectId: WorkspaceProjectId?
+    @Binding var renamingProjectText: String
+    var onCommitRenameProject: @MainActor @Sendable () -> Void = {}
+    var onCancelRenameProject: @MainActor @Sendable () -> Void = {}
     var onSetProjectColor: (WorkspaceSidebarProjectViewModel, String?) -> Void = { _, _ in }
     var onDeleteProject: (WorkspaceSidebarProjectViewModel) -> Void = { _ in }
 
     @State private var isProjectMenuOpen = false
-    private let projectPopupWidth: CGFloat = 148
+    private var projectPopupWidth: CGFloat {
+        let names = browsableProjects.map(\.displayName) + ["Other Projects"]
+        let maxTextWidth = names.map {
+            ($0 as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium)]).width
+        }.max() ?? 0
+        return max(ceil(maxTextWidth) + 50, 148)
+    }
+    private var hasMultipleMonitors: Bool {
+        scopes.count { workspaceSidebarMonitorScopePoint($0.id) != nil } > 1
+    }
 
     private var quickScopes: [WorkspaceSidebarMonitorScopeViewModel] {
         var result = [
@@ -41,16 +54,18 @@ struct WorkspaceSidebarMonitorSelector: View {
                     isFocusedMonitor: false
                 ),
         ]
-        result.append(
-            scopes.first { $0.id == workspaceSidebarAllScopeId }
-                ?? WorkspaceSidebarMonitorScopeViewModel(
-                    id: workspaceSidebarAllScopeId,
-                    displayName: "All",
-                    subtitle: nil,
-                    systemImageName: "rectangle.grid.2x2",
-                    isFocusedMonitor: false
-                )
-        )
+        if hasMultipleMonitors {
+            result.append(
+                scopes.first { $0.id == workspaceSidebarAllScopeId }
+                    ?? WorkspaceSidebarMonitorScopeViewModel(
+                        id: workspaceSidebarAllScopeId,
+                        displayName: "All",
+                        subtitle: nil,
+                        systemImageName: "rectangle.grid.2x2",
+                        isFocusedMonitor: false
+                    )
+            )
+        }
         return result
     }
 
@@ -78,11 +93,26 @@ struct WorkspaceSidebarMonitorSelector: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .opacity(expansionProgress)
         .zIndex(isProjectMenuOpen ? 200 : 0)
+        .onReceive(NotificationCenter.default.publisher(for: workspaceSidebarWillCollapseNotification)) { _ in
+            if isProjectMenuOpen {
+                withAnimation(.easeOut(duration: 0.08)) {
+                    isProjectMenuOpen = false
+                }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: workspaceSidebarDismissProjectMenusNotification)) { _ in
+            if isProjectMenuOpen {
+                withAnimation(.easeOut(duration: 0.10)) {
+                    isProjectMenuOpen = false
+                }
+            }
+        }
     }
 
     private func monitorScopePill(_ scope: WorkspaceSidebarMonitorScopeViewModel) -> some View {
         let isActive = scope.id == selectedScopeId && browsedProjectId == nil
         return Button {
+            isProjectMenuOpen = false
             onSelectScope(scope.id)
         } label: {
             Text(scope.id == workspaceSidebarFocusedScopeId ? "Focus" : scope.displayName)
@@ -111,7 +141,19 @@ struct WorkspaceSidebarMonitorSelector: View {
 
     private var projectSelector: some View {
         let isActive = selectedProject != nil || isProjectMenuOpen
-        return Button {
+        if let selectedProject, renamingProjectId == selectedProject.id {
+            return AnyView(
+                WorkspaceSidebarProjectRenameField(
+                    project: selectedProject,
+                    text: $renamingProjectText,
+                    onCommit: onCommitRenameProject,
+                    onCancel: onCancelRenameProject,
+                )
+                .frame(width: projectPopupWidth, height: workspaceSidebarDropdownHeight)
+            )
+        }
+        return AnyView(Button {
+            guard !browsableProjects.isEmpty else { return }
             isProjectMenuOpen.toggle()
         } label: {
             HStack(spacing: 4) {
@@ -124,16 +166,7 @@ struct WorkspaceSidebarMonitorSelector: View {
                     .rotationEffect(.degrees(isProjectMenuOpen ? 180 : 0))
             }
             .foregroundStyle(Color.white.opacity(isActive ? 0.86 : 0.72))
-            .padding(.horizontal, 6)
-            .frame(height: workspaceSidebarDropdownHeight)
-            .background {
-                RoundedRectangle(cornerRadius: workspaceSidebarPlateCornerRadius, style: .continuous)
-                    .fill(isActive ? Color.white.opacity(0.10) : Color.white.opacity(0.04))
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: workspaceSidebarPlateCornerRadius, style: .continuous)
-                    .strokeBorder(isActive ? Color.white.opacity(0.14) : Color.white.opacity(0.08), lineWidth: 0.5)
-            }
+            .modifier(WorkspaceSidebarDropdownControlStyle(isActive: isActive))
         }
         .buttonStyle(.plain)
         .fixedSize(horizontal: true, vertical: false)
@@ -143,6 +176,7 @@ struct WorkspaceSidebarMonitorSelector: View {
         }
         .zIndex(isProjectMenuOpen ? 200 : 0)
         .help("Browse project workspaces")
+        )
     }
 
     private var projectPopup: some View {
@@ -152,8 +186,11 @@ struct WorkspaceSidebarMonitorSelector: View {
                     projects: browsableProjects,
                     selectedProjectId: browsedProjectId ?? activeProjectId,
                     onSelect: { projectId in
-                        onSelectProject(projectId)
-                        isProjectMenuOpen = false
+                        var transaction = Transaction()
+                        transaction.disablesAnimations = true
+                        withTransaction(transaction) {
+                            onSelectProject(projectId)
+                        }
                     },
                     onCreate: {
                         onCreateProject()
@@ -168,6 +205,7 @@ struct WorkspaceSidebarMonitorSelector: View {
                         onDeleteProject(project)
                         isProjectMenuOpen = false
                     },
+                    showsCreateAction: false,
                     menuWidth: projectPopupWidth
                 )
                 .transition(.asymmetric(

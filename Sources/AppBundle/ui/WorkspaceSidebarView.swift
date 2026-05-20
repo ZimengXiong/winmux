@@ -12,6 +12,10 @@ struct WorkspaceSidebarView: View {
     @State var browsedProjectId: WorkspaceProjectId? = nil
     @State var activeInUseOverrideWorkspaceName: String? = nil
     @State var isProjectMenuOpen = false
+    @State var isSidebarCollapsing = false
+    @State var isSidebarExpanding = false
+    @State var renamingProjectId: WorkspaceProjectId? = nil
+    @State var renamingProjectText = ""
 
     init(snapshot: WorkspaceSidebarSnapshot, actions: WorkspaceSidebarActions = WorkspaceSidebarActions()) {
         self.snapshot = snapshot
@@ -39,21 +43,69 @@ struct WorkspaceSidebarView: View {
         .onChange(of: snapshot.visibleWidth) { visibleWidth in
             if visibleWidth <= collapsedWidth + 0.5 {
                 resetTransientSidebarState()
+            } else if visibleWidth >= collapsedWidth + 8 {
+                isSidebarCollapsing = false
+            }
+            if visibleWidth >= expandedWidth - 0.5 {
+                isSidebarExpanding = false
             }
         }
         .onChange(of: snapshot.selectedProjectId) { _ in
             browsedProjectId = nil
             activeInUseOverrideWorkspaceName = nil
-            isProjectMenuOpen = false
+            finishProjectRename(cancelled: true)
             resetProjectSwipeWithoutAnimation()
         }
         .onChange(of: snapshot.projects) { _ in
             if let browsedProjectId, !snapshot.projects.contains(where: { $0.id == browsedProjectId }) {
                 self.browsedProjectId = nil
             }
+            if let renamingProjectId, !snapshot.projects.contains(where: { $0.id == renamingProjectId }) {
+                finishProjectRename(cancelled: true)
+            }
             isProjectMenuOpen = false
             resetProjectSwipeWithoutAnimation()
         }
+        .onReceive(NotificationCenter.default.publisher(for: workspaceSidebarWillCollapseNotification)) { _ in
+            withAnimation(.easeOut(duration: 0.08)) {
+                isProjectMenuOpen = false
+                isSidebarCollapsing = true
+                isSidebarExpanding = false
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: workspaceSidebarWillExpandNotification)) { _ in
+            isSidebarCollapsing = false
+            isSidebarExpanding = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: workspaceSidebarDismissProjectMenusNotification)) { _ in
+            if isProjectMenuOpen {
+                withAnimation(.easeOut(duration: 0.10)) {
+                    isProjectMenuOpen = false
+                }
+            }
+        }
+    }
+
+    func beginProjectRename(_ project: WorkspaceSidebarProjectViewModel) {
+        debugWorkspaceSidebarRenameLog("beginProjectRename project=\(project.id.rawValue) displayName=\(project.displayName) selected=\(snapshot.selectedProjectId.rawValue) visibleWidth=\(snapshot.visibleWidth)")
+        if project.id != snapshot.selectedProjectId {
+            browsedProjectId = project.id
+        }
+        renamingProjectId = project.id
+        renamingProjectText = project.displayName
+        isProjectMenuOpen = false
+        WorkspaceSidebarPanel.shared.prepareForInlineTextEditing()
+    }
+
+    func finishProjectRename(cancelled: Bool = false) {
+        guard let projectId = renamingProjectId else { return }
+        let displayName = renamingProjectText.trimmingCharacters(in: .whitespacesAndNewlines)
+        debugWorkspaceSidebarRenameLog("finishProjectRename project=\(projectId.rawValue) cancelled=\(cancelled) raw=\(renamingProjectText) trimmed=\(displayName)")
+        renamingProjectId = nil
+        renamingProjectText = ""
+        WorkspaceSidebarPanel.shared.endInlineTextEditing()
+        guard !cancelled, !displayName.isEmpty else { return }
+        actions.send(.renameProject(projectId, displayName: displayName))
     }
 }
 

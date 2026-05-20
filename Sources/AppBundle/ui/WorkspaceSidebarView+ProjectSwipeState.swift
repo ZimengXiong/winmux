@@ -34,6 +34,8 @@ extension WorkspaceSidebarView {
         browsedProjectId = nil
         activeInUseOverrideWorkspaceName = nil
         isProjectMenuOpen = false
+        isSidebarCollapsing = false
+        isSidebarExpanding = false
         resetProjectSwipeWithoutAnimation()
     }
 

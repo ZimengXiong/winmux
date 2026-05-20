@@ -28,7 +28,15 @@ extension WorkspaceSidebarView {
                 actions.send(.createProject)
             },
             onRenameProject: { project in
-                _ = project
+                beginProjectRename(project)
+            },
+            renamingProjectId: $renamingProjectId,
+            renamingProjectText: $renamingProjectText,
+            onCommitRenameProject: {
+                finishProjectRename()
+            },
+            onCancelRenameProject: {
+                finishProjectRename(cancelled: true)
             },
             onSetProjectColor: { project, colorHex in
                 actions.send(.setProjectColor(project.id, colorHex: colorHex))
@@ -58,7 +66,7 @@ extension WorkspaceSidebarView {
         )
         .padding(.leading, leadingInset)
         .padding(.trailing, trailingInset)
-        .padding(.top, workspaceSidebarSectionGap)
-        .padding(.bottom, workspaceSidebarStatusBottomPadding(isCompact: isCompact))
+        .padding(.top, 4)
+        .padding(.bottom, workspaceSidebarStatusBottomPadding(isCompact: isCompact) + 4)
     }
 }

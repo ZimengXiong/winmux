@@ -142,6 +142,11 @@ func debugFocusLog(_ message: @autoclosure () -> String) {
     fputs("[focus-debug] \(Date()) \(message())\n", stderr)
 }
 
+func debugWorkspaceSidebarRenameLog(_ message: @autoclosure () -> String) {
+    guard isDebug else { return }
+    fputs("[sidebar-rename-debug] \(Date()) \(message())\n", stderr)
+}
+
 @inlinable
 func checkCancellation() throws(CancellationError) {
     if Task.isCancelled {

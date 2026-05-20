@@ -48,7 +48,7 @@ func visibleWorkspaceNamesForSidebar(
 ) -> Set<String> {
     Set(workspaces.filter {
         workspaceSidebarWorkspaceMatchesScope(
-            workspaceMonitorScopeId: $0.monitorScopeId,
+            $0,
             selectedScopeId: selectedMonitorScopeId,
             focusedMonitorScopeId: focusedMonitorScopeId,
         )

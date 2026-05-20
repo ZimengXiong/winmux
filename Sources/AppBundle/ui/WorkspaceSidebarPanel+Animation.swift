@@ -11,6 +11,7 @@ extension WorkspaceSidebarPanel {
     func expandSidebar(to expandedWidth: CGFloat) {
         pendingExpand?.cancel()
         pendingExpand = nil
+        NotificationCenter.default.post(name: workspaceSidebarWillExpandNotification, object: nil)
         TrayMenuModel.shared.isWorkspaceSidebarExpanded = true
         if !isVisible {
             refresh()

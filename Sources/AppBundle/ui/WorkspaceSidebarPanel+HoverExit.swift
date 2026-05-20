@@ -13,6 +13,7 @@ extension WorkspaceSidebarPanel {
     }
 
     func scheduleCollapse(collapsedWidth: CGFloat) {
+        NotificationCenter.default.post(name: workspaceSidebarWillCollapseNotification, object: nil)
         let collapse = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.pendingCollapse = nil

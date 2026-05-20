@@ -7,12 +7,38 @@ extension WorkspaceSidebarView {
     }
 
     func sidebarSurface<S: Shape>(in shape: S) -> some View {
-        shape
-            .fill(workspaceSidebarPanelFill)
-            .overlay {
-                shape.stroke(workspaceSidebarPanelSeparator.opacity(0.34), lineWidth: 0.5)
-            }
-            .ignoresSafeArea()
+        ZStack {
+            sidebarGlassBase(in: shape)
+            shape.fill(Color.black.opacity(sidebarGlassScrimOpacity))
+            shape.fill(sidebarGlassTint.opacity(sidebarGlassTintOpacity))
+                .blendMode(.plusLighter)
+            shape.fill(
+                LinearGradient(
+                    stops: [
+                        .init(color: Color.white.opacity(sidebarGlassHighlightPeak), location: 0),
+                        .init(color: Color.white.opacity(sidebarGlassHighlightPeak * 0.25), location: 0.12),
+                        .init(color: Color.clear, location: 0.45),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .blendMode(.screen)
+            shape.stroke(Color.white.opacity(sidebarGlassBorderOpacity), lineWidth: 0.5)
+        }
+        .compositingGroup()
+        .ignoresSafeArea()
+    }
+
+    @ViewBuilder
+    private func sidebarGlassBase<S: Shape>(in shape: S) -> some View {
+        if #available(macOS 26.0, *) {
+            Color.clear
+                .glassEffect(.regular.interactive(false), in: shape)
+        } else {
+            shape.fill(.ultraThinMaterial)
+                .environment(\.colorScheme, .dark)
+        }
     }
 
     func sidebarSwipeCaptureOverlay(expansionProgress: CGFloat) -> some View {
@@ -38,11 +64,8 @@ extension WorkspaceSidebarView {
     }
 }
 
-private let workspaceSidebarPanelFill = Color(nsColor: NSColor(
-    srgbRed: 0.09,
-    green: 0.092,
-    blue: 0.10,
-    alpha: 0.92
-))
-
-private let workspaceSidebarPanelSeparator = Color.white.opacity(0.10)
+private let sidebarGlassTint = Color(hue: 0.61, saturation: 0.45, brightness: 0.55)
+private let sidebarGlassTintOpacity: Double = 0.14
+private let sidebarGlassScrimOpacity: Double = 0.55
+private let sidebarGlassHighlightPeak: Double = 0.12
+private let sidebarGlassBorderOpacity: Double = 0.10

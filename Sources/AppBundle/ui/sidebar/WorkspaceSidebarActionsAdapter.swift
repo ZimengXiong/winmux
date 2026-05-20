@@ -42,6 +42,8 @@ func handleWorkspaceSidebarAction(_ action: WorkspaceSidebarAction) {
             selectWorkspaceSidebarProject(projectId)
         case .createProject:
             createWorkspaceSidebarProject()
+        case .renameProject(let projectId, let displayName):
+            renameWorkspaceSidebarProject(projectId, displayName: displayName)
         case .setProjectColor(let projectId, let colorHex):
             if let project = workspaceSidebarProjectViewModel(projectId) {
                 setWorkspaceSidebarProjectColor(project, colorHex: colorHex)

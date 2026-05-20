@@ -81,13 +81,28 @@ func updateCompositedResizePreview(_ window: Window, rect: Rect) {
     )
     guard !items.isEmpty else {
         logWindowDragLive("resizePreview hide requested reason=resizePreview.no-items window=\(window.windowId)")
+        WindowTabStripPanelController.shared.clearHiddenPassiveTabGroupChrome()
         WindowResizePreviewPanel.shared.endStableFrame()
         WindowResizePreviewPanel.shared.hide(reason: "resizePreview.no-items")
         return
     }
     currentlyManipulatedWithMouseWindowId = window.windowId
     setCurrentMouseManipulationKind(.resize)
+    WindowTabStripPanelController.shared.setHiddenPassiveTabGroupChrome(
+        resizePreviewTabGroupChromeIdsToHide(items)
+    )
     WindowResizePreviewPanel.shared.show(items)
+}
+
+@MainActor
+private func resizePreviewTabGroupChromeIdsToHide(_ items: [WindowResizePreviewItem]) -> Set<ObjectIdentifier> {
+    Set(items.compactMap { item in
+        guard item.isTabGroup,
+              let tabGroup = Window.get(byId: item.id)?.nearestWindowTabGroup,
+              tabGroup.usesWindowTabBehavior
+        else { return nil }
+        return ObjectIdentifier(tabGroup)
+    })
 }
 
 @MainActor

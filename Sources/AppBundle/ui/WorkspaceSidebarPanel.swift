@@ -55,12 +55,12 @@ struct WorkspaceSidebarProjectColorPreset: Hashable, Identifiable {
 }
 
 let workspaceSidebarProjectColorPresets: [WorkspaceSidebarProjectColorPreset] = [
-    WorkspaceSidebarProjectColorPreset(name: "Blue", hex: "#93C5FD"),
-    WorkspaceSidebarProjectColorPreset(name: "Cyan", hex: "#67E8F9"),
-    WorkspaceSidebarProjectColorPreset(name: "Green", hex: "#86EFAC"),
-    WorkspaceSidebarProjectColorPreset(name: "Yellow", hex: "#FDE68A"),
-    WorkspaceSidebarProjectColorPreset(name: "Orange", hex: "#FDBA74"),
-    WorkspaceSidebarProjectColorPreset(name: "Red", hex: "#FCA5A5"),
-    WorkspaceSidebarProjectColorPreset(name: "Pink", hex: "#F9A8D4"),
-    WorkspaceSidebarProjectColorPreset(name: "Violet", hex: "#C4B5FD"),
+    WorkspaceSidebarProjectColorPreset(name: "Blue", hex: "#7BA3C9"),
+    WorkspaceSidebarProjectColorPreset(name: "Cyan", hex: "#6FBAB4"),
+    WorkspaceSidebarProjectColorPreset(name: "Green", hex: "#7DBF8E"),
+    WorkspaceSidebarProjectColorPreset(name: "Yellow", hex: "#C9B97A"),
+    WorkspaceSidebarProjectColorPreset(name: "Orange", hex: "#C4956E"),
+    WorkspaceSidebarProjectColorPreset(name: "Red", hex: "#C48181"),
+    WorkspaceSidebarProjectColorPreset(name: "Pink", hex: "#BF8AAE"),
+    WorkspaceSidebarProjectColorPreset(name: "Violet", hex: "#9B8FC4"),
 ]

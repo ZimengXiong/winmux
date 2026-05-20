@@ -30,7 +30,7 @@ public final class TrayMenuModel: ObservableObject {
         workspaceSidebarWorkspaces.filter {
             $0.projectId == workspaceSidebarSelectedProjectId &&
             workspaceSidebarWorkspaceMatchesScope(
-                workspaceMonitorScopeId: $0.monitorScopeId,
+                $0,
                 selectedScopeId: workspaceSidebarSelectedMonitorScopeId,
                 focusedMonitorScopeId: workspaceSidebarFocusedMonitorScopeId,
             )

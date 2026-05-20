@@ -13,7 +13,12 @@ func workspaceProjects() -> [WorkspaceProject] {
     var numberedProjectIndex = 0
     return projects.map { project in
         let displayName: String
-        if project.id == workspaceProjectDefaultId {
+        if let configuredName = config.workspaceSidebar.projectLabels[project.id.rawValue]?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !configuredName.isEmpty,
+           configuredName != project.id.rawValue
+        {
+            displayName = configuredName
+        } else if project.id == workspaceProjectDefaultId {
             displayName = "Default"
         } else {
             numberedProjectIndex += 1
@@ -117,7 +122,12 @@ func renameWorkspaceProject(_ projectId: WorkspaceProjectId, displayName: String
     guard winMuxWorkspaceState.projectsById[projectId] != nil else {
         throw WorkspaceMutationError.projectNotFound(projectId.rawValue)
     }
-    _ = displayName
+    let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedName.isEmpty else { return }
+    config.workspaceSidebar.projectLabels[projectId.rawValue] = trimmedName
+    if !isUnitTest {
+        try persistWorkspaceSidebarProjectLabel(projectId: projectId.rawValue, label: trimmedName)
+    }
 }
 
 @MainActor

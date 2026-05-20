@@ -38,7 +38,12 @@ func updatePendingWindowDragIntent(
     if detachOrigin == .tabStrip {
         showWorkspaceSidebarDragCursorPreview(sourceWindow: sourceWindow, subject: subject, point: mouseLocation)
     }
-    return setPendingWindowDragIntent(sourceWindowId: sourceWindow.windowId, sourceSubject: subject, destination: destination)
+    return setPendingWindowDragIntent(
+        sourceWindowId: sourceWindow.windowId,
+        sourceSubject: subject,
+        detachOrigin: detachOrigin,
+        destination: destination,
+    )
 }
 
 @MainActor
@@ -64,8 +69,18 @@ func refreshPendingWindowDragIntentFromGlobalMouseDrag() {
 }
 
 @MainActor
-func setPendingWindowDragIntent(sourceWindowId: UInt32, sourceSubject: WindowDragSubject, destination: WindowDragIntentDestination) -> Bool {
+func setPendingWindowDragIntent(
+    sourceWindowId: UInt32,
+    sourceSubject: WindowDragSubject,
+    detachOrigin: TabDetachOrigin,
+    destination: WindowDragIntentDestination,
+) -> Bool {
     let isPointerSettled = WindowDragFrameGate.shared.state(for: sourceWindowId)?.isSettled ?? false
+    syncTargetTabGroupChromeForDropIntentOverlay(
+        destination.kind,
+        detachOrigin: detachOrigin,
+        hasOverlay: destination.dropIntentOverlay != nil,
+    )
     if let pendingWindowDragIntent,
        pendingWindowDragIntent.sourceWindowId == sourceWindowId,
        pendingWindowDragIntent.sourceSubject == sourceSubject,
@@ -131,12 +146,43 @@ func clearPendingWindowDragIntent() {
     setPinnedDraggedWindowId(nil)
     setWorkspaceSidebarDropPreviewIfChanged(nil)
     WindowDropIntentOverlayPanelController.shared.hide()
+    WindowTabStripPanelController.shared.clearHiddenPassiveTabGroupChrome()
     WindowDragCursorProxyPanel.shared.hide()
     if getCurrentMouseManipulationKind() == .resize, isLeftMouseButtonDown {
         logWindowDragLive("dragIntent.clear preserving resizePreview during active resize manipulated=\(currentlyManipulatedWithMouseWindowId?.description ?? "nil")")
     } else {
         WindowResizePreviewPanel.shared.endStableFrame()
         WindowResizePreviewPanel.shared.hide(reason: "dragIntent.clear")
+    }
+}
+
+@MainActor
+private func syncTargetTabGroupChromeForDropIntentOverlay(
+    _ kind: WindowDragIntentKind,
+    detachOrigin: TabDetachOrigin,
+    hasOverlay: Bool,
+) {
+    guard hasOverlay,
+          detachOrigin != .tabStrip,
+          let targetWindow = targetWindowForDropIntent(kind),
+          let tabGroup = targetWindow.nearestWindowTabGroup,
+          tabGroup.usesWindowTabBehavior
+    else {
+        WindowTabStripPanelController.shared.clearHiddenPassiveTabGroupChrome()
+        return
+    }
+    WindowTabStripPanelController.shared.setHiddenPassiveTabGroupChrome([ObjectIdentifier(tabGroup)])
+}
+
+@MainActor
+private func targetWindowForDropIntent(_ kind: WindowDragIntentKind) -> Window? {
+    switch kind {
+        case .tabStack(let targetWindowId),
+             .stackSplit(let targetWindowId, _),
+             .swap(let targetWindowId):
+            Window.get(byId: targetWindowId)
+        case .detachTab, .moveToWorkspace, .createWorkspace, .sidebarHover:
+            nil
     }
 }
 

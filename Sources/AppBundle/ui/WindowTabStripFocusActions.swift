@@ -1,19 +1,20 @@
 @MainActor
 func focusWindowFromTabStrip(_ windowId: UInt32, fallbackWorkspace: String) {
-    guard let token: RunSessionGuard = .isServerEnabled else { return }
-    Task {
-        try await runLightSession(.menuBarButton, token) {
-            guard let window = Window.get(byId: windowId),
-                  let liveFocus = window.toLiveFocusOrNil()
-            else {
-                _ = Workspace.existing(byName: fallbackWorkspace)?.focusWorkspace()
-                return
-            }
-            window.markAsMostRecentChild()
-            _ = setFocus(to: liveFocus)
-            window.nativeFocus()
-        }
+    guard TrayMenuModel.shared.isEnabled else { return }
+    guard let window = Window.get(byId: windowId),
+          let liveFocus = window.toLiveFocusOrNil()
+    else {
+        _ = Workspace.existing(byName: fallbackWorkspace)?.focusWorkspace()
+        scheduleRefreshSession(.menuBarButton)
+        return
     }
+    window.markAsMostRecentChild()
+    _ = setFocus(to: liveFocus)
+    window.nativeFocus()
+    Task { @MainActor in
+        await updateWindowTabModel()
+    }
+    scheduleRefreshSession(.menuBarButton)
 }
 
 @MainActor

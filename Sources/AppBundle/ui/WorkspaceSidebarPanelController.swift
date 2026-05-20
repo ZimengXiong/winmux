@@ -18,6 +18,13 @@ final class WorkspaceSidebarPanel: NSPanelHud {
     var menuTrackingDepth = 0
     var menuTrackingGraceUntil: Date = .distantPast
     var inlineTextEditingActive = false
+    var inlineTextEditingCancel: (@MainActor () -> Void)?
+    var inlineTextEditingKeyDown: (@MainActor (WorkspaceSidebarInlineTextKey) -> Void)?
+    var inlineTextEditingEventMonitors: [Any] = []
+    var inlineTextEditingKeyEventTap: CFMachPort?
+    var inlineTextEditingKeyEventTapRunLoopSource: CFRunLoopSource?
+    var inlineTextEditingStartedAt: Date = .distantPast
+    var inlineTextEditingPointerEnteredVisibleRegion = false
     var menuTrackingObservers: [NSObjectProtocol] = []
     let hoverExitTolerance: CGFloat = 20
     let hoverPollInterval: TimeInterval = 1.0 / 30.0
@@ -49,4 +56,19 @@ final class WorkspaceSidebarPanel: NSPanelHud {
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+
+    override func becomeKey() {
+        super.becomeKey()
+        debugWorkspaceSidebarRenameLog("panel becomeKey isKey=\(isKeyWindow) firstResponder=\(String(describing: firstResponder))")
+    }
+
+    override func resignKey() {
+        debugWorkspaceSidebarRenameLog("panel resignKey isKey=\(isKeyWindow) firstResponder=\(String(describing: firstResponder))")
+        super.resignKey()
+    }
+
+    override func keyDown(with event: NSEvent) {
+        debugWorkspaceSidebarRenameLog("panel keyDown keyCode=\(event.keyCode) chars=\(event.charactersIgnoringModifiers ?? "nil") firstResponder=\(String(describing: firstResponder)) inline=\(inlineTextEditingActive)")
+        super.keyDown(with: event)
+    }
 }

@@ -27,14 +27,18 @@ struct WorkspaceSidebarProjectPopup: View {
         .frame(minWidth: menuWidth, idealWidth: menuWidth, maxWidth: menuWidth, alignment: .leading)
         .fixedSize(horizontal: menuWidth != nil, vertical: false)
         .background {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color(nsColor: NSColor(srgbRed: 0.13, green: 0.13, blue: 0.14, alpha: 0.98)))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.09), lineWidth: 0.5)
-                }
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(.regularMaterial)
+                    .environment(\.colorScheme, .dark)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.white.opacity(0.06))
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.14), lineWidth: 0.75)
+            }
+            .compositingGroup()
         }
-        .shadow(color: .black.opacity(0.35), radius: 14, x: 0, y: 7)
+        .shadow(color: .black.opacity(0.50), radius: 18, x: 0, y: 8)
         .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 

@@ -3,6 +3,7 @@ import SwiftUI
 struct WorkspaceSidebarInUseOverrideOverlay: View {
     let text: String
     let onOverride: () -> Void
+    @State private var isOverrideHovered = false
 
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: workspaceSidebarSectionCornerRadius, style: .continuous)
@@ -37,7 +38,14 @@ struct WorkspaceSidebarInUseOverrideOverlay: View {
                 .buttonStyle(.plain)
                 .background {
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(Color(nsColor: .systemRed).opacity(0.88))
+                        .fill(Color(nsColor: .systemRed).opacity(isOverrideHovered ? 1 : 0.88))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                        .strokeBorder(Color.white.opacity(isOverrideHovered ? 0.28 : 0), lineWidth: 0.6)
+                }
+                .onHover { hovering in
+                    isOverrideHovered = hovering
                 }
             }
         }

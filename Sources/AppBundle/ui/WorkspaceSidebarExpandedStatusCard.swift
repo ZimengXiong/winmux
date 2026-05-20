@@ -22,31 +22,32 @@ struct WorkspaceSidebarExpandedStatusCard: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text(date, format: .dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
-                    .font(.system(size: 18, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(Color.white.opacity(0.88))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                Text(date, format: .dateTime.second(.twoDigits))
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(Color.white.opacity(0.40))
-                    .lineLimit(1)
-                    .baselineOffset(3)
+        HStack(alignment: .center, spacing: 0) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 1) {
+                    Text(date, format: .dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
+                        .font(.system(size: 20, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.white.opacity(0.82))
+                        .lineLimit(1)
+                    Text(date, format: .dateTime.second(.twoDigits))
+                        .font(.system(size: 10, weight: .regular, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.white.opacity(0.32))
+                        .lineLimit(1)
+                        .baselineOffset(4)
+                        .padding(.leading, 1)
+                }
+                if showsDate {
+                    Text(date, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day())
+                        .font(.system(size: 11, weight: .regular))
+                        .foregroundStyle(Color.white.opacity(0.40))
+                        .lineLimit(1)
+                }
             }
-            if showsDate {
-                Text(date, format: .dateTime.month(.abbreviated).day())
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.48))
-                    .lineLimit(1)
-                    .padding(.leading, 10)
-            }
-            Spacer(minLength: 0)
+            Spacer(minLength: 8)
             if showsStatusPills {
-                HStack(alignment: .center, spacing: 6) {
+                HStack(alignment: .center, spacing: 12) {
                     WorkspaceSidebarStatusMiniIcon(
                         symbolName: systemStatus.battery.symbolName,
                         tint: systemStatus.battery.tintColor,
@@ -65,14 +66,14 @@ struct WorkspaceSidebarExpandedStatusCard: View {
                 }
             }
         }
-        .padding(.horizontal, 10)
-        .frame(width: sectionWidth, height: 38, alignment: .leading)
+        .padding(.horizontal, 12)
+        .frame(width: sectionWidth, height: 52, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: workspaceSidebarStatusCornerRadius, style: .continuous)
-                .fill(Color.white.opacity(0.035))
+                .fill(Color.white.opacity(0.06))
                 .overlay {
                     RoundedRectangle(cornerRadius: workspaceSidebarStatusCornerRadius, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5)
+                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
                 }
         )
         .accessibilityElement(children: .combine)

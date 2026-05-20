@@ -1,0 +1,5 @@
+import Foundation
+
+let workspaceSidebarWillCollapseNotification = Notification.Name("WorkspaceSidebarWillCollapseNotification")
+let workspaceSidebarWillExpandNotification = Notification.Name("WorkspaceSidebarWillExpandNotification")
+let workspaceSidebarDismissProjectMenusNotification = Notification.Name("WorkspaceSidebarDismissProjectMenusNotification")

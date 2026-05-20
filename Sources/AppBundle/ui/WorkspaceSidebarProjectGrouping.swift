@@ -7,7 +7,7 @@ func workspaceSidebarVisibleWorkspacesByProject(
 ) -> [WorkspaceProjectId: [WorkspaceSidebarWorkspaceViewModel]] {
     var result: [WorkspaceProjectId: [WorkspaceSidebarWorkspaceViewModel]] = [:]
     for workspace in workspaces where workspaceSidebarWorkspaceMatchesScope(
-        workspaceMonitorScopeId: workspace.monitorScopeId,
+        workspace,
         selectedScopeId: selectedScopeId,
         focusedMonitorScopeId: focusedMonitorScopeId,
     ) {

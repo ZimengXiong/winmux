@@ -352,6 +352,14 @@ func createWorkspaceSidebarProject() {
 }
 
 @MainActor
+func renameWorkspaceSidebarProject(_ projectId: WorkspaceProjectId, displayName: String) {
+    runWorkspaceSidebarSession {
+        try renameWorkspaceProject(projectId, displayName: displayName)
+        await updateWorkspaceSidebarModel()
+    }
+}
+
+@MainActor
 func setWorkspaceSidebarProjectColor(_ project: WorkspaceSidebarProjectViewModel, colorHex: String?) {
     runWorkspaceSidebarSession {
         let normalizedColorHex = colorHex.flatMap(normalizedWorkspaceSidebarColorHex)

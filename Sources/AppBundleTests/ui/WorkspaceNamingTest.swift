@@ -406,7 +406,7 @@ final class WorkspaceNamingTest: XCTestCase {
 
         XCTAssertEqual(config.workspaceSidebar.projectLabels[project.id.rawValue], project.id.rawValue)
         try renameWorkspaceProject(project.id, displayName: "Work")
-        XCTAssertEqual(config.workspaceSidebar.projectLabels[project.id.rawValue], project.id.rawValue)
+        XCTAssertEqual(config.workspaceSidebar.projectLabels[project.id.rawValue], "Work")
         config.workspaceSidebar.projectColors[project.id.rawValue] = "#60A5FA"
         try deleteWorkspaceProject(project.id)
 
@@ -420,7 +420,7 @@ final class WorkspaceNamingTest: XCTestCase {
 
         let project = workspaceProjects().first { $0.id == "project-7" }
 
-        XCTAssertEqual(project?.name, "Project 1")
+        XCTAssertEqual(project?.name, "Research")
         XCTAssertTrue(canDeleteWorkspaceProject("project-7"))
     }
 

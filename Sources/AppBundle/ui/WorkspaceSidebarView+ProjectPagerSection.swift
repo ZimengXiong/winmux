@@ -16,8 +16,19 @@ extension WorkspaceSidebarView {
             expansionProgress: expansionProgress,
             layout: snapshot.configuration,
             isProjectMenuOpen: $isProjectMenuOpen,
+            renamingProjectId: $renamingProjectId,
+            renamingProjectText: $renamingProjectText,
             onSelectProject: { actions.send(.selectProject($0)) },
             onCreateProject: { actions.send(.createProject) },
+            onBeginRenameProject: { project in
+                beginProjectRename(project)
+            },
+            onCommitRenameProject: {
+                finishProjectRename()
+            },
+            onCancelRenameProject: {
+                finishProjectRename(cancelled: true)
+            },
             onSetProjectColor: { project, colorHex in
                 actions.send(.setProjectColor(project.id, colorHex: colorHex))
             },

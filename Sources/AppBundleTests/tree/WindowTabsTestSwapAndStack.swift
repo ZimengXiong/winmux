@@ -41,6 +41,38 @@ import XCTest
         XCTAssertEqual(pendingIntent.interactionRect.height, expectedInteractionRect.height)
     }
 
+    func testTabStackOntoHiddenTabbedWindowUsesGroupContentRect() {
+        setUpWorkspacesForTests()
+        config.windowTabs.enabled = true
+
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let source = TestWindow.new(id: 1, parent: root)
+        let tabGroup = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let active = TestWindow.new(id: 2, parent: tabGroup)
+        let hiddenTarget = TestWindow.new(
+            id: 3,
+            parent: tabGroup,
+            rect: Rect(topLeftX: 2559, topLeftY: 1408, width: 1338, height: 1376),
+        )
+        let groupRect = Rect(topLeftX: 1203.75, topLeftY: 12, width: 1344.25, height: 1415)
+        tabGroup.lastAppliedLayoutPhysicalRect = groupRect
+        active.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 1206, topLeftY: 48, width: 1338, height: 1376)
+        hiddenTarget.lastAppliedLayoutPhysicalRect = nil
+        active.markAsMostRecentChild()
+        let hiddenTargetOldX = hiddenTarget.lastKnownActualRect?.topLeftX
+        let expectedRect = resolvedTabStackNormalizedRect(targetWindow: hiddenTarget).orDie()
+
+        createOrAppendWindowTabStack(sourceWindow: source, onto: hiddenTarget)
+
+        XCTAssertTrue(source.parent === tabGroup)
+        XCTAssertEqual(source.lastKnownActualRect?.topLeftX, expectedRect.topLeftX)
+        XCTAssertEqual(source.lastKnownActualRect?.topLeftY, expectedRect.topLeftY)
+        XCTAssertEqual(source.lastKnownActualRect?.width, expectedRect.width)
+        XCTAssertEqual(source.lastKnownActualRect?.height, expectedRect.height)
+        XCTAssertNotEqual(source.lastKnownActualRect?.topLeftX, hiddenTargetOldX)
+    }
+
     @MainActor
     func testResolvedDraggedWindowAnchorRectUsesWholeGroupForGroupDrag() {
         setUpWorkspacesForTests()

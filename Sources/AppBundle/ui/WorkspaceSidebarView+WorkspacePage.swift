@@ -169,7 +169,7 @@ extension WorkspaceSidebarView {
               !pageWorkspaces.contains(where: \.isFocused),
               let focusedWorkspace = snapshot.workspaces.first(where: \.isFocused),
               workspaceSidebarWorkspaceMatchesScope(
-                workspaceMonitorScopeId: focusedWorkspace.monitorScopeId,
+                focusedWorkspace,
                 selectedScopeId: snapshot.selectedMonitorScopeId,
                 focusedMonitorScopeId: snapshot.focusedMonitorScopeId
               )

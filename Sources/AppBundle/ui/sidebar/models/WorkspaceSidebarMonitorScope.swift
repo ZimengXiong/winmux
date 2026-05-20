@@ -52,3 +52,19 @@ func workspaceSidebarWorkspaceMatchesScope(
             workspaceMonitorScopeId == selectedScopeId
     }
 }
+
+func workspaceSidebarWorkspaceMatchesScope(
+    _ workspace: WorkspaceSidebarWorkspaceViewModel,
+    selectedScopeId: String,
+    focusedMonitorScopeId: String,
+) -> Bool {
+    if selectedScopeId == workspaceSidebarFocusedScopeId {
+        return workspace.isVisible &&
+            (workspace.monitorScopeId == focusedMonitorScopeId || workspace.monitorScopeId == workspaceSidebarAllScopeId)
+    }
+    return workspaceSidebarWorkspaceMatchesScope(
+        workspaceMonitorScopeId: workspace.monitorScopeId,
+        selectedScopeId: selectedScopeId,
+        focusedMonitorScopeId: focusedMonitorScopeId,
+    )
+}
