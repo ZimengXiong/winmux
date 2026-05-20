@@ -69,6 +69,7 @@ func updateCompositedResizePreview(_ window: Window, rect: Rect) {
     } else {
         WindowTabStripPanelController.shared.hideChromeDuringMouseInteraction(showFrameOnly: true)
     }
+    WindowTabStripPanelController.shared.updateResizingTabGroupChrome(window: window, activeWindowRect: rect)
     guard let workspace = window.nodeWorkspace,
           workspace.isVisible,
           let weightMap = proposedResizeWeightMap(window, rect: rect)

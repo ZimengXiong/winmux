@@ -3,10 +3,6 @@ import Foundation
 extension WindowTabStripPanelController {
     @discardableResult
     func updateResizingTabGroupChrome(window: Window, activeWindowRect: Rect) -> Bool {
-        guard !windowResizeUsesActiveTabGroupChrome(window: window) else {
-            transientResizeTabGroupId = nil
-            return false
-        }
         guard let transientStrip = resizingTabGroupStrip(window: window, activeWindowRect: activeWindowRect) else {
             transientResizeTabGroupId = nil
             return false
@@ -40,7 +36,7 @@ extension WindowTabStripPanelController {
               config.windowTabs.enabled,
               let tabGroup = window.nearestWindowTabGroup,
               tabGroup.usesWindowTabBehavior,
-              tabGroup.tabActiveWindow != window
+              tabGroup.tabActiveWindow == window
         else { return nil }
         let id = ObjectIdentifier(tabGroup)
         guard let baseStrip = TrayMenuModel.shared.windowTabStrips.first(where: { $0.id == id }) else { return nil }
