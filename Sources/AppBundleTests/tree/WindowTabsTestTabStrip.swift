@@ -222,25 +222,30 @@ import XCTest
 
     func testWindowTabStripLeadingFadeOnlyAppearsAfterScrollingFromLeftEdge() {
         let stripWidth: CGFloat = 240
+        let contentWidth: CGFloat = 360
 
         XCTAssertEqual(windowTabLeadingScrollFadeWidth(
             isScrollable: true,
-            contentMinX: 0,
+            contentMaxX: contentWidth,
+            contentWidth: contentWidth,
             stripWidth: stripWidth,
         ), 0)
         XCTAssertEqual(windowTabLeadingScrollFadeWidth(
             isScrollable: true,
-            contentMinX: -0.5,
+            contentMaxX: contentWidth - 0.5,
+            contentWidth: contentWidth,
             stripWidth: stripWidth,
         ), 0)
         XCTAssertEqual(windowTabLeadingScrollFadeWidth(
             isScrollable: false,
-            contentMinX: -12,
+            contentMaxX: contentWidth - 12,
+            contentWidth: contentWidth,
             stripWidth: stripWidth,
         ), 0)
         XCTAssertGreaterThan(windowTabLeadingScrollFadeWidth(
             isScrollable: true,
-            contentMinX: -2,
+            contentMaxX: contentWidth - 2,
+            contentWidth: contentWidth,
             stripWidth: stripWidth,
         ), 0)
     }

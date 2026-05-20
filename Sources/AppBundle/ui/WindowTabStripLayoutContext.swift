@@ -56,10 +56,11 @@ struct WindowTabStripLayoutContext {
         )
     }
 
-    func leadingFadeWidth(contentMinX: CGFloat) -> CGFloat {
+    func leadingFadeWidth(contentMaxX: CGFloat) -> CGFloat {
         windowTabLeadingScrollFadeWidth(
             isScrollable: shouldFadeTabScroll,
-            contentMinX: contentMinX,
+            contentMaxX: contentMaxX,
+            contentWidth: scrollContentWidth,
             stripWidth: width,
         )
     }

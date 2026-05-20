@@ -75,10 +75,13 @@ extension WindowTabStripView {
             if abs(tabScrollContentMinX - nextFrame.minX) > 0.5 {
                 tabScrollContentMinX = nextFrame.minX
             }
+            if abs(tabScrollContentMaxX - nextFrame.maxX) > 0.5 {
+                tabScrollContentMaxX = nextFrame.maxX
+            }
         }
         .mask {
             WindowTabStripScrollFadeMask(
-                leadingFadeWidth: context.leadingFadeWidth(contentMinX: tabScrollContentMinX),
+                leadingFadeWidth: context.leadingFadeWidth(contentMaxX: tabScrollContentMaxX),
                 trailingFadeWidth: context.trailingFadeWidth(contentMinX: tabScrollContentMinX),
             )
         }

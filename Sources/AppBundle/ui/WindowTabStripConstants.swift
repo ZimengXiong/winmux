@@ -56,8 +56,13 @@ func windowTabResolvedScrollFadeWidth(stripWidth: CGFloat) -> CGFloat {
     min(windowTabStripScrollFadeWidth, max(stripWidth / 5, 0))
 }
 
-func windowTabLeadingScrollFadeWidth(isScrollable: Bool, contentMinX: CGFloat, stripWidth: CGFloat) -> CGFloat {
-    guard isScrollable, contentMinX < -windowTabStripScrollOriginTolerance else { return 0 }
+func windowTabLeadingScrollFadeWidth(
+    isScrollable: Bool,
+    contentMaxX: CGFloat,
+    contentWidth: CGFloat,
+    stripWidth: CGFloat,
+) -> CGFloat {
+    guard isScrollable, contentMaxX < contentWidth - windowTabStripScrollOriginTolerance else { return 0 }
     return windowTabResolvedScrollFadeWidth(stripWidth: stripWidth)
 }
 
