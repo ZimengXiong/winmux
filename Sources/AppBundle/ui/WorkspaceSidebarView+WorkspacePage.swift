@@ -50,6 +50,20 @@ extension WorkspaceSidebarView {
     ) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 6) {
+                if let pinnedActiveWorkspace = pinnedActiveWorkspace(
+                    displayedProjectId: projectId,
+                    pageWorkspaces: workspaces
+                ) {
+                    workspaceSection(
+                        workspace: pinnedActiveWorkspace,
+                        expansionProgress: expansionProgress,
+                        emitsDropTarget: true,
+                        allowsWorkspaceActivation: false,
+                        isPinnedActiveWorkspace: true,
+                        projectContextLabel: projectName(snapshot.activeProjectId),
+                        projectContextColor: projectColor(snapshot.activeProjectId)
+                    )
+                }
                 ForEach(workspaces) { workspace in
                     workspaceSection(
                         workspace: workspace,
@@ -163,6 +177,25 @@ extension WorkspaceSidebarView {
 
     private func projectColor(_ projectId: WorkspaceProjectId) -> Color {
         workspaceSidebarProjectColor(projectId: projectId, configuredHex: projectColorHex(projectId))
+    }
+
+    private func pinnedActiveWorkspace(
+        displayedProjectId: WorkspaceProjectId,
+        pageWorkspaces: [WorkspaceSidebarWorkspaceViewModel]
+    ) -> WorkspaceSidebarWorkspaceViewModel? {
+        guard browsedProjectId != nil,
+              displayedProjectId != snapshot.activeProjectId,
+              !pageWorkspaces.contains(where: { workspaceIsActiveOnTargetMonitor($0) }),
+              let focusedWorkspace = snapshot.workspaces.first(where: { workspaceIsActiveOnTargetMonitor($0) }),
+              workspaceSidebarWorkspaceMatchesScope(
+                focusedWorkspace,
+                selectedScopeId: snapshot.selectedMonitorScopeId,
+                focusedMonitorScopeId: snapshot.focusedMonitorScopeId
+              )
+        else {
+            return nil
+        }
+        return focusedWorkspace
     }
 
     private func workspaceIsActiveOnTargetMonitor(_ workspace: WorkspaceSidebarWorkspaceViewModel) -> Bool {
