@@ -75,20 +75,12 @@ extension WindowTabStripView {
             if abs(tabScrollContentMinX - nextFrame.minX) > 0.5 {
                 tabScrollContentMinX = nextFrame.minX
             }
-            if abs(tabScrollContentMaxX - nextFrame.maxX) > 0.5 {
-                tabScrollContentMaxX = nextFrame.maxX
-            }
         }
         .mask {
-            GeometryReader { proxy in
-                WindowTabStripScrollFadeMask(
-                    leadingFadeWidth: context.leadingFadeWidth(contentMinX: tabScrollContentMinX),
-                    trailingFadeWidth: context.trailingFadeWidth(
-                        contentMaxX: tabScrollContentMaxX,
-                        viewportWidth: proxy.size.width,
-                    ),
-                )
-            }
+            WindowTabStripScrollFadeMask(
+                leadingFadeWidth: context.leadingFadeWidth(contentMinX: tabScrollContentMinX),
+                trailingFadeWidth: context.trailingFadeWidth(contentMinX: tabScrollContentMinX),
+            )
         }
         .simultaneousGesture(tabScrollBackgroundGroupDragGesture(
             for: groupDragWindowId,

@@ -20,6 +20,23 @@ struct WindowTabStripLayoutContext {
         tabWidth + windowTabStripTabSpacing
     }
 
+    var scrollViewportWidth: CGFloat {
+        max(
+            0,
+            width
+                - 16
+                - (windowTabStripReservedGroupHandleWidth() * 2)
+                - windowTabStripTrailingGroupDragGutterWidth
+                - 18,
+        )
+    }
+
+    var scrollContentWidth: CGFloat {
+        CGFloat(strip.tabs.count) * tabWidth
+            + CGFloat(max(strip.tabs.count - 1, 0)) * windowTabStripTabSpacing
+            + windowTabStripContentHorizontalPadding * 2
+    }
+
     var scrollCoordinateSpaceName: String {
         "window-tab-strip-scroll-\(strip.id.hashValue)"
     }
@@ -30,11 +47,11 @@ struct WindowTabStripLayoutContext {
         )
     }
 
-    func trailingFadeWidth(contentMaxX: CGFloat, viewportWidth: CGFloat) -> CGFloat {
+    func trailingFadeWidth(contentMinX: CGFloat) -> CGFloat {
         windowTabTrailingScrollFadeWidth(
             isScrollable: shouldFadeTabScroll,
-            contentMaxX: contentMaxX,
-            viewportWidth: viewportWidth,
+            contentMaxX: contentMinX + scrollContentWidth,
+            viewportWidth: scrollViewportWidth,
             stripWidth: width,
         )
     }
@@ -48,9 +65,6 @@ struct WindowTabStripLayoutContext {
     }
 
     private var shouldFadeTabScroll: Bool {
-        let contentWidth = CGFloat(strip.tabs.count) * tabWidth
-            + CGFloat(max(strip.tabs.count - 1, 0)) * windowTabStripTabSpacing
-            + windowTabStripContentHorizontalPadding * 2
-        return contentWidth > windowTabStripAvailableTabsWidth(stripWidth: width) + 1
+        scrollContentWidth > scrollViewportWidth + 1
     }
 }
