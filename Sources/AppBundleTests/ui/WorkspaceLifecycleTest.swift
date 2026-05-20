@@ -146,6 +146,69 @@ final class WorkspaceLifecycleTest: XCTestCase {
         XCTAssertEqual(userFacingWorkspaces(Workspace.all, focusedWorkspace: focus.workspace), [occupied])
     }
 
+    func testConnectingSecondMonitorCreatesVisibleWorkspaceForDefaultProject() {
+        let main = WorkspaceNamingTestMonitor(
+            monitorAppKitNsScreenScreensId: 1,
+            name: "Main",
+            rect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            isMain: true,
+        )
+        setMonitorsForTests([main])
+        let workspace = Workspace.get(byName: "1")
+        workspace.markAsAutomaticallyNamed()
+        XCTAssertTrue(main.setActiveWorkspace(workspace))
+        Workspace.reconcileWorkspaceState()
+
+        let secondary = WorkspaceNamingTestMonitor(
+            monitorAppKitNsScreenScreensId: 2,
+            name: "Secondary",
+            rect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            isMain: false,
+        )
+        setMonitorsForTests([main, secondary])
+
+        Workspace.reconcileWorkspaceState()
+
+        XCTAssertTrue(main.activeWorkspace === workspace)
+        XCTAssertNotNil(secondary.activeWorkspace)
+        XCTAssertFalse(secondary.activeWorkspace === workspace)
+        XCTAssertEqual(secondary.activeWorkspace.projectId, workspaceProjectDefaultId)
+        XCTAssertTrue(secondary.activeWorkspace.isOrdinaryEmptySlot)
+        XCTAssertEqual(Workspace.all.filter { $0.projectId == workspaceProjectDefaultId && !$0.isArchived }.count, 2)
+    }
+
+    func testEachMonitorKeepsAWorkspaceWhenWorkspacesSpanProjects() {
+        let main = WorkspaceNamingTestMonitor(
+            monitorAppKitNsScreenScreensId: 1,
+            name: "Main",
+            rect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            isMain: true,
+        )
+        let secondary = WorkspaceNamingTestMonitor(
+            monitorAppKitNsScreenScreensId: 2,
+            name: "Secondary",
+            rect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            isMain: false,
+        )
+        setMonitorsForTests([main, secondary])
+        let defaultWorkspace = Workspace.get(byName: "default")
+        XCTAssertTrue(main.setActiveWorkspace(defaultWorkspace))
+        let project = createWorkspaceProject()
+        let projectWorkspace = createBlankWorkspace(projectId: project.id, monitor: secondary)
+        XCTAssertTrue(secondary.setActiveWorkspace(projectWorkspace))
+
+        Workspace.reconcileWorkspaceState()
+
+        XCTAssertTrue(main.activeWorkspace === defaultWorkspace)
+        XCTAssertTrue(secondary.activeWorkspace === projectWorkspace)
+        XCTAssertEqual(defaultWorkspace.projectId, workspaceProjectDefaultId)
+        XCTAssertEqual(projectWorkspace.projectId, project.id)
+    }
+
     private func emptyUserFacingWorkspaces(in scope: WorkspaceScope) -> [Workspace] {
         userFacingWorkspaces(Workspace.all, focusedWorkspace: focus.workspace)
             .filter { $0.scope == scope && $0.isOrdinaryEmptySlot }

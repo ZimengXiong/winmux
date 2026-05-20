@@ -11,6 +11,8 @@ struct WorkspaceSidebarWorkspaceSection: View {
     let isFromOtherDisplay: Bool
     let isInUseOnOtherDisplay: Bool
     let isPinnedActiveWorkspace: Bool
+    let projectContextLabel: String?
+    let projectContextColor: Color?
     @Binding var activeInUseOverrideWorkspaceName: String?
     let actions: WorkspaceSidebarActions
 

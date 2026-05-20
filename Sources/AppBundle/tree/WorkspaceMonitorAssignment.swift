@@ -78,7 +78,12 @@ func rearrangeWorkspacesOnMonitors() {
 
     let newMonitors = monitors.map(DisplayLaneId.init)
     var newMonitorToOldMonitorMapping: [DisplayLaneId: DisplayLaneId] = [:]
+    for newMonitor in newMonitors where oldVisibleMonitors.contains(newMonitor) {
+        check(oldVisibleMonitors.remove(newMonitor) != nil)
+        newMonitorToOldMonitorMapping[newMonitor] = newMonitor
+    }
     for newMonitor in newMonitors {
+        if newMonitorToOldMonitorMapping[newMonitor] != nil { continue }
         if let oldMonitor = oldVisibleMonitors.minBy({ ($0.topLeftCorner - newMonitor.topLeftCorner).vectorLength }) {
             check(oldVisibleMonitors.remove(oldMonitor) != nil)
             newMonitorToOldMonitorMapping[newMonitor] = oldMonitor

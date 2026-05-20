@@ -58,7 +58,9 @@ extension WorkspaceSidebarView {
                         workspace: pinnedActiveWorkspace,
                         expansionProgress: expansionProgress,
                         isInteractive: isInteractive,
-                        isPinnedActiveWorkspace: true
+                        isPinnedActiveWorkspace: true,
+                        projectContextLabel: "Current",
+                        projectContextColor: projectColor(snapshot.selectedProjectId)
                     )
                 }
                 ForEach(workspaces) { workspace in
@@ -66,7 +68,9 @@ extension WorkspaceSidebarView {
                         workspace: workspace,
                         expansionProgress: expansionProgress,
                         isInteractive: isInteractive,
-                        isPinnedActiveWorkspace: false
+                        isPinnedActiveWorkspace: false,
+                        projectContextLabel: browsedProjectId != nil && projectId != snapshot.selectedProjectId ? "Selected" : nil,
+                        projectContextColor: browsedProjectId != nil && projectId != snapshot.selectedProjectId ? projectColor(projectId) : nil
                     )
                 }
                 if workspaceSidebarShowsCreateWorkspace(selectedScopeId: snapshot.selectedMonitorScopeId) && browsedProjectId == nil {
@@ -121,7 +125,9 @@ extension WorkspaceSidebarView {
         workspace: WorkspaceSidebarWorkspaceViewModel,
         expansionProgress: CGFloat,
         isInteractive: Bool,
-        isPinnedActiveWorkspace: Bool
+        isPinnedActiveWorkspace: Bool,
+        projectContextLabel: String? = nil,
+        projectContextColor: Color? = nil
     ) -> some View {
         let isFromOtherDisplay = snapshot.selectedMonitorScopeId == workspaceSidebarAllScopeId &&
             workspace.monitorScopeId != snapshot.focusedMonitorScopeId &&
@@ -139,9 +145,19 @@ extension WorkspaceSidebarView {
             isFromOtherDisplay: isFromOtherDisplay,
             isInUseOnOtherDisplay: isInUseOnOtherDisplay,
             isPinnedActiveWorkspace: isPinnedActiveWorkspace,
+            projectContextLabel: projectContextLabel,
+            projectContextColor: projectContextColor,
             activeInUseOverrideWorkspaceName: $activeInUseOverrideWorkspaceName,
             actions: actions,
         )
+    }
+
+    private func projectColorHex(_ projectId: WorkspaceProjectId) -> String? {
+        snapshot.projects.first { $0.id == projectId }?.colorHex
+    }
+
+    private func projectColor(_ projectId: WorkspaceProjectId) -> Color {
+        workspaceSidebarProjectColor(projectId: projectId, configuredHex: projectColorHex(projectId))
     }
 
     private func pinnedActiveWorkspace(
