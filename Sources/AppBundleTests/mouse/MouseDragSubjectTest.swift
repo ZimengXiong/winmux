@@ -9,27 +9,23 @@ final class MouseDragSubjectTest: XCTestCase {
         XCTAssertFalse(shouldPromoteWindowDragToTabGroupDrag(isOptionPressed: true, isTabbedWindow: false))
     }
 
-    func testSameWorkspaceSurfaceIntentRulesInUnmanagedMode() {
+    func testSameWorkspaceSurfaceIntentIsAlwaysAllowed() {
         XCTAssertTrue(shouldAllowSameWorkspaceWindowSurfaceIntent(
-            enableWindowManagement: false,
             subject: .window,
             detachOrigin: .window,
             isOptionPressed: true,
         ))
-        XCTAssertFalse(shouldAllowSameWorkspaceWindowSurfaceIntent(
-            enableWindowManagement: false,
+        XCTAssertTrue(shouldAllowSameWorkspaceWindowSurfaceIntent(
             subject: .window,
             detachOrigin: .window,
             isOptionPressed: false,
         ))
         XCTAssertTrue(shouldAllowSameWorkspaceWindowSurfaceIntent(
-            enableWindowManagement: false,
             subject: .window,
             detachOrigin: .tabStrip,
             isOptionPressed: false,
         ))
-        XCTAssertFalse(shouldAllowSameWorkspaceWindowSurfaceIntent(
-            enableWindowManagement: false,
+        XCTAssertTrue(shouldAllowSameWorkspaceWindowSurfaceIntent(
             subject: .group,
             detachOrigin: .window,
             isOptionPressed: true,

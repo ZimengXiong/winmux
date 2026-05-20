@@ -156,18 +156,14 @@ func shouldPromoteWindowDragToTabGroupDrag(isOptionPressed: Bool, isTabbedWindow
 }
 
 func shouldAllowSameWorkspaceWindowSurfaceIntent(
-    enableWindowManagement: Bool,
     subject: WindowDragSubject,
     detachOrigin: TabDetachOrigin,
-    isOptionPressed: Bool,
+    isOptionPressed _: Bool,
 ) -> Bool {
-    if enableWindowManagement {
-        return true
-    }
     if detachOrigin == .tabStrip {
         return true
     }
-    return subject == .window && isOptionPressed
+    return true
 }
 
 @MainActor
@@ -248,7 +244,6 @@ func beginWindowMoveWithMouseSessionIfNeeded(
 func cancelManipulatedWithMouseState() {
     WindowMouseInteractionDriver.shared.stop()
     cancelWindowDragActualRectRefresh()
-    clearPendingUnmanagedWindowSnap()
     clearDraggedWindowAnchorRect(for: currentlyManipulatedWithMouseWindowId)
     WindowDragFrameGate.shared.resetAll()
     setCurrentMouseManipulationKind(.none)

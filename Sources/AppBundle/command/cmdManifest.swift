@@ -34,7 +34,6 @@ extension CmdArgs {
             case let args as MoveWorkspaceToMonitorCmdArgs: MoveWorkspaceToMonitorCommand(args: args)
             case let args as ReloadConfigCmdArgs: ReloadConfigCommand(args: args)
             case let args as ResizeCmdArgs: ResizeCommand(args: args)
-            case let args as SnapCmdArgs: SnapCommand(args: args)
             case let args as SplitCmdArgs: SplitCommand(args: args)
             case let args as StackWithCmdArgs: StackWithCommand(args: args)
             case is SubscribeCmdArgs: die("subscribe is handled separately")

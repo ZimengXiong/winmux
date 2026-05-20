@@ -12,7 +12,6 @@ extension ShortcutSettingsModel {
     enum Category: String, CaseIterable, Identifiable {
         case managed = "Managed"
         case common = "Common"
-        case unmanaged = "Unmanaged"
 
         var id: String { rawValue }
     }

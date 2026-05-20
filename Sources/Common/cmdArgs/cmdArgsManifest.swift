@@ -36,7 +36,6 @@ public enum CmdKind: String, CaseIterable, Equatable, Sendable {
     case stackWith = "stack-with"
     case subscribe
     case summonWorkspace = "summon-workspace"
-    case snap
     case swap
     case triggerBinding = "trigger-binding"
     case volume
@@ -114,8 +113,6 @@ func initSubcommands() -> [String: any SubCommandParserProtocol] {
                 result[kind.rawValue] = SubCommandParser(ReloadConfigCmdArgs.init)
             case .resize:
                 result[kind.rawValue] = SubCommandParser(parseResizeCmdArgs)
-            case .snap:
-                result[kind.rawValue] = SubCommandParser(parseSnapCmdArgs)
             case .split:
                 result[kind.rawValue] = SubCommandParser(parseSplitCmdArgs)
             case .stackWith:

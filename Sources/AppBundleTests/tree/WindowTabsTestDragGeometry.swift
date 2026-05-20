@@ -4,9 +4,8 @@ import CoreGraphics
 import XCTest
 
 @MainActor extension WindowTabsTest {
-    func testUnmanagedTabGroupTabBarUsesActiveWindowFrame() {
+    func testTabGroupTabBarUsesAppliedContainerFrame() {
         setUpWorkspacesForTests()
-        config.enableWindowManagement = false
         let workspace = Workspace.get(byName: "tabs")
         let tabGroup = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
         let active = TestWindow.new(
@@ -21,14 +20,14 @@ import XCTest
         let tabBarRect = tabGroup.windowTabBarRect.orDie()
         let groupFrameRect = tabGroup.windowTabGroupFrameRect.orDie()
 
-        XCTAssertEqual(tabBarRect.topLeftX, 40)
-        XCTAssertEqual(tabBarRect.topLeftY, 60)
-        XCTAssertEqual(tabBarRect.width, 500)
+        XCTAssertEqual(tabBarRect.topLeftX, 0)
+        XCTAssertEqual(tabBarRect.topLeftY, 0)
+        XCTAssertEqual(tabBarRect.width, 240)
         XCTAssertEqual(tabBarRect.height, resolvedWindowTabBarHeight())
-        XCTAssertEqual(groupFrameRect.topLeftX, 40)
-        XCTAssertEqual(groupFrameRect.topLeftY, 60)
-        XCTAssertEqual(groupFrameRect.width, 500)
-        XCTAssertEqual(groupFrameRect.height, 300)
+        XCTAssertEqual(groupFrameRect.topLeftX, 0)
+        XCTAssertEqual(groupFrameRect.topLeftY, 0)
+        XCTAssertEqual(groupFrameRect.width, 240)
+        XCTAssertEqual(groupFrameRect.height, 180)
     }
 
     @MainActor

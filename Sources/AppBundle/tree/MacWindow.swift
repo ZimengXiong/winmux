@@ -211,8 +211,6 @@ final class MacWindow: Window {
             // Tiling windows should be unhidden with layoutRecursive anyway
             case .floatingWindow:
                 restoreToSavedWorkspacePosition()
-            case .tiling where !config.enableWindowManagement:
-                restoreToSavedWorkspacePosition()
             case .macosNativeFullscreenWindow, .macosNativeHiddenAppWindow, .macosNativeMinimizedWindow,
                  .macosPopupWindow, .tiling, .rootTilingContainer, .shimContainerRelation: break
         }

@@ -340,42 +340,12 @@ import XCTest
     }
 
     @MainActor
-    func testUnmanagedSameWorkspaceBodyMoveHintIsSuppressed() {
+    func testDetachedTabStillOffersTabReentryHint() {
         setUpWorkspacesForTests()
         clearPendingWindowDragIntent()
-        let previousValue = config.enableWindowManagement
-        config.enableWindowManagement = false
-        defer {
-            config.enableWindowManagement = previousValue
-            clearPendingWindowDragIntent()
-        }
-
-        let workspace = Workspace.get(byName: "tabs")
-        XCTAssertTrue(workspace.focusWorkspace())
-        let root = workspace.rootTilingContainer
-        let source = TestWindow.new(id: 1, parent: root)
-        let target = TestWindow.new(id: 2, parent: root)
-        source.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 200, height: 220)
-        target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 220, topLeftY: 0, width: 200, height: 220)
-
-        XCTAssertFalse(updatePendingWindowDragIntent(
-            sourceWindow: source,
-            mouseLocation: target.swapDropZoneRect.orDie().center,
-            subject: .window,
-            detachOrigin: .window,
-        ))
-    }
-
-    @MainActor
-    func testUnmanagedDetachedTabStillOffersTabReentryHint() {
-        setUpWorkspacesForTests()
-        clearPendingWindowDragIntent()
-        let previousWindowManagement = config.enableWindowManagement
         let previousWindowTabs = config.windowTabs.enabled
-        config.enableWindowManagement = false
         config.windowTabs.enabled = true
         defer {
-            config.enableWindowManagement = previousWindowManagement
             config.windowTabs.enabled = previousWindowTabs
             clearPendingWindowDragIntent()
         }

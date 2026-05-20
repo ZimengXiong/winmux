@@ -102,17 +102,7 @@ extension ConfigTest {
         ])
     }
 
-    func testParseEnableWindowManagement() {
-        let (parsed, errors) = parseConfig(
-            """
-            enable-window-management = false
-            """,
-        )
-        assertEquals(errors, [])
-        XCTAssertFalse(parsed.enableWindowManagement)
-    }
-
-    func testParseRectangleShortcutsPresetSeedsMainMode() {
+    func testParseRectangleShortcutsPresetIsRemoved() {
         let (parsed, errors) = parseConfig(
             """
             shortcuts-preset = 'rectangle'
@@ -120,22 +110,14 @@ extension ConfigTest {
                 alt-h = 'focus left'
             """,
         )
-        assertEquals(errors, [])
+        assertEquals(errors.descriptions, [
+            "shortcuts-preset: The 'rectangle' shortcuts preset has been removed",
+        ])
         XCTAssertEqual(parsed.shortcutsPreset, .rectangle)
-        XCTAssertNotNil(parsed.modes[mainModeId])
         XCTAssertNotNil(parsed.modes["foo"])
-
-        let leftBinding = HotkeyBinding(.control.union(.option), .leftArrow, [
-            SnapCommand(args: SnapCmdArgs(rawArgs: [], action: .leftHalf)),
-        ])
-        let maximizeBinding = HotkeyBinding(.control.union(.option), .return, [
-            SnapCommand(args: SnapCmdArgs(rawArgs: [], action: .maximize)),
-        ])
-        assertEquals(parsed.modes[mainModeId]?.bindings[leftBinding.descriptionWithKeyCode], leftBinding)
-        assertEquals(parsed.modes[mainModeId]?.bindings[maximizeBinding.descriptionWithKeyCode], maximizeBinding)
     }
 
-    func testRectangleShortcutsPresetDoesNotOverrideExplicitBindings() {
+    func testRemovedRectangleShortcutsPresetDoesNotOverrideExplicitBindings() {
         let (parsed, errors) = parseConfig(
             """
             shortcuts-preset = 'rectangle'
@@ -143,14 +125,12 @@ extension ConfigTest {
                 ctrl-alt-left = 'focus left'
             """,
         )
-        assertEquals(errors, [])
+        assertEquals(errors.descriptions, [
+            "shortcuts-preset: The 'rectangle' shortcuts preset has been removed",
+        ])
 
         let explicitBinding = HotkeyBinding(.control.union(.option), .leftArrow, [FocusCommand.new(direction: .left)])
-        let seededBinding = HotkeyBinding(.control.union(.option), .rightArrow, [
-            SnapCommand(args: SnapCmdArgs(rawArgs: [], action: .rightHalf)),
-        ])
         assertEquals(parsed.modes[mainModeId]?.bindings[explicitBinding.descriptionWithKeyCode], explicitBinding)
-        assertEquals(parsed.modes[mainModeId]?.bindings[seededBinding.descriptionWithKeyCode], seededBinding)
     }
 
     func testParseOnWindowDetected() {

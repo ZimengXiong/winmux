@@ -8,7 +8,6 @@ extension WindowMouseInteractionDriver {
               let sourceWindow = Window.get(byId: session.windowId)
         else {
             clearPendingWindowDragIntent()
-            clearPendingUnmanagedWindowSnap()
             stop()
             return
         }
@@ -27,20 +26,14 @@ extension WindowMouseInteractionDriver {
         )
         guard shouldProcess else { return }
 
-        if config.enableWindowManagement {
-            renderManagedMoveFrame(sourceWindow: sourceWindow, mouseLocation: mouse, session: session)
-        } else {
-            renderUnmanagedMoveFrame(sourceWindow: sourceWindow, mouseLocation: mouse, session: session)
-        }
+        renderManagedMoveFrame(sourceWindow: sourceWindow, mouseLocation: mouse, session: session)
     }
 
     func renderManagedMoveFrame(sourceWindow: Window, mouseLocation: CGPoint, session: MoveSession) {
         switch sourceWindow.parent?.cases {
             case .workspace:
                 moveFloatingWindowWithMouse(sourceWindow)
-                clearPendingUnmanagedWindowSnap()
             case .tilingContainer:
-                clearPendingUnmanagedWindowSnap()
                 _ = updatePendingWindowDragIntent(
                     sourceWindow: sourceWindow,
                     mouseLocation: mouseLocation,
@@ -50,7 +43,6 @@ extension WindowMouseInteractionDriver {
             case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer,
                  .macosPopupWindowsContainer, .macosHiddenAppsWindowsContainer, nil:
                 clearPendingWindowDragIntent()
-                clearPendingUnmanagedWindowSnap()
         }
     }
 }

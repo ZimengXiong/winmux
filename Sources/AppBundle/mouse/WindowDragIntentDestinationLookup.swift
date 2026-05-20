@@ -65,16 +65,14 @@ private func currentWindowSurfaceDestinationIfAllowed(
     targetWorkspace: Workspace,
     sourceWorkspace: Workspace?,
 ) -> WindowDragIntentDestination? {
-    let isOptionPressed = currentSessionModifierFlags().contains(.maskAlternate)
     let canOfferWindowSurfaceIntent = if targetWorkspace == sourceWorkspace {
         shouldAllowSameWorkspaceWindowSurfaceIntent(
-            enableWindowManagement: config.enableWindowManagement,
             subject: subject,
             detachOrigin: detachOrigin,
-            isOptionPressed: isOptionPressed,
+            isOptionPressed: currentSessionModifierFlags().contains(.maskAlternate),
         )
     } else {
-        config.enableWindowManagement
+        true
     }
     guard canOfferWindowSurfaceIntent else { return nil }
     return currentWindowSurfaceDestination(

@@ -55,7 +55,6 @@ extension Command {
                  is MoveNodeToWorkspaceCommand,
                  is MoveWorkspaceToMonitorCommand,
                  is ResizeCommand,
-                 is SnapCommand,
                  is SplitCommand,
                  is StackWithCommand,
                  is SummonWorkspaceCommand,

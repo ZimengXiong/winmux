@@ -34,7 +34,6 @@ public func openShortcutSettingsWindow(_ openWindow: OpenWindowAction) {
 enum SettingsSidebarItem: Hashable, Identifiable {
     case managedShortcuts
     case commonShortcuts
-    case unmanagedShortcuts
     case general
     case advanced
 
@@ -44,7 +43,6 @@ enum SettingsSidebarItem: Hashable, Identifiable {
         switch self {
             case .managedShortcuts: "Managed Shortcuts"
             case .commonShortcuts: "Common Shortcuts"
-            case .unmanagedShortcuts: "Unmanaged Shortcuts"
             case .general: "General"
             case .advanced: "Advanced"
         }
@@ -54,7 +52,6 @@ enum SettingsSidebarItem: Hashable, Identifiable {
         switch self {
             case .managedShortcuts: "keyboard"
             case .commonShortcuts: "keyboard"
-            case .unmanagedShortcuts: "keyboard"
             case .general: "gearshape"
             case .advanced: "slider.horizontal.3"
         }
@@ -74,9 +71,6 @@ struct ShortcutSettingsView: View {
                     }
                     NavigationLink(value: SettingsSidebarItem.commonShortcuts) {
                         Label(SettingsSidebarItem.commonShortcuts.label, systemImage: SettingsSidebarItem.commonShortcuts.icon)
-                    }
-                    NavigationLink(value: SettingsSidebarItem.unmanagedShortcuts) {
-                        Label(SettingsSidebarItem.unmanagedShortcuts.label, systemImage: SettingsSidebarItem.unmanagedShortcuts.icon)
                     }
                 }
 
@@ -98,8 +92,6 @@ struct ShortcutSettingsView: View {
                         ShortcutCategoryView(model: model, category: .managed)
                     case .commonShortcuts:
                         ShortcutCategoryView(model: model, category: .common)
-                    case .unmanagedShortcuts:
-                        ShortcutCategoryView(model: model, category: .unmanaged)
                     case .general:
                         ShortcutGeneralView(model: model)
                     case .advanced:
@@ -164,11 +156,6 @@ struct ShortcutSectionView: View {
             } else if section.id == "managed-splits" {
                 CompassPad(model: model, title: "Split", prefix: "split") {
                     SplitDemoView()
-                }
-            } else if section.id == "unmanaged" {
-                HStack {
-                    SnapGridPad(model: model)
-                    Spacer()
                 }
             } else if section.id == "workspaces" {
                 WorkspaceShortcutSectionView(model: model)

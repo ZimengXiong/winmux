@@ -17,12 +17,6 @@ extension TilingContainer {
 
     @MainActor
     var windowTabBarReferenceRect: Rect? {
-        if config.enableWindowManagement {
-            return lastAppliedLayoutPhysicalRect
-        }
-        return tabActiveWindow?.lastKnownActualRect ??
-            mostRecentWindowRecursive?.lastKnownActualRect ??
-            anyLeafWindowRecursive?.lastKnownActualRect ??
-            lastAppliedLayoutPhysicalRect
+        lastAppliedLayoutPhysicalRect
     }
 }

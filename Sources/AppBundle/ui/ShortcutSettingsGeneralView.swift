@@ -5,7 +5,6 @@ import SwiftUI
 
 struct ShortcutGeneralView: View {
     @ObservedObject var model: ShortcutSettingsModel
-    @State private var enableWindowManagement = config.enableWindowManagement
     @State private var displayStyle = ExperimentalUISettings().displayStyle
     @State private var workspaceSidebarMenuBarReserveHeight = config.workspaceSidebar.menuBarReserveHeight
     @State private var projectDeletionAction = config.workspaceSidebar.projectDeletionAction
@@ -15,24 +14,6 @@ struct ShortcutGeneralView: View {
             VStack(alignment: .leading, spacing: 24) {
                 GeneralSection(title: "Management") {
                     VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            Text("Manage Windows")
-                            Spacer()
-                            Toggle("", isOn: $enableWindowManagement)
-                                .toggleStyle(.switch)
-                                .labelsHidden()
-                                .onChange(of: enableWindowManagement) { newValue in
-                                    toggleManageWindows(enabled: newValue)
-                                }
-                        }
-                        
-                        Text("Manage windows should be turned on. Manage windows turned off is experimental, in beta, and is not supported.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        Divider()
-
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Deleting projects")
@@ -118,17 +99,6 @@ struct ShortcutGeneralView: View {
                 }
             }
             .padding(24)
-        }
-    }
-
-    private func toggleManageWindows(enabled: Bool) {
-        Task { @MainActor in
-            do {
-                let targetUrl = try persistWindowManagementPreference(enabled: enabled)
-                _ = try await reloadConfig(forceConfigUrl: targetUrl)
-            } catch {
-                model.errorMessage = error.localizedDescription
-            }
         }
     }
 

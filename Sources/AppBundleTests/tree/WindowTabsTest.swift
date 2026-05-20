@@ -409,23 +409,4 @@ final class WindowTabsTest: XCTestCase {
         XCTAssertTrue(swapDropZone.contains(swapDropZone.center))
     }
 
-    @MainActor
-    func testUnmanagedLayoutKeepsVisibleWindowFrame() async throws {
-        setUpWorkspacesForTests()
-        config.enableWindowManagement = false
-        let workspace = Workspace.get(byName: "tabs")
-        let window = TestWindow.new(
-            id: 1,
-            parent: workspace.rootTilingContainer,
-            rect: Rect(topLeftX: 50, topLeftY: 70, width: 320, height: 240),
-        )
-
-        try await workspace.layoutWorkspace()
-
-        let rect = try await window.getAxRect().orDie()
-        XCTAssertEqual(rect.topLeftX, 50)
-        XCTAssertEqual(rect.topLeftY, 70)
-        XCTAssertEqual(rect.width, 320)
-        XCTAssertEqual(rect.height, 240)
-    }
 }

@@ -8,7 +8,6 @@ extension WindowMouseInteractionDriver {
         if isNewSession {
             resetResizeTrackingState()
             clearPendingWindowDragIntent()
-            clearPendingUnmanagedWindowSnap()
         }
         resizeSession = session
         currentlyManipulatedWithMouseWindowId = windowId

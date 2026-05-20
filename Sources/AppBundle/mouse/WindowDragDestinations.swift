@@ -23,10 +23,6 @@ func windowSurfaceDestination(
     ) {
         return reentryDestination
     }
-    guard config.enableWindowManagement else {
-        return nil
-    }
-
     let resolvedIntent = resolveWindowDropIntent(
         sourceWindow: sourceWindow,
         targetWindow: targetWindow,

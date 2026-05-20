@@ -51,14 +51,12 @@ func refreshPendingWindowDragIntentFromGlobalMouseDrag() {
     WorkspaceSidebarPanel.shared.refreshForCurrentDragIfNeeded()
     guard isLeftMouseButtonDown, getCurrentMouseManipulationKind() == .move else {
         clearPendingWindowDragIntent()
-        clearPendingUnmanagedWindowSnap()
         return
     }
     guard let windowId = currentlyManipulatedWithMouseWindowId,
           Window.get(byId: windowId) != nil
     else {
         clearPendingWindowDragIntent()
-        clearPendingUnmanagedWindowSnap()
         cancelManipulatedWithMouseState()
         return
     }

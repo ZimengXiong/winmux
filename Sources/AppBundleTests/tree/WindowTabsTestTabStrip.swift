@@ -4,7 +4,7 @@ import CoreGraphics
 import XCTest
 
 @MainActor extension WindowTabsTest {
-    func testUnmanagedCrossWorkspaceMoveHintStillWorks() {
+    func testCrossWorkspaceMoveHintStillWorks() {
         setUpWorkspacesForTests()
         clearPendingWindowDragIntent()
         let main = WindowTabsTestMonitor(
@@ -22,12 +22,7 @@ import XCTest
             isMain: false,
         )
         setMonitorsForTests([main, secondary])
-        let previousValue = config.enableWindowManagement
-        config.enableWindowManagement = false
-        defer {
-            config.enableWindowManagement = previousValue
-            clearPendingWindowDragIntent()
-        }
+        defer { clearPendingWindowDragIntent() }
 
         let sourceWorkspace = Workspace.get(byName: "source")
         XCTAssertTrue(sourceWorkspace.focusWorkspace())
@@ -75,31 +70,6 @@ import XCTest
             debugPendingWindowDragIntentSummary()?.kind,
             .stackSplit(targetWindowId: target.windowId, position: .left)
         )
-    }
-
-    @MainActor
-    func testClearingMissingUnmanagedPreviewDoesNotHideManagedDragPreview() {
-        setUpWorkspacesForTests()
-        clearPendingWindowDragIntent()
-        clearPendingUnmanagedWindowSnap()
-        config.windowTabs.enabled = true
-        let workspace = Workspace.get(byName: "tabs")
-        XCTAssertTrue(workspace.focusWorkspace())
-        let root = workspace.rootTilingContainer
-        let source = TestWindow.new(id: 1, parent: root)
-        let target = TestWindow.new(id: 2, parent: root)
-        root.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 220)
-        source.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 200, height: 220)
-        target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 220, topLeftY: 0, width: 200, height: 220)
-        let mouseLocation = target.tabDropInteractionRect.orDie().center
-
-        XCTAssertTrue(updatePendingWindowDragIntent(sourceWindow: source, mouseLocation: mouseLocation))
-        XCTAssertTrue(WindowDropIntentOverlayPanelController.shared.isVisible)
-
-        clearPendingUnmanagedWindowSnap()
-
-        XCTAssertTrue(WindowDropIntentOverlayPanelController.shared.isVisible)
-        clearPendingWindowDragIntent()
     }
 
     @MainActor

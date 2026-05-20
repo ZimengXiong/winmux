@@ -46,15 +46,6 @@ WinMux has 6 intent (hover-hint) zones that make it easy to move windows without
 2. Form Tab Group (drag over top of a window)
 3. Swap positions with window (drag over center)
 
-## Unmanaged Mode (WIP)
-<a href="cornersnapping.mp4">
-  <img src="cornersnapping.gif" width="800" alt="Unmanaged mode corner snapping demo">
-</a>
-
-In unmanaged mode, WinMux does not perform tiling. It still supports tab groups and the sidebar. In lieu of tiling, WinMux supports traditional corner snapping.
-
-Unmanaged mode can be toggled from the menu bar or via settings.
-
 ### Settings
 ![](settings.gif)
 
@@ -185,8 +176,6 @@ You can report issues via `Menu Bar > Report an Issue on Github`. Please conside
 ## Roadmap
 - [x] Tab groups
 - [x] Sidebar
-- [x] Window Snapping
-- [ ] Tab groups working in unmanaged mode
 - [ ] Workspace renaming
 - [ ] Sidebar customization/plugins system
 - [ ] Support for Yabai

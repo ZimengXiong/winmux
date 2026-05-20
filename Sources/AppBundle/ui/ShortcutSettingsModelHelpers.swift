@@ -69,23 +69,6 @@ func buildShortcutSections() -> [ShortcutSettingsModel.Section] {
             summary: "Use one modifier pattern for workspace numbers, then override specific workspaces only when needed.",
             actions: [],
         ),
-        .init(
-            id: "unmanaged",
-            category: .unmanaged,
-            title: "Unmanaged Windows",
-            summary: "These only apply when Manage Windows is turned off.",
-            actions: [
-                shortcutAction(id: "snap-left-half", title: "Snap Left Half", command: "snap left-half"),
-                shortcutAction(id: "snap-right-half", title: "Snap Right Half", command: "snap right-half"),
-                shortcutAction(id: "snap-top-half", title: "Snap Top Half", command: "snap top-half"),
-                shortcutAction(id: "snap-bottom-half", title: "Snap Bottom Half", command: "snap bottom-half"),
-                shortcutAction(id: "snap-top-left", title: "Snap Top Left", command: "snap top-left"),
-                shortcutAction(id: "snap-top-right", title: "Snap Top Right", command: "snap top-right"),
-                shortcutAction(id: "snap-bottom-left", title: "Snap Bottom Left", command: "snap bottom-left"),
-                shortcutAction(id: "snap-bottom-right", title: "Snap Bottom Right", command: "snap bottom-right"),
-                shortcutAction(id: "snap-maximize", title: "Snap Maximize", command: "snap maximize"),
-            ],
-        ),
     ]
 }
 

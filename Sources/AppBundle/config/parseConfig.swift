@@ -62,7 +62,6 @@ private let configParser: [String: any ParserProtocol<Config>] = [
     "start-at-login": Parser(\.startAtLogin, parseBool),
     "auto-reload-config": Parser(\.autoReloadConfig, parseBool),
     "automatically-unhide-macos-hidden-apps": Parser(\.automaticallyUnhideMacosHiddenApps, parseBool),
-    "enable-window-management": Parser(\.enableWindowManagement, parseBool),
     "shortcuts-preset": Parser(\.shortcutsPreset, parseShortcutsPreset),
     "tab-group-padding": Parser(\.tabGroupPadding, parseInt),
     persistentWorkspacesKey: Parser(\.persistentWorkspaces, parsePersistentWorkspaces),
@@ -254,43 +253,10 @@ private func parseShortcutsPreset(_ raw: TOMLValueConvertible, _ backtrace: Toml
         }
 }
 
-private let rectangleShortcutsPresetBindings: [(String, SnapCmdArgs.SnapAction)] = [
-    ("ctrl-alt-left", .leftHalf),
-    ("ctrl-alt-right", .rightHalf),
-    ("ctrl-alt-up", .topHalf),
-    ("ctrl-alt-down", .bottomHalf),
-    ("ctrl-alt-u", .topLeft),
-    ("ctrl-alt-i", .topRight),
-    ("ctrl-alt-j", .bottomLeft),
-    ("ctrl-alt-k", .bottomRight),
-    ("ctrl-alt-enter", .maximize),
-    ("ctrl-alt-d", .firstThird),
-    ("ctrl-alt-e", .firstTwoThirds),
-    ("ctrl-alt-f", .centerThird),
-    ("ctrl-alt-t", .lastTwoThirds),
-    ("ctrl-alt-g", .lastThird),
-]
-
 @MainActor
 private func applyShortcutsPreset(_ config: inout Config, mapping: [String: Key], errors: inout [TomlParseError]) {
     guard config.shortcutsPreset == .rectangle else { return }
-
-    var mainMode = config.modes[mainModeId] ?? .zero
-    for (bindingNotation, action) in rectangleShortcutsPresetBindings {
-        guard let (modifiers, key) = parseBinding(bindingNotation, .rootKey("shortcuts-preset"), mapping)
-            .getOrNil(appendErrorTo: &errors)
-        else { continue }
-        let binding = HotkeyBinding(
-            modifiers,
-            key,
-            [SnapCommand(args: SnapCmdArgs(rawArgs: [], action: action))],
-            descriptionWithKeyNotation: bindingNotation,
-        )
-        if mainMode.bindings[binding.descriptionWithKeyCode] == nil {
-            mainMode.bindings[binding.descriptionWithKeyCode] = binding
-        }
-    }
-    config.modes[mainModeId] = mainMode
+    errors += [.semantic(.rootKey("shortcuts-preset"), "The 'rectangle' shortcuts preset has been removed")]
 }
 
 private func skipParsing<T: Sendable>(_ value: T) -> @Sendable (_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace) -> ParsedToml<T> {

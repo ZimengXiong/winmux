@@ -2,8 +2,7 @@ import AppKit
 
 extension WindowMouseInteractionDriver {
     func makePendingResizeCandidate() async -> PendingResizeCandidate? {
-        guard config.enableWindowManagement,
-              getCurrentMouseManipulationKind() == .none,
+        guard getCurrentMouseManipulationKind() == .none,
               let window = try? await getNativeFocusedWindow(),
               window.parent is TilingContainer,
               !window.isHiddenInCorner

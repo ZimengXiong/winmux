@@ -27,30 +27,6 @@ func movedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutableR
 
 @MainActor
 private func moveWithMouse(_ window: Window) async throws { // todo cover with tests
-    if !config.enableWindowManagement {
-        let subject = resolvedMouseDragSubject(for: window)
-        let nativeAnchorRect = try await window.getAxRect()
-        let anchorRect =
-            resolvedDraggedWindowAnchorRect(for: window, subject: subject) ??
-            nativeAnchorRect ??
-            window.lastKnownActualRect ??
-            window.lastAppliedLayoutPhysicalRect
-        beginWindowMoveWithMouseSessionIfNeeded(
-            windowId: window.windowId,
-            subject: subject,
-            detachOrigin: .window,
-            startedInSidebar: false,
-            anchorRect: anchorRect,
-            refreshActualRects: subject == .window,
-        )
-        WindowMouseInteractionDriver.shared.startMove(
-            windowId: window.windowId,
-            subject: subject,
-            detachOrigin: .window,
-            startedInSidebar: false,
-        )
-        return
-    }
     syncClosedWindowsCacheToCurrentWorld()
     guard let parent = window.parent else { return }
     switch parent.cases {

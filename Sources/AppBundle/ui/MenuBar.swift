@@ -22,10 +22,6 @@ private let winmuxNewIssueURL = "https://github.com/zimengxiong/winmux/issues/ne
                 }
             }
         }.keyboardShortcut("E", modifiers: .command)
-        Toggle("Manage Windows", isOn: Binding(
-            get: { config.enableWindowManagement },
-            set: { enabled in setWindowManagementFromMenu(enabled) },
-        ))
         OpenShortcutSettingsButton()
         openConfigButton()
         reloadConfigButton()
@@ -100,23 +96,6 @@ func shortcutGroup(label: some View, content: some View) -> some View {
             label
                 .foregroundStyle(Color.secondary)
             content
-        }
-    }
-}
-
-@MainActor
-private func setWindowManagementFromMenu(_ enabled: Bool) {
-    Task { @MainActor in
-        do {
-            try await runLightSession(.menuBarButton, .forceRun) {
-                let targetUrl = try persistWindowManagementPreference(enabled: enabled)
-                _ = try await reloadConfig(forceConfigUrl: targetUrl)
-            }
-        } catch {
-            MessageModel.shared.message = Message(
-                description: "Window Management Toggle Error",
-                body: error.localizedDescription,
-            )
         }
     }
 }

@@ -11,10 +11,6 @@ func resizedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutabl
         if shouldIgnoreAxObserverEventForPostDragSuppression(windowId: windowId, notif: notif) {
             return
         }
-        if !config.enableWindowManagement {
-            scheduleRefreshSession(.ax(notif))
-            return
-        }
         guard RunSessionGuard.isServerEnabled != nil else { return }
         guard let windowId, let window = Window.get(byId: windowId), try await isManipulatedWithMouse(window) else {
             scheduleRefreshSession(.ax(notif))
@@ -32,10 +28,8 @@ func resizedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutabl
 func resetManipulatedWithMouseIfPossible() async throws {
     await WindowMouseInteractionDriver.shared.flushBeforeMouseUp()
     let didApplyPendingDragIntent = applyPendingWindowDragIntentIfPossible()
-    let didApplyPendingUnmanagedSnap = applyPendingUnmanagedWindowSnapIfPossible()
     clearPendingWindowDragIntent()
-    clearPendingUnmanagedWindowSnap()
-    if currentlyManipulatedWithMouseWindowId != nil || didApplyPendingDragIntent || didApplyPendingUnmanagedSnap {
+    if currentlyManipulatedWithMouseWindowId != nil || didApplyPendingDragIntent {
         armGlobalPostDragAxObserverSuppression()
         cancelManipulatedWithMouseState()
         scheduleRefreshSession(.resetManipulatedWithMouse, optimisticallyPreLayoutWorkspaces: true)
