@@ -3,8 +3,12 @@ import AppKit
 extension WindowMouseInteractionDriver {
     func startResize(windowId: UInt32) {
         let session = ResizeSession(windowId: windowId)
-        if resizeSession != session {
+        let isNewSession = resizeSession != session
+        logWindowDragLive("resize.start window=\(windowId) isNewSession=\(isNewSession) existingSession=\(String(describing: resizeSession)) mouseDown=\(isLeftMouseButtonDown) kind=\(getCurrentMouseManipulationKind())")
+        if isNewSession {
             resetResizeTrackingState()
+            clearPendingWindowDragIntent()
+            clearPendingUnmanagedWindowSnap()
         }
         resizeSession = session
         currentlyManipulatedWithMouseWindowId = windowId
@@ -13,8 +17,6 @@ extension WindowMouseInteractionDriver {
             hidesPassiveTabGroupChrome: true,
         )
         setCurrentMouseManipulationKind(.resize)
-        clearPendingWindowDragIntent()
-        clearPendingUnmanagedWindowSnap()
         configureResizeChrome(windowId: windowId)
         startDisplayLoop()
         sampleResizeFrame(force: true)
@@ -22,10 +24,12 @@ extension WindowMouseInteractionDriver {
 
     func configureResizeChrome(windowId: UInt32) {
         guard let window = Window.get(byId: windowId) else {
+            logWindowDragLive("resize.configureChrome missing-window window=\(windowId)")
             WindowTabStripPanelController.shared.hideChromeDuringMouseInteraction()
             return
         }
         let resizesTabGroup = window.nearestWindowTabGroup?.tabActiveWindow == window
+        logWindowDragLive("resize.configureChrome window=\(windowId) resizesTabGroup=\(resizesTabGroup) lastKnown=\(debugDescribe(window.lastKnownActualRect)) lastApplied=\(debugDescribe(window.lastAppliedLayoutPhysicalRect))")
         WindowTabStripPanelController.shared.hideChromeDuringMouseInteraction(showFrameOnly: !resizesTabGroup)
         if resizeGesture == nil {
             let sample = MousePointerTracker.shared.currentSample

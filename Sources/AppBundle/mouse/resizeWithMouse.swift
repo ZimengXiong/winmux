@@ -69,8 +69,9 @@ func updateCompositedResizePreview(_ window: Window, rect: Rect) {
           workspace.isVisible,
           let weightMap = proposedResizeWeightMap(window, rect: rect)
     else {
+        logWindowDragLive("resizePreview hide requested reason=resizePreview.no-workspace-or-weightMap window=\(window.windowId) workspace=\(window.nodeWorkspace?.name.description ?? "nil") visible=\(window.nodeWorkspace?.isVisible.description ?? "nil") hasWeightMap=\(proposedResizeWeightMap(window, rect: rect) != nil)")
         WindowResizePreviewPanel.shared.endStableFrame()
-        WindowResizePreviewPanel.shared.hide()
+        WindowResizePreviewPanel.shared.hide(reason: "resizePreview.no-workspace-or-weightMap")
         return
     }
     WindowResizePreviewPanel.shared.beginStableFrame(workspace.workspaceMonitor.rect.toAppKitScreenRect)
@@ -83,13 +84,13 @@ func updateCompositedResizePreview(_ window: Window, rect: Rect) {
         items.append(sourceTabGroupItem)
     }
     guard !items.isEmpty else {
+        logWindowDragLive("resizePreview hide requested reason=resizePreview.no-items window=\(window.windowId)")
         WindowResizePreviewPanel.shared.endStableFrame()
-        WindowResizePreviewPanel.shared.hide()
+        WindowResizePreviewPanel.shared.hide(reason: "resizePreview.no-items")
         return
     }
     currentlyManipulatedWithMouseWindowId = window.windowId
     setCurrentMouseManipulationKind(.resize)
-    clearPendingWindowDragIntent()
     WindowResizePreviewPanel.shared.show(items)
 }
 

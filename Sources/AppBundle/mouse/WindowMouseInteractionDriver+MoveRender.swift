@@ -15,11 +15,17 @@ extension WindowMouseInteractionDriver {
 
         let mouse = MousePointerTracker.shared.currentSample.point
         updateCompositedMovePreview(sourceWindow: sourceWindow, mouseLocation: mouse)
-        guard WindowDragFrameGate.shared.shouldProcess(
+        let shouldProcess = WindowDragFrameGate.shared.shouldProcess(
             windowId: sourceWindow.windowId,
             point: mouse,
             force: force,
-        ) else { return }
+        )
+        let gateState = WindowDragFrameGate.shared.state(for: sourceWindow.windowId)
+        logWindowDragHitTestIfNeeded(
+            signature: "drag-live:frame:window=\(sourceWindow.windowId):bucket=\(debugDescribeDragPointBucket(mouse)):process=\(shouldProcess):settled=\(gateState?.isSettled.description ?? "nil")",
+            "[drag-live] frame window=\(sourceWindow.windowId) subject=\(debugDescribe(session.subject)) origin=\(session.detachOrigin) mouse=\(debugDescribe(mouse)) bucket=\(debugDescribeDragPointBucket(mouse)) shouldProcess=\(shouldProcess) velocity=\(gateState?.velocity.description ?? "nil") settled=\(gateState?.isSettled.description ?? "nil") force=\(force)"
+        )
+        guard shouldProcess else { return }
 
         if config.enableWindowManagement {
             renderManagedMoveFrame(sourceWindow: sourceWindow, mouseLocation: mouse, session: session)

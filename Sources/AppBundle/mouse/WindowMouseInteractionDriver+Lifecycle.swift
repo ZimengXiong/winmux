@@ -24,6 +24,7 @@ extension WindowMouseInteractionDriver {
     }
 
     func stop() {
+        logWindowDragLive("driver.stop moveSession=\(String(describing: moveSession)) resizeSession=\(String(describing: resizeSession)) manipulated=\(currentlyManipulatedWithMouseWindowId?.description ?? "nil") kind=\(getCurrentMouseManipulationKind()) mouseDown=\(isLeftMouseButtonDown)")
         DisplayRefreshDriver.shared.remove(owner: self)
         moveSession = nil
         resizeSession = nil
@@ -31,7 +32,7 @@ extension WindowMouseInteractionDriver {
         pendingResizeCandidate = nil
         resetResizeTrackingState()
         WindowResizePreviewPanel.shared.endStableFrame()
-        WindowResizePreviewPanel.shared.hide()
+        WindowResizePreviewPanel.shared.hide(reason: "driver.stop")
         WindowMouseInteractionOpacityController.shared.restore()
         WindowTabStripPanelController.shared.showChromeDuringMouseInteraction()
     }
@@ -43,6 +44,6 @@ extension WindowMouseInteractionDriver {
         pendingResizeCandidate = nil
         resetResizeTrackingState()
         WindowResizePreviewPanel.shared.endStableFrame()
-        WindowResizePreviewPanel.shared.hide()
+        WindowResizePreviewPanel.shared.hide(reason: "driver.finishResizeFlush")
     }
 }

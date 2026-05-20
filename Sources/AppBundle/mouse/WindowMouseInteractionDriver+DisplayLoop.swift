@@ -18,9 +18,10 @@ extension WindowMouseInteractionDriver {
 
     func finishAfterMissedMouseUpIfNeeded() {
         guard resizeSession != nil || moveSession != nil else {
+            logWindowDragLive("resizePreview hide requested reason=displayLoop.idle mouseDown=\(isLeftMouseButtonDown)")
             DisplayRefreshDriver.shared.remove(owner: self)
             WindowResizePreviewPanel.shared.endStableFrame()
-            WindowResizePreviewPanel.shared.hide()
+            WindowResizePreviewPanel.shared.hide(reason: "displayLoop.idle")
             return
         }
         guard !isMouseUpResetScheduled else { return }

@@ -20,9 +20,11 @@ extension WindowMouseInteractionDriver {
         moveSession = session
         WindowMouseInteractionOpacityController.shared.update(
             activeWindowId: windowId,
-            hidesPassiveTabGroupChrome: session.startedInSidebar || session.subject == .group,
+            hidesPassiveTabGroupChrome: false,
         )
-        configureMoveChrome(windowId: windowId, session: session)
+        if isNewSession {
+            configureMoveChrome(windowId: windowId, session: session)
+        }
         startDisplayLoop()
         renderMoveFrame(force: isNewSession)
     }
@@ -48,6 +50,6 @@ extension WindowMouseInteractionDriver {
     func clearMovePreview() {
         dragSourcePreviewState = nil
         WindowResizePreviewPanel.shared.endStableFrame()
-        WindowResizePreviewPanel.shared.hide()
+        WindowResizePreviewPanel.shared.hide(reason: "moveStart.clearMovePreview")
     }
 }

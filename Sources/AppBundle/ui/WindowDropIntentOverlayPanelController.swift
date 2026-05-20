@@ -33,10 +33,13 @@ final class WindowDropIntentOverlayPanelController {
     }
 
     func show(_ model: WindowDropIntentOverlayModel) {
+        let activeZone = model.activeZone?.rawValue ?? "nil"
         guard let frame = Self.panelFrame(for: model.targetFrame)?.alignedToBackingPixels() else {
+            logWindowDragLive("dropOverlay show aborted: no panel frame target=\(debugDescribe(model.targetFrame)) zone=\(activeZone)")
             hide()
             return
         }
+        let wasVisible = panel.isVisible
         if panel.frame.size == frame.size {
             panel.setFrameOrigin(frame.origin)
         } else {
@@ -47,13 +50,23 @@ final class WindowDropIntentOverlayPanelController {
             hostingView.rootView = AnyView(WindowDropIntentOverlayView(model: model))
             currentModel = model
         }
-        panel.orderFrontRegardless()
+        if !panel.isVisible {
+            panel.orderFrontRegardless()
+        }
+        logWindowDragLive(
+            "dropOverlay show zone=\(activeZone) wasVisible=\(wasVisible) isVisible=\(panel.isVisible) level=\(panel.level.rawValue) frame=\(panel.frame) target=\(debugDescribe(model.targetFrame))"
+        )
     }
 
     func hide() {
+        guard currentModel != nil || panel.isVisible else { return }
+        let wasVisible = panel.isVisible
         hostingView.rootView = AnyView(EmptyView())
         currentModel = nil
-        panel.orderOut(nil)
+        if panel.isVisible {
+            panel.orderOut(nil)
+        }
+        logWindowDragLive("dropOverlay hide wasVisible=\(wasVisible) isVisible=\(panel.isVisible)")
     }
 
     private static func panelFrame(for frame: Rect) -> CGRect? {

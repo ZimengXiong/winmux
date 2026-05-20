@@ -20,6 +20,7 @@ final class WindowDragCursorProxyPanel: NSPanelHud {
         ignoresMouseEvents = true
         backgroundColor = .clear
         applyWinMuxLayer(.dragCursorProxy)
+        level = NSWindow.Level(rawValue: WinMuxPanelLayer.workspaceSidebar.level.rawValue + 1)
         contentView = hostingView
         hostingView.frame = contentView?.bounds ?? .zero
         hostingView.autoresizingMask = [.width, .height]
@@ -30,12 +31,27 @@ final class WindowDragCursorProxyPanel: NSPanelHud {
         proxySize = windowDragCursorProxySize(label: label)
         updateFrame(mouseScreenPoint: mouseScreenPoint)
         startFollowingMouseIfNeeded()
-        orderFrontRegardless()
+        if !isVisible {
+            orderFrontRegardless()
+        }
+    }
+
+    func show(preview: WorkspaceSidebarDropPreviewViewModel, mouseScreenPoint: CGPoint) {
+        updateContent(preview: preview)
+        proxySize = windowDragCursorProxySize(label: preview.label)
+        updateFrame(mouseScreenPoint: mouseScreenPoint)
+        startFollowingMouseIfNeeded()
+        if !isVisible {
+            orderFrontRegardless()
+        }
     }
 
     func hide() {
+        guard currentContent != nil || isVisible else { return }
         stopFollowingMouse()
         currentContent = nil
-        orderOut(nil)
+        if isVisible {
+            orderOut(nil)
+        }
     }
 }

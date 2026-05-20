@@ -13,7 +13,9 @@ func updatePendingWindowDragIntent(
     subject: WindowDragSubject,
     detachOrigin: TabDetachOrigin,
 ) -> Bool {
-    WindowDragCursorProxyPanel.shared.hide()
+    if detachOrigin != .tabStrip {
+        WindowDragCursorProxyPanel.shared.hide()
+    }
 
     guard let destination = currentWindowDragIntentDestination(
         sourceWindow: sourceWindow,
@@ -21,11 +23,21 @@ func updatePendingWindowDragIntent(
         subject: subject,
         detachOrigin: detachOrigin,
     ) else {
+        logWindowDragIntentIfNeeded(
+            signature: "drag-live:no-destination:source=\(sourceWindow.windowId):subject=\(debugDescribe(subject)):origin=\(detachOrigin):bucket=\(debugDescribeDragPointBucket(mouseLocation))",
+            "[drag-live] destination none source=\(sourceWindow.windowId) subject=\(debugDescribe(subject)) origin=\(detachOrigin) mouse=\(debugDescribe(mouseLocation)) bucket=\(debugDescribeDragPointBucket(mouseLocation)); clearing previews"
+        )
         updateSidebarDragFeedback(sourceWindow: sourceWindow, subject: subject, destination: nil)
         clearPendingWindowDragIntent()
+        if detachOrigin == .tabStrip {
+            showWorkspaceSidebarDragCursorPreview(sourceWindow: sourceWindow, subject: subject, point: mouseLocation)
+        }
         return false
     }
     updateSidebarDragFeedback(sourceWindow: sourceWindow, subject: subject, destination: destination)
+    if detachOrigin == .tabStrip {
+        showWorkspaceSidebarDragCursorPreview(sourceWindow: sourceWindow, subject: subject, point: mouseLocation)
+    }
     return setPendingWindowDragIntent(sourceWindowId: sourceWindow.windowId, sourceSubject: subject, destination: destination)
 }
 
@@ -92,10 +104,17 @@ func setPendingWindowDragIntent(sourceWindowId: UInt32, sourceSubject: WindowDra
         "windowDragIntent.update mouse=\(debugDescribe(mouseLocation)) source=\(debugDescribe(Window.get(byId: sourceWindowId))) subject=\(debugDescribe(sourceSubject)) prevKind=\(previousIntent.map { debugDescribe($0.kind) } ?? "nil") prevPreview=\(debugDescribe(previousIntent?.previewRect)) newKind=\(debugDescribe(destination.kind)) newPreview=\(debugDescribe(destination.previewRect)) newInteraction=\(debugDescribe(destination.interactionRect)) style=\(destination.previewStyle) geometry=\(destination.previewGeometry)"
     )
     if let overlay = destination.dropIntentOverlay {
-        WindowResizePreviewPanel.shared.endStableFrame()
-        WindowResizePreviewPanel.shared.hide()
+        let activeZone = overlay.activeZone?.rawValue ?? "nil"
+        logWindowDragIntentIfNeeded(
+            signature: "drag-live:overlay-show:source=\(sourceWindowId):kind=\(debugDescribe(destination.kind)):bucket=\(debugDescribeDragPointBucket(mouseLocation)):zone=\(activeZone)",
+            "[drag-live] overlay show request source=\(sourceWindowId) kind=\(debugDescribe(destination.kind)) zone=\(activeZone) target=\(debugDescribe(overlay.targetFrame)) mouse=\(debugDescribe(mouseLocation)) bucket=\(debugDescribeDragPointBucket(mouseLocation))"
+        )
         WindowDropIntentOverlayPanelController.shared.show(overlay)
     } else {
+        logWindowDragIntentIfNeeded(
+            signature: "drag-live:overlay-hide:source=\(sourceWindowId):kind=\(debugDescribe(destination.kind)):bucket=\(debugDescribeDragPointBucket(mouseLocation))",
+            "[drag-live] overlay hide request source=\(sourceWindowId) kind=\(debugDescribe(destination.kind)) reason=destination-has-no-overlay mouse=\(debugDescribe(mouseLocation)) bucket=\(debugDescribeDragPointBucket(mouseLocation))"
+        )
         WindowDropIntentOverlayPanelController.shared.hide()
     }
     return true
@@ -115,8 +134,12 @@ func clearPendingWindowDragIntent() {
     setWorkspaceSidebarDropPreviewIfChanged(nil)
     WindowDropIntentOverlayPanelController.shared.hide()
     WindowDragCursorProxyPanel.shared.hide()
-    WindowResizePreviewPanel.shared.endStableFrame()
-    WindowResizePreviewPanel.shared.hide()
+    if getCurrentMouseManipulationKind() == .resize, isLeftMouseButtonDown {
+        logWindowDragLive("dragIntent.clear preserving resizePreview during active resize manipulated=\(currentlyManipulatedWithMouseWindowId?.description ?? "nil")")
+    } else {
+        WindowResizePreviewPanel.shared.endStableFrame()
+        WindowResizePreviewPanel.shared.hide(reason: "dragIntent.clear")
+    }
 }
 
 @MainActor

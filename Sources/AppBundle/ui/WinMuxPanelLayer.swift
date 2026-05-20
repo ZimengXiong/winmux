@@ -12,7 +12,7 @@ enum WinMuxPanelLayer: CaseIterable {
             case .windowChrome:
                 .normal
             case .windowIntentPreview:
-                .floating
+                .statusBar
             case .overlay:
                 .statusBar
             case .dragCursorProxy:

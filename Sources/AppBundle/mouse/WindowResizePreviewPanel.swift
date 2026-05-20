@@ -37,10 +37,12 @@ final class WindowResizePreviewPanel: NSPanelHud {
         pendingHide?.cancel()
         pendingHide = nil
         guard let panelFrame = stableFrame ?? windowResizePreviewPanelFrame(for: screenItems) else {
-            hide()
+            logWindowDragLive("resizePreview show aborted: no panel frame itemCount=\(screenItems.count)")
+            hide(reason: "show.no-panel-frame")
             return
         }
 
+        let wasVisible = isVisible
         let alignedPanelFrame = panelFrame.alignedToBackingPixels()
         let localItems = screenItems.map { $0.localItem(in: alignedPanelFrame) }
         if frame.size == alignedPanelFrame.size {
@@ -52,15 +54,24 @@ final class WindowResizePreviewPanel: NSPanelHud {
         if !isVisible {
             orderFrontRegardless()
         }
+        logWindowDragLive(
+            "resizePreview show itemCount=\(screenItems.count) wasVisible=\(wasVisible) isVisible=\(isVisible) level=\(level.rawValue) frame=\(frame)"
+        )
     }
 
-    func hide(after delay: TimeInterval = 0) {
+    func hide(reason: String, after delay: TimeInterval = 0) {
         pendingHide?.cancel()
         let hideWorkItem = DispatchWorkItem { [weak self] in
             guard let self else { return }
+            let wasVisible = self.isVisible
             self.pendingHide = nil
             self.compositorView.clear()
-            self.orderOut(nil)
+            if self.isVisible {
+                self.orderOut(nil)
+            }
+            if wasVisible {
+                logWindowDragLive("resizePreview hide reason=\(reason) wasVisible=\(wasVisible) isVisible=\(self.isVisible) mouseDown=\(isLeftMouseButtonDown) manipulated=\(currentlyManipulatedWithMouseWindowId?.description ?? "nil") kind=\(getCurrentMouseManipulationKind())")
+            }
         }
         pendingHide = hideWorkItem
         if delay > 0 {

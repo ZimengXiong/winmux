@@ -23,7 +23,7 @@ extension WindowTabStripPanelController {
                 orderOutPanels(id: strip.id)
                 continue
             }
-            visualPanel(for: strip.id).update(with: strip)
+            visualPanel(for: strip.id).update(with: strip, drawsMockTabs: false)
             stripPanel(for: strip.id).update(with: strip)
         }
         removeStalePanels(activeIds: activeIds)
@@ -48,8 +48,8 @@ extension WindowTabStripPanelController {
                 orderOutPanels(id: strip.id)
                 continue
             }
-            visualPanel(for: strip.id).update(with: strip)
-            stripPanels[strip.id]?.orderOut(nil)
+            visualPanel(for: strip.id).update(with: strip, drawsMockTabs: true)
+            orderOutIfVisible(stripPanels[strip.id])
         }
         removeStalePanels(activeIds: activeIds)
     }

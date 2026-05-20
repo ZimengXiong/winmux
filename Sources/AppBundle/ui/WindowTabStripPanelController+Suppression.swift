@@ -20,13 +20,13 @@ extension WindowTabStripPanelController {
 
     func refreshHiddenChrome(activeIds: Set<ObjectIdentifier>) {
         for id in Array(visualPanels.keys) {
-            visualPanels[id]?.orderOut(nil)
+            orderOutIfVisible(visualPanels[id])
             if !activeIds.contains(id) {
                 visualPanels.removeValue(forKey: id)
             }
         }
         for id in Array(stripPanels.keys) {
-            stripPanels[id]?.orderOut(nil)
+            orderOutIfVisible(stripPanels[id])
             if !activeIds.contains(id) {
                 stripPanels.removeValue(forKey: id)
             }

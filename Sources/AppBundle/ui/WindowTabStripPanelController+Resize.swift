@@ -13,7 +13,10 @@ extension WindowTabStripPanelController {
             orderOutPanels(id: transientStrip.id)
             return true
         }
-        visualPanel(for: transientStrip.id).update(with: transientStrip)
+        visualPanel(for: transientStrip.id).update(
+            with: transientStrip,
+            drawsMockTabs: mouseInteractionChromeMode == .frameOnly,
+        )
         updateInteractivePanelForResizingStrip(transientStrip)
         return true
     }
@@ -25,7 +28,7 @@ extension WindowTabStripPanelController {
 
     func updateInteractivePanelForResizingStrip(_ strip: WindowTabStripViewModel) {
         if mouseInteractionChromeMode != nil {
-            stripPanels[strip.id]?.orderOut(nil)
+            orderOutIfVisible(stripPanels[strip.id])
         } else {
             stripPanel(for: strip.id).update(with: strip)
         }

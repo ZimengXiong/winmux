@@ -14,8 +14,8 @@ extension WindowTabStripPanelController {
     }
 
     func orderOutPanels(id: ObjectIdentifier) {
-        visualPanels[id]?.orderOut(nil)
-        stripPanels[id]?.orderOut(nil)
+        orderOutIfVisible(visualPanels[id])
+        orderOutIfVisible(stripPanels[id])
     }
 
     func removeStalePanels(activeIds: Set<ObjectIdentifier>) {
@@ -25,15 +25,20 @@ extension WindowTabStripPanelController {
 
     func removeStaleVisualPanels(activeIds: Set<ObjectIdentifier>) {
         for staleId in visualPanels.keys where !activeIds.contains(staleId) {
-            visualPanels[staleId]?.orderOut(nil)
+            orderOutIfVisible(visualPanels[staleId])
             visualPanels.removeValue(forKey: staleId)
         }
     }
 
     func removeStaleStripPanels(activeIds: Set<ObjectIdentifier>) {
         for staleId in stripPanels.keys where !activeIds.contains(staleId) {
-            stripPanels[staleId]?.orderOut(nil)
+            orderOutIfVisible(stripPanels[staleId])
             stripPanels.removeValue(forKey: staleId)
         }
+    }
+
+    func orderOutIfVisible(_ panel: NSPanelHud?) {
+        guard panel?.isVisible == true else { return }
+        panel?.orderOut(nil)
     }
 }
