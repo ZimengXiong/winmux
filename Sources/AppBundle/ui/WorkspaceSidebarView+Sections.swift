@@ -14,18 +14,17 @@ extension WorkspaceSidebarView {
             activeProjectId: snapshot.activeProjectId,
             browsedProjectId: browsedProjectId,
             expansionProgress: expansionProgress,
-            sectionWidth: workspaceSidebarSectionWidth(expansionProgress, layout: snapshot.configuration),
+            sectionWidth: workspaceSidebarTopSectionWidth(expansionProgress: expansionProgress),
             onSelectScope: { scopeId in
                 if scopeId == workspaceSidebarDefaultScopeId {
-                    browsedProjectId = nil
+                    browseMode = .activeProject
                 }
                 actions.send(.selectMonitorScope(scopeId))
             },
             onSelectProject: { projectId in
-                browsedProjectId = projectId == snapshot.activeProjectId ? nil : projectId
-            },
-            onCreateProject: {
-                actions.send(.createProject)
+                WorkspaceSidebarPanel.panel(for: snapshot.targetMonitorScopeId)?.cancelExpansionWork()
+                browseMode = projectId.map { .split(otherProjectId: $0) } ?? .activeProject
+                showsPinnedActiveWorkspaceForBrowsedProject = false
             },
             onRenameProject: { project in
                 beginProjectRename(project)
@@ -52,6 +51,13 @@ extension WorkspaceSidebarView {
         .zIndex(100)
     }
 
+    func workspaceSidebarTopSectionWidth(expansionProgress: CGFloat) -> CGFloat {
+        if browsedProjectId != nil {
+            return workspaceSidebarSplitSectionWidth(expansionProgress: expansionProgress)
+        }
+        return workspaceSidebarSectionWidth(expansionProgress, layout: snapshot.configuration)
+    }
+
     func statusSection(
         expansionProgress: CGFloat,
         isCompact: Bool,
@@ -68,5 +74,51 @@ extension WorkspaceSidebarView {
         .padding(.trailing, trailingInset)
         .padding(.top, 4)
         .padding(.bottom, workspaceSidebarStatusBottomPadding(isCompact: isCompact) + 4)
+    }
+
+    func sidebarSearchSection(
+        expansionProgress: CGFloat,
+        leadingInset: CGFloat,
+        trailingInset: CGFloat,
+    ) -> some View {
+        HStack(spacing: 7) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.66))
+                .frame(width: 14)
+
+            Text(searchText)
+                .font(.system(size: 12, weight: .medium))
+                .lineLimit(1)
+                .foregroundStyle(Color.white.opacity(0.9))
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button {
+                finishSidebarSearch(clearText: true)
+                beginSidebarSearchIfNeeded()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(Color.white.opacity(0.7))
+                    .frame(width: 18, height: 18)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Clear search")
+        }
+        .padding(.horizontal, 8)
+        .frame(width: workspaceSidebarSectionWidth(expansionProgress, layout: snapshot.configuration), height: workspaceSidebarSearchHeight)
+        .background {
+            RoundedRectangle(cornerRadius: workspaceSidebarDropdownCornerRadius, style: .continuous)
+                .fill(Color.white.opacity(0.11))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: workspaceSidebarDropdownCornerRadius, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.12), lineWidth: 0.6)
+        }
+        .padding(.leading, leadingInset)
+        .padding(.trailing, trailingInset)
+        .padding(.bottom, workspaceSidebarSectionGap)
+        .transition(.opacity.combined(with: .move(edge: .top)))
     }
 }

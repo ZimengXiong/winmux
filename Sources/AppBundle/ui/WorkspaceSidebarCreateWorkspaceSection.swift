@@ -5,6 +5,8 @@ import SwiftUI
 // MARK: - Create Workspace Section
 
 struct WorkspaceSidebarCreateWorkspaceSection: View {
+    let projectId: WorkspaceProjectId
+    let monitorScopeId: String
     let dragPreview: WorkspaceSidebarDropPreviewViewModel?
     let expansionProgress: CGFloat
     let layout: WorkspaceSidebarConfiguration
@@ -18,7 +20,16 @@ struct WorkspaceSidebarCreateWorkspaceSection: View {
 
     private var sectionWidth: CGFloat { workspaceSidebarSectionWidth(expansionProgress, layout: layout) }
     private var isCompact: Bool { expansionProgress < workspaceSidebarRowsRevealProgress }
-    private var showsDropTarget: Bool { dragPreview?.targetsNewWorkspace == true }
+    private var showsDropTarget: Bool {
+        guard dragPreview?.targetsNewWorkspace == true else { return false }
+        if let targetProjectId = dragPreview?.targetProjectId {
+            return targetProjectId == projectId
+        }
+        return workspaceSidebarDropTarget(at: MousePointerTracker.shared.currentSample.point)?.kind == .newWorkspace(
+            projectId: projectId,
+            monitorScopeId: monitorScopeId
+        )
+    }
     private var sectionShape: RoundedRectangle {
         RoundedRectangle(cornerRadius: workspaceSidebarSectionCornerRadius, style: .continuous)
     }
@@ -48,14 +59,14 @@ struct WorkspaceSidebarCreateWorkspaceSection: View {
                 Color.clear.preference(
                     key: WorkspaceSidebarDropTargetPreferenceKey.self,
                     value: emitsDropTarget ? [WorkspaceSidebarDropTargetFrame(
-                        kind: .newWorkspace,
+                        kind: .newWorkspace(projectId: projectId, monitorScopeId: monitorScopeId),
                         frame: geometry.frame(in: .named("workspaceSidebarContent")),
                     )] : [],
                 )
             }
         }
         .onDrop(of: [workspaceSidebarDragPayloadType], delegate: WorkspaceSidebarDropDelegate(
-            target: .newWorkspace,
+            target: .newWorkspace(projectId: projectId, monitorScopeId: monitorScopeId),
             actions: actions,
             performPayloadDrop: onDropPayload,
             isTargeted: $isDropTargeted,

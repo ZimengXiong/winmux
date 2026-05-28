@@ -4,7 +4,10 @@ import Common
 @MainActor
 func switchWorkspaceProject(_ projectId: WorkspaceProjectId, on monitor: Monitor) -> Workspace? {
     materializePersistedWorkspaceProjects()
-    guard winMuxWorkspaceState.projectsById[projectId] != nil else { return nil }
+    guard winMuxWorkspaceState.projectsById[projectId] != nil else {
+        debugWorkspaceSidebarProjectLog("switchProjectAbort unknownProject=\(projectId.rawValue)")
+        return nil
+    }
     let laneId = DisplayLaneId(monitor)
     let rememberedWorkspace = winMuxWorkspaceState.lanesById[laneId]?
         .lastActiveWorkspaceByProject[projectId]
@@ -13,7 +16,11 @@ func switchWorkspaceProject(_ projectId: WorkspaceProjectId, on monitor: Monitor
     let workspace = rememberedWorkspace
         ?? availablePreferredWorkspace(projectId: projectId, monitor: monitor)
         ?? createBlankWorkspace(projectId: projectId, monitor: monitor)
-    return monitor.setActiveWorkspace(workspace) ? workspace : nil
+    let didSetActive = monitor.setActiveWorkspace(workspace)
+    debugWorkspaceSidebarProjectLog(
+        "switchProject project=\(projectId.rawValue) lane=\(laneId.description) remembered=\(rememberedWorkspace?.name ?? "nil") chosen=\(workspace.name) chosenProject=\(workspace.projectId.rawValue) didSetActive=\(didSetActive)"
+    )
+    return didSetActive ? workspace : nil
 }
 
 @MainActor

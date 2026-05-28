@@ -22,6 +22,7 @@ let workspaceSidebarAppIconTextSpacing: CGFloat = 6
 let workspaceSidebarTabGroupChildLeadingIndent: CGFloat = workspaceSidebarAppIconSize + workspaceSidebarAppIconTextSpacing - 2
 let workspaceSidebarControlHeight: CGFloat = 30
 let workspaceSidebarDropdownHeight: CGFloat = 28
+let workspaceSidebarSearchHeight: CGFloat = 28
 let workspaceSidebarDropdownCornerRadius: CGFloat = 9
 let workspaceSidebarDropdownPadding: CGFloat = 7
 let workspaceSidebarDropdownLabelSize: CGFloat = 11.5

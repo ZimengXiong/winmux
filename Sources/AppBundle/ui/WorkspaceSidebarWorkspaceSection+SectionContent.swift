@@ -39,6 +39,9 @@ extension WorkspaceSidebarWorkspaceSection {
     var headerSlot: some View {
         if isCompact {
             header.frame(maxWidth: .infinity, alignment: .center)
+        } else if isRenamingWorkspace {
+            header
+                .frame(maxWidth: .infinity, alignment: .leading)
         } else {
             headerButton
         }

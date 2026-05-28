@@ -13,8 +13,7 @@ struct WorkspaceSidebarMonitorSelector: View {
     let expansionProgress: CGFloat
     let sectionWidth: CGFloat
     var onSelectScope: (String) -> Void = { selectWorkspaceSidebarMonitorScope($0) }
-    var onSelectProject: (WorkspaceProjectId) -> Void = { _ in }
-    var onCreateProject: () -> Void = {}
+    var onSelectProject: (WorkspaceProjectId?) -> Void = { _ in }
     var onRenameProject: (WorkspaceSidebarProjectViewModel) -> Void = { _ in }
     @Binding var renamingProjectId: WorkspaceProjectId?
     @Binding var renamingProjectText: String
@@ -25,11 +24,11 @@ struct WorkspaceSidebarMonitorSelector: View {
 
     @State private var isProjectMenuOpen = false
     private var projectPopupWidth: CGFloat {
-        let names = browsableProjects.map(\.displayName) + ["Project"]
+        let names = browsableProjects.map(\.displayName) + ["Other Projects"]
         let maxTextWidth = names.map {
             ($0 as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 12, weight: .medium)]).width
         }.max() ?? 0
-        return max(ceil(maxTextWidth) + 50, 92)
+        return max(ceil(maxTextWidth) + 50, 116)
     }
     private var hasMultipleMonitors: Bool {
         scopes.count { workspaceSidebarMonitorScopePoint($0.id) != nil } > 1
@@ -176,7 +175,7 @@ struct WorkspaceSidebarMonitorSelector: View {
                 .offset(y: workspaceSidebarDropdownHeight + workspaceSidebarSectionGap)
         }
         .zIndex(isProjectMenuOpen ? 200 : 0)
-        .help("Browse project workspaces")
+        .help("Browse another project")
         )
     }
 
@@ -190,14 +189,11 @@ struct WorkspaceSidebarMonitorSelector: View {
                         var transaction = Transaction()
                         transaction.disablesAnimations = true
                         withTransaction(transaction) {
-                            onSelectProject(projectId)
+                            onSelectProject(projectId == browsedProjectId ? nil : projectId)
                             isProjectMenuOpen = false
                         }
                     },
-                    onCreate: {
-                        onCreateProject()
-                        isProjectMenuOpen = false
-                    },
+                    onCreate: {},
                     onRename: { project in
                         onRenameProject(project)
                         isProjectMenuOpen = false

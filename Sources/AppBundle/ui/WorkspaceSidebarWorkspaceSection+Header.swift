@@ -27,11 +27,20 @@ extension WorkspaceSidebarWorkspaceSection {
 
     var expandedHeader: some View {
         HStack(spacing: workspaceSidebarHeaderSpacing) {
-            Text(workspace.displayName)
-                .font(.system(size: 15, weight: isActiveOnTargetMonitor ? .bold : .semibold))
-                .foregroundStyle(isActiveOnTargetMonitor ? Color.white : Color.white.opacity(0.85))
-                .lineLimit(1)
-                .truncationMode(.tail)
+            if isRenamingWorkspace {
+                WorkspaceSidebarWorkspaceRenameField(
+                    text: $renamingWorkspaceText,
+                    workspaceName: workspace.name,
+                    onCommit: onCommitRenameWorkspace,
+                    onCancel: onCancelRenameWorkspace,
+                )
+            } else {
+                Text(workspace.displayName)
+                    .font(.system(size: 15, weight: isActiveOnTargetMonitor ? .bold : .semibold))
+                    .foregroundStyle(isActiveOnTargetMonitor ? Color.white : Color.white.opacity(0.85))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
             if let projectContextLabel, let projectContextColor {
                 Text(projectContextLabel)
                     .font(.system(size: 8.5, weight: .bold))
@@ -49,7 +58,7 @@ extension WorkspaceSidebarWorkspaceSection {
                     }
             }
             Spacer(minLength: 0)
-            if !workspace.items.isEmpty {
+            if !workspace.items.isEmpty && !isRenamingWorkspace {
                 Text("\(workspace.items.count)")
                     .font(.system(size: 12, weight: .medium))
                     .monospacedDigit()

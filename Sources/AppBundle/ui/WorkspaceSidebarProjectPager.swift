@@ -19,7 +19,6 @@ struct WorkspaceSidebarProjectPager: View {
     let onDeleteProject: (WorkspaceSidebarProjectViewModel) -> Void
 
     @State var isHovered = false
-    @State var pressedProjectId: WorkspaceProjectId? = nil
     @State var hoveredProjectDotId: WorkspaceProjectId? = nil
     @State var projectTrackScrollTargetId: WorkspaceProjectId? = nil
     @State var projectTrackContentMinX: CGFloat = 0
@@ -45,7 +44,7 @@ struct WorkspaceSidebarProjectPager: View {
         (workspaceSidebarPagerHeight * 2) + 4
     }
     var pagerHeight: CGFloat {
-        let controlsHeight = isCompact ? workspaceSidebarPagerHeight : expandedProjectControlsHeight
+        let controlsHeight = isCompact ? compactProjectControlsHeight : expandedProjectControlsHeight
         guard isProjectMenuOpen && !isCompact else {
             return controlsHeight
         }

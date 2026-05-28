@@ -13,6 +13,7 @@ struct WorkspaceSidebarDropPreviewViewModel: Hashable {
     let appBundlePath: String?
     let targetWorkspaceName: String?
     let targetsNewWorkspace: Bool
+    let targetProjectId: WorkspaceProjectId?
     let isTabGroup: Bool
     let windowCount: Int
     let tabItems: [WorkspaceSidebarDropPreviewTabItem]
@@ -25,6 +26,7 @@ struct WorkspaceSidebarDropPreviewViewModel: Hashable {
         appBundlePath: String? = nil,
         targetWorkspaceName: String?,
         targetsNewWorkspace: Bool,
+        targetProjectId: WorkspaceProjectId? = nil,
         isTabGroup: Bool,
         windowCount: Int,
         tabItems: [WorkspaceSidebarDropPreviewTabItem] = []
@@ -36,6 +38,7 @@ struct WorkspaceSidebarDropPreviewViewModel: Hashable {
         self.appBundlePath = appBundlePath
         self.targetWorkspaceName = targetWorkspaceName
         self.targetsNewWorkspace = targetsNewWorkspace
+        self.targetProjectId = targetProjectId
         self.isTabGroup = isTabGroup
         self.windowCount = windowCount
         self.tabItems = tabItems

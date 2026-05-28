@@ -24,7 +24,7 @@ func applyWorkspaceSidebarModelState(_ state: WorkspaceSidebarModelState, previo
         TrayMenuModel.shared.workspaceSidebarShowsMonitorSelector != state.showsMonitorSelector
     let didProjectChange =
         TrayMenuModel.shared.workspaceSidebarProjects != state.projects ||
-        TrayMenuModel.shared.workspaceSidebarSelectedProjectId != state.selectedProjectId
+        TrayMenuModel.shared.workspaceSidebarActiveProjectId != state.activeProjectId
 
     updateWorkspaceSidebarTrayModel(with: state)
     WorkspaceSidebarPanel.syncVisiblePanelModelsFromShared()
@@ -48,7 +48,6 @@ private func updateWorkspaceSidebarTrayModel(with state: WorkspaceSidebarModelSt
     TrayMenuModel.shared.workspaceSidebarTopPadding = state.topPadding
     TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName = state.hoveredWorkspaceName
     TrayMenuModel.shared.workspaceSidebarProjects = state.projects
-    TrayMenuModel.shared.workspaceSidebarSelectedProjectId = state.selectedProjectId
     TrayMenuModel.shared.workspaceSidebarActiveProjectId = state.activeProjectId
     TrayMenuModel.shared.workspaceSidebarMonitorScopes = state.monitorScopes
     TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId = state.selectedMonitorScopeId

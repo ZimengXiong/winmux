@@ -3,3 +3,7 @@ import Foundation
 let workspaceSidebarWillCollapseNotification = Notification.Name("WorkspaceSidebarWillCollapseNotification")
 let workspaceSidebarWillExpandNotification = Notification.Name("WorkspaceSidebarWillExpandNotification")
 let workspaceSidebarDismissProjectMenusNotification = Notification.Name("WorkspaceSidebarDismissProjectMenusNotification")
+let workspaceSidebarDragPointerChangedNotification = Notification.Name("WorkspaceSidebarDragPointerChangedNotification")
+let workspaceSidebarDragPointerEndedNotification = Notification.Name("WorkspaceSidebarDragPointerEndedNotification")
+
+let workspaceSidebarDragPointerUserInfoKey = "pointer"

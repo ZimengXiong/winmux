@@ -100,8 +100,21 @@ func ensureMinimumWorkspace(for projectId: WorkspaceProjectId, monitor: Monitor 
 
 @MainActor
 func renameWorkspaceForSidebar(workspaceName: String, displayName: String) throws {
-    guard Workspace.existing(byName: workspaceName) != nil else { throw WorkspaceMutationError.workspaceNotFound(workspaceName) }
-    _ = displayName
+    guard Workspace.existing(byName: workspaceName) != nil else {
+        throw WorkspaceMutationError.workspaceNotFound(workspaceName)
+    }
+    let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedName.isEmpty else {
+        throw WorkspaceMutationError.emptyName
+    }
+    if trimmedName == workspaceDefaultDisplayName(workspaceName) {
+        try resetWorkspaceSidebarName(workspaceName: workspaceName)
+        return
+    }
+    config.workspaceSidebar.workspaceLabels[workspaceName] = trimmedName
+    if !isUnitTest {
+        try persistWorkspaceSidebarLabel(workspaceName: workspaceName, label: trimmedName)
+    }
 }
 
 @MainActor
@@ -205,13 +218,8 @@ private func deleteWorkspaceProjectMovingWindowsToFallback(_ projectId: Workspac
     }
 
     winMuxWorkspaceState.projectsById.removeValue(forKey: projectId)
-    config.workspaceSidebar.projectLabels.removeValue(forKey: projectId.rawValue)
-    config.workspaceSidebar.projectColors.removeValue(forKey: projectId.rawValue)
+    try clearWorkspaceSidebarProjectMetadata(projectId)
     ensureVisibleActiveProjectWorkspaces()
-    if !isUnitTest {
-        try persistWorkspaceSidebarProjectLabel(projectId: projectId.rawValue, label: nil)
-        try persistWorkspaceSidebarProjectColor(projectId: projectId.rawValue, colorHex: nil)
-    }
     checkWorkspaceHierarchyInvariants()
 }
 
@@ -249,14 +257,23 @@ private func closeWindowsAndDeleteWorkspaceProject(_ projectId: WorkspaceProject
     }
 
     winMuxWorkspaceState.projectsById.removeValue(forKey: projectId)
-    config.workspaceSidebar.projectLabels.removeValue(forKey: projectId.rawValue)
-    config.workspaceSidebar.projectColors.removeValue(forKey: projectId.rawValue)
+    try clearWorkspaceSidebarProjectMetadata(projectId)
     ensureVisibleActiveProjectWorkspaces()
-    if !isUnitTest {
-        try persistWorkspaceSidebarProjectLabel(projectId: projectId.rawValue, label: nil)
-        try persistWorkspaceSidebarProjectColor(projectId: projectId.rawValue, colorHex: nil)
-    }
     checkWorkspaceHierarchyInvariants()
+}
+
+@MainActor
+private func clearWorkspaceSidebarProjectMetadata(_ projectId: WorkspaceProjectId) throws {
+    let rawProjectId = projectId.rawValue
+    let hadLabel = config.workspaceSidebar.projectLabels.removeValue(forKey: rawProjectId) != nil
+    let hadColor = config.workspaceSidebar.projectColors.removeValue(forKey: rawProjectId) != nil
+    guard !isUnitTest else { return }
+    if hadLabel {
+        try persistWorkspaceSidebarProjectLabel(projectId: rawProjectId, label: nil)
+    }
+    if hadColor {
+        try persistWorkspaceSidebarProjectColor(projectId: rawProjectId, colorHex: nil)
+    }
 }
 
 @MainActor

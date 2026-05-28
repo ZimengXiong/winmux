@@ -126,4 +126,3 @@ func shouldSuppressSameTabGroupSwapDestination(
     else { return false }
     return true
 }
-

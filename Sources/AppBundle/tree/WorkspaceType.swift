@@ -71,7 +71,7 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
         repairInvalidVisibleWorkspaceAssignments()
         rearrangeWorkspacesOnMonitors()
         pruneEmptyWorkspaces()
-        clearOrphanedSidebarDraftWorkspaceLabels()
+        clearOrphanedWorkspaceSidebarLabels()
         ensureVisibleActiveProjectWorkspaces()
         checkWorkspaceHierarchyInvariants()
     }

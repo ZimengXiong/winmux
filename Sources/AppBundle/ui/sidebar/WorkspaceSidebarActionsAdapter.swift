@@ -48,6 +48,9 @@ func handleWorkspaceSidebarAction(
         case .selectWindow(let windowId):
             focusWindowFromSidebar(windowId)
         case .selectProject(let projectId):
+            debugWorkspaceSidebarProjectLog(
+                "adapterSelectProject project=\(projectId.rawValue) targetScope=\(targetMonitorScopeId ?? "nil") modelSelected=\(viewModel.workspaceSidebarSelectedProjectId.rawValue) modelActive=\(viewModel.workspaceSidebarActiveProjectId.rawValue)"
+            )
             selectWorkspaceSidebarProject(projectId, viewModel: viewModel, targetMonitorScopeId: targetMonitorScopeId)
         case .createProject:
             createWorkspaceSidebarProject(viewModel: viewModel, targetMonitorScopeId: targetMonitorScopeId)
@@ -59,12 +62,14 @@ func handleWorkspaceSidebarAction(
             }
         case .deleteProject(let projectId):
             if let project = workspaceSidebarProjectViewModel(projectId) {
-                deleteWorkspaceSidebarProject(project)
+                deleteWorkspaceSidebarProject(project, viewModel: viewModel)
             }
         case .selectMonitorScope(let scopeId):
             selectWorkspaceSidebarMonitorScope(scopeId, viewModel: viewModel)
         case .createWorkspace(let projectId, let monitorScopeId):
             createWorkspaceFromSidebarButton(projectId: projectId, monitorScopeId: targetMonitorScopeId ?? monitorScopeId)
+        case .renameWorkspace(let name, let displayName):
+            renameWorkspaceFromSidebar(name, displayName: displayName)
         case .deleteWorkspace(let name):
             if let workspace = workspaceSidebarWorkspaceViewModel(name) {
                 deleteWorkspaceFromSidebar(workspace)

@@ -2,7 +2,7 @@ import Common
 
 @MainActor
 func nextSidebarDraftWorkspaceName() -> String {
-    clearOrphanedSidebarDraftWorkspaceLabels()
+    clearOrphanedWorkspaceSidebarLabels()
     let nextIndex = lowestUnusedPositiveIndex(Set(winMuxWorkspaceState.workspaceIdByName.keys.compactMap(sidebarDraftWorkspaceIndex)))
     return "\(sidebarDraftWorkspacePrefix)\(nextIndex)"
 }
@@ -37,11 +37,11 @@ func clearSidebarDraftWorkspaceLabelIfNeeded(_ workspaceName: String) {
 }
 
 @MainActor
-func clearOrphanedSidebarDraftWorkspaceLabels() {
+func clearOrphanedWorkspaceSidebarLabels() {
     for workspaceName in config.workspaceSidebar.workspaceLabels.keys
-    where isSidebarDraftWorkspaceName(workspaceName) && winMuxWorkspaceState.workspace(named: workspaceName) == nil
+    where winMuxWorkspaceState.workspace(named: workspaceName) == nil
     {
-        clearSidebarDraftWorkspaceLabelIfNeeded(workspaceName)
+        clearWorkspaceSidebarLabelIfNeeded(workspaceName)
     }
 }
 
@@ -64,5 +64,10 @@ func workspaceDefaultDisplayName(_ workspaceName: String) -> String {
 
 @MainActor
 func workspaceDisplayName(_ workspaceName: String) -> String {
+    if let configuredName = config.workspaceSidebar.workspaceLabels[workspaceName]?.trimmingCharacters(in: .whitespacesAndNewlines),
+       !configuredName.isEmpty
+    {
+        return configuredName
+    }
     return workspaceDefaultDisplayName(workspaceName)
 }

@@ -11,15 +11,30 @@ extension WorkspaceSidebarView {
         visibleWorkspacesByProject: [WorkspaceProjectId: [WorkspaceSidebarWorkspaceViewModel]],
         swipeDirection: Int?,
     ) -> some View {
-        if snapshot.projects.isEmpty {
+        if let browsedProjectId,
+           browsedProjectId != snapshot.activeProjectId
+        {
+            splitWorkspacePage(
+                activeProjectId: snapshot.activeProjectId,
+                browsedProjectId: browsedProjectId,
+                expansionProgress: expansionProgress,
+                leadingInset: leadingInset,
+                trailingInset: trailingInset,
+                topPadding: topPadding,
+                visibleWorkspacesByProject: visibleWorkspacesByProject
+            )
+        } else if snapshot.projects.isEmpty {
             workspacePage(
-                projectId: snapshot.selectedProjectId,
-                workspaces: visibleWorkspacesByProject[snapshot.selectedProjectId] ?? [],
+                projectId: snapshot.activeProjectId,
+                workspaces: visibleWorkspacesByProject[snapshot.activeProjectId] ?? [],
                 expansionProgress: expansionProgress,
                 leadingInset: leadingInset,
                 trailingInset: trailingInset,
                 topPadding: topPadding,
                 isInteractive: true,
+                showsPinnedActiveWorkspace: true,
+                showsCreateWorkspace: true,
+                allowsActivation: allowsWorkspaceActivation(projectId: snapshot.activeProjectId),
             )
         } else {
             projectPagerPages(

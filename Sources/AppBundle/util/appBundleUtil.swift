@@ -147,6 +147,16 @@ func debugWorkspaceSidebarRenameLog(_ message: @autoclosure () -> String) {
     fputs("[sidebar-rename-debug] \(Date()) \(message())\n", stderr)
 }
 
+func debugWorkspaceSidebarHoverLog(_ message: @autoclosure () -> String) {
+    guard isDebug else { return }
+    fputs("[sidebar-hover-debug] \(Date()) \(message())\n", stderr)
+}
+
+func debugWorkspaceSidebarProjectLog(_ message: @autoclosure () -> String) {
+    guard isDebug else { return }
+    fputs("[sidebar-project-debug] \(Date()) \(message())\n", stderr)
+}
+
 @inlinable
 func checkCancellation() throws(CancellationError) {
     if Task.isCancelled {

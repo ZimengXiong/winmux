@@ -109,6 +109,10 @@ let move_node_to_monitor_help_generated = """
        OR: move-node-to-monitor [-h|--help] [--window-id <window-id>] [--focus-follows-window]
                                 [--fail-if-noop] <monitor-pattern>...
     """
+let move_node_to_project_help_generated = """
+    USAGE: move-node-to-project [-h|--help] [--window-id <window-id>] [--focus-follows-window]
+                                [--wrap-around] [--fail-if-noop] (<project-index>|next|prev)
+    """
 let move_node_to_workspace_help_generated = """
     USAGE: move-node-to-workspace [-h|--help] [--focus-follows-window] [--wrap-around]
                                   [--stdin|--no-stdin]
@@ -123,6 +127,9 @@ let move_workspace_to_monitor_help_generated = """
     """
 let move_help_generated = """
     USAGE: move [-h|--help] [--window-id <window-id>] [--boundaries <boundary>] [--boundaries-action <boundary-action>] (left|down|up|right)
+    """
+let project_help_generated = """
+    USAGE: project [-h|--help] [--wrap-around] [--fail-if-noop] (<project-index>|next|prev)
     """
 let reload_config_help_generated = """
     USAGE: reload-config [-h|--help] [--no-gui] [--dry-run]

@@ -15,6 +15,13 @@ struct WorkspaceSidebarWorkspaceSection: View {
     let isActiveOnTargetMonitor: Bool
     let projectContextLabel: String?
     let projectContextColor: Color?
+    @Binding var renamingWorkspaceName: String?
+    @Binding var renamingWorkspaceText: String
+    let onBeginRenameWorkspace: @MainActor () -> Void
+    let onCommitRenameWorkspace: @MainActor () -> Void
+    let onCancelRenameWorkspace: @MainActor () -> Void
+    let selectedSearchTarget: WorkspaceSidebarSearchSelection?
+    let isSearchFiltering: Bool
     @Binding var activeInUseOverrideWorkspaceName: String?
     let actions: WorkspaceSidebarActions
 
@@ -41,6 +48,8 @@ struct WorkspaceSidebarWorkspaceSection: View {
     var isDropTarget: Bool { dragPreview?.targetWorkspaceName == workspace.name }
     var activeSidebarDragSourceWindowId: UInt32? { dragPreview?.sourceWindowId }
     var isShowingInUseOverlay: Bool { activeInUseOverrideWorkspaceName == workspace.name }
+    var isSearchSelectedWorkspace: Bool { selectedSearchTarget == .workspace(workspace.name) }
+    var isRenamingWorkspace: Bool { renamingWorkspaceName == workspace.name }
     var inUseOverrideText: String {
         if let monitorName = workspace.monitorName, !monitorName.isEmpty {
             return "In use on \(monitorName)"
@@ -61,6 +70,13 @@ struct WorkspaceSidebarWorkspaceSection: View {
             .clipped()
             .contentShape(Rectangle())
             .contextMenu {
+                Button {
+                    debugWorkspaceSidebarRenameLog("workspaceContextRename workspace=\(workspace.name) displayName=\(workspace.displayName) compact=\(isCompact)")
+                    onBeginRenameWorkspace()
+                } label: {
+                    Text("Rename Workspace")
+                }
+                Divider()
                 Button(role: .destructive) {
                     actions.send(.deleteWorkspace(workspace.name))
                 } label: {

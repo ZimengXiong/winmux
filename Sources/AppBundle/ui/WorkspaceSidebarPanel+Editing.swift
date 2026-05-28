@@ -5,6 +5,10 @@ enum WorkspaceSidebarInlineTextKey {
     case text(String)
     case deleteBackward
     case deleteForward
+    case deleteWordBackward
+    case deleteToBeginningOfLine
+    case moveUp
+    case moveDown
     case commit
     case cancel
     case ignored
@@ -13,25 +17,46 @@ enum WorkspaceSidebarInlineTextKey {
 private let workspaceSidebarInlineTextEventTapCallback: CGEventTapCallBack = { _, type, event, _ in
     guard type == .keyDown else { return Unmanaged.passUnretained(event) }
     let key = workspaceSidebarInlineTextKey(from: event)
+    if case .ignored = key {
+        return Unmanaged.passUnretained(event)
+    }
     DispatchQueue.main.async {
-        _ = WorkspaceSidebarPanel.shared.handleInlineTextEditingKey(key)
+        _ = WorkspaceSidebarPanel.activeInlineTextEditingPanel?.handleInlineTextEditingKey(key)
     }
     return nil
 }
 
 private func workspaceSidebarInlineTextKey(from event: CGEvent) -> WorkspaceSidebarInlineTextKey {
     let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+    let flags = event.flags
+    let usesCommand = flags.contains(.maskCommand)
+    let usesOption = flags.contains(.maskAlternate)
+    let usesControl = flags.contains(.maskControl)
     switch keyCode {
         case 36, 76:
             return .commit
         case 53:
             return .cancel
         case 51:
+            if usesCommand {
+                return .deleteToBeginningOfLine
+            }
+            if usesOption {
+                return .deleteWordBackward
+            }
             return .deleteBackward
         case 117:
             return .deleteForward
+        case 126:
+            return .moveUp
+        case 125:
+            return .moveDown
         default:
             break
+    }
+
+    guard !usesCommand, !usesOption, !usesControl else {
+        return .ignored
     }
 
     var length = 0
@@ -47,11 +72,16 @@ private func workspaceSidebarInlineTextKey(from event: CGEvent) -> WorkspaceSide
 
 extension WorkspaceSidebarPanel {
     func beginInlineTextEditing(
+        locksExpansion: Bool = true,
+        cancelsOnPointerExit: Bool = true,
         onCancel: (@MainActor () -> Void)? = nil,
         onKeyDown: (@MainActor (WorkspaceSidebarInlineTextKey) -> Void)? = nil
     ) {
         debugWorkspaceSidebarRenameLog("beginInlineTextEditing isKeyBefore=\(isKeyWindow) firstResponder=\(String(describing: firstResponder)) mouseInside=\(isMouseInsideVisibleRegion())")
         inlineTextEditingActive = true
+        inlineTextEditingLocksExpansion = locksExpansion
+        inlineTextEditingCancelsOnPointerExit = cancelsOnPointerExit
+        WorkspaceSidebarPanel.activeInlineTextEditingPanel = self
         inlineTextEditingCancel = onCancel
         inlineTextEditingKeyDown = onKeyDown
         inlineTextEditingStartedAt = .now
@@ -65,6 +95,11 @@ extension WorkspaceSidebarPanel {
         guard inlineTextEditingActive else { return }
         debugWorkspaceSidebarRenameLog("endInlineTextEditing isKey=\(isKeyWindow) firstResponder=\(String(describing: firstResponder))")
         inlineTextEditingActive = false
+        inlineTextEditingLocksExpansion = true
+        inlineTextEditingCancelsOnPointerExit = true
+        if WorkspaceSidebarPanel.activeInlineTextEditingPanel === self {
+            WorkspaceSidebarPanel.activeInlineTextEditingPanel = nil
+        }
         inlineTextEditingCancel = nil
         inlineTextEditingKeyDown = nil
         inlineTextEditingPointerEnteredVisibleRegion = false
@@ -104,6 +139,7 @@ extension WorkspaceSidebarPanel {
     }
 
     func shouldCancelInlineTextEditingForOutsidePointer(isMouseDown: Bool) -> Bool {
+        guard inlineTextEditingCancelsOnPointerExit else { return false }
         if isMouseInsideVisibleRegion() {
             inlineTextEditingPointerEnteredVisibleRegion = true
             return false

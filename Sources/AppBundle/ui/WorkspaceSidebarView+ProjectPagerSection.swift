@@ -12,14 +12,17 @@ extension WorkspaceSidebarView {
     ) -> some View {
         WorkspaceSidebarProjectPager(
             projects: snapshot.projects,
-            selectedProjectId: snapshot.selectedProjectId,
+            selectedProjectId: snapshot.activeProjectId,
             expansionProgress: expansionProgress,
             layout: snapshot.configuration,
             isProjectMenuOpen: $isProjectMenuOpen,
             renamingProjectId: $renamingProjectId,
             renamingProjectText: $renamingProjectText,
             onSelectProject: { projectId in
-                browsedProjectId = nil
+                debugWorkspaceSidebarProjectLog(
+                    "pagerSectionSelect project=\(projectId.rawValue) active=\(snapshot.activeProjectId.rawValue) browsed=\(browsedProjectId?.rawValue ?? "nil")"
+                )
+                browseMode = .activeProject
                 actions.send(.selectProject(projectId))
             },
             onCreateProject: { actions.send(.createProject) },

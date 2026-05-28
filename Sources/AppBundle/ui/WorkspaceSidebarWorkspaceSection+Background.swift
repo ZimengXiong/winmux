@@ -5,7 +5,7 @@ extension WorkspaceSidebarWorkspaceSection {
         sectionShape
             .fill(sectionBackgroundFill)
             .overlay {
-                if isPinnedActiveWorkspace {
+                if isPinnedActiveWorkspace && !isSearchFiltering {
                     sectionShape
                         .strokeBorder(
                             Color.white.opacity(0.24),
@@ -18,6 +18,12 @@ extension WorkspaceSidebarWorkspaceSection {
     var sectionBackgroundFill: Color {
         if isDropTarget {
             return Color.accentColor.opacity(0.12)
+        }
+        if isSearchSelectedWorkspace {
+            return Color.white.opacity(0.105)
+        }
+        if isSearchFiltering {
+            return isHovered ? Color.white.opacity(0.045) : Color.white.opacity(0.015)
         }
         if allowsWorkspaceActivation && isInUseOnOtherDisplay {
             return Color(nsColor: .systemRed).opacity(isHovered ? 0.18 : 0.10)

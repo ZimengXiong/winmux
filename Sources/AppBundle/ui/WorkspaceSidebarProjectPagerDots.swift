@@ -7,16 +7,18 @@ extension WorkspaceSidebarProjectPager {
         index: Int,
     ) -> some View {
         let isCurrent = index == currentIndex
-        let isPressed = pressedProjectId == project.id
         let isDotHovered = hoveredProjectDotId == project.id
         let projectColor = workspaceSidebarProjectColor(projectId: project.id, configuredHex: project.colorHex)
         Button {
+            debugWorkspaceSidebarProjectLog(
+                "dotButton project=\(project.id.rawValue) selected=\(selectedProjectId.rawValue) currentIndex=\(currentIndex?.description ?? "nil") compact=\(isCompact) projects=\(projects.map(\.id.rawValue))"
+            )
             projectTrackScrollTargetId = project.id
             onSelectProject(project.id)
         } label: {
             ZStack {
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(isDotHovered || isPressed ? projectColor.opacity(0.14) : Color.clear)
+                    .fill(isDotHovered ? projectColor.opacity(0.14) : Color.clear)
                     .frame(width: 34, height: 22)
                 Capsule(style: .continuous)
                     .fill(isCurrent ? projectColor.opacity(0.86) : projectColor.opacity(isDotHovered ? 0.58 : (isHovered ? 0.44 : 0.32)))
@@ -29,7 +31,6 @@ extension WorkspaceSidebarProjectPager {
                             )
                     }
                 }
-                .scaleEffect(isPressed ? 0.92 : 1, anchor: .center)
                 .frame(width: 36, height: workspaceSidebarProjectDotFrameHeight, alignment: .center)
                 .contentShape(Rectangle())
         }
@@ -42,13 +43,7 @@ extension WorkspaceSidebarProjectPager {
         .contextMenu {
             projectContextMenuItems(for: project)
         }
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in pressedProjectId = project.id }
-                .onEnded { _ in pressedProjectId = nil },
-        )
         .animation(.easeOut(duration: 0.18), value: isCurrent)
         .animation(.easeOut(duration: 0.14), value: isDotHovered)
-        .animation(.easeOut(duration: 0.14), value: isPressed)
     }
 }

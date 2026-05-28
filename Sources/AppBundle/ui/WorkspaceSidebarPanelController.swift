@@ -6,6 +6,7 @@ import SwiftUI
 final class WorkspaceSidebarPanel: NSPanelHud {
     static let shared = WorkspaceSidebarPanel(monitor: mainMonitor)
     private static var panelsByMonitorScopeId: [String: WorkspaceSidebarPanel] = [:]
+    static weak var activeInlineTextEditingPanel: WorkspaceSidebarPanel?
 
     let viewModel: TrayMenuModel
     let hostingView: WorkspaceSidebarHostingView
@@ -18,6 +19,8 @@ final class WorkspaceSidebarPanel: NSPanelHud {
     var menuTrackingDepth = 0
     var menuTrackingGraceUntil: Date = .distantPast
     var inlineTextEditingActive = false
+    var inlineTextEditingLocksExpansion = true
+    var inlineTextEditingCancelsOnPointerExit = true
     var inlineTextEditingCancel: (@MainActor () -> Void)?
     var inlineTextEditingKeyDown: (@MainActor (WorkspaceSidebarInlineTextKey) -> Void)?
     var inlineTextEditingEventMonitors: [Any] = []
@@ -25,10 +28,15 @@ final class WorkspaceSidebarPanel: NSPanelHud {
     var inlineTextEditingKeyEventTapRunLoopSource: CFRunLoopSource?
     var inlineTextEditingStartedAt: Date = .distantPast
     var inlineTextEditingPointerEnteredVisibleRegion = false
+    var commandParkedMousePoint: CGPoint?
+    var commandOriginalMousePoint: CGPoint?
+    var commandMouseRestoreAllowed = false
+    var commandMouseMoveMonitors: [Any] = []
     var menuTrackingObservers: [NSObjectProtocol] = []
     var lastEdgeTrapSample: MousePointerSample?
     var edgeTrapStartedAt: TimeInterval?
     var edgeTrapSuppressedUntil: TimeInterval = 0
+    var splitBrowseCollapseSuppressedUntil: Date = .distantPast
     let hoverExitTolerance: CGFloat = 20
     let hoverPollInterval: TimeInterval = 1.0 / 30.0
     let hoverOpenDelay: TimeInterval = 0.05
@@ -73,6 +81,10 @@ final class WorkspaceSidebarPanel: NSPanelHud {
 
     static func panel(containing point: CGPoint) -> WorkspaceSidebarPanel? {
         visiblePanels.first { $0.visibleScreenRectNormalized()?.contains(point) == true }
+    }
+
+    static func panel(for monitorScopeId: String) -> WorkspaceSidebarPanel? {
+        panelsByMonitorScopeId[monitorScopeId]
     }
 
     static func updateVisibleDropTargets(_ targets: [WorkspaceSidebarDropTargetFrame]) {
@@ -126,10 +138,8 @@ final class WorkspaceSidebarPanel: NSPanelHud {
 
     private func resolvedLocalSelectedProjectId() -> WorkspaceProjectId {
         let validProjectIds = Set(TrayMenuModel.shared.workspaceSidebarProjects.map(\.id))
-        if validProjectIds.contains(viewModel.workspaceSidebarSelectedProjectId) {
-            return viewModel.workspaceSidebarSelectedProjectId
-        }
-        return resolvedLocalActiveProjectId()
+        let activeProjectId = resolvedLocalActiveProjectId()
+        return validProjectIds.contains(activeProjectId) ? activeProjectId : workspaceProjectDefaultId
     }
 
     private func resolvedLocalActiveProjectId() -> WorkspaceProjectId {

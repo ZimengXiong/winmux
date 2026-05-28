@@ -28,8 +28,11 @@ public enum CmdKind: String, CaseIterable, Equatable, Sendable {
     case move = "move"
     case moveMouse = "move-mouse"
     case moveNodeToMonitor = "move-node-to-monitor"
+    case moveNodeToProject = "move-node-to-project"
     case moveNodeToWorkspace = "move-node-to-workspace"
     case moveWorkspaceToMonitor = "move-workspace-to-monitor"
+    case openSidebar = "open-sidebar"
+    case project
     case reloadConfig = "reload-config"
     case resize
     case split
@@ -103,12 +106,18 @@ func initSubcommands() -> [String: any SubCommandParserProtocol] {
                 result[kind.rawValue] = SubCommandParser(parseMoveMouseCmdArgs)
             case .moveNodeToMonitor:
                 result[kind.rawValue] = SubCommandParser(parseMoveNodeToMonitorCmdArgs)
+            case .moveNodeToProject:
+                result[kind.rawValue] = SubCommandParser(parseMoveNodeToProjectCmdArgs)
             case .moveNodeToWorkspace:
                 result[kind.rawValue] = SubCommandParser(parseMoveNodeToWorkspaceCmdArgs)
             case .moveWorkspaceToMonitor:
                 result[kind.rawValue] = SubCommandParser(parseWorkspaceToMonitorCmdArgs)
                 // deprecated
                 result["move-workspace-to-display"] = SubCommandParser(MoveWorkspaceToMonitorCmdArgs.init)
+            case .openSidebar:
+                result[kind.rawValue] = SubCommandParser(OpenSidebarCmdArgs.init)
+            case .project:
+                result[kind.rawValue] = SubCommandParser(parseProjectCmdArgs)
             case .reloadConfig:
                 result[kind.rawValue] = SubCommandParser(ReloadConfigCmdArgs.init)
             case .resize:

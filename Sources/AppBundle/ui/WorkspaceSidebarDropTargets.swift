@@ -2,7 +2,7 @@ import SwiftUI
 
 enum WorkspaceSidebarDropTargetKind: Equatable {
     case workspace(String)
-    case newWorkspace
+    case newWorkspace(projectId: WorkspaceProjectId, monitorScopeId: String)
     case monitor(String)
 }
 

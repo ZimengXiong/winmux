@@ -28,8 +28,11 @@ extension WorkspaceSidebarView {
                 leadingInset: leadingInset,
                 trailingInset: trailingInset,
                 topPadding: topPadding,
-                        isInteractive: index == displayIndex,
-                    )
+                isInteractive: index == displayIndex,
+                showsPinnedActiveWorkspace: showsPinnedActiveWorkspaceForBrowsedProject,
+                showsCreateWorkspace: browsedProjectId == nil,
+                allowsActivation: allowsWorkspaceActivation(projectId: project.id),
+            )
                     .frame(width: pageWidth, alignment: .topLeading)
                     .allowsHitTesting(index == displayIndex)
         } else {
@@ -47,10 +50,14 @@ extension WorkspaceSidebarView {
         trailingInset: CGFloat,
         topPadding: CGFloat,
         isInteractive: Bool,
+        showsPinnedActiveWorkspace: Bool = true,
+        showsCreateWorkspace: Bool = true,
+        allowsActivation: Bool? = nil,
     ) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 6) {
-                if let pinnedActiveWorkspace = pinnedActiveWorkspace(
+                if showsPinnedActiveWorkspace,
+                   let pinnedActiveWorkspace = pinnedActiveWorkspace(
                     displayedProjectId: projectId,
                     pageWorkspaces: workspaces
                 ) {
@@ -69,14 +76,21 @@ extension WorkspaceSidebarView {
                         workspace: workspace,
                         expansionProgress: expansionProgress,
                         emitsDropTarget: true,
-                        allowsWorkspaceActivation: allowsWorkspaceActivation(projectId: projectId),
+                        allowsWorkspaceActivation: allowsActivation ?? allowsWorkspaceActivation(projectId: projectId),
                         isPinnedActiveWorkspace: false,
-                        projectContextLabel: browsedProjectId != nil && projectId != snapshot.selectedProjectId ? projectName(projectId) : nil,
-                        projectContextColor: browsedProjectId != nil && projectId != snapshot.selectedProjectId ? projectColor(projectId) : nil
+                        projectContextLabel: browsedProjectId != nil && projectId != snapshot.activeProjectId ? projectName(projectId) : nil,
+                        projectContextColor: browsedProjectId != nil && projectId != snapshot.activeProjectId ? projectColor(projectId) : nil
                     )
                 }
-                if workspaceSidebarShowsCreateWorkspace(selectedScopeId: snapshot.selectedMonitorScopeId) && browsedProjectId == nil {
+                if showsCreateWorkspace && workspaceSidebarShowsCreateWorkspace(selectedScopeId: snapshot.selectedMonitorScopeId) {
+                    let createMonitorScopeId = workspaceSidebarWorkspaceCreateScope(
+                        selectedScopeId: snapshot.selectedMonitorScopeId,
+                        targetMonitorScopeId: snapshot.targetMonitorScopeId,
+                        focusedScopeId: snapshot.focusedMonitorScopeId,
+                    )
                     WorkspaceSidebarCreateWorkspaceSection(
+                        projectId: projectId,
+                        monitorScopeId: createMonitorScopeId,
                         dragPreview: snapshot.dropPreview,
                         expansionProgress: expansionProgress,
                         layout: snapshot.configuration,
@@ -84,31 +98,22 @@ extension WorkspaceSidebarView {
                         onCreateWorkspace: {
                             actions.send(.createWorkspace(
                                 projectId: projectId,
-                                monitorScopeId: workspaceSidebarWorkspaceCreateScope(
-                                    selectedScopeId: snapshot.selectedMonitorScopeId,
-                                    targetMonitorScopeId: snapshot.targetMonitorScopeId,
-                                    focusedScopeId: snapshot.focusedMonitorScopeId,
-                                )
+                                monitorScopeId: createMonitorScopeId
                             ))
                         },
                         onDropPayload: { payload in
-                            let monitorScopeId = workspaceSidebarWorkspaceCreateScope(
-                                selectedScopeId: snapshot.selectedMonitorScopeId,
-                                targetMonitorScopeId: snapshot.targetMonitorScopeId,
-                                focusedScopeId: snapshot.focusedMonitorScopeId,
-                            )
                             switch payload {
                                 case .window(let windowId):
                                     actions.send(.moveWindowToNewWorkspace(
                                         windowId,
                                         projectId: projectId,
-                                        monitorScopeId: monitorScopeId,
+                                        monitorScopeId: createMonitorScopeId,
                                     ))
                                 case .tabGroup(let representativeWindowId):
                                     actions.send(.moveTabGroupToNewWorkspace(
                                         representativeWindowId,
                                         projectId: projectId,
-                                        monitorScopeId: monitorScopeId,
+                                        monitorScopeId: createMonitorScopeId,
                                     ))
                             }
                         },
@@ -122,6 +127,51 @@ extension WorkspaceSidebarView {
             .padding(.bottom, 10)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    func splitWorkspacePage(
+        activeProjectId: WorkspaceProjectId,
+        browsedProjectId: WorkspaceProjectId,
+        expansionProgress: CGFloat,
+        leadingInset: CGFloat,
+        trailingInset: CGFloat,
+        topPadding: CGFloat,
+        visibleWorkspacesByProject: [WorkspaceProjectId: [WorkspaceSidebarWorkspaceViewModel]],
+    ) -> some View {
+        let sectionWidth = workspaceSidebarSectionWidth(expansionProgress, layout: snapshot.configuration)
+        return HStack(alignment: .top, spacing: workspaceSidebarSplitPaneGap) {
+            workspacePage(
+                projectId: activeProjectId,
+                workspaces: visibleWorkspacesByProject[activeProjectId] ?? [],
+                expansionProgress: expansionProgress,
+                leadingInset: leadingInset,
+                trailingInset: 0,
+                topPadding: topPadding,
+                isInteractive: true,
+                showsPinnedActiveWorkspace: false,
+                showsCreateWorkspace: true,
+                allowsActivation: true,
+            )
+            .frame(width: sectionWidth + leadingInset, alignment: .topLeading)
+
+            workspacePage(
+                projectId: browsedProjectId,
+                workspaces: visibleWorkspacesByProject[browsedProjectId] ?? [],
+                expansionProgress: expansionProgress,
+                leadingInset: 0,
+                trailingInset: trailingInset,
+                topPadding: topPadding,
+                isInteractive: true,
+                showsPinnedActiveWorkspace: false,
+                showsCreateWorkspace: true,
+                allowsActivation: false,
+            )
+            .frame(width: sectionWidth + trailingInset, alignment: .topLeading)
+        }
+        .frame(
+            width: workspaceSidebarSplitSectionWidth(expansionProgress: expansionProgress) + leadingInset + trailingInset,
+            alignment: .topLeading
+        )
     }
 
     @ViewBuilder
@@ -156,12 +206,25 @@ extension WorkspaceSidebarView {
             isActiveOnTargetMonitor: workspace.monitorScopeId == snapshot.targetMonitorScopeId && workspace.isVisible,
             projectContextLabel: projectContextLabel,
             projectContextColor: projectContextColor,
+            renamingWorkspaceName: $renamingWorkspaceName,
+            renamingWorkspaceText: $renamingWorkspaceText,
+            onBeginRenameWorkspace: {
+                beginWorkspaceRename(workspace)
+            },
+            onCommitRenameWorkspace: {
+                finishWorkspaceRename()
+            },
+            onCancelRenameWorkspace: {
+                finishWorkspaceRename(cancelled: true)
+            },
+            selectedSearchTarget: searchText.isEmpty ? nil : selectedSearchTarget,
+            isSearchFiltering: !searchText.isEmpty,
             activeInUseOverrideWorkspaceName: $activeInUseOverrideWorkspaceName,
             actions: actions,
         )
     }
 
-    private func allowsWorkspaceActivation(projectId: WorkspaceProjectId) -> Bool {
+    func allowsWorkspaceActivation(projectId: WorkspaceProjectId) -> Bool {
         snapshot.selectedMonitorScopeId == workspaceSidebarDefaultScopeId &&
             browsedProjectId == nil &&
             projectId == snapshot.activeProjectId

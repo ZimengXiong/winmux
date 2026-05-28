@@ -25,7 +25,7 @@ extension WorkspaceSidebarDragTest {
         XCTAssertTrue(
             isActionableSidebarWorkspaceDropTarget(
                 sourceWorkspaceName: "1",
-                targetKind: .newWorkspace,
+                targetKind: .newWorkspace(projectId: workspaceProjectDefaultId, monitorScopeId: workspaceSidebarDefaultScopeId),
             ),
         )
     }

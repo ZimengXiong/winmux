@@ -2,8 +2,10 @@ import AppKit
 
 extension WorkspaceSidebarPanel {
     func updateMousePassthrough() {
-        let shouldIgnoreMouseEvents = !isMouseInsideVisibleRegion()
+        let inside = isMouseInsideVisibleRegion()
+        let shouldIgnoreMouseEvents = !inside
         if ignoresMouseEvents != shouldIgnoreMouseEvents {
+            debugWorkspaceSidebarHoverLog("mousePassthrough panel=\(monitorScopeId) ignores \(ignoresMouseEvents)->\(shouldIgnoreMouseEvents) insideVisible=\(inside) visibleWidth=\(viewModel.workspaceSidebarVisibleWidth) frame=\(frame) mouse=\(NSEvent.mouseLocation)")
             ignoresMouseEvents = shouldIgnoreMouseEvents
         }
     }
@@ -15,7 +17,11 @@ extension WorkspaceSidebarPanel {
             CGFloat(config.workspaceSidebar.collapsedWidth),
         ) + hoverExitTolerance
         let hoverRegion = NSRect(x: frame.minX, y: frame.minY, width: hoverWidth, height: frame.height)
-        return hoverRegion.contains(NSEvent.mouseLocation)
+        let inside = hoverRegion.contains(NSEvent.mouseLocation)
+        if viewModel.workspaceSidebarVisibleWidth > CGFloat(config.workspaceSidebar.collapsedWidth) + 0.5 || pendingCollapse != nil {
+            debugWorkspaceSidebarHoverLog("hoverRegion panel=\(monitorScopeId) inside=\(inside) hoverWidth=\(hoverWidth) visibleWidth=\(viewModel.workspaceSidebarVisibleWidth) frame=\(frame) mouse=\(NSEvent.mouseLocation) suppressUntil=\(splitBrowseCollapseSuppressedUntil)")
+        }
+        return inside
     }
 
     func isMouseInsideVisibleRegion() -> Bool {

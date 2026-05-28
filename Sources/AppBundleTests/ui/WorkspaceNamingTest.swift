@@ -285,7 +285,7 @@ final class WorkspaceNamingTest: XCTestCase {
         XCTAssertEqual(workspaceDisplayName(projectWorkspace.name), "Workspace 1")
     }
 
-    func testWorkspaceSidebarRenameIsIgnored() throws {
+    func testWorkspaceSidebarRenameUsesDisplayLabelWithoutRenamingWorkspaceIdentity() throws {
         let workspace = Workspace.get(byName: "1")
         workspace.markAsAutomaticallyNamed()
         _ = TestWindow.new(id: 14, parent: workspace.rootTilingContainer)
@@ -293,8 +293,10 @@ final class WorkspaceNamingTest: XCTestCase {
         try renameWorkspaceForSidebar(workspaceName: workspace.name, displayName: "Code")
 
         XCTAssertEqual(workspace.name, "1")
-        XCTAssertEqual(workspaceDisplayName(workspace.name), "Workspace 1")
-        XCTAssertNil(config.workspaceSidebar.workspaceLabels[workspace.name])
+        XCTAssertEqual(workspaceDisplayName(workspace.name), "Code")
+        XCTAssertEqual(config.workspaceSidebar.workspaceLabels[workspace.name], "Code")
+        XCTAssertTrue(Workspace.existing(byName: "1") === workspace)
+        XCTAssertNil(Workspace.existing(byName: "Code"))
     }
 
     func testResettingWorkspaceNameFromSidebarUsesDefaultDisplayName() throws {
@@ -310,6 +312,27 @@ final class WorkspaceNamingTest: XCTestCase {
         XCTAssertNil(config.workspaceSidebar.workspaceLabels[workspace.name])
     }
 
+    func testRenamingWorkspaceToDefaultDisplayNameClearsLabel() throws {
+        let workspace = Workspace.get(byName: "1")
+        workspace.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 214, parent: workspace.rootTilingContainer)
+        try renameWorkspaceForSidebar(workspaceName: workspace.name, displayName: "Code")
+
+        try renameWorkspaceForSidebar(workspaceName: workspace.name, displayName: "Workspace 1")
+
+        XCTAssertEqual(workspace.name, "1")
+        XCTAssertEqual(workspaceDisplayName(workspace.name), "Workspace 1")
+        XCTAssertNil(config.workspaceSidebar.workspaceLabels[workspace.name])
+    }
+
+    func testWorkspaceRenameRejectsEmptyDisplayName() throws {
+        let workspace = Workspace.get(byName: "1")
+        workspace.markAsAutomaticallyNamed()
+
+        XCTAssertThrowsError(try renameWorkspaceForSidebar(workspaceName: workspace.name, displayName: "  "))
+        XCTAssertNil(config.workspaceSidebar.workspaceLabels[workspace.name])
+    }
+
     func testDeletingWorkspaceKeepsStableWorkspaceIdsAndCompactsDisplayNames() throws {
         let first = Workspace.get(byName: "1")
         first.markAsAutomaticallyNamed()
@@ -317,6 +340,7 @@ final class WorkspaceNamingTest: XCTestCase {
         let second = Workspace.get(byName: "2")
         second.markAsAutomaticallyNamed()
         _ = TestWindow.new(id: 16, parent: second.rootTilingContainer)
+        try renameWorkspaceForSidebar(workspaceName: first.name, displayName: "Code")
 
         try deleteWorkspaceForSidebar(workspaceName: first.name)
 
@@ -324,6 +348,7 @@ final class WorkspaceNamingTest: XCTestCase {
         XCTAssertTrue(Workspace.existing(byName: "2") === second)
         XCTAssertTrue(firstWindow.nodeWorkspace === second)
         XCTAssertEqual(workspaceDisplayName(second.name), "Workspace 1")
+        XCTAssertNil(config.workspaceSidebar.workspaceLabels[first.name])
     }
 
     func testDeletingFocusedWorkspaceFocusesNextClosestWorkspace() throws {
@@ -392,6 +417,8 @@ final class WorkspaceNamingTest: XCTestCase {
         projectWorkspace.seedMonitorIfNeeded(mainMonitor)
         let projectWindow = TestWindow.new(id: 218, parent: projectWorkspace.rootTilingContainer)
         config.workspaceSidebar.projectDeletionAction = .closeWindows
+        config.workspaceSidebar.projectLabels[project.id.rawValue] = "Temporary"
+        config.workspaceSidebar.projectColors[project.id.rawValue] = "#60A5FA"
 
         try await deleteWorkspaceProjectFromSidebar(project.id)
 
@@ -399,6 +426,8 @@ final class WorkspaceNamingTest: XCTestCase {
         XCTAssertNil(Workspace.existing(byName: projectWorkspace.name))
         XCTAssertNil(projectWindow.nodeWorkspace)
         XCTAssertFalse(defaultWorkspace.allLeafWindowsRecursive.contains(projectWindow))
+        XCTAssertNil(config.workspaceSidebar.projectLabels[project.id.rawValue])
+        XCTAssertNil(config.workspaceSidebar.projectColors[project.id.rawValue])
     }
 
     func testCreatedProjectPersistsIdentityAndDeleteRemovesPersistedIdentity() throws {
@@ -413,6 +442,7 @@ final class WorkspaceNamingTest: XCTestCase {
         XCTAssertNil(config.workspaceSidebar.projectLabels[project.id.rawValue])
         XCTAssertNil(config.workspaceSidebar.projectColors[project.id.rawValue])
         XCTAssertFalse(workspaceProjects().contains { $0.id == project.id })
+        XCTAssertNil(winMuxWorkspaceState.projectsById[WorkspaceProjectId("Work")])
     }
 
     func testPersistedProjectLabelMaterializesProject() {

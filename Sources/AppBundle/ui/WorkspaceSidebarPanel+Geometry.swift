@@ -20,6 +20,7 @@ extension WorkspaceSidebarPanel {
 
         let sidebarConfig = config.workspaceSidebar
         let expandedWidth = CGFloat(sidebarConfig.width)
+        let maximumExpandedWidth = expandedWidth * 2
         let collapsedWidth = CGFloat(sidebarConfig.collapsedWidth)
         guard expandedWidth > 0, collapsedWidth > 0 else { return nil }
 
@@ -28,7 +29,7 @@ extension WorkspaceSidebarPanel {
             frame: NSRect(
                 x: screen.frame.minX,
                 y: screen.frame.minY,
-                width: expandedWidth,
+                width: maximumExpandedWidth,
                 height: screen.frame.height - menuBarReserveHeight,
             ),
             expandedWidth: expandedWidth,

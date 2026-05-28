@@ -14,6 +14,7 @@ struct WorkspaceSidebarWindowRow: View {
     let title: String
     let badge: String?
     let isFocused: Bool
+    let suppressFocusedStyle: Bool
     let rowHeight: CGFloat
     let isHovered: Bool
     let style: Style
@@ -22,7 +23,7 @@ struct WorkspaceSidebarWindowRow: View {
 
     private var isTabGroupHeader: Bool { style == .tabGroupHeader }
     private var isTabGroupChild: Bool { style == .tabGroupChild }
-    private var isActiveRow: Bool { isFocused }
+    private var isActiveRow: Bool { isFocused && !suppressFocusedStyle }
     private var rowShape: RoundedRectangle {
         RoundedRectangle(cornerRadius: workspaceSidebarRowCornerRadius, style: .continuous)
     }

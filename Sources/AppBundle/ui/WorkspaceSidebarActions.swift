@@ -250,12 +250,13 @@ func previewWorkspaceSidebarDrop(_ windowId: UInt32, subject: WindowDragSubject,
         return
     }
     guard case .workspace(let workspaceName) = target else {
-        if target == .newWorkspace {
+        if case .newWorkspace(let projectId, _) = target {
             setWorkspaceSidebarDropPreviewIfChanged(workspaceSidebarDropPreview(
                 sourceWindow: sourceWindow,
                 subject: subject,
                 targetWorkspaceName: nil,
                 targetsNewWorkspace: true,
+                targetProjectId: projectId,
             ))
         } else {
             clearWorkspaceSidebarDropPreview()
@@ -267,6 +268,7 @@ func previewWorkspaceSidebarDrop(_ windowId: UInt32, subject: WindowDragSubject,
         subject: subject,
         targetWorkspaceName: workspaceName,
         targetsNewWorkspace: false,
+        targetProjectId: nil,
     ))
 }
 
@@ -313,6 +315,7 @@ private func workspaceSidebarDropPreview(
     subject: WindowDragSubject,
     targetWorkspaceName: String?,
     targetsNewWorkspace: Bool,
+    targetProjectId: WorkspaceProjectId? = nil,
 ) -> WorkspaceSidebarDropPreviewViewModel {
     let moveNode = dragSubjectNode(for: sourceWindow, subject: subject)
     let isTabGroup = moveNode is TilingContainer
@@ -326,6 +329,7 @@ private func workspaceSidebarDropPreview(
         appBundlePath: sourceWindow.app.bundlePath,
         targetWorkspaceName: targetWorkspaceName,
         targetsNewWorkspace: targetsNewWorkspace,
+        targetProjectId: targetProjectId,
         isTabGroup: isTabGroup,
         windowCount: max(moveNode.allLeafWindowsRecursive.count, 1),
         tabItems: workspaceSidebarDropPreviewTabs(for: moveNode, isTabGroup: isTabGroup),
@@ -367,21 +371,37 @@ func selectWorkspaceSidebarProject(
     viewModel: TrayMenuModel = TrayMenuModel.shared,
     targetMonitorScopeId: String? = nil,
 ) {
-    guard workspaceProjects().contains(where: { $0.id == projectId }) else { return }
+    let knownProjects = workspaceProjects()
+    let resolvedTargetScopeId = targetMonitorScopeId ?? viewModel.workspaceSidebarTargetMonitorScopeId
+    debugWorkspaceSidebarProjectLog(
+        "selectProjectBegin project=\(projectId.rawValue) known=\(knownProjects.map(\.id.rawValue)) targetScope=\(resolvedTargetScopeId) selectedBefore=\(viewModel.workspaceSidebarSelectedProjectId.rawValue) activeBefore=\(viewModel.workspaceSidebarActiveProjectId.rawValue)"
+    )
+    guard knownProjects.contains(where: { $0.id == projectId }) else {
+        debugWorkspaceSidebarProjectLog("selectProjectAbort unknownProject=\(projectId.rawValue)")
+        return
+    }
     viewModel.workspaceSidebarSelectedProjectId = projectId
-    TrayMenuModel.shared.workspaceSidebarSelectedProjectId = projectId
-    WorkspaceSidebarPanel.syncVisiblePanelModelsFromShared()
     runWorkspaceSidebarSession {
         viewModel.workspaceSidebarSelectedProjectId = projectId
-        TrayMenuModel.shared.workspaceSidebarSelectedProjectId = projectId
         let monitor = workspaceSidebarTargetMonitor(
             scopeId: targetMonitorScopeId ?? viewModel.workspaceSidebarTargetMonitorScopeId
         )
+        debugWorkspaceSidebarProjectLog(
+            "selectProjectSession project=\(projectId.rawValue) monitor=\(monitor.monitorAppKitNsScreenScreensId) visibleBefore=\(monitor.activeWorkspace.name) activeProjectBefore=\(activeWorkspaceProjectId(for: monitor).rawValue)"
+        )
         if let workspace = switchWorkspaceProject(projectId, on: monitor) {
+            debugWorkspaceSidebarProjectLog(
+                "selectProjectSwitchResult project=\(projectId.rawValue) workspace=\(workspace.name) workspaceProject=\(workspace.projectId.rawValue)"
+            )
             _ = workspace.focusWorkspace()
             viewModel.workspaceSidebarActiveProjectId = projectId
+        } else {
+            debugWorkspaceSidebarProjectLog("selectProjectSwitchResult project=\(projectId.rawValue) workspace=nil")
         }
         await updateWorkspaceSidebarModel()
+        debugWorkspaceSidebarProjectLog(
+            "selectProjectEnd project=\(projectId.rawValue) selectedAfter=\(viewModel.workspaceSidebarSelectedProjectId.rawValue) activeAfter=\(viewModel.workspaceSidebarActiveProjectId.rawValue)"
+        )
     }
 }
 
@@ -393,7 +413,6 @@ func createWorkspaceSidebarProject(
     runWorkspaceSidebarSession {
         let project = createWorkspaceProject()
         viewModel.workspaceSidebarSelectedProjectId = project.id
-        TrayMenuModel.shared.workspaceSidebarSelectedProjectId = project.id
         let monitor = workspaceSidebarTargetMonitor(
             scopeId: targetMonitorScopeId ?? viewModel.workspaceSidebarTargetMonitorScopeId
         )
@@ -430,13 +449,16 @@ func setWorkspaceSidebarProjectColor(_ project: WorkspaceSidebarProjectViewModel
 }
 
 @MainActor
-func deleteWorkspaceSidebarProject(_ project: WorkspaceSidebarProjectViewModel) {
+func deleteWorkspaceSidebarProject(
+    _ project: WorkspaceSidebarProjectViewModel,
+    viewModel: TrayMenuModel = TrayMenuModel.shared,
+) {
     guard canDeleteWorkspaceProject(project.id) else { return }
     guard confirmWorkspaceSidebarProjectDeletion(project) else { return }
     let fallbackProjectId = workspaceProjectFallbackForDeletion(excluding: project.id)
     runWorkspaceSidebarSession {
         try await deleteWorkspaceProjectFromSidebar(project.id)
-        TrayMenuModel.shared.workspaceSidebarSelectedProjectId = fallbackProjectId
+        viewModel.workspaceSidebarSelectedProjectId = fallbackProjectId
         await updateWorkspaceSidebarModel()
     }
 }
@@ -464,6 +486,15 @@ private func confirmWorkspaceSidebarProjectDeletion(_ project: WorkspaceSidebarP
     alert.addButton(withTitle: "Cancel")
     alert.alertStyle = .warning
     return alert.runModal() == .alertFirstButtonReturn
+}
+
+@MainActor
+func renameWorkspaceFromSidebar(_ workspaceName: String, displayName: String) {
+    debugWorkspaceSidebarRenameLog("renameWorkspaceFromSidebar workspace=\(workspaceName) displayName=\(displayName)")
+    runWorkspaceSidebarSession {
+        try renameWorkspaceForSidebar(workspaceName: workspaceName, displayName: displayName)
+        await updateWorkspaceSidebarModel()
+    }
 }
 
 @MainActor
@@ -515,6 +546,7 @@ func workspaceSidebarFallbackWorkspaceName(for windowId: UInt32) -> String? {
 func updateSidebarWindowDrag(_ windowId: UInt32, subject: WindowDragSubject = .window, pointer: CGPoint? = nil) {
     if let pointer {
         MousePointerTracker.shared.note(point: pointer)
+        postWorkspaceSidebarDragPointerNotification(workspaceSidebarDragPointerChangedNotification, pointer: pointer)
     }
     guard let window = Window.get(byId: windowId) else {
         clearWorkspaceSidebarDropPreview()
@@ -552,6 +584,7 @@ func updateSidebarWindowDrag(_ windowId: UInt32, subject: WindowDragSubject = .w
 func finishSidebarWindowDrag(pointer: CGPoint? = nil) {
     if let pointer {
         MousePointerTracker.shared.note(point: pointer)
+        postWorkspaceSidebarDragPointerNotification(workspaceSidebarDragPointerEndedNotification, pointer: pointer)
     }
     let didCommitSidebarDrop = commitActiveWorkspaceSidebarDragIfPossible()
     clearActiveWorkspaceSidebarDrag()
@@ -566,6 +599,15 @@ func finishSidebarWindowDrag(pointer: CGPoint? = nil) {
     }
     clearWorkspaceSidebarDropPreview()
     WindowDragCursorProxyPanel.shared.hide()
+}
+
+@MainActor
+private func postWorkspaceSidebarDragPointerNotification(_ name: Notification.Name, pointer: CGPoint) {
+    NotificationCenter.default.post(
+        name: name,
+        object: nil,
+        userInfo: [workspaceSidebarDragPointerUserInfoKey: NSValue(point: pointer)]
+    )
 }
 
 @MainActor
@@ -619,17 +661,7 @@ private func commitActiveWorkspaceSidebarDragIfPossible() -> Bool {
                 moveWindowFromSidebar(sourceWindow.windowId, toWorkspace: workspaceName)
             }
             return true
-        case .newWorkspace:
-            let targetMonitor = sidebarWorkspaceTargetMonitor(
-                fallbackWindow: sourceWindow,
-                fallbackPoint: MousePointerTracker.shared.currentSample.point
-            )
-            let panelViewModel = WorkspaceSidebarPanel.panel(containing: MousePointerTracker.shared.currentSample.point)?.viewModel
-            let projectId = sidebarWorkspaceTargetProjectId(
-                targetMonitor: targetMonitor,
-                viewModel: panelViewModel ?? TrayMenuModel.shared
-            )
-            let monitorScopeId = (panelViewModel ?? TrayMenuModel.shared).workspaceSidebarSelectedMonitorScopeId
+        case .newWorkspace(let projectId, let monitorScopeId):
             if activeDrag.subject == .group {
                 moveTabGroupToNewWorkspaceFromSidebar(sourceWindow.windowId, projectId: projectId, monitorScopeId: monitorScopeId)
             } else {

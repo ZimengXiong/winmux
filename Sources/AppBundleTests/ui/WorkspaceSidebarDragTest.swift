@@ -13,6 +13,83 @@ struct WorkspaceSidebarDragTestMonitor: Monitor {
     var height: CGFloat { rect.height }
 }
 
+private func makeWorkspaceSidebarSearchFixture() -> [WorkspaceSidebarWorkspaceViewModel] {
+    let releaseNotes = WorkspaceSidebarWindowViewModel(
+        windowId: 101,
+        workspaceName: "coding",
+        appName: "Xcode",
+        appBundleId: "com.apple.dt.Xcode",
+        appBundlePath: "/Applications/Xcode.app",
+        title: "ReleaseNotes.swift",
+        isFocused: false,
+    )
+    let terminal = WorkspaceSidebarWindowViewModel(
+        windowId: 102,
+        workspaceName: "coding",
+        appName: "Terminal",
+        appBundleId: "com.apple.Terminal",
+        appBundlePath: "/System/Applications/Utilities/Terminal.app",
+        title: "server",
+        isFocused: false,
+    )
+    let browserTab = WorkspaceSidebarWindowViewModel(
+        windowId: 202,
+        workspaceName: "research",
+        appName: "Safari",
+        appBundleId: "com.apple.Safari",
+        appBundlePath: "/Applications/Safari.app",
+        title: "WindowServer docs",
+        isFocused: false,
+    )
+    let notesTab = WorkspaceSidebarWindowViewModel(
+        windowId: 203,
+        workspaceName: "research",
+        appName: "Notes",
+        appBundleId: "com.apple.Notes",
+        appBundlePath: "/System/Applications/Notes.app",
+        title: "Ideas",
+        isFocused: false,
+    )
+    let browserGroup = WorkspaceSidebarTabGroupViewModel(
+        representativeWindowId: 201,
+        workspaceName: "research",
+        title: "Docs",
+        windowCount: 2,
+        isFocused: false,
+        tabs: [browserTab, notesTab],
+    )
+
+    return [
+        WorkspaceSidebarWorkspaceViewModel(
+            name: "coding",
+            projectId: workspaceProjectDefaultId,
+            displayName: "Coding",
+            sidebarLabel: "Coding",
+            isGeneratedName: false,
+            monitorScopeId: workspaceSidebarDefaultScopeId,
+            monitorName: nil,
+            isFocused: false,
+            isVisible: true,
+            items: [
+                WorkspaceSidebarItemViewModel(kind: .window(releaseNotes)),
+                WorkspaceSidebarItemViewModel(kind: .window(terminal)),
+            ],
+        ),
+        WorkspaceSidebarWorkspaceViewModel(
+            name: "research",
+            projectId: workspaceProjectDefaultId,
+            displayName: "Research",
+            sidebarLabel: "Research",
+            isGeneratedName: false,
+            monitorScopeId: workspaceSidebarDefaultScopeId,
+            monitorName: nil,
+            isFocused: false,
+            isVisible: true,
+            items: [WorkspaceSidebarItemViewModel(kind: .tabGroup(browserGroup))],
+        ),
+    ]
+}
+
 final class WorkspaceSidebarDragTest: XCTestCase {
     @MainActor
     func testWorkspaceSidebarSnapshotIncludesEmptyWorkspaceInBrowsedProject() async {
@@ -174,6 +251,52 @@ final class WorkspaceSidebarDragTest: XCTestCase {
         XCTAssertEqual(workspaceSidebarFallbackWorkspaceName(for: 201), "research")
         XCTAssertEqual(workspaceSidebarFallbackWorkspaceName(for: 202), "research")
         XCTAssertNil(workspaceSidebarFallbackWorkspaceName(for: 999))
+    }
+
+    func testWorkspaceSidebarSearchFiltersByWindowTitleAndAppName() {
+        let workspaces = makeWorkspaceSidebarSearchFixture()
+
+        let titleResults = workspaceSidebarFilteredWorkspacesByProject(
+            [workspaceProjectDefaultId: workspaces],
+            projects: [],
+            query: "release",
+        )[workspaceProjectDefaultId] ?? []
+        XCTAssertEqual(titleResults.map(\.name), ["coding"])
+        XCTAssertEqual(titleResults.first?.items.map(\.id), ["window:101"])
+
+        let appResults = workspaceSidebarFilteredWorkspacesByProject(
+            [workspaceProjectDefaultId: workspaces],
+            projects: [],
+            query: "safari",
+        )[workspaceProjectDefaultId] ?? []
+        XCTAssertEqual(appResults.map(\.name), ["research"])
+        XCTAssertEqual(appResults.first?.items.map(\.id), ["group:201"])
+        if case .tabGroup(let group) = appResults.first?.items.first?.kind {
+            XCTAssertEqual(group.tabs.map(\.windowId), [202, 203])
+            XCTAssertEqual(group.searchVisibleTabs?.map(\.windowId), [202])
+        } else {
+            XCTFail("Expected tab group search result")
+        }
+        XCTAssertEqual(workspaceSidebarSearchSelections(workspaces: appResults), [.window(202)])
+    }
+
+    func testWorkspaceSidebarSearchKeepsWholeWorkspaceForWorkspaceMatch() {
+        let workspaces = makeWorkspaceSidebarSearchFixture()
+
+        let results = workspaceSidebarFilteredWorkspacesByProject(
+            [workspaceProjectDefaultId: workspaces],
+            projects: [],
+            query: "coding",
+        )[workspaceProjectDefaultId] ?? []
+
+        XCTAssertEqual(results.map(\.name), ["coding"])
+        XCTAssertEqual(results.first?.items.map(\.id), ["window:101", "window:102"])
+    }
+
+    func testWorkspaceSidebarInlineTextDeletesLastWord() {
+        XCTAssertEqual("release notes".deletingLastWord(), "release ")
+        XCTAssertEqual("release notes   ".deletingLastWord(), "release ")
+        XCTAssertEqual("release".deletingLastWord(), "")
     }
 
     func testWorkspaceSidebarDragPayloadRoundTripsWindowAndTabGroupIds() {

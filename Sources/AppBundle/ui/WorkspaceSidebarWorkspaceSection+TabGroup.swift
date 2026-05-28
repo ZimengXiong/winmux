@@ -13,7 +13,7 @@ extension WorkspaceSidebarWorkspaceSection {
 
     func tabGroupTabs(_ group: WorkspaceSidebarTabGroupViewModel, isDragging: Bool) -> some View {
         VStack(alignment: .leading, spacing: 1) {
-            ForEach(group.tabs) { tab in
+            ForEach(group.searchVisibleTabs ?? group.tabs) { tab in
                 workspaceWindowButton(
                     tab,
                     allowsDrag: true,
