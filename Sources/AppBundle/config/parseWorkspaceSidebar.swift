@@ -3,6 +3,7 @@ import TOMLKit
 
 private let workspaceSidebarParser: [String: any ParserProtocol<WorkspaceSidebarConfig>] = [
     "enabled": Parser(\.enabled, parseBool),
+    "enable-focus": Parser(\.enableFocus, parseBool),
     "collapsed-width": Parser(\.collapsedWidth, parseWorkspaceSidebarWidth),
     "width": Parser(\.width, parseWorkspaceSidebarWidth),
     "monitor": Parser(\.monitor) { value, backtrace, errors in

@@ -139,7 +139,7 @@ func restoreFrozenWorldIfNeeded(_ frozenWorld: FrozenWorld, newlyDetectedWindow:
         {
             targetWorkspace = existingVisibleWorkspace
         } else {
-            targetWorkspace = getOrCreateLaneFallbackWorkspace(for: targetMonitor)
+            targetWorkspace = getOrCreateMonitorViewportFallbackWorkspace(for: targetMonitor)
         }
         _ = targetMonitor.setActiveWorkspace(targetWorkspace)
     }

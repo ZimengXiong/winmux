@@ -1,21 +1,6 @@
 import AppKit
 
 @MainActor
-func workspaceSidebarSelectedProjectMonitor(
-    selectedScopeId: String,
-    focusedMonitor: Monitor,
-    sortedMonitors: [Monitor],
-) -> Monitor {
-    guard selectedScopeId != workspaceSidebarDefaultScopeId,
-          selectedScopeId != workspaceSidebarFocusedScopeId,
-          selectedScopeId != workspaceSidebarAllScopeId
-    else {
-        return focusedMonitor
-    }
-    return sortedMonitors.first { workspaceSidebarMonitorScopeId(for: $0) == selectedScopeId } ?? focusedMonitor
-}
-
-@MainActor
 func workspaceSidebarResolvedPanelMonitor() -> Monitor {
     if isMouseWindowDragInProgress() {
         return mouseLocation.monitorApproximation
@@ -34,7 +19,7 @@ func buildWorkspaceSidebarMonitorScopes(
     sortedMonitors: [Monitor],
     focusedMonitorScopeId: String,
 ) -> [WorkspaceSidebarMonitorScopeViewModel] {
-    [
+    var scopes = [
         WorkspaceSidebarMonitorScopeViewModel(
             id: workspaceSidebarDefaultScopeId,
             displayName: "Default",
@@ -42,21 +27,17 @@ func buildWorkspaceSidebarMonitorScopes(
             systemImageName: "display",
             isFocusedMonitor: false,
         ),
-        WorkspaceSidebarMonitorScopeViewModel(
+    ]
+    if config.workspaceSidebar.enableFocus {
+        scopes.append(WorkspaceSidebarMonitorScopeViewModel(
             id: workspaceSidebarFocusedScopeId,
             displayName: "Focused",
             subtitle: nil,
             systemImageName: "scope",
             isFocusedMonitor: false,
-        ),
-        WorkspaceSidebarMonitorScopeViewModel(
-            id: workspaceSidebarAllScopeId,
-            displayName: "All",
-            subtitle: nil,
-            systemImageName: "rectangle.grid.2x2",
-            isFocusedMonitor: false,
-        ),
-    ] + sortedMonitors.enumerated().map { index, monitor in
+        ))
+    }
+    return scopes + sortedMonitors.enumerated().map { index, monitor in
         let scopeId = workspaceSidebarMonitorScopeId(for: monitor)
         return WorkspaceSidebarMonitorScopeViewModel(
             id: scopeId,

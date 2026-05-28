@@ -28,9 +28,7 @@ func workspaceSidebarWorkspaceIsInUseOnOtherDisplay(
 ) -> Bool {
     guard selectedScopeId != workspaceSidebarDefaultScopeId,
           selectedScopeId != workspaceSidebarFocusedScopeId,
-          selectedScopeId != workspaceSidebarAllScopeId,
-          workspace.isVisible,
-          workspace.monitorScopeId != workspaceSidebarAllScopeId
+          workspace.isVisible
     else {
         return false
     }

@@ -19,8 +19,8 @@ func resetWinMuxWorkspaceStateForTests() {
 }
 
 @MainActor
-func activateLaneFallbackWorkspaceForTests(on monitor: Monitor) -> Workspace {
-    let workspace = getOrCreateLaneFallbackWorkspace(for: monitor)
+func activateMonitorViewportFallbackWorkspaceForTests(on monitor: Monitor) -> Workspace {
+    let workspace = getOrCreateMonitorViewportFallbackWorkspace(for: monitor)
     check(monitor.setActiveWorkspace(workspace))
     return workspace
 }

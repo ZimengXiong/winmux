@@ -15,7 +15,7 @@ struct MoveWorkspaceToMonitorCommand: Command {
                 if targetMonitor.monitorId_oneBased == prevMonitor.monitorId_oneBased {
                     return true
                 }
-                if activateWorkspaceOnMonitorPreservingSourceLane(focusedWorkspace, targetMonitor: targetMonitor) {
+                if activateWorkspaceOnMonitorPreservingSourceViewport(focusedWorkspace, targetMonitor: targetMonitor) {
                     return true
                 } else {
                     return io.err(

@@ -3,7 +3,6 @@ import CoreGraphics
 struct WorkspaceSidebarSnapshot: Equatable {
     var workspaces: [WorkspaceSidebarWorkspaceViewModel]
     var projects: [WorkspaceSidebarProjectViewModel]
-    var selectedProjectId: WorkspaceProjectId
     var activeProjectId: WorkspaceProjectId
     var monitorScopes: [WorkspaceSidebarMonitorScopeViewModel]
     var selectedMonitorScopeId: String
@@ -17,7 +16,6 @@ struct WorkspaceSidebarSnapshot: Equatable {
     static let empty = WorkspaceSidebarSnapshot(
         workspaces: [],
         projects: [],
-        selectedProjectId: workspaceProjectDefaultId,
         activeProjectId: workspaceProjectDefaultId,
         monitorScopes: [],
         selectedMonitorScopeId: workspaceSidebarDefaultScopeId,

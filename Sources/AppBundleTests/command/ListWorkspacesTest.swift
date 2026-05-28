@@ -19,7 +19,7 @@ final class ListWorkspacesTest: XCTestCase {
     }
 
     @MainActor
-    func testListWorkspacesUsesProjectLaneOrderInsteadOfRawNameSort() async throws {
+    func testListWorkspacesUsesProjectViewportOrderInsteadOfRawNameSort() async throws {
         setUpWorkspacesForTests()
         let first = Workspace.get(byName: "10")
         first.markAsAutomaticallyNamed()

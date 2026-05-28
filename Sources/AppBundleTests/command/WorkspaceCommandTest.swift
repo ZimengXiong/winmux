@@ -81,7 +81,7 @@ final class WorkspaceCommandTest: XCTestCase {
         XCTAssertNil(Workspace.existing(byName: "3"))
     }
 
-    func testDirectWorkspaceShortcutUsesProjectLaneOrderInsteadOfRawNameSort() async throws {
+    func testDirectWorkspaceShortcutUsesProjectViewportOrderInsteadOfRawNameSort() async throws {
         let first = Workspace.get(byName: "10")
         first.markAsAutomaticallyNamed()
         _ = TestWindow.new(id: 21, parent: first.rootTilingContainer)

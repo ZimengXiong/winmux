@@ -43,7 +43,7 @@ final class MonitorTopologyTest: XCTestCase {
         XCTAssertEqual(left.findRelativeMonitor(inDirection: .right)?.monitorsInDirection.map(\.name), ["Left", "Main"])
     }
 
-    func testWorkspaceSidebarInsetAppliesOnlyToPanelMonitor() {
+    func testWorkspaceSidebarMainMonitorConfigCreatesPanelOnEveryMonitor() {
         let main = MonitorTopologyTestMonitor(
             monitorAppKitNsScreenScreensId: 1,
             name: "Main",
@@ -66,7 +66,58 @@ final class MonitorTopologyTest: XCTestCase {
 
         XCTAssertEqual(main.visibleRectPaddedByOuterGaps.topLeftX, 54)
         XCTAssertEqual(main.visibleRectPaddedByOuterGaps.width, 1866)
-        XCTAssertEqual(secondary.visibleRectPaddedByOuterGaps.topLeftX, 1920)
-        XCTAssertEqual(secondary.visibleRectPaddedByOuterGaps.width, 1920)
+        XCTAssertEqual(secondary.visibleRectPaddedByOuterGaps.topLeftX, 1974)
+        XCTAssertEqual(secondary.visibleRectPaddedByOuterGaps.width, 1866)
+    }
+
+    func testWorkspaceSidebarMainMonitorConfigResolvesAllMonitors() {
+        let main = MonitorTopologyTestMonitor(
+            monitorAppKitNsScreenScreensId: 1,
+            name: "Main",
+            rect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            isMain: true,
+        )
+        let secondary = MonitorTopologyTestMonitor(
+            monitorAppKitNsScreenScreensId: 2,
+            name: "Secondary",
+            rect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            isMain: false,
+        )
+        setMonitorsForTests([main, secondary])
+        config.workspaceSidebar.monitor = [.main]
+
+        XCTAssertEqual(
+            config.workspaceSidebar.resolvedMonitors(sortedMonitors: sortedMonitors).map(\.rect.topLeftCorner),
+            [main.rect.topLeftCorner, secondary.rect.topLeftCorner],
+        )
+    }
+
+    func testWorkspaceSidebarExplicitSecondaryConfigOnlyInsetsSecondaryMonitor() {
+        let main = MonitorTopologyTestMonitor(
+            monitorAppKitNsScreenScreensId: 1,
+            name: "Main",
+            rect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            isMain: true,
+        )
+        let secondary = MonitorTopologyTestMonitor(
+            monitorAppKitNsScreenScreensId: 2,
+            name: "Secondary",
+            rect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            isMain: false,
+        )
+        setMonitorsForTests([main, secondary])
+        config.workspaceSidebar.enabled = true
+        config.workspaceSidebar.collapsedWidth = 54
+        config.workspaceSidebar.monitor = [.sequenceNumber(2)]
+        config.gaps = .zero
+
+        XCTAssertEqual(main.visibleRectPaddedByOuterGaps.topLeftX, 0)
+        XCTAssertEqual(main.visibleRectPaddedByOuterGaps.width, 1920)
+        XCTAssertEqual(secondary.visibleRectPaddedByOuterGaps.topLeftX, 1974)
+        XCTAssertEqual(secondary.visibleRectPaddedByOuterGaps.width, 1866)
     }
 }

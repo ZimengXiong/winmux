@@ -13,9 +13,9 @@ public final class TrayMenuModel: ObservableObject {
     @Published var workspaces: [WorkspaceViewModel] = []
     @Published var workspaceSidebarWorkspaces: [WorkspaceSidebarWorkspaceViewModel] = []
     @Published var workspaceSidebarProjects: [WorkspaceSidebarProjectViewModel] = []
-    @Published var workspaceSidebarSelectedProjectId: WorkspaceProjectId = workspaceProjectDefaultId
     @Published var workspaceSidebarActiveProjectId: WorkspaceProjectId = workspaceProjectDefaultId
     @Published var workspaceSidebarMonitorScopes: [WorkspaceSidebarMonitorScopeViewModel] = []
+    /// Panel-local UI state. The shared model keeps this only as a compatibility default for legacy callers.
     @Published var workspaceSidebarSelectedMonitorScopeId: String = workspaceSidebarDefaultScopeId
     @Published var workspaceSidebarTargetMonitorScopeId: String = workspaceSidebarDefaultScopeId
     @Published var workspaceSidebarFocusedMonitorScopeId: String = ""
@@ -30,7 +30,7 @@ public final class TrayMenuModel: ObservableObject {
 
     var visibleWorkspaceSidebarWorkspaces: [WorkspaceSidebarWorkspaceViewModel] {
         workspaceSidebarWorkspaces.filter {
-            $0.projectId == workspaceSidebarSelectedProjectId &&
+            $0.projectId == workspaceSidebarActiveProjectId &&
             workspaceSidebarWorkspaceMatchesScope(
                 $0,
                 selectedScopeId: workspaceSidebarSelectedMonitorScopeId,

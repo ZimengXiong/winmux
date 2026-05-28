@@ -148,12 +148,17 @@ func debugWorkspaceSidebarRenameLog(_ message: @autoclosure () -> String) {
 }
 
 func debugWorkspaceSidebarHoverLog(_ message: @autoclosure () -> String) {
-    guard isDebug else { return }
+    guard isDebug, ProcessInfo.processInfo.environment["WINMUX_DEBUG_SIDEBAR_HOVER"] == "1" else { return }
     fputs("[sidebar-hover-debug] \(Date()) \(message())\n", stderr)
 }
 
+func debugWorkspaceSidebarEdgeTrapLog(_ message: @autoclosure () -> String) {
+    guard isDebug, ProcessInfo.processInfo.environment["WINMUX_DEBUG_SIDEBAR_EDGE_TRAP"] == "1" else { return }
+    fputs("[sidebar-edge-trap-debug] \(Date()) \(message())\n", stderr)
+}
+
 func debugWorkspaceSidebarProjectLog(_ message: @autoclosure () -> String) {
-    guard isDebug else { return }
+    guard isDebug, ProcessInfo.processInfo.environment["WINMUX_DEBUG_SIDEBAR_PROJECT"] == "1" else { return }
     fputs("[sidebar-project-debug] \(Date()) \(message())\n", stderr)
 }
 

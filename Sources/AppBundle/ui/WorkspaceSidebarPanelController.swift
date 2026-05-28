@@ -120,7 +120,6 @@ final class WorkspaceSidebarPanel: NSPanelHud {
         viewModel.workspaces = TrayMenuModel.shared.workspaces
         viewModel.workspaceSidebarWorkspaces = TrayMenuModel.shared.workspaceSidebarWorkspaces
         viewModel.workspaceSidebarProjects = TrayMenuModel.shared.workspaceSidebarProjects
-        viewModel.workspaceSidebarSelectedProjectId = resolvedLocalSelectedProjectId()
         viewModel.workspaceSidebarActiveProjectId = resolvedLocalActiveProjectId()
         viewModel.workspaceSidebarMonitorScopes = TrayMenuModel.shared.workspaceSidebarMonitorScopes
         viewModel.workspaceSidebarSelectedMonitorScopeId = resolvedLocalSelectedMonitorScopeId()
@@ -130,16 +129,10 @@ final class WorkspaceSidebarPanel: NSPanelHud {
         viewModel.workspaceSidebarDropPreview = TrayMenuModel.shared.workspaceSidebarDropPreview
         viewModel.windowTabStrips = TrayMenuModel.shared.windowTabStrips
         viewModel.workspaceSidebarTopPadding = TrayMenuModel.shared.workspaceSidebarTopPadding
-        viewModel.workspaceSidebarHoveredWorkspaceName = TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName
+        viewModel.workspaceSidebarHoveredWorkspaceName = resolvedLocalHoveredWorkspaceName()
         viewModel.experimentalUISettings = TrayMenuModel.shared.experimentalUISettings
         viewModel.workspaceSidebarVisibleWidth = visibleWidth
         viewModel.isWorkspaceSidebarExpanded = isExpanded
-    }
-
-    private func resolvedLocalSelectedProjectId() -> WorkspaceProjectId {
-        let validProjectIds = Set(TrayMenuModel.shared.workspaceSidebarProjects.map(\.id))
-        let activeProjectId = resolvedLocalActiveProjectId()
-        return validProjectIds.contains(activeProjectId) ? activeProjectId : workspaceProjectDefaultId
     }
 
     private func resolvedLocalActiveProjectId() -> WorkspaceProjectId {
@@ -153,6 +146,18 @@ final class WorkspaceSidebarPanel: NSPanelHud {
             return viewModel.workspaceSidebarSelectedMonitorScopeId
         }
         return workspaceSidebarDefaultScopeId
+    }
+
+    private func resolvedLocalHoveredWorkspaceName() -> String? {
+        let visibleWorkspaceNames = visibleWorkspaceNamesForSidebar(
+            workspaces: TrayMenuModel.shared.workspaceSidebarWorkspaces,
+            selectedMonitorScopeId: viewModel.workspaceSidebarSelectedMonitorScopeId,
+            focusedMonitorScopeId: TrayMenuModel.shared.workspaceSidebarFocusedMonitorScopeId,
+        )
+        return sanitizedWorkspaceSidebarHoveredWorkspaceName(
+            visibleWorkspaceNames: visibleWorkspaceNames,
+            hoveredWorkspaceName: TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName,
+        )
     }
 
     override var canBecomeKey: Bool { true }

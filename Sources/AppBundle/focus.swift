@@ -148,7 +148,12 @@ extension Window {
     @MainActor func toLiveFocusOrNil() -> LiveFocus? { visualWorkspace.map { LiveFocus(windowOrNil: self, workspace: $0) } }
 }
 extension Workspace {
-    @MainActor func focusWorkspace() -> Bool { setFocus(to: toLiveFocus()) }
+    @MainActor func focusWorkspace() -> Bool {
+        if self != focus.workspace {
+            WorkspaceSidebarPanel.suppressEdgeTrapForWorkspaceActivation()
+        }
+        return setFocus(to: toLiveFocus())
+    }
 
     func toLiveFocus() -> LiveFocus {
         toLiveFocus(excluding: nil)

@@ -39,8 +39,8 @@ func retainedEmptyWorkspaceId(in scope: WorkspaceScope) -> WorkspaceId? {
 
 @MainActor
 func workspaceScopeIsVisibleActiveProject(_ scope: WorkspaceScope) -> Bool {
-    winMuxWorkspaceState.lanesById.values.contains { lane in
-        lane.activeWorkspaceId
+    winMuxWorkspaceState.monitorViewportsById.values.contains { viewport in
+        viewport.activeWorkspaceId
             .flatMap { winMuxWorkspaceState.workspaceById[$0] }?
             .projectId == scope.projectId
     }

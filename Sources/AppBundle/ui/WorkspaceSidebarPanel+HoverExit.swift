@@ -25,7 +25,7 @@ extension WorkspaceSidebarPanel {
 
     func scheduleCollapse(collapsedWidth: CGFloat) {
         debugWorkspaceSidebarHoverLog("scheduleCollapse panel=\(monitorScopeId) visible=\(viewModel.workspaceSidebarVisibleWidth) collapsed=\(collapsedWidth) mouse=\(NSEvent.mouseLocation)")
-        NotificationCenter.default.post(name: workspaceSidebarWillCollapseNotification, object: nil)
+        NotificationCenter.default.post(name: workspaceSidebarWillCollapseNotification, object: self)
         let collapse = DispatchWorkItem { [weak self] in
             guard let self else { return }
             self.pendingCollapse = nil

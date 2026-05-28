@@ -25,7 +25,17 @@ struct WorkspaceSidebarDropTargetPreferenceKey: PreferenceKey {
 }
 
 @MainActor
-func workspaceSidebarDropTarget(at mouseLocation: CGPoint) -> WorkspaceSidebarDropTarget? {
+func workspaceSidebarDropTarget(at mouseLocation: CGPoint, hitSlop: NSEdgeInsets = NSEdgeInsets()) -> WorkspaceSidebarDropTarget? {
     WorkspaceSidebarPanel.panel(containing: mouseLocation)
-        .flatMap { panel in workspaceSidebarDropTargets.last(where: { panel.visibleScreenRectNormalized()?.contains($0.rect.center) == true && $0.rect.contains(mouseLocation) }) }
+        .flatMap { panel in
+            workspaceSidebarDropTargets.last(where: { target in
+                panel.visibleScreenRectNormalized()?.contains(target.rect.center) == true &&
+                    target.rect.expanded(
+                        left: hitSlop.left,
+                        right: hitSlop.right,
+                        top: hitSlop.top,
+                        bottom: hitSlop.bottom
+                    ).contains(mouseLocation)
+            })
+        }
 }

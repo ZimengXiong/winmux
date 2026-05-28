@@ -1,8 +1,8 @@
 import AppKit
 
 @MainActor
-struct DisplayLane {
-    let id: DisplayLaneId
+struct MonitorViewport {
+    let id: MonitorViewportId
     var activeWorkspaceId: WorkspaceId?
     var previousWorkspaceId: WorkspaceId?
     var lastActiveWorkspaceByProject: [WorkspaceProjectId: WorkspaceId] = [:]
@@ -15,7 +15,7 @@ struct WinMuxWorkspaceState {
     var projectsById: [WorkspaceProjectId: WorkspaceProject] = [
         workspaceProjectDefaultId: WorkspaceProject(id: workspaceProjectDefaultId, name: "Default", order: 0),
     ]
-    var lanesById: [DisplayLaneId: DisplayLane] = [:]
+    var monitorViewportsById: [MonitorViewportId: MonitorViewport] = [:]
 
     private var nextWorkspaceCounter = 1
     private var nextProjectCounter = 1
@@ -34,13 +34,13 @@ struct WinMuxWorkspaceState {
     }
 
     mutating func resetDisplayAssignments() {
-        lanesById = [:]
+        monitorViewportsById = [:]
     }
 
     mutating func resetWorkspaceRegistryForTests(defaultProjectName: String) {
         workspaceById = [:]
         workspaceIdByName = [:]
-        lanesById = [:]
+        monitorViewportsById = [:]
         projectsById = [
             workspaceProjectDefaultId: WorkspaceProject(id: workspaceProjectDefaultId, name: defaultProjectName, order: 0),
         ]
@@ -89,27 +89,27 @@ struct WinMuxWorkspaceState {
         insertWorkspace(workspace.id, intoProject: workspace.projectId)
     }
 
-    mutating func removeWorkspace(_ workspace: Workspace) -> DisplayLaneId? {
+    mutating func removeWorkspace(_ workspace: Workspace) -> MonitorViewportId? {
         workspaceById.removeValue(forKey: workspace.id)
         workspaceIdByName.removeValue(forKey: workspace.name)
         removeWorkspaceFromProjectIndexes(workspace.id)
 
-        var removedLane: DisplayLaneId?
-        for (laneId, lane) in lanesById {
-            var lane = lane
-            if lane.activeWorkspaceId == workspace.id {
-                lane.activeWorkspaceId = nil
-                removedLane = laneId
+        var removedViewport: MonitorViewportId?
+        for (viewportId, viewport) in monitorViewportsById {
+            var viewport = viewport
+            if viewport.activeWorkspaceId == workspace.id {
+                viewport.activeWorkspaceId = nil
+                removedViewport = viewportId
             }
-            if lane.previousWorkspaceId == workspace.id {
-                lane.previousWorkspaceId = nil
+            if viewport.previousWorkspaceId == workspace.id {
+                viewport.previousWorkspaceId = nil
             }
-            lane.lastActiveWorkspaceByProject = lane.lastActiveWorkspaceByProject.filter { _, id in
+            viewport.lastActiveWorkspaceByProject = viewport.lastActiveWorkspaceByProject.filter { _, id in
                 id != workspace.id
             }
-            lanesById[laneId] = lane
+            monitorViewportsById[viewportId] = viewport
         }
-        return removedLane
+        return removedViewport
     }
 
     mutating func ensureProjectExists(_ projectId: WorkspaceProjectId) {
@@ -119,41 +119,41 @@ struct WinMuxWorkspaceState {
         }
     }
 
-    mutating func ensureLaneExists(_ laneId: DisplayLaneId) {
-        if lanesById[laneId] == nil {
-            lanesById[laneId] = DisplayLane(id: laneId)
+    mutating func ensureMonitorViewportExists(_ viewportId: MonitorViewportId) {
+        if monitorViewportsById[viewportId] == nil {
+            monitorViewportsById[viewportId] = MonitorViewport(id: viewportId)
         }
     }
 
     mutating func activeProjectId(for monitor: Monitor) -> WorkspaceProjectId {
-        let laneId = DisplayLaneId(monitor)
-        ensureLaneExists(laneId)
-        return lanesById[laneId]?.activeWorkspaceId.flatMap { workspaceById[$0]?.projectId } ?? workspaceProjectDefaultId
+        let viewportId = MonitorViewportId(monitor)
+        ensureMonitorViewportExists(viewportId)
+        return monitorViewportsById[viewportId]?.activeWorkspaceId.flatMap { workspaceById[$0]?.projectId } ?? workspaceProjectDefaultId
     }
 
     mutating func visibleWorkspace(for monitor: Monitor) -> Workspace? {
-        let laneId = DisplayLaneId(monitor)
-        ensureLaneExists(laneId)
-        return lanesById[laneId]?.activeWorkspaceId.flatMap { workspaceById[$0] }
+        let viewportId = MonitorViewportId(monitor)
+        ensureMonitorViewportExists(viewportId)
+        return monitorViewportsById[viewportId]?.activeWorkspaceId.flatMap { workspaceById[$0] }
     }
 
-    func isWorkspaceActive(_ workspaceId: WorkspaceId, outside laneId: DisplayLaneId) -> Bool {
-        lanesById.contains { otherLaneId, lane in
-            otherLaneId != laneId && lane.activeWorkspaceId == workspaceId
+    func isWorkspaceActive(_ workspaceId: WorkspaceId, outside viewportId: MonitorViewportId) -> Bool {
+        monitorViewportsById.contains { otherViewportId, viewport in
+            otherViewportId != viewportId && viewport.activeWorkspaceId == workspaceId
         }
     }
 
-    mutating func setActiveWorkspace(_ workspace: Workspace, on laneId: DisplayLaneId) -> Bool {
-        ensureLaneExists(laneId)
+    mutating func setActiveWorkspace(_ workspace: Workspace, on viewportId: MonitorViewportId) -> Bool {
+        ensureMonitorViewportExists(viewportId)
         ensureProjectExists(workspace.projectId)
 
-        var lane = lanesById[laneId] ?? DisplayLane(id: laneId)
-        if lane.activeWorkspaceId != workspace.id {
-            lane.previousWorkspaceId = lane.activeWorkspaceId
+        var viewport = monitorViewportsById[viewportId] ?? MonitorViewport(id: viewportId)
+        if viewport.activeWorkspaceId != workspace.id {
+            viewport.previousWorkspaceId = viewport.activeWorkspaceId
         }
-        lane.activeWorkspaceId = workspace.id
-        lane.lastActiveWorkspaceByProject[workspace.projectId] = workspace.id
-        lanesById[laneId] = lane
+        viewport.activeWorkspaceId = workspace.id
+        viewport.lastActiveWorkspaceByProject[workspace.projectId] = workspace.id
+        monitorViewportsById[viewportId] = viewport
         return true
     }
 
@@ -168,18 +168,18 @@ struct WinMuxWorkspaceState {
         for workspace in workspaceById.values {
             ensureProjectExists(workspace.projectId)
         }
-        for (laneId, lane) in lanesById {
-            var lane = lane
-            if lane.activeWorkspaceId.flatMap({ workspaceById[$0] }) == nil {
-                lane.activeWorkspaceId = nil
+        for (viewportId, viewport) in monitorViewportsById {
+            var viewport = viewport
+            if viewport.activeWorkspaceId.flatMap({ workspaceById[$0] }) == nil {
+                viewport.activeWorkspaceId = nil
             }
-            if lane.previousWorkspaceId.flatMap({ workspaceById[$0] }) == nil {
-                lane.previousWorkspaceId = nil
+            if viewport.previousWorkspaceId.flatMap({ workspaceById[$0] }) == nil {
+                viewport.previousWorkspaceId = nil
             }
-            lane.lastActiveWorkspaceByProject = lane.lastActiveWorkspaceByProject.filter { projectId, workspaceId in
+            viewport.lastActiveWorkspaceByProject = viewport.lastActiveWorkspaceByProject.filter { projectId, workspaceId in
                 workspaceById[workspaceId]?.projectId == projectId
             }
-            lanesById[laneId] = lane
+            monitorViewportsById[viewportId] = viewport
         }
 
         let orderedWorkspaces = workspaceById.values.sorted()
@@ -214,13 +214,13 @@ struct WinMuxWorkspaceState {
             ensureProjectExists(workspace.projectId)
             insertWorkspace(workspace.id, intoProject: workspace.projectId)
         }
-        for (laneId, lane) in lanesById {
-            guard let workspaceId = lane.activeWorkspaceId,
+        for (viewportId, viewport) in monitorViewportsById {
+            guard let workspaceId = viewport.activeWorkspaceId,
                   let workspace = workspaceById[workspaceId]
             else { continue }
-            var lane = lane
-            lane.lastActiveWorkspaceByProject[workspace.projectId] = workspaceId
-            lanesById[laneId] = lane
+            var viewport = viewport
+            viewport.lastActiveWorkspaceByProject[workspace.projectId] = workspaceId
+            monitorViewportsById[viewportId] = viewport
         }
     }
 

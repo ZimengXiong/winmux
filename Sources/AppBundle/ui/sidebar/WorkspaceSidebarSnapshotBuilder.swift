@@ -10,7 +10,6 @@ func buildWorkspaceSidebarSnapshot() async -> WorkspaceSidebarSnapshot {
     return WorkspaceSidebarSnapshot(
         workspaces: TrayMenuModel.shared.workspaceSidebarWorkspaces,
         projects: TrayMenuModel.shared.workspaceSidebarProjects,
-        selectedProjectId: TrayMenuModel.shared.workspaceSidebarSelectedProjectId,
         activeProjectId: TrayMenuModel.shared.workspaceSidebarActiveProjectId,
         monitorScopes: TrayMenuModel.shared.workspaceSidebarMonitorScopes,
         selectedMonitorScopeId: TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId,
@@ -32,7 +31,6 @@ func refreshWorkspaceSidebarModelState() async {
 func applyWorkspaceSidebarSnapshotToTrayModel(_ snapshot: WorkspaceSidebarSnapshot) {
     TrayMenuModel.shared.workspaceSidebarWorkspaces = snapshot.workspaces
     TrayMenuModel.shared.workspaceSidebarProjects = snapshot.projects
-    TrayMenuModel.shared.workspaceSidebarSelectedProjectId = snapshot.selectedProjectId
     TrayMenuModel.shared.workspaceSidebarActiveProjectId = snapshot.activeProjectId
     TrayMenuModel.shared.workspaceSidebarMonitorScopes = snapshot.monitorScopes
     TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId = snapshot.selectedMonitorScopeId

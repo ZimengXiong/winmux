@@ -29,7 +29,7 @@ func workspaceProjects() -> [WorkspaceProject] {
             name: displayName,
             order: project.order,
             workspaceOrder: project.workspaceOrder,
-            linkedLaneIds: project.linkedLaneIds,
+            linkedViewportIds: project.linkedViewportIds,
         )
     }
 }
@@ -197,14 +197,14 @@ private func deleteWorkspaceProjectMovingWindowsToFallback(_ projectId: Workspac
     }
 
     let fallbackId = workspaceProjectFallbackForDeletion(excluding: projectId)
-    let lanesShowingDeletedProject = winMuxWorkspaceState.lanesById.values.compactMap { lane -> DisplayLaneId? in
-        guard let activeWorkspaceId = lane.activeWorkspaceId,
+    let viewportsShowingDeletedProject = winMuxWorkspaceState.monitorViewportsById.values.compactMap { viewport -> MonitorViewportId? in
+        guard let activeWorkspaceId = viewport.activeWorkspaceId,
               winMuxWorkspaceState.workspaceById[activeWorkspaceId]?.projectId == projectId
         else { return nil }
-        return lane.id
+        return viewport.id
     }
-    for laneId in lanesShowingDeletedProject {
-        _ = switchWorkspaceProject(fallbackId, on: laneId.topLeftCorner.monitorApproximation)
+    for viewportId in viewportsShowingDeletedProject {
+        _ = switchWorkspaceProject(fallbackId, on: viewportId.topLeftCorner.monitorApproximation)
     }
 
     for workspace in Workspace.all.filter({ $0.projectId == projectId }) {
@@ -242,14 +242,14 @@ private func closeWindowsAndDeleteWorkspaceProject(_ projectId: WorkspaceProject
     }
 
     let fallbackId = workspaceProjectFallbackForDeletion(excluding: projectId)
-    let lanesShowingDeletedProject = winMuxWorkspaceState.lanesById.values.compactMap { lane -> DisplayLaneId? in
-        guard let activeWorkspaceId = lane.activeWorkspaceId,
+    let viewportsShowingDeletedProject = winMuxWorkspaceState.monitorViewportsById.values.compactMap { viewport -> MonitorViewportId? in
+        guard let activeWorkspaceId = viewport.activeWorkspaceId,
               winMuxWorkspaceState.workspaceById[activeWorkspaceId]?.projectId == projectId
         else { return nil }
-        return lane.id
+        return viewport.id
     }
-    for laneId in lanesShowingDeletedProject {
-        _ = switchWorkspaceProject(fallbackId, on: laneId.topLeftCorner.monitorApproximation)
+    for viewportId in viewportsShowingDeletedProject {
+        _ = switchWorkspaceProject(fallbackId, on: viewportId.topLeftCorner.monitorApproximation)
     }
 
     for workspace in Workspace.all.filter({ $0.projectId == projectId }) {

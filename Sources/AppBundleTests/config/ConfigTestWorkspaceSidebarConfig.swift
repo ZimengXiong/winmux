@@ -9,6 +9,7 @@ extension ConfigTest {
             """
             [workspace-sidebar]
                 enabled = true
+                enable-focus = true
                 width = 280
                 monitor = ['secondary', 2]
                 show-status-pills = false
@@ -32,6 +33,7 @@ extension ConfigTest {
             parsed.workspaceSidebar,
             WorkspaceSidebarConfig(
                 enabled: true,
+                enableFocus: true,
                 collapsedWidth: 44,
                 width: 280,
                 monitor: [.secondary, .sequenceNumber(2)],
@@ -106,7 +108,7 @@ extension ConfigTest {
         let (parsed, errors) = parseConfig(
             """
             shortcuts-preset = 'rectangle'
-            [mode.foo.binding]
+            [mode.main.binding]
                 alt-h = 'focus left'
             """,
         )
@@ -114,7 +116,7 @@ extension ConfigTest {
             "shortcuts-preset: The 'rectangle' shortcuts preset has been removed",
         ])
         XCTAssertEqual(parsed.shortcutsPreset, .rectangle)
-        XCTAssertNotNil(parsed.modes["foo"])
+        XCTAssertNotNil(parsed.modes["main"])
     }
 
     func testRemovedRectangleShortcutsPresetDoesNotOverrideExplicitBindings() {

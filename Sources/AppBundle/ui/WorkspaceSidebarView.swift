@@ -98,7 +98,8 @@ struct WorkspaceSidebarView: View {
             isProjectMenuOpen = false
             resetProjectSwipeWithoutAnimation()
         }
-        .onReceive(NotificationCenter.default.publisher(for: workspaceSidebarWillCollapseNotification)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: workspaceSidebarWillCollapseNotification)) { notification in
+            guard notificationPanel(from: notification)?.monitorScopeId == snapshot.targetMonitorScopeId else { return }
             guard snapshot.visibleWidth > collapsedWidth + 0.5 else {
                 isSidebarCollapsing = false
                 return
@@ -111,6 +112,7 @@ struct WorkspaceSidebarView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: workspaceSidebarWillExpandNotification)) { notification in
+            guard notificationPanel(from: notification)?.monitorScopeId == snapshot.targetMonitorScopeId else { return }
             isSidebarCollapsing = false
             isSidebarExpanding = true
             let panel = notificationPanel(from: notification)
@@ -143,7 +145,7 @@ struct WorkspaceSidebarView: View {
         renamingProjectId = project.id
         renamingProjectText = project.displayName
         isProjectMenuOpen = false
-        WorkspaceSidebarPanel.shared.prepareForInlineTextEditing()
+        currentPanel()?.prepareForInlineTextEditing()
     }
 
     func finishProjectRename(cancelled: Bool = false) {
@@ -152,7 +154,7 @@ struct WorkspaceSidebarView: View {
         debugWorkspaceSidebarRenameLog("finishProjectRename project=\(projectId.rawValue) cancelled=\(cancelled) raw=\(renamingProjectText) trimmed=\(displayName)")
         renamingProjectId = nil
         renamingProjectText = ""
-        WorkspaceSidebarPanel.shared.endInlineTextEditing()
+        currentPanel()?.endInlineTextEditing()
         guard !cancelled, !displayName.isEmpty else { return }
         actions.send(.renameProject(projectId, displayName: displayName))
     }
@@ -163,6 +165,7 @@ struct WorkspaceSidebarView: View {
         finishProjectRename(cancelled: true)
         renamingWorkspaceName = workspace.name
         renamingWorkspaceText = workspace.displayName
+        currentPanel()?.prepareForInlineTextEditing()
     }
 
     func finishWorkspaceRename(cancelled: Bool = false) {
@@ -171,15 +174,20 @@ struct WorkspaceSidebarView: View {
         debugWorkspaceSidebarRenameLog("finishWorkspaceRename workspace=\(workspaceName) cancelled=\(cancelled) raw=\(renamingWorkspaceText) trimmed=\(displayName) targetScope=\(snapshot.targetMonitorScopeId)")
         renamingWorkspaceName = nil
         renamingWorkspaceText = ""
+        currentPanel()?.endInlineTextEditing()
         guard !cancelled, !displayName.isEmpty else { return }
         actions.send(.renameWorkspace(workspaceName, displayName: displayName))
+    }
+
+    func currentPanel() -> WorkspaceSidebarPanel? {
+        WorkspaceSidebarPanel.panel(for: snapshot.targetMonitorScopeId)
     }
 
     func beginSidebarSearchIfNeeded(panel: WorkspaceSidebarPanel? = nil) {
         guard renamingProjectId == nil, renamingWorkspaceName == nil, !isSearchEditing else { return }
         guard snapshot.visibleWidth > snapshot.configuration.collapsedWidth + 0.5 || isSidebarExpanding else { return }
         isSearchEditing = true
-        let editingPanel = panel ?? WorkspaceSidebarPanel.shared
+        let editingPanel = panel ?? currentPanel() ?? WorkspaceSidebarPanel.shared
         searchEditingPanel = editingPanel
         selectFirstSearchTarget()
         editingPanel.beginInlineTextEditing(
@@ -198,7 +206,7 @@ struct WorkspaceSidebarView: View {
         let panel = searchEditingPanel
         if isSearchEditing {
             isSearchEditing = false
-            (panel ?? WorkspaceSidebarPanel.shared).endInlineTextEditing()
+            (panel ?? currentPanel() ?? WorkspaceSidebarPanel.shared).endInlineTextEditing()
             searchEditingPanel = nil
         }
         if clearText {

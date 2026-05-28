@@ -20,7 +20,6 @@ extension WorkspaceSidebarPanel {
     }
 
     func updateHoverStateFromMousePosition() {
-        trapCursorForLeftEdgeSidebarActivationIfNeeded()
         updateMousePassthrough()
         setHovering(isMouseInsideHoverRegion())
     }

@@ -55,6 +55,8 @@ func setUpWorkspacesForTests() {
     shouldSuppressChromeForNativeFullscreenContent = false
     setScheduledRefreshOverrideForTests(nil)
     setBlockingRefreshOverridesForTests()
+    cancelManipulatedWithMouseState()
+    clearPendingWindowDragIntent()
     TestApp.shared.focusedWindow = nil
     TestApp.shared.windows = []
 }

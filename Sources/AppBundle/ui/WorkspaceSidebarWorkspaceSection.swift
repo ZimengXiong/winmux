@@ -10,6 +10,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
     let emitsDropTarget: Bool
     let isFromOtherDisplay: Bool
     let isInUseOnOtherDisplay: Bool
+    let isOnFocusedMonitor: Bool
     let allowsWorkspaceActivation: Bool
     let isPinnedActiveWorkspace: Bool
     let isActiveOnTargetMonitor: Bool
@@ -68,6 +69,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
             .frame(minHeight: sectionMinHeight, alignment: .top)
             .frame(maxWidth: .infinity, alignment: .leading)
             .clipped()
+            .opacity(compactFocusOpacity)
             .contentShape(Rectangle())
             .contextMenu {
                 Button {
@@ -101,6 +103,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
             .animation(reduceMotion ? workspaceSidebarReducedMotionHoverAnimation : workspaceSidebarHoverAnimation, value: isHovered)
             .animation(reduceMotion ? workspaceSidebarReducedMotionHoverAnimation : workspaceSidebarHoverAnimation, value: hoveredWindowId)
             .animation(reduceMotion ? workspaceSidebarReducedMotionHoverAnimation : workspaceSidebarHoverAnimation, value: hoveredTabGroupId)
+            .animation(reduceMotion ? workspaceSidebarReducedMotionHoverAnimation : workspaceSidebarHoverAnimation, value: isOnFocusedMonitor)
             .background {
                 ZStack {
                     sectionBackground

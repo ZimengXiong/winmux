@@ -1,6 +1,17 @@
 import AppKit
 import Common
 
+private let sidebarWorkspaceDropTargetHitSlop = NSEdgeInsets(top: 12, left: 14, bottom: 12, right: 14)
+
+private func sidebarWorkspaceDropInteractionRect(for target: WorkspaceSidebarDropTarget) -> Rect {
+    target.rect.expanded(
+        left: sidebarWorkspaceDropTargetHitSlop.left,
+        right: sidebarWorkspaceDropTargetHitSlop.right,
+        top: sidebarWorkspaceDropTargetHitSlop.top,
+        bottom: sidebarWorkspaceDropTargetHitSlop.bottom,
+    )
+}
+
 func isActionableSidebarWorkspaceDropTarget(
     sourceWorkspaceName: String?,
     targetKind: WorkspaceSidebarDropTargetKind?,
@@ -22,7 +33,7 @@ func currentSidebarWorkspaceDropDestination(sourceWindow: Window, mouseLocation:
     let sourceLabel = sidebarDragSourceTitle(for: sourceWindow, subject: subject)
     let isGroup = subject == .group
     let sourceWorkspaceName = dragSubjectNode(for: sourceWindow, subject: subject).nodeWorkspace?.name
-    if let target = workspaceSidebarDropTarget(at: mouseLocation),
+    if let target = workspaceSidebarDropTarget(at: mouseLocation, hitSlop: sidebarWorkspaceDropTargetHitSlop),
        isActionableSidebarWorkspaceDropTarget(sourceWorkspaceName: sourceWorkspaceName, targetKind: target.kind)
     {
         switch target.kind {
@@ -34,7 +45,7 @@ func currentSidebarWorkspaceDropDestination(sourceWindow: Window, mouseLocation:
                     kind: .moveToWorkspace(workspaceName: workspace.name),
                     previewContainerRect: workspaceSidebarCursorPreviewRect(at: mouseLocation),
                     previewRect: workspaceSidebarCursorPreviewRect(at: mouseLocation),
-                    interactionRect: target.rect.expanded(left: 14, right: 14, top: 12, bottom: 12),
+                    interactionRect: sidebarWorkspaceDropInteractionRect(for: target),
                     title: sourceLabel,
                     subtitle: "Drop to send this item to \(workspaceSidebarMonitorDisplayName(monitor))",
                     previewStyle: .sidebarWorkspaceMove,
@@ -46,7 +57,7 @@ func currentSidebarWorkspaceDropDestination(sourceWindow: Window, mouseLocation:
                     kind: .moveToWorkspace(workspaceName: workspaceName),
                     previewContainerRect: workspaceSidebarCursorPreviewRect(at: mouseLocation),
                     previewRect: workspaceSidebarCursorPreviewRect(at: mouseLocation),
-                    interactionRect: target.rect.expanded(left: 14, right: 14, top: 12, bottom: 12),
+                    interactionRect: sidebarWorkspaceDropInteractionRect(for: target),
                     title: sourceLabel,
                     subtitle: "Drop to send this item to \(workspaceName)",
                     previewStyle: .sidebarWorkspaceMove,
@@ -58,7 +69,7 @@ func currentSidebarWorkspaceDropDestination(sourceWindow: Window, mouseLocation:
                     kind: .createWorkspace,
                     previewContainerRect: workspaceSidebarCursorPreviewRect(at: mouseLocation),
                     previewRect: workspaceSidebarCursorPreviewRect(at: mouseLocation),
-                    interactionRect: target.rect.expanded(left: 14, right: 14, top: 12, bottom: 12),
+                    interactionRect: sidebarWorkspaceDropInteractionRect(for: target),
                     title: sourceLabel,
                     subtitle: "Drop to create a workspace and move this item there",
                     previewStyle: .sidebarWorkspaceMove,

@@ -137,7 +137,7 @@ extension WorkspaceNamingTest {
         XCTAssertEqual(workspace.preferredMonitorPointForTesting, secondary.rect.topLeftCorner)
     }
 
-    func testLaneFallbackIgnoresEmptyWorkspaceForcedToAnotherMonitor() {
+    func testMonitorViewportFallbackIgnoresEmptyWorkspaceForcedToAnotherMonitor() {
         let main = WorkspaceNamingTestMonitor(
             monitorAppKitNsScreenScreensId: 1,
             name: "Main",
@@ -157,7 +157,7 @@ extension WorkspaceNamingTest {
         let forcedElsewhere = Workspace.get(byName: "forced")
         config.workspaceToMonitorForceAssignment[forcedElsewhere.name] = [.sequenceNumber(2)]
 
-        let fallback = getOrCreateLaneFallbackWorkspace(projectId: workspaceProjectDefaultId, for: main)
+        let fallback = getOrCreateMonitorViewportFallbackWorkspace(projectId: workspaceProjectDefaultId, for: main)
 
         XCTAssertFalse(fallback === forcedElsewhere)
         XCTAssertEqual(fallback.workspaceMonitor.rect.topLeftCorner, main.rect.topLeftCorner)
@@ -204,7 +204,7 @@ extension WorkspaceNamingTest {
         XCTAssertTrue(newMain.activeWorkspace === workspace)
     }
 
-    func testGcMonitorsIgnoresInactiveLanesWhenPreservingVisibleWorkspace() {
+    func testGcMonitorsIgnoresInactiveViewportsWhenPreservingVisibleWorkspace() {
         let oldMain = WorkspaceNamingTestMonitor(
             monitorAppKitNsScreenScreensId: 1,
             name: "Main",
@@ -234,12 +234,12 @@ extension WorkspaceNamingTest {
         XCTAssertFalse(inactiveWorkspace.isVisible)
     }
 
-    func testLaneFallbackWorkspaceDoesNotForgetActiveProject() throws {
+    func testMonitorViewportFallbackWorkspaceDoesNotForgetActiveProject() throws {
         let project = createWorkspaceProject()
         let projectWorkspace = try XCTUnwrap(switchWorkspaceProject(project.id, on: mainMonitor))
         XCTAssertTrue(projectWorkspace.isVisible)
 
-        let fallback = activateLaneFallbackWorkspaceForTests(on: mainMonitor)
+        let fallback = activateMonitorViewportFallbackWorkspaceForTests(on: mainMonitor)
         XCTAssertEqual(fallback.projectId, project.id)
         XCTAssertEqual(activeWorkspaceProjectId(for: mainMonitor), project.id)
 

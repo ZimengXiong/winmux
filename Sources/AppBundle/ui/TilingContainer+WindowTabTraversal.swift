@@ -4,7 +4,7 @@ extension TilingContainer {
         var result: [TilingContainer] = []
         func visit(_ node: TreeNode) {
             guard let container = node as? TilingContainer else { return }
-            if container.showsWindowTabs {
+            if container.usesWindowTabBehavior {
                 result.append(container)
             }
             for child in container.children {

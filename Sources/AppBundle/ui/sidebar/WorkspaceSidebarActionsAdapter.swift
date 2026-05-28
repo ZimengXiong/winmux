@@ -49,7 +49,7 @@ func handleWorkspaceSidebarAction(
             focusWindowFromSidebar(windowId)
         case .selectProject(let projectId):
             debugWorkspaceSidebarProjectLog(
-                "adapterSelectProject project=\(projectId.rawValue) targetScope=\(targetMonitorScopeId ?? "nil") modelSelected=\(viewModel.workspaceSidebarSelectedProjectId.rawValue) modelActive=\(viewModel.workspaceSidebarActiveProjectId.rawValue)"
+                "adapterSelectProject project=\(projectId.rawValue) targetScope=\(targetMonitorScopeId ?? "nil") modelActive=\(viewModel.workspaceSidebarActiveProjectId.rawValue)"
             )
             selectWorkspaceSidebarProject(projectId, viewModel: viewModel, targetMonitorScopeId: targetMonitorScopeId)
         case .createProject:
@@ -67,7 +67,7 @@ func handleWorkspaceSidebarAction(
         case .selectMonitorScope(let scopeId):
             selectWorkspaceSidebarMonitorScope(scopeId, viewModel: viewModel)
         case .createWorkspace(let projectId, let monitorScopeId):
-            createWorkspaceFromSidebarButton(projectId: projectId, monitorScopeId: targetMonitorScopeId ?? monitorScopeId)
+            createWorkspaceFromSidebarButton(projectId: projectId, monitorScopeId: monitorScopeId)
         case .renameWorkspace(let name, let displayName):
             renameWorkspaceFromSidebar(name, displayName: displayName)
         case .deleteWorkspace(let name):
@@ -79,9 +79,9 @@ func handleWorkspaceSidebarAction(
         case .moveTabGroup(let windowId, let workspaceName):
             moveTabGroupFromSidebar(windowId, toWorkspace: workspaceName)
         case .moveWindowToNewWorkspace(let windowId, let projectId, let monitorScopeId):
-            moveWindowToNewWorkspaceFromSidebar(windowId, projectId: projectId, monitorScopeId: targetMonitorScopeId ?? monitorScopeId)
+            moveWindowToNewWorkspaceFromSidebar(windowId, projectId: projectId, monitorScopeId: monitorScopeId)
         case .moveTabGroupToNewWorkspace(let windowId, let projectId, let monitorScopeId):
-            moveTabGroupToNewWorkspaceFromSidebar(windowId, projectId: projectId, monitorScopeId: targetMonitorScopeId ?? monitorScopeId)
+            moveTabGroupToNewWorkspaceFromSidebar(windowId, projectId: projectId, monitorScopeId: monitorScopeId)
         case .previewWindowDrop(let windowId, let target):
             previewWorkspaceSidebarDrop(windowId, subject: .window, target: target)
         case .previewTabGroupDrop(let windowId, let target):

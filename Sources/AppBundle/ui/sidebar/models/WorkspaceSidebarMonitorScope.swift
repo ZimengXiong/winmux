@@ -2,13 +2,11 @@ import CoreGraphics
 
 let workspaceSidebarDefaultScopeId = "default"
 let workspaceSidebarFocusedScopeId = "focused"
-let workspaceSidebarAllScopeId = "all"
 private let workspaceSidebarMonitorScopePrefix = "monitor:"
 
 func workspaceSidebarMonitorScopeIsSentinel(_ scopeId: String) -> Bool {
     scopeId == workspaceSidebarDefaultScopeId ||
-        scopeId == workspaceSidebarFocusedScopeId ||
-        scopeId == workspaceSidebarAllScopeId
+        scopeId == workspaceSidebarFocusedScopeId
 }
 
 func workspaceSidebarMonitorScopeId(for monitor: Monitor) -> String {
@@ -43,11 +41,9 @@ func workspaceSidebarWorkspaceMatchesScope(
 ) -> Bool {
     switch selectedScopeId {
         case workspaceSidebarDefaultScopeId:
-            workspaceMonitorScopeId != workspaceSidebarAllScopeId
-        case workspaceSidebarAllScopeId:
-            workspaceMonitorScopeId != workspaceSidebarAllScopeId
+            true
         case workspaceSidebarFocusedScopeId:
-            workspaceMonitorScopeId == focusedMonitorScopeId || workspaceMonitorScopeId == workspaceSidebarAllScopeId
+            workspaceMonitorScopeId == focusedMonitorScopeId
         default:
             workspaceMonitorScopeId == selectedScopeId
     }
@@ -59,10 +55,7 @@ func workspaceSidebarWorkspaceMatchesScope(
     focusedMonitorScopeId: String,
 ) -> Bool {
     if selectedScopeId == workspaceSidebarDefaultScopeId {
-        return workspace.monitorScopeId != workspaceSidebarAllScopeId
-    }
-    if selectedScopeId == workspaceSidebarAllScopeId {
-        return workspace.monitorScopeId != workspaceSidebarAllScopeId
+        return true
     }
     if selectedScopeId == workspaceSidebarFocusedScopeId {
         return workspace.isFocused

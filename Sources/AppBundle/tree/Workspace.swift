@@ -9,7 +9,7 @@ struct WorkspaceProject: Hashable, Identifiable {
     let name: String
     let order: Int
     var workspaceOrder: [WorkspaceId] = []
-    var linkedLaneIds: Set<DisplayLaneId> = []
+    var linkedViewportIds: Set<MonitorViewportId> = []
 }
 
 enum WorkspaceMutationError: LocalizedError {

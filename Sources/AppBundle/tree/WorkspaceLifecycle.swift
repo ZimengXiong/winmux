@@ -8,8 +8,8 @@ func switchWorkspaceProject(_ projectId: WorkspaceProjectId, on monitor: Monitor
         debugWorkspaceSidebarProjectLog("switchProjectAbort unknownProject=\(projectId.rawValue)")
         return nil
     }
-    let laneId = DisplayLaneId(monitor)
-    let rememberedWorkspace = winMuxWorkspaceState.lanesById[laneId]?
+    let viewportId = MonitorViewportId(monitor)
+    let rememberedWorkspace = winMuxWorkspaceState.monitorViewportsById[viewportId]?
         .lastActiveWorkspaceByProject[projectId]
         .flatMap { winMuxWorkspaceState.workspaceById[$0] }
         .flatMap { workspaceIsAvailableForMonitor($0, monitor: monitor) ? $0 : nil }
@@ -18,7 +18,7 @@ func switchWorkspaceProject(_ projectId: WorkspaceProjectId, on monitor: Monitor
         ?? createBlankWorkspace(projectId: projectId, monitor: monitor)
     let didSetActive = monitor.setActiveWorkspace(workspace)
     debugWorkspaceSidebarProjectLog(
-        "switchProject project=\(projectId.rawValue) lane=\(laneId.description) remembered=\(rememberedWorkspace?.name ?? "nil") chosen=\(workspace.name) chosenProject=\(workspace.projectId.rawValue) didSetActive=\(didSetActive)"
+        "switchProject project=\(projectId.rawValue) viewport=\(viewportId.description) remembered=\(rememberedWorkspace?.name ?? "nil") chosen=\(workspace.name) chosenProject=\(workspace.projectId.rawValue) didSetActive=\(didSetActive)"
     )
     return didSetActive ? workspace : nil
 }
@@ -235,11 +235,30 @@ func replacementWorkspaceForPrunedWorkspace(
 @MainActor
 func ensureVisibleActiveProjectWorkspaces() {
     for monitor in monitors where winMuxWorkspaceState.visibleWorkspace(for: monitor) == nil {
-        let projectId = activeWorkspaceProjectId(for: monitor)
+        let viewportId = MonitorViewportId(monitor)
+        let projectId = fallbackProjectIdForMissingActiveWorkspace(on: viewportId)
         let workspace = availablePreferredWorkspace(projectId: projectId, monitor: monitor)
             ?? createBlankWorkspace(projectId: projectId, monitor: monitor)
         check(monitor.setActiveWorkspace(workspace))
     }
+}
+
+@MainActor
+private func fallbackProjectIdForMissingActiveWorkspace(on viewportId: MonitorViewportId) -> WorkspaceProjectId {
+    guard let viewport = winMuxWorkspaceState.monitorViewportsById[viewportId] else {
+        return workspaceProjectDefaultId
+    }
+    if let previousProjectId = viewport.previousWorkspaceId.flatMap({ winMuxWorkspaceState.workspaceById[$0]?.projectId }) {
+        return previousProjectId
+    }
+    if let rememberedProjectId = viewport.lastActiveWorkspaceByProject
+        .sorted(by: { $0.key < $1.key })
+        .first(where: { entry in winMuxWorkspaceState.workspaceById[entry.value] != nil })?
+        .key
+    {
+        return rememberedProjectId
+    }
+    return workspaceProjectDefaultId
 }
 
 @MainActor
@@ -259,10 +278,10 @@ func workspaceIsAvailableForMonitor(_ workspace: Workspace, monitor: Monitor) ->
 
 @MainActor
 func repairInvalidVisibleWorkspaceAssignments() {
-    let invalidVisibleWorkspaces = winMuxWorkspaceState.lanesById.compactMap { laneId, lane -> Workspace? in
-        guard let workspaceId = lane.activeWorkspaceId,
+    let invalidVisibleWorkspaces = winMuxWorkspaceState.monitorViewportsById.compactMap { viewportId, viewport -> Workspace? in
+        guard let workspaceId = viewport.activeWorkspaceId,
               let workspace = winMuxWorkspaceState.workspaceById[workspaceId],
-              !isValidAssignment(workspace: workspace, screen: laneId.topLeftCorner)
+              !isValidAssignment(workspace: workspace, screen: viewportId.topLeftCorner)
         else {
             return nil
         }
@@ -271,22 +290,22 @@ func repairInvalidVisibleWorkspaceAssignments() {
 
     for workspace in invalidVisibleWorkspaces {
         if let forceAssignedMonitor = workspace.forceAssignedMonitor {
-            _ = activateWorkspaceOnMonitorPreservingSourceLane(workspace, targetMonitor: forceAssignedMonitor)
+            _ = activateWorkspaceOnMonitorPreservingSourceViewport(workspace, targetMonitor: forceAssignedMonitor)
         }
     }
 
-    for (laneId, lane) in winMuxWorkspaceState.lanesById {
-        guard let workspaceId = lane.activeWorkspaceId,
+    for (viewportId, viewport) in winMuxWorkspaceState.monitorViewportsById {
+        guard let workspaceId = viewport.activeWorkspaceId,
               let workspace = winMuxWorkspaceState.workspaceById[workspaceId],
-              !isValidAssignment(workspace: workspace, screen: laneId.topLeftCorner)
+              !isValidAssignment(workspace: workspace, screen: viewportId.topLeftCorner)
         else {
             continue
         }
-        var lane = lane
-        lane.activeWorkspaceId = nil
-        if lane.previousWorkspaceId == workspaceId {
-            lane.previousWorkspaceId = nil
+        var viewport = viewport
+        viewport.activeWorkspaceId = nil
+        if viewport.previousWorkspaceId == workspaceId {
+            viewport.previousWorkspaceId = nil
         }
-        winMuxWorkspaceState.lanesById[laneId] = lane
+        winMuxWorkspaceState.monitorViewportsById[viewportId] = viewport
     }
 }

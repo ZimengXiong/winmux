@@ -44,26 +44,9 @@ struct WorkspaceSidebarMonitorSelector: View {
                     systemImageName: "display",
                     isFocusedMonitor: false
                 ),
-            scopes.first { $0.id == workspaceSidebarFocusedScopeId }
-                ?? WorkspaceSidebarMonitorScopeViewModel(
-                    id: workspaceSidebarFocusedScopeId,
-                    displayName: "Focus",
-                    subtitle: nil,
-                    systemImageName: "scope",
-                    isFocusedMonitor: false
-                ),
         ]
-        if hasMultipleMonitors {
-            result.append(
-                scopes.first { $0.id == workspaceSidebarAllScopeId }
-                    ?? WorkspaceSidebarMonitorScopeViewModel(
-                        id: workspaceSidebarAllScopeId,
-                        displayName: "All",
-                        subtitle: nil,
-                        systemImageName: "rectangle.grid.2x2",
-                        isFocusedMonitor: false
-                    )
-            )
+        if let focusedScope = scopes.first(where: { $0.id == workspaceSidebarFocusedScopeId }) {
+            result.append(focusedScope)
         }
         return result
     }
@@ -81,7 +64,7 @@ struct WorkspaceSidebarMonitorSelector: View {
         HStack(spacing: 3) {
             ForEach(Array(quickScopes.enumerated()), id: \.element.id) { index, scope in
                 monitorScopePill(scope)
-                if index == 1, !browsableProjects.isEmpty {
+                if index == quickScopes.count - 1, !browsableProjects.isEmpty {
                     projectSelector
                 }
             }

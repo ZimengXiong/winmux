@@ -19,7 +19,6 @@ func clearWorkspaceSidebarModelState() {
 func applyWorkspaceSidebarModelState(_ state: WorkspaceSidebarModelState, previousTopPadding: CGFloat) {
     let didMonitorScopeChange =
         TrayMenuModel.shared.workspaceSidebarMonitorScopes != state.monitorScopes ||
-        TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId != state.selectedMonitorScopeId ||
         TrayMenuModel.shared.workspaceSidebarFocusedMonitorScopeId != state.focusedMonitorScopeId ||
         TrayMenuModel.shared.workspaceSidebarShowsMonitorSelector != state.showsMonitorSelector
     let didProjectChange =
@@ -50,7 +49,6 @@ private func updateWorkspaceSidebarTrayModel(with state: WorkspaceSidebarModelSt
     TrayMenuModel.shared.workspaceSidebarProjects = state.projects
     TrayMenuModel.shared.workspaceSidebarActiveProjectId = state.activeProjectId
     TrayMenuModel.shared.workspaceSidebarMonitorScopes = state.monitorScopes
-    TrayMenuModel.shared.workspaceSidebarSelectedMonitorScopeId = state.selectedMonitorScopeId
     TrayMenuModel.shared.workspaceSidebarFocusedMonitorScopeId = state.focusedMonitorScopeId
     TrayMenuModel.shared.workspaceSidebarShowsMonitorSelector = state.showsMonitorSelector
 }

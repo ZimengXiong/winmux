@@ -184,9 +184,7 @@ extension WorkspaceSidebarView {
         projectContextLabel: String? = nil,
         projectContextColor: Color? = nil
     ) -> some View {
-        let isFromOtherDisplay = snapshot.selectedMonitorScopeId == workspaceSidebarAllScopeId &&
-            workspace.monitorScopeId != snapshot.targetMonitorScopeId &&
-            workspace.monitorScopeId != workspaceSidebarAllScopeId
+        let isFromOtherDisplay = false
         let isInUseOnOtherDisplay = allowsWorkspaceActivation &&
             !isPinnedActiveWorkspace &&
             workspaceSidebarWorkspaceIsInUseOnOtherDisplay(
@@ -201,6 +199,7 @@ extension WorkspaceSidebarView {
             emitsDropTarget: emitsDropTarget,
             isFromOtherDisplay: isFromOtherDisplay,
             isInUseOnOtherDisplay: isInUseOnOtherDisplay,
+            isOnFocusedMonitor: workspace.monitorScopeId == snapshot.focusedMonitorScopeId,
             allowsWorkspaceActivation: allowsWorkspaceActivation,
             isPinnedActiveWorkspace: isPinnedActiveWorkspace,
             isActiveOnTargetMonitor: workspace.monitorScopeId == snapshot.targetMonitorScopeId && workspace.isVisible,

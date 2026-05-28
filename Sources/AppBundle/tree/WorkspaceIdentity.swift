@@ -58,7 +58,7 @@ struct WorkspaceProjectId: RawRepresentable, Hashable, Identifiable, Sendable, C
     }
 }
 
-struct DisplayLaneId: Hashable, Sendable, Codable, CustomStringConvertible {
+struct MonitorViewportId: Hashable, Sendable, Codable, CustomStringConvertible {
     let topLeftCorner: CGPoint
 
     var description: String {
@@ -75,18 +75,10 @@ struct DisplayLaneId: Hashable, Sendable, Codable, CustomStringConvertible {
     }
 }
 
-typealias MonitorKey = DisplayLaneId
+typealias MonitorKey = MonitorViewportId
 
 struct WorkspaceScope: Hashable, Sendable {
     let projectId: WorkspaceProjectId
-
-    init(projectId: WorkspaceProjectId, laneId: DisplayLaneId) {
-        self.projectId = projectId
-    }
-
-    init(projectId: WorkspaceProjectId, monitor: DisplayLaneId) {
-        self.init(projectId: projectId, laneId: monitor)
-    }
 
     init(projectId: WorkspaceProjectId) {
         self.projectId = projectId

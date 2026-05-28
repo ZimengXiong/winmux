@@ -73,7 +73,7 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
         pruneEmptyWorkspaces()
         clearOrphanedWorkspaceSidebarLabels()
         ensureVisibleActiveProjectWorkspaces()
-        checkWorkspaceHierarchyInvariants()
+        checkWorkspaceHierarchyInvariants(requireActiveMonitorViewports: true)
     }
 
     nonisolated static func == (lhs: Workspace, rhs: Workspace) -> Bool {
@@ -144,7 +144,7 @@ extension Workspace {
 
     @MainActor
     var isVisible: Bool {
-        winMuxWorkspaceState.lanesById.values.contains { $0.activeWorkspaceId == id }
+        winMuxWorkspaceState.monitorViewportsById.values.contains { $0.activeWorkspaceId == id }
     }
     @MainActor
     var workspaceMonitor: Monitor {
@@ -157,8 +157,8 @@ extension Workspace {
 
     @MainActor
     var visibleMonitor: Monitor? {
-        winMuxWorkspaceState.lanesById.first { _, lane in
-            lane.activeWorkspaceId == id
+        winMuxWorkspaceState.monitorViewportsById.first { _, viewport in
+            viewport.activeWorkspaceId == id
         }?.key.topLeftCorner.monitorApproximation
     }
 

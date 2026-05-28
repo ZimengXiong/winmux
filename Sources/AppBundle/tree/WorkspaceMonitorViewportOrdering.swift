@@ -1,45 +1,37 @@
 import AppKit
 
-@MainActor
-func workspaceScope(projectId: WorkspaceProjectId, monitor: Monitor) -> WorkspaceScope {
-    WorkspaceScope(projectId: projectId)
-}
-
-@MainActor func getOrCreateLaneFallbackWorkspace(for monitor: Monitor) -> Workspace {
-    getOrCreateLaneFallbackWorkspace(
+@MainActor func getOrCreateMonitorViewportFallbackWorkspace(for monitor: Monitor) -> Workspace {
+    getOrCreateMonitorViewportFallbackWorkspace(
         projectId: activeWorkspaceProjectId(for: monitor),
         for: monitor,
     )
 }
 
-@MainActor func getOrCreateLaneFallbackWorkspace(projectId: WorkspaceProjectId, for monitor: Monitor) -> Workspace {
+@MainActor func getOrCreateMonitorViewportFallbackWorkspace(projectId: WorkspaceProjectId, for monitor: Monitor) -> Workspace {
     getOrCreateFallbackWorkspace(
         projectId: projectId,
-        laneId: DisplayLaneId(monitor),
         monitor: monitor,
         excluding: nil,
     )
 }
 
-@MainActor func getOrCreateLaneFallbackWorkspace(
+@MainActor func getOrCreateMonitorViewportFallbackWorkspace(
     projectId: WorkspaceProjectId,
     for monitor: Monitor,
     excluding excludedWorkspace: Workspace?,
 ) -> Workspace {
     getOrCreateFallbackWorkspace(
         projectId: projectId,
-        laneId: DisplayLaneId(monitor),
         monitor: monitor,
         excluding: excludedWorkspace,
     )
 }
 
 @MainActor
-func getOrCreateLaneFallbackWorkspace(forPoint point: CGPoint) -> Workspace {
+func getOrCreateMonitorViewportFallbackWorkspace(forPoint point: CGPoint) -> Workspace {
     let monitor = point.monitorApproximation
     return getOrCreateFallbackWorkspace(
         projectId: activeWorkspaceProjectId(for: monitor),
-        laneId: DisplayLaneId(topLeftCorner: point),
         monitor: monitor,
         excluding: nil,
     )
@@ -48,7 +40,6 @@ func getOrCreateLaneFallbackWorkspace(forPoint point: CGPoint) -> Workspace {
 @MainActor
 func getOrCreateFallbackWorkspace(
     projectId: WorkspaceProjectId,
-    laneId: DisplayLaneId,
     monitor: Monitor,
     excluding excludedWorkspace: Workspace?,
 ) -> Workspace {

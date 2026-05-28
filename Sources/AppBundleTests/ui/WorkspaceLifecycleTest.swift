@@ -179,6 +179,21 @@ final class WorkspaceLifecycleTest: XCTestCase {
         XCTAssertEqual(Workspace.all.filter { $0.projectId == workspaceProjectDefaultId && !$0.isArchived }.count, 2)
     }
 
+    func testReconcileRepairsCurrentMonitorViewportWithMissingActiveWorkspace() {
+        let workspace = Workspace.get(byName: "1")
+        workspace.markAsAutomaticallyNamed()
+        XCTAssertTrue(mainMonitor.setActiveWorkspace(workspace))
+        let viewportId = MonitorViewportId(mainMonitor)
+        var viewport = winMuxWorkspaceState.monitorViewportsById[viewportId].orDie()
+        viewport.activeWorkspaceId = nil
+        winMuxWorkspaceState.monitorViewportsById[viewportId] = viewport
+
+        Workspace.reconcileWorkspaceState()
+
+        XCTAssertNotNil(winMuxWorkspaceState.monitorViewportsById[viewportId]?.activeWorkspaceId)
+        XCTAssertEqual(mainMonitor.activeWorkspace.projectId, workspaceProjectDefaultId)
+    }
+
     func testEachMonitorKeepsAWorkspaceWhenWorkspacesSpanProjects() {
         let main = WorkspaceNamingTestMonitor(
             monitorAppKitNsScreenScreensId: 1,
@@ -207,6 +222,102 @@ final class WorkspaceLifecycleTest: XCTestCase {
         XCTAssertTrue(secondary.activeWorkspace === projectWorkspace)
         XCTAssertEqual(defaultWorkspace.projectId, workspaceProjectDefaultId)
         XCTAssertEqual(projectWorkspace.projectId, project.id)
+    }
+
+    func testSameProjectCanBeActiveOnDifferentMonitorsWithDifferentWorkspaces() {
+        let main = WorkspaceNamingTestMonitor(
+            monitorAppKitNsScreenScreensId: 1,
+            name: "Main",
+            rect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            isMain: true,
+        )
+        let secondary = WorkspaceNamingTestMonitor(
+            monitorAppKitNsScreenScreensId: 2,
+            name: "Secondary",
+            rect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            isMain: false,
+        )
+        setMonitorsForTests([main, secondary])
+        let first = Workspace.get(byName: "project-workspace-a")
+        let second = Workspace.get(byName: "project-workspace-b")
+        first.assignProject(workspaceProjectDefaultId)
+        second.assignProject(workspaceProjectDefaultId)
+
+        XCTAssertTrue(main.setActiveWorkspace(first))
+        XCTAssertTrue(secondary.setActiveWorkspace(second))
+
+        XCTAssertTrue(main.activeWorkspace === first)
+        XCTAssertTrue(secondary.activeWorkspace === second)
+        XCTAssertEqual(main.activeWorkspace.projectId, secondary.activeWorkspace.projectId)
+        checkWorkspaceHierarchyInvariants(requireActiveMonitorViewports: true)
+    }
+
+    func testSameWorkspaceCannotBeActiveOnTwoMonitorViewports() {
+        let main = WorkspaceNamingTestMonitor(
+            monitorAppKitNsScreenScreensId: 1,
+            name: "Main",
+            rect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            isMain: true,
+        )
+        let secondary = WorkspaceNamingTestMonitor(
+            monitorAppKitNsScreenScreensId: 2,
+            name: "Secondary",
+            rect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            isMain: false,
+        )
+        setMonitorsForTests([main, secondary])
+        let workspace = Workspace.get(byName: "shared-workspace")
+        let otherWorkspace = Workspace.get(byName: "other-workspace")
+
+        XCTAssertTrue(main.setActiveWorkspace(workspace))
+        XCTAssertTrue(secondary.setActiveWorkspace(otherWorkspace))
+        XCTAssertFalse(secondary.setActiveWorkspace(workspace))
+
+        XCTAssertTrue(main.activeWorkspace === workspace)
+        XCTAssertTrue(secondary.activeWorkspace === otherWorkspace)
+        checkWorkspaceHierarchyInvariants(requireActiveMonitorViewports: true)
+    }
+
+    func testSidebarWorkspaceModelsKeepSeparateMonitorScopesForSameProject() async {
+        let main = WorkspaceNamingTestMonitor(
+            monitorAppKitNsScreenScreensId: 1,
+            name: "Main",
+            rect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            isMain: true,
+        )
+        let secondary = WorkspaceNamingTestMonitor(
+            monitorAppKitNsScreenScreensId: 2,
+            name: "Secondary",
+            rect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 1920, topLeftY: 0, width: 1920, height: 1080),
+            isMain: false,
+        )
+        setMonitorsForTests([main, secondary])
+        let first = Workspace.get(byName: "project-workspace-a")
+        let second = Workspace.get(byName: "project-workspace-b")
+        XCTAssertTrue(main.setActiveWorkspace(first))
+        XCTAssertTrue(secondary.setActiveWorkspace(second))
+
+        let models = await buildWorkspaceSidebarWorkspaceViewModels(
+            currentFocus: focus,
+            workspaceLabels: [:],
+            availableMonitors: sortedMonitors,
+        )
+        let projectModels = Dictionary(uniqueKeysWithValues: models
+            .filter { $0.name == first.name || $0.name == second.name }
+            .map { ($0.name, $0) })
+
+        XCTAssertEqual(projectModels[first.name]?.projectId, workspaceProjectDefaultId)
+        XCTAssertEqual(projectModels[second.name]?.projectId, workspaceProjectDefaultId)
+        XCTAssertEqual(projectModels[first.name]?.monitorScopeId, workspaceSidebarMonitorScopeId(for: main))
+        XCTAssertEqual(projectModels[second.name]?.monitorScopeId, workspaceSidebarMonitorScopeId(for: secondary))
+        XCTAssertTrue(projectModels[first.name]?.isVisible == true)
+        XCTAssertTrue(projectModels[second.name]?.isVisible == true)
     }
 
     private func emptyUserFacingWorkspaces(in projectId: WorkspaceProjectId) -> [Workspace] {

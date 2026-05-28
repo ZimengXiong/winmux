@@ -15,7 +15,8 @@ extension WorkspaceSidebarPanel {
 
     func beginMenuTrackingIfNeeded() {
         guard isVisible,
-              viewModel.workspaceSidebarVisibleWidth > 0
+              viewModel.workspaceSidebarVisibleWidth > 0,
+              isMouseInsideVisibleRegion()
         else { return }
         menuTrackingDepth += 1
         menuTrackingGraceUntil = .distantFuture
