@@ -154,8 +154,8 @@ final class MacWindow: Window {
 
     // todo it's part of the window layout and should be moved to layoutRecursive.swift
     @MainActor
-    func hideInCorner(_ corner: OptimalHideCorner) async throws {
-        if isHiddenInCorner, hiddenInCorner == corner {
+    func hideInCorner(_ corner: OptimalHideCorner, force: Bool = false) async throws {
+        if !force, isHiddenInCorner, hiddenInCorner == corner {
             return
         }
         guard let nodeMonitor else { return }

@@ -22,7 +22,11 @@ extension WorkspaceSidebarPanel {
             hasDropPreview: TrayMenuModel.shared.workspaceSidebarDropPreview != nil,
             hasPinnedDraggedWindow: hasPinnedDraggedWindow(),
             isSidebarDragInProgress: getCurrentMouseManipulationKind() == .move && getCurrentMouseDragStartedInSidebar(),
-            hasActiveEditor: isMenuTrackingOrInGracePeriod() || (inlineTextEditingActive && inlineTextEditingLocksExpansion),
+            hasActiveEditor: isMenuTrackingOrInGracePeriod() || shouldKeepSidebarOpenForInlineTextEditing(),
         ) || isMouseWindowDragInProgress()
+    }
+
+    func shouldKeepSidebarOpenForInlineTextEditing() -> Bool {
+        commandExpansionLocksCollapse || (inlineTextEditingActive && inlineTextEditingLocksExpansion)
     }
 }

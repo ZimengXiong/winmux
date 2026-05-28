@@ -120,6 +120,12 @@ struct WorkspaceSidebarView: View {
                 beginSidebarSearchIfNeeded(panel: panel)
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: workspaceSidebarCommandSearchKeyNotification)) { notification in
+            guard let panel = notificationPanel(from: notification),
+                  panel.monitorScopeId == snapshot.targetMonitorScopeId
+            else { return }
+            adoptCommandSidebarSearchIfNeeded(panel: panel)
+        }
         .onReceive(NotificationCenter.default.publisher(for: workspaceSidebarDismissProjectMenusNotification)) { _ in
             if isProjectMenuOpen {
                 withAnimation(.easeOut(duration: 0.10)) {
@@ -186,12 +192,21 @@ struct WorkspaceSidebarView: View {
     func beginSidebarSearchIfNeeded(panel: WorkspaceSidebarPanel? = nil) {
         guard renamingProjectId == nil, renamingWorkspaceName == nil, !isSearchEditing else { return }
         guard snapshot.visibleWidth > snapshot.configuration.collapsedWidth + 0.5 || isSidebarExpanding else { return }
-        isSearchEditing = true
         let editingPanel = panel ?? currentPanel() ?? WorkspaceSidebarPanel.shared
-        searchEditingPanel = editingPanel
-        selectFirstSearchTarget()
+        adoptCommandSidebarSearchIfNeeded(panel: editingPanel)
+    }
+
+    func adoptCommandSidebarSearchIfNeeded(panel editingPanel: WorkspaceSidebarPanel) {
+        guard renamingProjectId == nil, renamingWorkspaceName == nil else { return }
+        if !isSearchEditing {
+            isSearchEditing = true
+            searchEditingPanel = editingPanel
+            selectFirstSearchTarget()
+        }
+        let locksExpansion = editingPanel.commandExpansionLocksCollapse || editingPanel.shouldLockNextSidebarSearchExpansion
+        editingPanel.shouldLockNextSidebarSearchExpansion = false
         editingPanel.beginInlineTextEditing(
-            locksExpansion: false,
+            locksExpansion: locksExpansion,
             cancelsOnPointerExit: false,
             onCancel: {
                 finishSidebarSearch(clearText: true)
@@ -200,6 +215,11 @@ struct WorkspaceSidebarView: View {
                 handleSidebarSearchKey(key)
             },
         )
+        let bufferedKeys = editingPanel.bufferedCommandSidebarSearchKeys
+        editingPanel.bufferedCommandSidebarSearchKeys = []
+        for key in bufferedKeys {
+            handleSidebarSearchKey(key)
+        }
     }
 
     func finishSidebarSearch(clearText: Bool) {

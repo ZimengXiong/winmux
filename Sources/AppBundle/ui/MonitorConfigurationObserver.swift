@@ -5,6 +5,7 @@ final class MonitorConfigurationObserver {
     static let shared = MonitorConfigurationObserver()
 
     private var observer: NSObjectProtocol?
+    private var screenChangeGeneration: UInt64 = 0
 
     private init() {}
 
@@ -27,6 +28,7 @@ final class MonitorConfigurationObserver {
 
     private func handleScreenParametersChanged() {
         refreshMonitorPolicy(refreshReason: NSApplication.didChangeScreenParametersNotification.rawValue)
+        scheduleSettledRefresh()
     }
 
     private func refreshMonitorPolicy(refreshReason: String) {
@@ -34,6 +36,16 @@ final class MonitorConfigurationObserver {
         WindowTabStripPanelController.shared.refresh()
         if TrayMenuModel.shared.isEnabled {
             scheduleRefreshSession(.globalObserver(refreshReason))
+        }
+    }
+
+    private func scheduleSettledRefresh() {
+        screenChangeGeneration += 1
+        let generation = screenChangeGeneration
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 750_000_000)
+            guard generation == screenChangeGeneration else { return }
+            refreshMonitorPolicy(refreshReason: "\(NSApplication.didChangeScreenParametersNotification.rawValue).settled")
         }
     }
 }

@@ -14,7 +14,7 @@ struct WindowTabItemView: View {
             Text(tab.title)
                 .font(.system(size: 12, weight: tab.isActive ? .semibold : .medium))
                 .lineLimit(1)
-                .truncationMode(.middle)
+                .truncationMode(.tail)
         }
         .foregroundStyle(tabForegroundStyle)
         .padding(.horizontal, 10)

@@ -28,10 +28,11 @@ final class WorkspaceSidebarPanel: NSPanelHud {
     var inlineTextEditingKeyEventTapRunLoopSource: CFRunLoopSource?
     var inlineTextEditingStartedAt: Date = .distantPast
     var inlineTextEditingPointerEnteredVisibleRegion = false
-    var commandParkedMousePoint: CGPoint?
-    var commandOriginalMousePoint: CGPoint?
-    var commandMouseRestoreAllowed = false
-    var commandMouseMoveMonitors: [Any] = []
+    var commandExpansionLocksCollapse = false
+    var shouldLockNextSidebarSearchExpansion = false
+    var bufferedCommandSidebarSearchKeys: [WorkspaceSidebarInlineTextKey] = []
+    var commandMouseUnlockPoint: CGPoint?
+    var commandMouseUnlockMonitors: [Any] = []
     var menuTrackingObservers: [NSObjectProtocol] = []
     var lastEdgeTrapSample: MousePointerSample?
     var edgeTrapStartedAt: TimeInterval?
@@ -175,6 +176,9 @@ final class WorkspaceSidebarPanel: NSPanelHud {
 
     override func keyDown(with event: NSEvent) {
         debugWorkspaceSidebarRenameLog("panel keyDown keyCode=\(event.keyCode) chars=\(event.charactersIgnoringModifiers ?? "nil") firstResponder=\(String(describing: firstResponder)) inline=\(inlineTextEditingActive)")
+        if handleInlineTextEditingKey(inlineTextKey(from: event)) {
+            return
+        }
         super.keyDown(with: event)
     }
 }

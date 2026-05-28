@@ -10,29 +10,33 @@ struct WorkspaceSidebarCompactClockCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(components.hour)
-                .foregroundStyle(Color.white.opacity(0.86))
+        GeometryReader { _ in
+            let shape = RoundedRectangle(cornerRadius: workspaceSidebarStatusCornerRadius, style: .continuous)
+            ZStack(alignment: .bottomLeading) {
+                shape
+                    .fill(Color.white.opacity(0.06))
 
-            Text(components.minute)
-                .foregroundStyle(Color.white.opacity(0.86))
+                VStack(alignment: .center, spacing: 4) {
+                    Text(components.hour)
+                        .foregroundStyle(Color.white.opacity(0.90))
 
-            Text(components.second)
-                .foregroundStyle(Color.white.opacity(0.62))
-        }
-        .font(.system(size: 18, weight: .semibold))
-        .monospacedDigit()
-        .padding(.leading, 7)
-        .frame(width: sectionWidth, alignment: .leading)
-        .frame(minHeight: 84)
-        .background(
-            RoundedRectangle(cornerRadius: workspaceSidebarStatusCornerRadius, style: .continuous)
-                .fill(Color.white.opacity(0.06))
-                .overlay {
-                    RoundedRectangle(cornerRadius: workspaceSidebarStatusCornerRadius, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.04), lineWidth: 0.5)
+                    Text(components.minute)
+                        .foregroundStyle(Color.white.opacity(0.90))
+
+                    Text(components.second)
+                        .foregroundStyle(Color.white.opacity(0.66))
                 }
-        )
+                .font(.system(size: 19, weight: .bold, design: .rounded))
+                .monospacedDigit()
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+
+                shape
+                    .strokeBorder(Color.white.opacity(0.05), lineWidth: 0.5)
+            }
+            .clipShape(shape)
+        }
+        .frame(width: sectionWidth, alignment: .leading)
+        .frame(height: 92)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(date, format: .dateTime.hour().minute().second()))
     }

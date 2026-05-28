@@ -21,14 +21,7 @@ struct WindowTabStripLayoutContext {
     }
 
     var scrollViewportWidth: CGFloat {
-        max(
-            0,
-            width
-                - 16
-                - windowTabStripReservedGroupHandleWidth()
-                - windowTabStripTrailingGroupDragGutterWidth
-                - 18,
-        )
+        windowTabStripScrollViewportWidth(stripWidth: width)
     }
 
     var scrollContentWidth: CGFloat {

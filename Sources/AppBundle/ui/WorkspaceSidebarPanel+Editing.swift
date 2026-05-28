@@ -71,6 +71,42 @@ private func workspaceSidebarInlineTextKey(from event: CGEvent) -> WorkspaceSide
 }
 
 extension WorkspaceSidebarPanel {
+    func inlineTextKey(from event: NSEvent) -> WorkspaceSidebarInlineTextKey {
+        let usesCommand = event.modifierFlags.contains(.command)
+        let usesOption = event.modifierFlags.contains(.option)
+        let usesControl = event.modifierFlags.contains(.control)
+        switch event.keyCode {
+            case 36, 76:
+                return .commit
+            case 53:
+                return .cancel
+            case 51:
+                if usesCommand {
+                    return .deleteToBeginningOfLine
+                }
+                if usesOption {
+                    return .deleteWordBackward
+                }
+                return .deleteBackward
+            case 117:
+                return .deleteForward
+            case 126:
+                return .moveUp
+            case 125:
+                return .moveDown
+            default:
+                break
+        }
+
+        guard !usesCommand, !usesOption, !usesControl,
+              let text = event.characters,
+              !text.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) })
+        else {
+            return .ignored
+        }
+        return text.isEmpty ? .ignored : .text(text)
+    }
+
     func beginInlineTextEditing(
         locksExpansion: Bool = true,
         cancelsOnPointerExit: Bool = true,

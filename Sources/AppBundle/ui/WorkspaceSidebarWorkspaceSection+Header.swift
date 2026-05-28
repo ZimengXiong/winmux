@@ -58,12 +58,6 @@ extension WorkspaceSidebarWorkspaceSection {
                     }
             }
             Spacer(minLength: 0)
-            if !workspace.items.isEmpty && !isRenamingWorkspace {
-                Text("\(workspace.items.count)")
-                    .font(.system(size: 12, weight: .medium))
-                    .monospacedDigit()
-                    .foregroundStyle(Color.white.opacity(0.35))
-            }
         }
         .padding(.leading, workspaceSidebarHeaderRowLeadingPadding)
         .padding(.trailing, workspaceSidebarRowHorizontalPadding)

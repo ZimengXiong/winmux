@@ -160,13 +160,31 @@ import XCTest
 
     func testWindowTabStripLayoutMatchesNextChromeMetrics() {
         let stripWidth: CGFloat = 360
-        let expectedTabsWidth = stripWidth
+        let expectedViewportWidth = stripWidth
+            - 16
             - windowTabStripReservedGroupHandleWidth()
+            - windowTabStripTrailingGroupDragGutterWidth
+            - 18
+        let expectedTabsWidth = expectedViewportWidth
             - (windowTabStripContentPadding() * 2)
 
+        XCTAssertEqual(windowTabStripScrollViewportWidth(stripWidth: stripWidth), expectedViewportWidth)
         XCTAssertEqual(windowTabStripAvailableTabsWidth(stripWidth: stripWidth), expectedTabsWidth)
         XCTAssertEqual(windowTabStripTabWidth(stripWidth: stripWidth, count: 1), 240)
-        XCTAssertEqual(windowTabStripTabWidth(stripWidth: stripWidth, count: 3), 132)
+        XCTAssertEqual(windowTabStripTabWidth(stripWidth: stripWidth, count: 2), 132)
+        XCTAssertEqual(windowTabStripTabWidth(stripWidth: stripWidth, count: 3), windowTabStripMinimumTabWidth)
+        XCTAssertLessThanOrEqual(
+            CGFloat(2) * windowTabStripTabWidth(stripWidth: stripWidth, count: 2)
+                + windowTabStripTabSpacing
+                + windowTabStripContentPadding() * 2,
+            windowTabStripScrollViewportWidth(stripWidth: stripWidth)
+        )
+        XCTAssertGreaterThan(
+            CGFloat(3) * windowTabStripTabWidth(stripWidth: stripWidth, count: 3)
+                + CGFloat(2) * windowTabStripTabSpacing
+                + windowTabStripContentPadding() * 2,
+            windowTabStripScrollViewportWidth(stripWidth: stripWidth)
+        )
         XCTAssertLessThan(windowTabStripAvailableTabsWidth(stripWidth: stripWidth), stripWidth)
     }
 

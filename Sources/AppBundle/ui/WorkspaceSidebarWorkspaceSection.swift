@@ -107,7 +107,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
             .background {
                 ZStack {
                     sectionBackground
-                if !isCompact && allowsWorkspaceActivation && !isInUseOnOtherDisplay {
+                if !isCompact && allowsWorkspaceActivation {
                     sectionActivationButton
                 }
                 }

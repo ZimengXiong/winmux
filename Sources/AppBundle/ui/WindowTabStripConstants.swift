@@ -33,22 +33,33 @@ func windowTabStripReservedGroupHandleWidth() -> CGFloat {
     windowTabStripReservedHandleWidth
 }
 
-func windowTabStripAvailableTabsWidth(stripWidth: CGFloat) -> CGFloat {
+func windowTabStripScrollViewportWidth(stripWidth: CGFloat) -> CGFloat {
     max(
         0,
         stripWidth
+            - 16
             - windowTabStripReservedGroupHandleWidth()
-            - (windowTabStripContentHorizontalPadding * 2),
+            - windowTabStripTrailingGroupDragGutterWidth
+            - 18,
     )
 }
 
 func windowTabStripTabWidth(stripWidth: CGFloat, count: Int) -> CGFloat {
     let count = max(count, 1)
-    let availableWidth = windowTabStripAvailableTabsWidth(stripWidth: stripWidth)
+    let availableWidth = windowTabStripScrollViewportWidth(stripWidth: stripWidth)
+        - (windowTabStripContentHorizontalPadding * 2)
         - CGFloat(max(count - 1, 0)) * windowTabStripTabSpacing
     return min(
         max(availableWidth / CGFloat(count), windowTabStripMinimumTabWidth),
         windowTabStripPreferredTabWidth
+    )
+}
+
+func windowTabStripAvailableTabsWidth(stripWidth: CGFloat) -> CGFloat {
+    max(
+        0,
+        windowTabStripScrollViewportWidth(stripWidth: stripWidth)
+            - (windowTabStripContentHorizontalPadding * 2),
     )
 }
 

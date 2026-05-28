@@ -3,71 +3,46 @@ import SwiftUI
 
 struct WorkspaceSidebarExpandedStatusCard: View {
     let date: Date
-    let systemStatus: WorkspaceSidebarSystemStatusSnapshot
     let sectionWidth: CGFloat
     let showsDate: Bool
-    let showsStatusPills: Bool
 
     private var accessibilitySummary: String {
         var parts = [date.formatted(date: .omitted, time: .standard)]
         if showsDate {
             parts.append(date.formatted(date: .complete, time: .omitted))
         }
-        if showsStatusPills {
-            parts.append(systemStatus.battery.accessibilityDescription)
-            parts.append(systemStatus.audio.accessibilityDescription)
-            parts.append(systemStatus.network.accessibilityDescription)
-        }
         return parts.joined(separator: ", ")
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 0) {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(alignment: .top, spacing: 1) {
-                    Text(date, format: .dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
-                        .font(.system(size: 20, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(Color.white.opacity(0.82))
-                        .lineLimit(1)
-                    Text(date, format: .dateTime.second(.twoDigits))
-                        .font(.system(size: 10, weight: .regular, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(Color.white.opacity(0.32))
-                        .lineLimit(1)
-                        .padding(.top, 3)
-                        .padding(.leading, 1)
-                }
-                if showsDate {
-                    Text(date, format: .dateTime.weekday(.abbreviated).month(.abbreviated).day())
-                        .font(.system(size: 11, weight: .regular))
-                        .foregroundStyle(Color.white.opacity(0.40))
-                        .lineLimit(1)
-                }
+        HStack(alignment: .center, spacing: 12) {
+            HStack(alignment: .top, spacing: 4) {
+                Text(date, format: .dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
+                    .font(.system(size: 42, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.white.opacity(0.90))
+                    .lineLimit(1)
+                Text(date, format: .dateTime.second(.twoDigits))
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.white.opacity(0.34))
+                    .lineLimit(1)
+                    .padding(.top, 9)
             }
-            Spacer(minLength: 8)
-            if showsStatusPills {
-                HStack(alignment: .center, spacing: 12) {
-                    WorkspaceSidebarStatusMiniIcon(
-                        symbolName: systemStatus.battery.symbolName,
-                        tint: systemStatus.battery.tintColor,
-                        accessibilityDescription: systemStatus.battery.accessibilityDescription,
-                    )
-                    WorkspaceSidebarStatusMiniIcon(
-                        symbolName: systemStatus.audio.symbolName,
-                        tint: systemStatus.audio.tintColor,
-                        accessibilityDescription: systemStatus.audio.accessibilityDescription,
-                    )
-                    WorkspaceSidebarStatusMiniIcon(
-                        symbolName: systemStatus.network.symbolName,
-                        tint: systemStatus.network.tintColor,
-                        accessibilityDescription: systemStatus.network.accessibilityDescription,
-                    )
+            .layoutPriority(1)
+
+            if showsDate {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(date, format: .dateTime.weekday(.abbreviated))
+                    Text(date, format: .dateTime.month(.abbreviated).day())
                 }
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.48))
+                .lineLimit(1)
             }
         }
-        .padding(.horizontal, 12)
-        .frame(width: sectionWidth, height: 52, alignment: .leading)
+        .padding(.horizontal, 14)
+        .frame(width: sectionWidth, height: 68, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: workspaceSidebarStatusCornerRadius, style: .continuous)
                 .fill(Color.white.opacity(0.06))
