@@ -100,7 +100,7 @@ private func findDirectWorkspaceTarget(named workspaceName: String, from current
             return workspace
         }
         guard let workspace = Workspace.existing(byName: workspaceName),
-              workspace.scope == current.scope,
+              workspace.projectId == current.projectId,
               isUserFacingWorkspace(workspace, focusedWorkspace: current)
         else {
             return nil
@@ -143,7 +143,7 @@ private func resolveRelativeWorkspaceCandidates(current: Workspace, stdin: Strin
             }
     }
 
-    return orderedUserFacingWorkspaces(in: current.scope, focusedWorkspace: current)
+    return orderedUserFacingWorkspaces(in: current.projectId, focusedWorkspace: current)
 }
 
 @MainActor

@@ -4,6 +4,11 @@ func orderedUserFacingWorkspaces(in scope: WorkspaceScope, focusedWorkspace: Wor
 }
 
 @MainActor
+func orderedUserFacingWorkspaces(in projectId: WorkspaceProjectId, focusedWorkspace: Workspace? = nil) -> [Workspace] {
+    userFacingWorkspaces(orderedWorkspaces(in: projectId), focusedWorkspace: focusedWorkspace)
+}
+
+@MainActor
 func workspaceHasSidebarVisibleWindows(_ workspace: Workspace) -> Bool {
     !workspace.rootTilingContainer.isEffectivelyEmpty ||
         !workspace.floatingWindows.isEmpty

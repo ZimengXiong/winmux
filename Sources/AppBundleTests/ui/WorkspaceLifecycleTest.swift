@@ -20,7 +20,7 @@ final class WorkspaceLifecycleTest: XCTestCase {
 
         XCTAssertNil(Workspace.existing(byName: "2"))
         XCTAssertNil(Workspace.existing(byName: "3"))
-        XCTAssertEqual(emptyUserFacingWorkspaces(in: occupied.scope), [])
+        XCTAssertEqual(emptyUserFacingWorkspaces(in: occupied.projectId), [])
         _ = adjacentEmpty
     }
 
@@ -81,7 +81,7 @@ final class WorkspaceLifecycleTest: XCTestCase {
         XCTAssertFalse(Workspace.existing(byName: deletedBlank.name) === deletedBlank)
         XCTAssertEqual(movedWindow.nodeWorkspace?.name, "2")
         XCTAssertNil(Workspace.existing(byName: "3"))
-        XCTAssertTrue(emptyUserFacingWorkspaces(in: sourceWorkspace.scope).isEmpty)
+        XCTAssertTrue(emptyUserFacingWorkspaces(in: sourceWorkspace.projectId).isEmpty)
     }
 
     func testMovingLastProjectWindowAwayLeavesOneActiveEmptyProjectWorkspace() async throws {
@@ -102,7 +102,7 @@ final class WorkspaceLifecycleTest: XCTestCase {
 
         XCTAssertEqual(mainMonitor.activeWorkspace.projectId, project.id)
         XCTAssertTrue(mainMonitor.activeWorkspace.isEffectivelyEmpty)
-        XCTAssertEqual(emptyUserFacingWorkspaces(in: projectWorkspace.scope), [projectWorkspace])
+        XCTAssertEqual(emptyUserFacingWorkspaces(in: projectWorkspace.projectId), [projectWorkspace])
     }
 
     func testWorkspaceNextFromExistingBlankDoesNotCreateAnotherBlank() async throws {
@@ -122,7 +122,7 @@ final class WorkspaceLifecycleTest: XCTestCase {
 
         assertEquals(result.exitCode, 1)
         XCTAssertNil(Workspace.existing(byName: "3"))
-        XCTAssertEqual(emptyUserFacingWorkspaces(in: occupied.scope).map(\.name), ["2"])
+        XCTAssertEqual(emptyUserFacingWorkspaces(in: occupied.projectId).map(\.name), ["2"])
     }
 
     func testEmptyAdjacentWorkspaceIsDeletedAfterLeavingIt() async throws {
@@ -209,8 +209,8 @@ final class WorkspaceLifecycleTest: XCTestCase {
         XCTAssertEqual(projectWorkspace.projectId, project.id)
     }
 
-    private func emptyUserFacingWorkspaces(in scope: WorkspaceScope) -> [Workspace] {
+    private func emptyUserFacingWorkspaces(in projectId: WorkspaceProjectId) -> [Workspace] {
         userFacingWorkspaces(Workspace.all, focusedWorkspace: focus.workspace)
-            .filter { $0.scope == scope && $0.isOrdinaryEmptySlot }
+            .filter { $0.projectId == projectId && $0.isOrdinaryEmptySlot }
     }
 }

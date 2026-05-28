@@ -7,7 +7,7 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
     nonisolated private var nameLogicalSegments: StringLogicalSegments
     private(set) var namingStyle: WorkspaceNamingStyle = .explicit
     var projectId: WorkspaceProjectId = workspaceProjectDefaultId
-    var laneId: DisplayLaneId
+    var preferredMonitorPoint: CGPoint?
     var lifecycle: WorkspaceLifecycle = .durable
 
     @MainActor
@@ -15,7 +15,6 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
         self.id = winMuxWorkspaceState.nextWorkspaceId()
         self.name = name
         self.nameLogicalSegments = name.toLogicalSegments()
-        self.laneId = DisplayLaneId(mainMonitor)
         super.init(parent: NilTreeNode.instance, adaptiveWeight: 0, index: 0)
     }
 
@@ -55,7 +54,6 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
             ("id", id.rawValue),
             ("name", name),
             ("projectId", projectId.rawValue),
-            ("laneId", laneId.description),
             ("lifecycle", lifecycle.rawValue),
             ("isVisible", String(isVisible)),
             ("isEffectivelyEmpty", String(isEffectivelyEmpty)),
@@ -90,14 +88,9 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
 extension Workspace {
     @MainActor
     func seedMonitorIfNeeded(_ monitor: Monitor) {
-        guard !isVisible else { return }
-        assignLane(DisplayLaneId(forceAssignedMonitor ?? monitor))
-    }
-
-    @MainActor
-    func assignLane(_ laneId: DisplayLaneId) {
-        guard self.laneId != laneId else { return }
-        winMuxWorkspaceState.moveWorkspace(self, to: laneId)
+        if preferredMonitorPoint == nil {
+            preferredMonitorPoint = (forceAssignedMonitor ?? monitor).rect.topLeftCorner
+        }
     }
 
     @MainActor
@@ -155,17 +148,23 @@ extension Workspace {
     }
     @MainActor
     var workspaceMonitor: Monitor {
-        forceAssignedMonitor ?? laneId.topLeftCorner.monitorApproximation
+        visibleMonitor ??
+            forceAssignedMonitor ??
+            preferredMonitorPoint?.monitorApproximation ??
+            focus.workspace.visibleMonitor ??
+            mainMonitor
+    }
+
+    @MainActor
+    var visibleMonitor: Monitor? {
+        winMuxWorkspaceState.lanesById.first { _, lane in
+            lane.activeWorkspaceId == id
+        }?.key.topLeftCorner.monitorApproximation
     }
 
     @MainActor
     var preferredMonitorPointForTesting: CGPoint? {
-        laneId.topLeftCorner
-    }
-
-    @MainActor
-    var scope: WorkspaceScope {
-        WorkspaceScope(projectId: projectId, laneId: laneId)
+        visibleMonitor?.rect.topLeftCorner ?? forceAssignedMonitor?.rect.topLeftCorner ?? preferredMonitorPoint
     }
 
     var isArchived: Bool {

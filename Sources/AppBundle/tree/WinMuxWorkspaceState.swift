@@ -5,6 +5,7 @@ struct DisplayLane {
     let id: DisplayLaneId
     var activeWorkspaceId: WorkspaceId?
     var previousWorkspaceId: WorkspaceId?
+    var lastActiveWorkspaceByProject: [WorkspaceProjectId: WorkspaceId] = [:]
 }
 
 @MainActor
@@ -85,8 +86,7 @@ struct WinMuxWorkspaceState {
         workspaceById[workspace.id] = workspace
         workspaceIdByName[workspace.name] = workspace.id
         ensureProjectExists(workspace.projectId)
-        ensureLaneExists(workspace.laneId)
-        insertWorkspace(workspace.id, intoProject: workspace.projectId, laneId: workspace.laneId)
+        insertWorkspace(workspace.id, intoProject: workspace.projectId)
     }
 
     mutating func removeWorkspace(_ workspace: Workspace) -> DisplayLaneId? {
@@ -103,6 +103,9 @@ struct WinMuxWorkspaceState {
             }
             if lane.previousWorkspaceId == workspace.id {
                 lane.previousWorkspaceId = nil
+            }
+            lane.lastActiveWorkspaceByProject = lane.lastActiveWorkspaceByProject.filter { _, id in
+                id != workspace.id
             }
             lanesById[laneId] = lane
         }
@@ -143,41 +146,27 @@ struct WinMuxWorkspaceState {
     mutating func setActiveWorkspace(_ workspace: Workspace, on laneId: DisplayLaneId) -> Bool {
         ensureLaneExists(laneId)
         ensureProjectExists(workspace.projectId)
-        if workspace.laneId != laneId {
-            moveWorkspace(workspace, to: laneId)
-        }
 
         var lane = lanesById[laneId] ?? DisplayLane(id: laneId)
         if lane.activeWorkspaceId != workspace.id {
             lane.previousWorkspaceId = lane.activeWorkspaceId
         }
         lane.activeWorkspaceId = workspace.id
+        lane.lastActiveWorkspaceByProject[workspace.projectId] = workspace.id
         lanesById[laneId] = lane
-
-        var project = projectsById[workspace.projectId].orDie()
-        project.lastActiveWorkspaceByLane[laneId] = workspace.id
-        projectsById[project.id] = project
         return true
-    }
-
-    mutating func moveWorkspace(_ workspace: Workspace, to laneId: DisplayLaneId) {
-        ensureLaneExists(laneId)
-        removeWorkspaceFromProjectIndexes(workspace.id)
-        workspace.laneId = laneId
-        insertWorkspace(workspace.id, intoProject: workspace.projectId, laneId: laneId)
     }
 
     mutating func assignWorkspace(_ workspace: Workspace, to projectId: WorkspaceProjectId) {
         ensureProjectExists(projectId)
         removeWorkspaceFromProjectIndexes(workspace.id)
         workspace.projectId = projectId
-        insertWorkspace(workspace.id, intoProject: projectId, laneId: workspace.laneId)
+        insertWorkspace(workspace.id, intoProject: projectId)
     }
 
     mutating func pruneProjectWorkspaceIndexes() {
         for workspace in workspaceById.values {
             ensureProjectExists(workspace.projectId)
-            ensureLaneExists(workspace.laneId)
         }
         for (laneId, lane) in lanesById {
             var lane = lane
@@ -187,6 +176,9 @@ struct WinMuxWorkspaceState {
             if lane.previousWorkspaceId.flatMap({ workspaceById[$0] }) == nil {
                 lane.previousWorkspaceId = nil
             }
+            lane.lastActiveWorkspaceByProject = lane.lastActiveWorkspaceByProject.filter { projectId, workspaceId in
+                workspaceById[workspaceId]?.projectId == projectId
+            }
             lanesById[laneId] = lane
         }
 
@@ -194,31 +186,19 @@ struct WinMuxWorkspaceState {
         for (projectId, project) in projectsById {
             var project = project
             var seen: Set<WorkspaceId> = []
-            var workspaceOrderByLane: [DisplayLaneId: [WorkspaceId]] = [:]
-            for (laneId, ids) in project.workspaceOrderByLane {
-                let validIds = ids.filter { workspaceId in
-                    guard let workspace = workspaceById[workspaceId],
-                          workspace.projectId == projectId,
-                          workspace.laneId == laneId,
-                          !seen.contains(workspaceId)
-                    else {
-                        return false
-                    }
-                    seen.insert(workspaceId)
-                    return true
+            project.workspaceOrder = project.workspaceOrder.filter { workspaceId in
+                guard let workspace = workspaceById[workspaceId],
+                      workspace.projectId == projectId,
+                      !seen.contains(workspaceId)
+                else {
+                    return false
                 }
-                if !validIds.isEmpty {
-                    workspaceOrderByLane[laneId] = validIds
-                }
+                seen.insert(workspaceId)
+                return true
             }
             for workspace in orderedWorkspaces where workspace.projectId == projectId && !seen.contains(workspace.id) {
-                workspaceOrderByLane[workspace.laneId, default: []].append(workspace.id)
+                project.workspaceOrder.append(workspace.id)
                 seen.insert(workspace.id)
-            }
-            project.workspaceOrderByLane = workspaceOrderByLane
-            project.lastActiveWorkspaceByLane = project.lastActiveWorkspaceByLane.filter { laneId, workspaceId in
-                workspaceById[workspaceId]?.projectId == projectId &&
-                    workspaceById[workspaceId]?.laneId == laneId
             }
             projectsById[projectId] = project
         }
@@ -227,43 +207,35 @@ struct WinMuxWorkspaceState {
     private mutating func rebuildProjectWorkspaceIndexes() {
         for (projectId, project) in projectsById {
             var project = project
-            project.workspaceOrderByLane = [:]
-            project.lastActiveWorkspaceByLane = [:]
+            project.workspaceOrder = []
             projectsById[projectId] = project
         }
         for workspace in workspaceById.values.sorted() {
             ensureProjectExists(workspace.projectId)
-            insertWorkspace(workspace.id, intoProject: workspace.projectId, laneId: workspace.laneId)
+            insertWorkspace(workspace.id, intoProject: workspace.projectId)
         }
         for (laneId, lane) in lanesById {
             guard let workspaceId = lane.activeWorkspaceId,
                   let workspace = workspaceById[workspaceId]
             else { continue }
-            var project = projectsById[workspace.projectId].orDie()
-            project.lastActiveWorkspaceByLane[laneId] = workspaceId
-            projectsById[project.id] = project
+            var lane = lane
+            lane.lastActiveWorkspaceByProject[workspace.projectId] = workspaceId
+            lanesById[laneId] = lane
         }
     }
 
-    private mutating func insertWorkspace(_ workspaceId: WorkspaceId, intoProject projectId: WorkspaceProjectId, laneId: DisplayLaneId) {
+    private mutating func insertWorkspace(_ workspaceId: WorkspaceId, intoProject projectId: WorkspaceProjectId) {
         var project = projectsById[projectId].orDie()
-        var order = project.workspaceOrderByLane[laneId] ?? []
-        if !order.contains(workspaceId) {
-            order.append(workspaceId)
+        if !project.workspaceOrder.contains(workspaceId) {
+            project.workspaceOrder.append(workspaceId)
         }
-        project.workspaceOrderByLane[laneId] = order
         projectsById[projectId] = project
     }
 
     private mutating func removeWorkspaceFromProjectIndexes(_ workspaceId: WorkspaceId) {
         for (projectId, project) in projectsById {
             var project = project
-            project.workspaceOrderByLane = project.workspaceOrderByLane.mapValues { ids in
-                ids.filter { $0 != workspaceId }
-            }.filter { !$0.value.isEmpty }
-            project.lastActiveWorkspaceByLane = project.lastActiveWorkspaceByLane.filter { _, id in
-                id != workspaceId
-            }
+            project.workspaceOrder = project.workspaceOrder.filter { $0 != workspaceId }
             projectsById[projectId] = project
         }
     }

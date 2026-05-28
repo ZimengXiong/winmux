@@ -155,13 +155,11 @@ extension WorkspaceNamingTest {
         setMonitorsForTests([main, secondary])
         _ = TestWindow.new(id: 213, parent: focus.workspace.rootTilingContainer)
         let forcedElsewhere = Workspace.get(byName: "forced")
-        forcedElsewhere.assignLane(DisplayLaneId(main))
         config.workspaceToMonitorForceAssignment[forcedElsewhere.name] = [.sequenceNumber(2)]
 
         let fallback = getOrCreateLaneFallbackWorkspace(projectId: workspaceProjectDefaultId, for: main)
 
         XCTAssertFalse(fallback === forcedElsewhere)
-        XCTAssertEqual(fallback.preferredMonitorPointForTesting, main.rect.topLeftCorner)
         XCTAssertEqual(fallback.workspaceMonitor.rect.topLeftCorner, main.rect.topLeftCorner)
     }
 
@@ -219,7 +217,6 @@ extension WorkspaceNamingTest {
         _ = TestWindow.new(id: 22, parent: visibleWorkspace.rootTilingContainer)
         XCTAssertTrue(oldMain.setActiveWorkspace(visibleWorkspace))
         let inactiveWorkspace = Workspace.get(byName: "inactive")
-        inactiveWorkspace.assignLane(DisplayLaneId(topLeftCorner: CGPoint(x: 100, y: 0)))
 
         let newMain = WorkspaceNamingTestMonitor(
             monitorAppKitNsScreenScreensId: 1,
@@ -271,7 +268,7 @@ extension WorkspaceNamingTest {
         XCTAssertTrue(userFacingWorkspaces(Workspace.all, focusedWorkspace: focus.workspace).contains(projectWorkspace))
         XCTAssertEqual(
             userFacingWorkspaces(Workspace.all, focusedWorkspace: focus.workspace)
-                .filter { $0.scope == workspaceScope(projectId: project.id, monitor: mainMonitor) },
+                .filter { $0.projectId == project.id },
             [projectWorkspace],
         )
     }

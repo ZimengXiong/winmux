@@ -28,8 +28,7 @@ func workspaceProjects() -> [WorkspaceProject] {
             id: project.id,
             name: displayName,
             order: project.order,
-            workspaceOrderByLane: project.workspaceOrderByLane,
-            lastActiveWorkspaceByLane: project.lastActiveWorkspaceByLane,
+            workspaceOrder: project.workspaceOrder,
             linkedLaneIds: project.linkedLaneIds,
         )
     }

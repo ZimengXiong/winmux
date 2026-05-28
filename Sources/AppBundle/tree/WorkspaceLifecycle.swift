@@ -6,8 +6,8 @@ func switchWorkspaceProject(_ projectId: WorkspaceProjectId, on monitor: Monitor
     materializePersistedWorkspaceProjects()
     guard winMuxWorkspaceState.projectsById[projectId] != nil else { return nil }
     let laneId = DisplayLaneId(monitor)
-    let rememberedWorkspace = winMuxWorkspaceState.projectsById[projectId]?
-        .lastActiveWorkspaceByLane[laneId]
+    let rememberedWorkspace = winMuxWorkspaceState.lanesById[laneId]?
+        .lastActiveWorkspaceByProject[projectId]
         .flatMap { winMuxWorkspaceState.workspaceById[$0] }
         .flatMap { workspaceIsAvailableForMonitor($0, monitor: monitor) ? $0 : nil }
     let workspace = rememberedWorkspace
@@ -18,7 +18,7 @@ func switchWorkspaceProject(_ projectId: WorkspaceProjectId, on monitor: Monitor
 
 @MainActor
 func preferredWorkspace(projectId: WorkspaceProjectId, monitor: Monitor) -> Workspace? {
-    workspaceProjectLaneWorkspaces(projectId: projectId, laneId: DisplayLaneId(monitor))
+    projectWorkspaces(projectId: projectId)
         .filter { !$0.isArchived }
         .filter { isValidAssignment(workspace: $0, screen: monitor.rect.topLeftCorner) }
         .first
@@ -29,13 +29,13 @@ func createBlankWorkspace(projectId: WorkspaceProjectId, monitor: Monitor) -> Wo
     let workspace = Workspace.get(byName: nextAutomaticWorkspaceName(projectId: projectId, monitor: monitor))
     workspace.markAsTransientBlank()
     workspace.assignProject(projectId)
-    workspace.assignLane(DisplayLaneId(monitor))
+    workspace.seedMonitorIfNeeded(monitor)
     return workspace
 }
 
 @MainActor
 func getOrCreateAdjacentBlankWorkspace(projectId: WorkspaceProjectId, monitor: Monitor) -> Workspace {
-    let scope = workspaceScope(projectId: projectId, monitor: monitor)
+    let scope = WorkspaceScope(projectId: projectId)
     if let workspaceId = retainedEmptyWorkspaceId(in: scope),
        let workspace = winMuxWorkspaceState.workspaceById[workspaceId],
        isValidAssignment(workspace: workspace, screen: monitor.rect.topLeftCorner)
@@ -87,7 +87,7 @@ func closestWorkspaceForDeletion(
     monitor: Monitor,
 ) -> Workspace? {
     let scopedCandidates = userFacingWorkspaces(
-        orderedWorkspaces(in: workspaceScope(projectId: projectId, monitor: monitor)),
+        orderedWorkspaces(in: projectId),
         focusedWorkspace: focus.workspace,
     )
         .filter { isValidAssignment(workspace: $0, screen: monitor.rect.topLeftCorner) }
@@ -178,14 +178,11 @@ func pruneEmptyWorkspaces() {
 
 @MainActor
 func focusReplacementForPrunedWorkspace(_ workspace: Workspace) -> Workspace? {
-    if !workspace.isVisible,
-       let activeWorkspaceId = winMuxWorkspaceState.lanesById[workspace.laneId]?.activeWorkspaceId,
-       activeWorkspaceId != workspace.id,
-       let activeWorkspace = winMuxWorkspaceState.workspaceById[activeWorkspaceId]
-    {
-        return activeWorkspace
+    let visibleWorkspaces = Workspace.all.filter { $0.isVisible && $0 != workspace }
+    if let mainVisible = visibleWorkspaces.first(where: { $0 === mainMonitor.activeWorkspace }) {
+        return mainVisible
     }
-    return nil
+    return visibleWorkspaces.first { $0.projectId == workspace.projectId } ?? visibleWorkspaces.first
 }
 
 @MainActor
@@ -194,9 +191,11 @@ func workspaceShouldSurviveReconciliation(
     retainedEmptyWorkspaceIds: [WorkspaceScope: WorkspaceId],
 ) -> Bool {
     guard !workspace.isArchived else { return false }
-    return workspaceHasLifecycleWindows(workspace) ||
+    return workspace.isVisible ||
+        workspaceHasLifecycleWindows(workspace) ||
         workspace.isConfiguredPersistent ||
-        retainedEmptyWorkspaceIds[workspace.scope] == workspace.id
+        projectWorkspaces(projectId: workspace.projectId).filter { !$0.isArchived }.count == 1 ||
+        retainedEmptyWorkspaceIds[WorkspaceScope(projectId: workspace.projectId)] == workspace.id
 }
 
 @MainActor
@@ -204,18 +203,19 @@ func replacementWorkspaceForPrunedWorkspace(
     _ workspace: Workspace,
     retainedEmptyWorkspaceIds: [WorkspaceScope: WorkspaceId],
 ) -> Workspace? {
-    if let retainedWorkspaceId = retainedEmptyWorkspaceIds[workspace.scope],
+    let scope = WorkspaceScope(projectId: workspace.projectId)
+    if let retainedWorkspaceId = retainedEmptyWorkspaceIds[scope],
        retainedWorkspaceId != workspace.id,
        let retainedWorkspace = winMuxWorkspaceState.workspaceById[retainedWorkspaceId],
-       isValidAssignment(workspace: retainedWorkspace, screen: workspace.workspaceMonitor.rect.topLeftCorner)
+       workspaceIsAvailableForMonitor(retainedWorkspace, monitor: workspace.workspaceMonitor)
     {
         return retainedWorkspace
     }
-    if let candidate = orderedWorkspaces(in: workspace.scope).first(where: {
+    if let candidate = orderedWorkspaces(in: scope).first(where: {
         $0.id != workspace.id &&
             workspaceShouldSurviveReconciliation($0, retainedEmptyWorkspaceIds: retainedEmptyWorkspaceIds) &&
             (workspaceHasSidebarVisibleWindows($0) || $0.isConfiguredPersistent) &&
-            isValidAssignment(workspace: $0, screen: workspace.workspaceMonitor.rect.topLeftCorner)
+            workspaceIsAvailableForMonitor($0, monitor: workspace.workspaceMonitor)
     }) {
         return candidate
     }

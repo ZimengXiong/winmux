@@ -79,17 +79,17 @@ typealias MonitorKey = DisplayLaneId
 
 struct WorkspaceScope: Hashable, Sendable {
     let projectId: WorkspaceProjectId
-    let laneId: DisplayLaneId
-
-    var monitor: DisplayLaneId { laneId }
 
     init(projectId: WorkspaceProjectId, laneId: DisplayLaneId) {
         self.projectId = projectId
-        self.laneId = laneId
     }
 
     init(projectId: WorkspaceProjectId, monitor: DisplayLaneId) {
         self.init(projectId: projectId, laneId: monitor)
+    }
+
+    init(projectId: WorkspaceProjectId) {
+        self.projectId = projectId
     }
 }
 

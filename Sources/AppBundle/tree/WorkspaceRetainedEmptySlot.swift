@@ -1,11 +1,11 @@
 @MainActor
 func workspaceIsRetainedEmptySlot(_ workspace: Workspace) -> Bool {
-    retainedEmptyWorkspaceIdsByScope()[workspace.scope] == workspace.id
+    retainedEmptyWorkspaceIdsByScope()[WorkspaceScope(projectId: workspace.projectId)] == workspace.id
 }
 
 @MainActor
 func retainedEmptyWorkspaceIdsByScope() -> [WorkspaceScope: WorkspaceId] {
-    let scopes = Set(Workspace.all.filter { !$0.isArchived }.map(\.scope))
+    let scopes = Set(Workspace.all.filter { !$0.isArchived }.map { WorkspaceScope(projectId: $0.projectId) })
     return Dictionary(
         uniqueKeysWithValues: scopes.compactMap { scope in
             retainedEmptyWorkspaceId(in: scope).map { (scope, $0) }
@@ -15,9 +15,13 @@ func retainedEmptyWorkspaceIdsByScope() -> [WorkspaceScope: WorkspaceId] {
 
 @MainActor
 func retainedEmptyWorkspaceId(in scope: WorkspaceScope) -> WorkspaceId? {
-    guard workspaceScopeIsVisibleActiveProject(scope) else { return nil }
     let orderedWorkspaces = orderedWorkspaces(in: scope)
-    let ordinaryEmptyWorkspaces = orderedWorkspaces.filter(\.isOrdinaryEmptySlot)
+    let ordinaryEmptyWorkspaces = orderedWorkspaces.filter(\.isOrdinaryEmptySlot).sorted {
+        if $0.lifecycle != $1.lifecycle {
+            return $0.lifecycle == .durable
+        }
+        return $0 < $1
+    }
     guard !ordinaryEmptyWorkspaces.isEmpty else { return nil }
 
     let hasAnchors = orderedWorkspaces.contains(where: workspaceAnchorsEmptySlot)
@@ -35,13 +39,11 @@ func retainedEmptyWorkspaceId(in scope: WorkspaceScope) -> WorkspaceId? {
 
 @MainActor
 func workspaceScopeIsVisibleActiveProject(_ scope: WorkspaceScope) -> Bool {
-    guard let lane = winMuxWorkspaceState.lanesById[scope.laneId],
-          let activeWorkspaceId = lane.activeWorkspaceId,
-          let activeWorkspace = winMuxWorkspaceState.workspaceById[activeWorkspaceId]
-    else {
-        return false
+    winMuxWorkspaceState.lanesById.values.contains { lane in
+        lane.activeWorkspaceId
+            .flatMap { winMuxWorkspaceState.workspaceById[$0] }?
+            .projectId == scope.projectId
     }
-    return activeWorkspace.projectId == scope.projectId
 }
 
 @MainActor

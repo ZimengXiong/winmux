@@ -128,6 +128,18 @@ func checkWorkspaceHierarchyInvariants() {
 @MainActor
 func rearrangeWorkspacesOnMonitors() {
     let oldLanesById = winMuxWorkspaceState.lanesById
+    let currentMonitorIds = Set(monitors.map(DisplayLaneId.init))
+    let activeLaneIds = Set(oldLanesById.compactMap { laneId, lane -> DisplayLaneId? in
+        guard let workspaceId = lane.activeWorkspaceId,
+              let workspace = winMuxWorkspaceState.workspaceById[workspaceId],
+              isValidAssignment(workspace: workspace, screen: laneId.topLeftCorner)
+        else { return nil }
+        return laneId
+    })
+    if activeLaneIds == currentMonitorIds {
+        return
+    }
+
     var oldVisibleMonitors: Set<DisplayLaneId> = oldLanesById.compactMap { laneId, lane in
         guard let activeWorkspaceId = lane.activeWorkspaceId,
               winMuxWorkspaceState.workspaceById[activeWorkspaceId] != nil
@@ -153,14 +165,22 @@ func rearrangeWorkspacesOnMonitors() {
 
     for newMonitor in newMonitors {
         let newScreen = newMonitor.topLeftCorner
-        if let existingVisibleWorkspace = newMonitorToOldMonitorMapping[newMonitor]
-            .flatMap({ oldLanesById[$0]?.activeWorkspaceId })
-            .flatMap({ winMuxWorkspaceState.workspaceById[$0] }),
+        let mappedOldMonitor = newMonitorToOldMonitorMapping[newMonitor]
+        let existingVisibleWorkspace = mappedOldMonitor
+            .flatMap { oldLanesById[$0]?.activeWorkspaceId }
+            .flatMap { winMuxWorkspaceState.workspaceById[$0] }
+        if let existingVisibleWorkspace,
            newScreen.setActiveWorkspace(existingVisibleWorkspace)
         {
             continue
         }
-        let workspace = getOrCreateLaneFallbackWorkspace(forPoint: newScreen)
+        let projectId = existingVisibleWorkspace?.projectId ?? workspaceProjectDefaultId
+        let workspace = getOrCreateFallbackWorkspace(
+            projectId: projectId,
+            laneId: DisplayLaneId(topLeftCorner: newScreen),
+            monitor: newScreen.monitorApproximation,
+            excluding: existingVisibleWorkspace,
+        )
         check(newScreen.setActiveWorkspace(workspace),
               "Generated incompatible fallback workspace (\(workspace)) for the display lane (\(newScreen)")
     }

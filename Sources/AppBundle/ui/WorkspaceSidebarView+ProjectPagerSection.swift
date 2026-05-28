@@ -18,7 +18,10 @@ extension WorkspaceSidebarView {
             isProjectMenuOpen: $isProjectMenuOpen,
             renamingProjectId: $renamingProjectId,
             renamingProjectText: $renamingProjectText,
-            onSelectProject: { actions.send(.selectProject($0)) },
+            onSelectProject: { projectId in
+                browsedProjectId = nil
+                actions.send(.selectProject(projectId))
+            },
             onCreateProject: { actions.send(.createProject) },
             onBeginRenameProject: { project in
                 beginProjectRename(project)

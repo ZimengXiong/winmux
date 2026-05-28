@@ -68,7 +68,7 @@ final class WorkspaceNamingTest: XCTestCase {
         XCTAssertEqual(workspaceDisplayName(second.name), "Workspace 2")
     }
 
-    func testAutomaticWorkspaceDisplayNamesFollowProjectLaneOrderInsteadOfRawNameSort() {
+    func testAutomaticWorkspaceDisplayNamesFollowProjectOrderInsteadOfRawNameSort() {
         let first = Workspace.get(byName: "10")
         first.markAsAutomaticallyNamed()
         _ = TestWindow.new(id: 201, parent: first.rootTilingContainer)
@@ -77,7 +77,7 @@ final class WorkspaceNamingTest: XCTestCase {
         _ = TestWindow.new(id: 202, parent: second.rootTilingContainer)
 
         XCTAssertEqual(
-            orderedUserFacingWorkspaces(in: first.scope, focusedWorkspace: focus.workspace)
+            orderedUserFacingWorkspaces(in: first.projectId, focusedWorkspace: focus.workspace)
                 .filter(\.usesAutomaticDisplayName)
                 .map(\.name),
             ["10", "2"],
@@ -86,7 +86,7 @@ final class WorkspaceNamingTest: XCTestCase {
         XCTAssertEqual(workspaceDisplayName(second.name), "Workspace 2")
     }
 
-    func testReconcileRepairsMissingProjectLaneWorkspaceIndex() {
+    func testReconcileRepairsMissingProjectWorkspaceIndex() {
         let first = Workspace.get(byName: "1")
         first.markAsAutomaticallyNamed()
         _ = TestWindow.new(id: 211, parent: first.rootTilingContainer)
@@ -95,13 +95,13 @@ final class WorkspaceNamingTest: XCTestCase {
         _ = TestWindow.new(id: 212, parent: second.rootTilingContainer)
 
         var project = winMuxWorkspaceState.projectsById[first.projectId].orDie()
-        project.workspaceOrderByLane[first.laneId] = [first.id]
+        project.workspaceOrder = [first.id]
         winMuxWorkspaceState.projectsById[first.projectId] = project
 
         Workspace.reconcileWorkspaceState()
 
         XCTAssertEqual(
-            orderedUserFacingWorkspaces(in: first.scope, focusedWorkspace: focus.workspace)
+            orderedUserFacingWorkspaces(in: first.projectId, focusedWorkspace: focus.workspace)
                 .filter(\.usesAutomaticDisplayName)
                 .map(\.name),
             ["1", "2"],
@@ -174,7 +174,7 @@ final class WorkspaceNamingTest: XCTestCase {
 
         XCTAssertNil(Workspace.existing(byName: deleted.name))
         XCTAssertEqual(
-            orderedUserFacingWorkspaces(in: first.scope, focusedWorkspace: focus.workspace)
+            orderedUserFacingWorkspaces(in: first.projectId, focusedWorkspace: focus.workspace)
                 .filter(\.usesAutomaticDisplayName)
                 .map(\.name),
             ["10", "7"],
@@ -265,8 +265,8 @@ final class WorkspaceNamingTest: XCTestCase {
 
         XCTAssertEqual(workspaceDisplayName(mainWorkspace.name), "Workspace 1")
         XCTAssertEqual(workspaceDisplayName(secondaryWorkspace.name), "Workspace 2")
-        XCTAssertEqual(mainWorkspace.scope, workspaceScope(projectId: workspaceProjectDefaultId, monitor: main))
-        XCTAssertEqual(secondaryWorkspace.scope, workspaceScope(projectId: workspaceProjectDefaultId, monitor: secondary))
+        XCTAssertEqual(mainWorkspace.projectId, workspaceProjectDefaultId)
+        XCTAssertEqual(secondaryWorkspace.projectId, workspaceProjectDefaultId)
     }
 
     func testProjectsOwnSeparateWorkspaceSetsOnTheSameDisplay() {
@@ -537,8 +537,24 @@ final class WorkspaceNamingTest: XCTestCase {
         XCTAssertEqual(activeWorkspaceProjectId(for: secondary), project.id)
         XCTAssertEqual(main.activeWorkspace.projectId, project.id)
         XCTAssertEqual(secondary.activeWorkspace.projectId, project.id)
-        XCTAssertEqual(main.activeWorkspace.scope, workspaceScope(projectId: project.id, monitor: main))
-        XCTAssertEqual(secondary.activeWorkspace.scope, workspaceScope(projectId: project.id, monitor: secondary))
+        XCTAssertFalse(main.activeWorkspace === secondary.activeWorkspace)
+    }
+
+    func testProjectSwitchCanReturnToDefaultOnSameMonitor() throws {
+        let defaultWorkspace = Workspace.get(byName: "1")
+        defaultWorkspace.markAsAutomaticallyNamed()
+        _ = TestWindow.new(id: 401, parent: defaultWorkspace.rootTilingContainer)
+        XCTAssertTrue(mainMonitor.setActiveWorkspace(defaultWorkspace))
+        let project = createWorkspaceProject()
+        let projectWorkspace = try XCTUnwrap(switchWorkspaceProject(project.id, on: mainMonitor))
+
+        XCTAssertTrue(mainMonitor.activeWorkspace === projectWorkspace)
+
+        let returnedWorkspace = try XCTUnwrap(switchWorkspaceProject(workspaceProjectDefaultId, on: mainMonitor))
+
+        XCTAssertTrue(mainMonitor.activeWorkspace === returnedWorkspace)
+        XCTAssertEqual(returnedWorkspace.projectId, workspaceProjectDefaultId)
+        XCTAssertTrue(returnedWorkspace === defaultWorkspace)
     }
 
 }

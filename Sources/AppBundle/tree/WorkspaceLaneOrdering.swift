@@ -2,7 +2,7 @@ import AppKit
 
 @MainActor
 func workspaceScope(projectId: WorkspaceProjectId, monitor: Monitor) -> WorkspaceScope {
-    WorkspaceScope(projectId: projectId, laneId: DisplayLaneId(monitor))
+    WorkspaceScope(projectId: projectId)
 }
 
 @MainActor func getOrCreateLaneFallbackWorkspace(for monitor: Monitor) -> Workspace {
@@ -52,20 +52,20 @@ func getOrCreateFallbackWorkspace(
     monitor: Monitor,
     excluding excludedWorkspace: Workspace?,
 ) -> Workspace {
-    let scope = WorkspaceScope(projectId: projectId, laneId: laneId)
+    let scope = WorkspaceScope(projectId: projectId)
     if let workspaceId = retainedEmptyWorkspaceId(in: scope),
        let workspace = winMuxWorkspaceState.workspaceById[workspaceId],
        workspace != excludedWorkspace,
-       isValidAssignment(workspace: workspace, screen: monitor.rect.topLeftCorner)
+       workspaceIsAvailableForMonitor(workspace, monitor: monitor)
     {
         return workspace
     }
-    if let workspace = workspaceProjectLaneWorkspaces(projectId: projectId, laneId: laneId)
+    if let workspace = projectWorkspaces(projectId: projectId)
         .first(where: {
             $0 != excludedWorkspace &&
                 $0.isEffectivelyEmpty &&
                 !$0.isArchived &&
-                isValidAssignment(workspace: $0, screen: monitor.rect.topLeftCorner)
+                workspaceIsAvailableForMonitor($0, monitor: monitor)
         })
     {
         return workspace
@@ -73,27 +73,33 @@ func getOrCreateFallbackWorkspace(
     let workspace = Workspace.get(byName: nextAutomaticWorkspaceName(projectId: projectId, monitor: monitor))
     workspace.markAsAutomaticallyNamed()
     workspace.assignProject(projectId)
-    workspace.assignLane(laneId)
+    workspace.seedMonitorIfNeeded(monitor)
     return workspace
 }
 
 @MainActor
-func workspaceProjectLaneWorkspaces(projectId: WorkspaceProjectId, laneId: DisplayLaneId) -> [Workspace] {
+func projectWorkspaces(projectId: WorkspaceProjectId) -> [Workspace] {
     guard let project = winMuxWorkspaceState.projectsById[projectId] else { return [] }
-    let indexedWorkspaces = (project.workspaceOrderByLane[laneId] ?? [])
+    let indexedWorkspaces = project.workspaceOrder
         .compactMap { winMuxWorkspaceState.workspaceById[$0] }
-        .filter { $0.projectId == projectId && $0.laneId == laneId }
+        .filter { $0.projectId == projectId }
     if !indexedWorkspaces.isEmpty {
         return indexedWorkspaces
     }
     return Workspace.all
-        .filter { $0.projectId == projectId && $0.laneId == laneId }
+        .filter { $0.projectId == projectId }
         .sorted()
 }
 
 @MainActor
 func orderedWorkspaces(in scope: WorkspaceScope) -> [Workspace] {
-    workspaceProjectLaneWorkspaces(projectId: scope.projectId, laneId: scope.laneId)
+    projectWorkspaces(projectId: scope.projectId)
+        .filter { !$0.isArchived }
+}
+
+@MainActor
+func orderedWorkspaces(in projectId: WorkspaceProjectId) -> [Workspace] {
+    projectWorkspaces(projectId: projectId)
         .filter { !$0.isArchived }
 }
 
@@ -102,23 +108,14 @@ func orderedWorkspacesForPresentation() -> [Workspace] {
     var seen: Set<WorkspaceId> = []
     var result: [Workspace] = []
     for project in workspaceProjects() {
-        for laneId in project.workspaceOrderByLane.keys.sorted(by: workspaceLanePresentationOrder) {
-            for workspaceId in project.workspaceOrderByLane[laneId] ?? [] {
-                guard let workspace = winMuxWorkspaceState.workspaceById[workspaceId],
-                      !workspace.isArchived,
-                      seen.insert(workspaceId).inserted
-                else { continue }
-                result.append(workspace)
-            }
+        for workspaceId in project.workspaceOrder {
+            guard let workspace = winMuxWorkspaceState.workspaceById[workspaceId],
+                  !workspace.isArchived,
+                  seen.insert(workspaceId).inserted
+            else { continue }
+            result.append(workspace)
         }
     }
     result.append(contentsOf: Workspace.all.filter { !$0.isArchived && seen.insert($0.id).inserted })
     return result
-}
-
-private func workspaceLanePresentationOrder(_ lhs: DisplayLaneId, _ rhs: DisplayLaneId) -> Bool {
-    if lhs.topLeftCorner.y != rhs.topLeftCorner.y {
-        return lhs.topLeftCorner.y < rhs.topLeftCorner.y
-    }
-    return lhs.topLeftCorner.x < rhs.topLeftCorner.x
 }
