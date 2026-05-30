@@ -1,15 +1,13 @@
 
-
-
-<p align="center">
+<p align="left">
   <img src="resources/winmux-logo.svg" width="64" alt="WinMux logo">
 </p>
 
-<p align="center">
-  <strong>WinMux <em>Beta</em></strong>
+<p align="left">
+  <strong><font size="7">WinMux</font></strong>
 </p>
 
-<p align="center">A sidebar-first window manager for macOS.</p>
+<p align="left">A sidebar-first window manager for macOS.</p>
 
 [![](winmux-overview.png)
 ](https://github.com/user-attachments/assets/89fe433c-55c3-4e42-b857-895a92ce40f6
