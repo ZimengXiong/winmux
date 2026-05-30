@@ -5,7 +5,7 @@
 
 # WinMux
 
-<p align="left">A sidebar-first window manager for macOS.</p>
+<p align="left">A powerfull sidebar-first window manager for macOS.</p>
 
 https://github.com/user-attachments/assets/35b10bb8-97cd-4b8e-87b4-aa99cb24e1ad
 
