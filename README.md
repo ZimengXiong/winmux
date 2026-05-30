@@ -1,3 +1,6 @@
+
+
+
 <p align="center">
   <img src="resources/winmux-logo.svg" width="80" alt="WinMux logo">
 </p>
@@ -6,7 +9,9 @@
 
 <p align="center">A sidebar-first window manager for macOS.</p>
 
-![](winmux-overview.png)
+[![](winmux-overview.png)
+](https://github.com/user-attachments/assets/89fe433c-55c3-4e42-b857-895a92ce40f6
+)
 
 ## Highlights
 ### Projects
