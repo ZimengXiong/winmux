@@ -1,11 +1,11 @@
 
 <p align="left">
-  <img src="resources/winmux-logo.svg" width="64" alt="WinMux logo">
+  <img src="resources/winmux-logo.svg" width="80" alt="WinMux logo">
 </p>
 
-<p align="left">
-  <strong><font size="7">WinMux</font></strong>
-</p>
+<div align="left">
+  <span style="font-size: 2em; font-weight: 600;">WinMux</span>
+</div>
 
 <p align="left">A sidebar-first window manager for macOS.</p>
 
