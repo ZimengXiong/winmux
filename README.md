@@ -3,9 +3,7 @@
   <img src="resources/winmux-logo.svg" width="80" alt="WinMux logo">
 </p>
 
-<div align="left">
-  <span style="font-size: 2em; font-weight: 600;">WinMux</span>
-</div>
+# WinMux
 
 <p align="left">A sidebar-first window manager for macOS.</p>
 
