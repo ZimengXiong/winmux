@@ -2,10 +2,12 @@
 
 
 <p align="center">
-  <img src="resources/winmux-logo.svg" width="80" alt="WinMux logo">
+  <img src="resources/winmux-logo.svg" width="64" alt="WinMux logo">
 </p>
 
-<h1 align="center">WinMux <em>Beta</em></h1>
+<p align="center">
+  <strong>WinMux <em>Beta</em></strong>
+</p>
 
 <p align="center">A sidebar-first window manager for macOS.</p>
 
