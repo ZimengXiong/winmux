@@ -102,4 +102,4 @@ You do not need to edit anything to get started. After import, WinMux uses `~/.c
 If neither exists, WinMux creates a new WinMux config with the bundled defaults.
 
 ## Credits
-The app logo/icon is still Aerospace's and will proab stay that way for a while. Been focusing on getting everything working first.
+[Aerospace](https://github.com/nikitabobko/AeroSpace)
