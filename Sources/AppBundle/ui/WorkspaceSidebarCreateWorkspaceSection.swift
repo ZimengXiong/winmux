@@ -23,7 +23,8 @@ struct WorkspaceSidebarCreateWorkspaceSection: View {
     private var showsDropTarget: Bool {
         guard dragPreview?.targetsNewWorkspace == true else { return false }
         if let targetProjectId = dragPreview?.targetProjectId {
-            return targetProjectId == projectId
+            return targetProjectId == projectId &&
+                (dragPreview?.targetMonitorScopeId == nil || dragPreview?.targetMonitorScopeId == monitorScopeId)
         }
         return workspaceSidebarDropTarget(at: MousePointerTracker.shared.currentSample.point)?.kind == .newWorkspace(
             projectId: projectId,

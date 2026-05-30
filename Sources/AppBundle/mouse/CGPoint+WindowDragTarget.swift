@@ -61,11 +61,13 @@ extension CGPoint {
     @MainActor
     private func findWindowDragTargetInTabGroup(_ container: TilingContainer, excluding excludedNode: TreeNode?) -> Window? {
         if container.usesWindowTabBehavior {
-            guard let targetWindow = container.tabActiveWindow ??
-                container.mostRecentWindowRecursive ??
-                container.anyLeafWindowRecursive
-            else { return nil }
-            return shouldExcludeDragTargetNode(targetWindow, excludedNode: excludedNode) ? nil : targetWindow
+            let candidates =
+                [container.tabActiveWindow] +
+                container.childrenByMostRecentUse.compactMap(\.tabRepresentativeWindow) +
+                [container.mostRecentWindowRecursive, container.anyLeafWindowRecursive]
+            return candidates.lazy.compactMap { $0 }.first {
+                !shouldExcludeDragTargetNode($0, excludedNode: excludedNode)
+            }
         }
         let candidates = container.childrenByMostRecentUse.filter { $0.windowDragVisibleRect?.contains(self) == true }
         for child in candidates {

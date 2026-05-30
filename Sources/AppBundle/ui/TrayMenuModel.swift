@@ -22,6 +22,7 @@ public final class TrayMenuModel: ObservableObject {
     @Published var workspaceSidebarShowsMonitorSelector: Bool = false
     @Published var workspaceSidebarDropPreview: WorkspaceSidebarDropPreviewViewModel? = nil
     @Published var windowTabStrips: [WindowTabStripViewModel] = []
+    @Published var windowTabReentryPreview: WindowTabPendingReorderDrop? = nil
     @Published var isWorkspaceSidebarExpanded: Bool = false
     @Published var workspaceSidebarVisibleWidth: CGFloat = 0
     @Published var workspaceSidebarTopPadding: CGFloat = 12

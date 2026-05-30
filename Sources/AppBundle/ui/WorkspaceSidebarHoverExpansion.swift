@@ -17,3 +17,10 @@ func shouldDelayWorkspaceSidebarExpansion(
 ) -> Bool {
     !isExpanded && !isExpansionLocked && !isMouseWindowDragInProgress
 }
+
+func shouldSuppressWorkspaceSidebarHoverExpansionForDrag(
+    isSidebarItemDragActive: Bool,
+    isSidebarOriginatedDrag: Bool,
+) -> Bool {
+    isSidebarItemDragActive || isSidebarOriginatedDrag
+}

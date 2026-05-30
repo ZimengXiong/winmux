@@ -28,6 +28,8 @@ extension WindowTabStripView {
             y: draggingTabId == tab.windowId ? 2 : 0,
         )
         .animation(.interactiveSpring(response: 0.2, dampingFraction: 0.8), value: reorderTargetIndex(context: context))
+        .animation(.interactiveSpring(response: 0.2, dampingFraction: 0.8), value: trayModel.windowTabReentryPreview?.targetIndex)
+        .animation(nil, value: trayModel.windowTabReentryPreview?.sourceVisualOffset)
         .highPriorityGesture(tabDragGesture(for: tab, context: context))
         .workspaceSidebarDrag(enabled: true) {
             WorkspaceSidebarDragPayload.window(tab.windowId).itemProvider

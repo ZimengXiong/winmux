@@ -8,10 +8,12 @@ extension WindowTabStripView {
         orderBeforeDrop: [UInt32],
     ) {
         pendingReorderDrop = WindowTabPendingReorderDrop(
+            stripId: strip.id,
             windowId: windowId,
             sourceIndex: sourceIndex,
             targetIndex: targetIndex,
             orderBeforeDrop: orderBeforeDrop,
+            sourceVisualOffset: nil,
         )
         draggingTabId = nil
         hoveredTabId = nil

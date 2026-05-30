@@ -30,7 +30,7 @@ import XCTest
         let pendingIntent = debugPendingWindowDragIntentSummary().orDie()
         let expectedPreviewRect = tabGroup.windowTabDropZoneRect.orDie()
         let expectedInteractionRect = tabGroup.windowTabDropInteractionRect.orDie()
-        XCTAssertEqual(pendingIntent.kind, .tabStack(targetWindowId: target.windowId))
+        XCTAssertEqual(pendingIntent.kind, .reorderTab(windowId: source.windowId, targetIndex: 0))
         XCTAssertEqual(pendingIntent.previewRect.topLeftX, expectedPreviewRect.topLeftX)
         XCTAssertEqual(pendingIntent.previewRect.topLeftY, expectedPreviewRect.topLeftY)
         XCTAssertEqual(pendingIntent.previewRect.width, expectedPreviewRect.width)

@@ -9,17 +9,11 @@ func updateNativeFullscreenChromeSuppression(nativeFocused: Window?) async {
 }
 
 @MainActor
-func workspaceContainsWinMuxFullscreenContent(_ workspace: Workspace) -> Bool {
-    workspace.allLeafWindowsRecursive.contains(where: \.isFullscreen)
-}
-
-@MainActor
-func shouldSuppressChromeForWinMuxFullscreenContent(on monitor: Monitor) -> Bool {
-    workspaceContainsWinMuxFullscreenContent(monitor.activeWorkspace)
-}
-
-@MainActor
 func shouldSuppressChromeForFullscreenContent(on monitor: Monitor) -> Bool {
-    shouldSuppressChromeForNativeFullscreenContent ||
-        shouldSuppressChromeForWinMuxFullscreenContent(on: monitor)
+    shouldSuppressChromeForNativeFullscreenContent
+}
+
+@MainActor
+func shouldSuppressWorkspaceSidebarForFullscreenContent() -> Bool {
+    shouldSuppressChromeForNativeFullscreenContent
 }

@@ -21,6 +21,11 @@ func endWorkspaceSidebarItemDrag() {
 }
 
 @MainActor
+func resetWorkspaceSidebarItemDrag() {
+    workspaceSidebarItemDragActiveCount = 0
+}
+
+@MainActor
 func isWorkspaceSidebarItemDragActive() -> Bool {
     workspaceSidebarItemDragActiveCount > 0
 }

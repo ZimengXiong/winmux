@@ -37,6 +37,21 @@ func createOrAppendWindowTabStack(sourceWindow: Window, onto targetWindow: Windo
 }
 
 @MainActor
+func reorderWindowTabInCurrentGroup(_ sourceWindow: Window, toIndex targetIndex: Int) -> Bool {
+    guard let parent = sourceWindow.parent as? TilingContainer,
+          parent.layout == .tabGroup,
+          let currentIndex = sourceWindow.ownIndex
+    else { return false }
+    let clampedTarget = max(0, min(targetIndex, parent.children.count - 1))
+    guard clampedTarget != currentIndex else { return true }
+    let binding = sourceWindow.unbindFromParent()
+    sourceWindow.bind(to: parent, adaptiveWeight: binding.adaptiveWeight, index: clampedTarget)
+    sourceWindow.markAsMostRecentChild()
+    _ = sourceWindow.focusWindow()
+    return true
+}
+
+@MainActor
 private func appendWindowToExistingTabGroup(
     sourceWindow: Window,
     targetWindow: Window,

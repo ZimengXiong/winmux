@@ -4,6 +4,7 @@ import SwiftUI
 struct WindowTabStripView: View {
     let strip: WindowTabStripViewModel
 
+    @ObservedObject var trayModel = TrayMenuModel.shared
     @State var draggingTabId: UInt32?
     @State var hoveredTabId: UInt32?
     @State var dragTranslationX: CGFloat = 0

@@ -76,11 +76,8 @@ func setPendingWindowDragIntent(
     destination: WindowDragIntentDestination,
 ) -> Bool {
     let isPointerSettled = WindowDragFrameGate.shared.state(for: sourceWindowId)?.isSettled ?? false
-    syncTargetTabGroupChromeForDropIntentOverlay(
-        destination.kind,
-        detachOrigin: detachOrigin,
-        hasOverlay: destination.dropIntentOverlay != nil,
-    )
+    WindowTabStripPanelController.shared.clearHiddenPassiveTabGroupChrome()
+    updateWindowTabReentryPreview(sourceWindowId: sourceWindowId, destination: destination)
     if let pendingWindowDragIntent,
        pendingWindowDragIntent.sourceWindowId == sourceWindowId,
        pendingWindowDragIntent.sourceSubject == sourceSubject,
@@ -143,6 +140,7 @@ func clearPendingWindowDragIntent() {
         )
     }
     pendingWindowDragIntent = nil
+    TrayMenuModel.shared.windowTabReentryPreview = nil
     lastWindowDragIntentLogSignature = nil
     setPinnedDraggedWindowId(nil)
     if !preservesSidebarDragUI {
@@ -162,33 +160,32 @@ func clearPendingWindowDragIntent() {
 }
 
 @MainActor
-private func syncTargetTabGroupChromeForDropIntentOverlay(
-    _ kind: WindowDragIntentKind,
-    detachOrigin: TabDetachOrigin,
-    hasOverlay: Bool,
-) {
-    guard hasOverlay,
-          detachOrigin != .tabStrip,
-          let targetWindow = targetWindowForDropIntent(kind),
-          let tabGroup = targetWindow.nearestWindowTabGroup,
-          tabGroup.usesWindowTabBehavior
+private func updateWindowTabReentryPreview(sourceWindowId: UInt32, destination: WindowDragIntentDestination) {
+    guard case .reorderTab(let windowId, let targetIndex) = destination.kind,
+          windowId == sourceWindowId,
+          let sourceWindow = Window.get(byId: sourceWindowId),
+          let parent = sourceWindow.parent as? TilingContainer,
+          parent.layout == .tabGroup,
+          let sourceIndex = sourceWindow.ownIndex
     else {
-        WindowTabStripPanelController.shared.clearHiddenPassiveTabGroupChrome()
+        TrayMenuModel.shared.windowTabReentryPreview = nil
         return
     }
-    WindowTabStripPanelController.shared.setHiddenPassiveTabGroupChrome([ObjectIdentifier(tabGroup)])
-}
-
-@MainActor
-private func targetWindowForDropIntent(_ kind: WindowDragIntentKind) -> Window? {
-    switch kind {
-        case .tabStack(let targetWindowId),
-             .stackSplit(let targetWindowId, _),
-             .swap(let targetWindowId):
-            Window.get(byId: targetWindowId)
-        case .detachTab, .moveToWorkspace, .moveToWorkspaceZone, .createWorkspace, .sidebarHover:
-            nil
-    }
+    TrayMenuModel.shared.windowTabReentryPreview = WindowTabPendingReorderDrop(
+        stripId: ObjectIdentifier(parent),
+        windowId: windowId,
+        sourceIndex: sourceIndex,
+        targetIndex: max(0, min(targetIndex, parent.children.count - 1)),
+        orderBeforeDrop: parent.children.compactMap { ($0 as? Window)?.windowId },
+        sourceVisualOffset: parent.windowTabDropZoneRect.map {
+            tabReentrySourceVisualOffset(
+                mouseLocation: MousePointerTracker.shared.currentSample.point,
+                tabStripRect: $0,
+                tabCount: parent.children.count,
+                sourceIndex: sourceIndex
+            )
+        }
+    )
 }
 
 @MainActor
@@ -202,6 +199,13 @@ func applyPendingWindowDragIntentIfPossible() -> Bool {
     else { return false }
     let sourceNode = dragSubjectNode(for: sourceWindow, subject: pendingWindowDragIntent.sourceSubject)
     switch pendingWindowDragIntent.kind {
+        case .reorderTab(let windowId, let targetIndex):
+            guard pendingWindowDragIntent.sourceSubject == .window,
+                  sourceWindow.windowId == windowId
+            else { return false }
+            syncClosedWindowsCacheToCurrentWorld()
+            suppressPostDragAxObserverEvents(for: [sourceWindow.windowId])
+            return reorderWindowTabInCurrentGroup(sourceWindow, toIndex: targetIndex)
         case .tabStack(let targetWindowId):
             guard pendingWindowDragIntent.sourceSubject == .window else { return false }
             guard let targetWindow = Window.get(byId: targetWindowId),
@@ -253,10 +257,15 @@ func applyPendingWindowDragIntentIfPossible() -> Bool {
             suppressPostDragAxObserverEvents(for: [sourceWindow.windowId])
             applyWorkspaceZoneMove(sourceNode: sourceNode, sourceWindow: sourceWindow, targetWorkspace: targetWorkspace, zone: zone)
             return true
-        case .createWorkspace:
+        case .createWorkspace(let projectId, let monitorScopeId):
             syncClosedWindowsCacheToCurrentWorld()
             suppressPostDragAxObserverEvents(for: [sourceWindow.windowId])
-            return createWorkspaceFromSidebarDrag(sourceNode: sourceNode, sourceWindow: sourceWindow)
+            return createWorkspaceFromSidebarDrag(
+                sourceNode: sourceNode,
+                sourceWindow: sourceWindow,
+                projectId: projectId,
+                monitorScopeId: monitorScopeId,
+            )
         case .sidebarHover:
             return false
     }

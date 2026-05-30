@@ -3,7 +3,7 @@ import AppKit
 extension WindowDragCursorProxyPanel {
     func startFollowingMouseIfNeeded() {
         DisplayRefreshDriver.shared.add(owner: self) { [weak self] _ in
-            self?.updateFrame(mouseScreenPoint: NSEvent.mouseLocation)
+            self?.updateFrameWhileDragging(mouseScreenPoint: NSEvent.mouseLocation)
         }
     }
 
@@ -22,5 +22,13 @@ extension WindowDragCursorProxyPanel {
         } else {
             setFrame(targetFrame, display: false, animate: false)
         }
+    }
+
+    private func updateFrameWhileDragging(mouseScreenPoint: CGPoint) {
+        guard isLeftMouseButtonDown else {
+            hide()
+            return
+        }
+        updateFrame(mouseScreenPoint: mouseScreenPoint)
     }
 }

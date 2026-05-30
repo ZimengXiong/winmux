@@ -1,4 +1,5 @@
 @testable import AppBundle
+import Common
 import Foundation
 import XCTest
 
@@ -118,12 +119,16 @@ final class ConfigBootstrapTest: XCTestCase {
             start-at-login = false
             default-root-container-layout = 'accordion'
             accordion-padding = 22
+            window-tabs.enabled = false
             exec-on-workspace-change = ['/bin/sh', '-c', 'echo $AEROSPACE_FOCUSED_WORKSPACE $AEROSPACE_PREV_WORKSPACE $AEROSPACE_WORKSPACE']
+
+            [workspace-sidebar]
+            enabled = false
 
             [mode.main.binding]
             alt-h = 'layout accordion tiles'
             alt-j = 'layout h_accordion v_accordion'
-            alt-l = 'focus --window-id $AEROSPACE_WINDOW_ID'
+            alt-l = 'exec-and-forget echo $AEROSPACE_WINDOW_ID'
             """
         try aerospaceText.write(to: aerospaceUrl, atomically: true, encoding: .utf8)
 
@@ -136,13 +141,23 @@ final class ConfigBootstrapTest: XCTestCase {
         XCTAssertTrue(didMaterialize)
         let migratedText = try String(contentsOf: targetUrl, encoding: .utf8)
         XCTAssertTrue(migratedText.contains("# Migrated from AeroSpace config by WinMux."))
-        XCTAssertTrue(migratedText.contains("default-root-container-layout = 'tab-group'"))
-        XCTAssertTrue(migratedText.contains("tab-group-padding = 22"))
+        XCTAssertTrue(migratedText.contains("default-root-container-layout = 'tiles'"))
+        XCTAssertTrue(migratedText.contains("tab-group-padding = 30"))
+        XCTAssertTrue(migratedText.contains("window-tabs.enabled = true"))
+        XCTAssertTrue(migratedText.contains("[workspace-sidebar]"))
+        XCTAssertTrue(migratedText.contains("enabled = true"))
         XCTAssertTrue(migratedText.contains("layout tab-group tiles"))
         XCTAssertTrue(migratedText.contains("layout h_tab_group v_tab_group"))
-        XCTAssertTrue(migratedText.contains("$WINMUX_FOCUSED_WORKSPACE $WINMUX_PREV_WORKSPACE $WINMUX_WORKSPACE"))
         XCTAssertTrue(migratedText.contains("$WINMUX_WINDOW_ID"))
+        XCTAssertFalse(migratedText.contains("exec-on-workspace-change"))
         XCTAssertFalse(migratedText.contains("accordion"))
         XCTAssertFalse(migratedText.contains("AEROSPACE_"))
+
+        let (parsedConfig, errors) = parseConfig(migratedText)
+        XCTAssertEqual(errors.descriptions, [])
+        XCTAssertTrue(parsedConfig.workspaceSidebar.enabled)
+        XCTAssertTrue(parsedConfig.windowTabs.enabled)
+        XCTAssertEqual(parsedConfig.configVersion, 2)
+        XCTAssertEqual(parsedConfig.modes[mainModeId]?.bindings.values.map(\.descriptionWithKeyNotation).sorted(), ["alt-h", "alt-j", "alt-l"])
     }
 }

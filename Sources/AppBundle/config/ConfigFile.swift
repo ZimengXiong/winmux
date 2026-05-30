@@ -170,7 +170,7 @@ func materializeBootstrapConfigIfNeeded(
 func migrateAerospaceConfigForWinMux(_ rawToml: String) throws -> String {
     _ = try TOMLTable(string: rawToml)
 
-    var migrated = rawToml
+    var migrated = aerospaceKeyboardConfigSections(from: rawToml)
     let literalReplacements = [
         ("AEROSPACE_FOCUSED_WORKSPACE", "WINMUX_FOCUSED_WORKSPACE"),
         ("AEROSPACE_PREV_WORKSPACE", "WINMUX_PREV_WORKSPACE"),
@@ -187,12 +187,17 @@ func migrateAerospaceConfigForWinMux(_ rawToml: String) throws -> String {
         #"(?<![A-Za-z0-9_-])accordion(?![A-Za-z0-9_-])"#,
         with: "tab-group",
     )
+    let baseConfig = migrated.isEmpty
+        ? starterConfigText()
+        : removingAerospaceKeyboardConfigSections(from: starterConfigText())
 
     return """
         # Migrated from AeroSpace config by WinMux.
         # WinMux owns this file after import; the AeroSpace source is not read again.
+        # Current WinMux defaults are used for WinMux-specific behavior; AeroSpace keyboard sections are preserved below.
 
-        \(migrated)
+        \(baseConfig)
+        \(migrated.isEmpty ? "" : "\n# Keyboard configuration imported from AeroSpace.\n\(migrated)")
         """
 }
 
@@ -202,6 +207,61 @@ private extension String {
         let range = NSRange(startIndex ..< endIndex, in: self)
         return regex.stringByReplacingMatches(in: self, range: range, withTemplate: replacement)
     }
+}
+
+private func aerospaceKeyboardConfigSections(from rawToml: String) -> String {
+    keyboardConfigSections(from: rawToml, keepMatchingSections: true)
+}
+
+private func removingAerospaceKeyboardConfigSections(from rawToml: String) -> String {
+    keyboardConfigSections(from: rawToml, keepMatchingSections: false)
+}
+
+private func keyboardConfigSections(from rawToml: String, keepMatchingSections: Bool) -> String {
+    let lines = rawToml.components(separatedBy: "\n")
+    var sections: [[String]] = []
+    var current: [String] = []
+    var shouldKeepCurrent = !keepMatchingSections
+
+    func flushCurrentSection() {
+        if shouldKeepCurrent {
+            sections.append(current)
+        }
+        current = []
+        shouldKeepCurrent = false
+    }
+
+    for line in lines {
+        if isTomlSectionHeader(line) {
+            flushCurrentSection()
+            current = [line]
+            shouldKeepCurrent = isAerospaceKeyboardSectionHeader(line) == keepMatchingSections
+        } else {
+            current.append(line)
+        }
+    }
+    flushCurrentSection()
+
+    return sections
+        .map { sectionLines in
+            sectionLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        .filter { !$0.isEmpty }
+        .joined(separator: "\n\n")
+}
+
+private func isAerospaceKeyboardSectionHeader(_ line: String) -> Bool {
+    let trimmed = line.trimmingCharacters(in: .whitespaces)
+    return trimmed == "[key-mapping]" ||
+        trimmed == "[mode]" ||
+        trimmed.hasPrefix("[mode.") ||
+        trimmed.hasPrefix("[[mode.")
+}
+
+private func isTomlSectionHeader(_ line: String) -> Bool {
+    let trimmed = line.trimmingCharacters(in: .whitespaces)
+    return (trimmed.hasPrefix("[[") && trimmed.hasSuffix("]]")) ||
+        (trimmed.hasPrefix("[") && trimmed.hasSuffix("]"))
 }
 
 func findCustomConfigUrl() -> ConfigFile {

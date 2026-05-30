@@ -90,7 +90,101 @@ private func makeWorkspaceSidebarSearchFixture() -> [WorkspaceSidebarWorkspaceVi
     ]
 }
 
+private func workspaceSidebarSnapshotForTopFilterBar(
+    projects: [WorkspaceSidebarProjectViewModel],
+    monitorScopes: [WorkspaceSidebarMonitorScopeViewModel],
+) -> WorkspaceSidebarSnapshot {
+    WorkspaceSidebarSnapshot(
+        workspaces: [],
+        projects: projects,
+        activeProjectId: workspaceProjectDefaultId,
+        monitorScopes: monitorScopes,
+        selectedMonitorScopeId: workspaceSidebarDefaultScopeId,
+        targetMonitorScopeId: workspaceSidebarDefaultScopeId,
+        focusedMonitorScopeId: "",
+        visibleWidth: 240,
+        hoveredWorkspaceName: nil,
+        dropPreview: nil,
+        configuration: WorkspaceSidebarConfiguration(
+            collapsedWidth: 44,
+            expandedWidth: 240,
+            topPadding: 12,
+            showMonitorSelector: true,
+            showsDate: false,
+            showsStatusPills: false,
+        ),
+    )
+}
+
 final class WorkspaceSidebarDragTest: XCTestCase {
+    @MainActor
+    func testTopFilterBarHidesForSingleProjectWithoutFocusFilter() {
+        let view = WorkspaceSidebarView(snapshot: workspaceSidebarSnapshotForTopFilterBar(
+            projects: [
+                WorkspaceSidebarProjectViewModel(id: workspaceProjectDefaultId, displayName: "Default", colorHex: nil),
+            ],
+            monitorScopes: [
+                WorkspaceSidebarMonitorScopeViewModel(
+                    id: workspaceSidebarDefaultScopeId,
+                    displayName: "Default",
+                    subtitle: nil,
+                    systemImageName: "display",
+                    isFocusedMonitor: false,
+                ),
+            ],
+        ))
+
+        XCTAssertFalse(view.shouldShowTopFilterBar)
+    }
+
+    @MainActor
+    func testTopFilterBarShowsWhenFocusFilterIsEnabled() {
+        let view = WorkspaceSidebarView(snapshot: workspaceSidebarSnapshotForTopFilterBar(
+            projects: [
+                WorkspaceSidebarProjectViewModel(id: workspaceProjectDefaultId, displayName: "Default", colorHex: nil),
+            ],
+            monitorScopes: [
+                WorkspaceSidebarMonitorScopeViewModel(
+                    id: workspaceSidebarDefaultScopeId,
+                    displayName: "Default",
+                    subtitle: nil,
+                    systemImageName: "display",
+                    isFocusedMonitor: false,
+                ),
+                WorkspaceSidebarMonitorScopeViewModel(
+                    id: workspaceSidebarFocusedScopeId,
+                    displayName: "Focused",
+                    subtitle: nil,
+                    systemImageName: "scope",
+                    isFocusedMonitor: false,
+                ),
+            ],
+        ))
+
+        XCTAssertTrue(view.shouldShowTopFilterBar)
+    }
+
+    @MainActor
+    func testTopFilterBarShowsWhenAnotherProjectExists() {
+        let view = WorkspaceSidebarView(snapshot: workspaceSidebarSnapshotForTopFilterBar(
+            projects: [
+                WorkspaceSidebarProjectViewModel(id: workspaceProjectDefaultId, displayName: "Default", colorHex: nil),
+                WorkspaceSidebarProjectViewModel(id: "project-1", displayName: "Project 1", colorHex: nil),
+            ],
+            monitorScopes: [
+                WorkspaceSidebarMonitorScopeViewModel(
+                    id: workspaceSidebarDefaultScopeId,
+                    displayName: "Default",
+                    subtitle: nil,
+                    systemImageName: "display",
+                    isFocusedMonitor: false,
+                ),
+            ],
+        ))
+
+        XCTAssertTrue(view.shouldShowTopFilterBar)
+    }
+
     @MainActor
     func testWorkspaceSidebarSnapshotIncludesEmptyWorkspaceInBrowsedProject() async {
         setUpWorkspacesForTests()
@@ -155,6 +249,19 @@ final class WorkspaceSidebarDragTest: XCTestCase {
     func testWorkspaceSidebarDragInProgressIgnoresNonSidebarMoves() {
         XCTAssertFalse(isWorkspaceSidebarDragInProgress(kind: .move, startedInSidebar: false))
         XCTAssertFalse(isWorkspaceSidebarDragInProgress(kind: .none, startedInSidebar: true))
+    }
+
+    @MainActor
+    func testWorkspaceSidebarItemDragCanBeResetAfterMissedEnd() {
+        resetWorkspaceSidebarItemDrag()
+        beginWorkspaceSidebarItemDrag()
+        beginWorkspaceSidebarItemDrag()
+
+        XCTAssertTrue(isWorkspaceSidebarItemDragActive())
+
+        resetWorkspaceSidebarItemDrag()
+
+        XCTAssertFalse(isWorkspaceSidebarItemDragActive())
     }
 
     @MainActor
@@ -686,6 +793,47 @@ final class WorkspaceSidebarDragTest: XCTestCase {
                 isMouseWindowDragInProgress: true,
             ),
         )
+    }
+
+    func testWorkspaceSidebarHoverExpansionIsSuppressedForSidebarOriginatedDrags() {
+        XCTAssertTrue(
+            shouldSuppressWorkspaceSidebarHoverExpansionForDrag(
+                isSidebarItemDragActive: true,
+                isSidebarOriginatedDrag: false,
+            ),
+        )
+        XCTAssertTrue(
+            shouldSuppressWorkspaceSidebarHoverExpansionForDrag(
+                isSidebarItemDragActive: false,
+                isSidebarOriginatedDrag: true,
+            ),
+        )
+        XCTAssertFalse(
+            shouldSuppressWorkspaceSidebarHoverExpansionForDrag(
+                isSidebarItemDragActive: false,
+                isSidebarOriginatedDrag: false,
+            ),
+        )
+    }
+
+    @MainActor
+    func testChromeIsNotSuppressedForWinMuxFullscreen() {
+        setUpWorkspacesForTests()
+        let window = TestWindow.new(id: 7010, parent: focus.workspace.rootTilingContainer)
+        window.isFullscreen = true
+
+        XCTAssertFalse(shouldSuppressChromeForFullscreenContent(on: mainMonitor))
+        XCTAssertFalse(shouldSuppressWorkspaceSidebarForFullscreenContent())
+    }
+
+    @MainActor
+    func testChromeIsSuppressedForNativeFullscreen() {
+        setUpWorkspacesForTests()
+        shouldSuppressChromeForNativeFullscreenContent = true
+        defer { shouldSuppressChromeForNativeFullscreenContent = false }
+
+        XCTAssertTrue(shouldSuppressChromeForFullscreenContent(on: mainMonitor))
+        XCTAssertTrue(shouldSuppressWorkspaceSidebarForFullscreenContent())
     }
 
     func testWorkspaceHoverExitDoesNotClearNewerHoveredWorkspace() {

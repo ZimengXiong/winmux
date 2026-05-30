@@ -64,9 +64,9 @@ func currentSidebarWorkspaceDropDestination(sourceWindow: Window, mouseLocation:
                     previewGeometry: .rounded,
                     isGroup: isGroup,
                 )
-            case .newWorkspace:
+            case .newWorkspace(let projectId, let monitorScopeId):
                 return WindowDragIntentDestination(
-                    kind: .createWorkspace,
+                    kind: .createWorkspace(projectId: projectId, monitorScopeId: monitorScopeId),
                     previewContainerRect: workspaceSidebarCursorPreviewRect(at: mouseLocation),
                     previewRect: workspaceSidebarCursorPreviewRect(at: mouseLocation),
                     interactionRect: sidebarWorkspaceDropInteractionRect(for: target),

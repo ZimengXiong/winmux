@@ -134,7 +134,7 @@ func updateSidebarDragFeedback(sourceWindow: Window, subject: WindowDragSubject,
     let targetWorkspaceName: String? = switch destination.kind {
         case .moveToWorkspace(let workspaceName): workspaceName
         case .moveToWorkspaceZone(let workspaceName, _): workspaceName
-        case .createWorkspace, .sidebarHover, .tabStack, .detachTab, .stackSplit, .swap: nil
+        case .createWorkspace, .sidebarHover, .tabStack, .reorderTab, .detachTab, .stackSplit, .swap: nil
     }
     if targetWorkspaceName != nil {
         setWorkspaceSidebarDropPreviewIfChanged(WorkspaceSidebarDropPreviewViewModel(
@@ -149,7 +149,7 @@ func updateSidebarDragFeedback(sourceWindow: Window, subject: WindowDragSubject,
             windowCount: windowCount,
             tabItems: tabItems,
         ))
-    } else if destination.kind == .createWorkspace {
+    } else if case .createWorkspace(let projectId, let monitorScopeId) = destination.kind {
         setWorkspaceSidebarDropPreviewIfChanged(WorkspaceSidebarDropPreviewViewModel(
             sourceWindowId: sourceWindow.windowId,
             label: sourceLabel,
@@ -158,7 +158,8 @@ func updateSidebarDragFeedback(sourceWindow: Window, subject: WindowDragSubject,
             appBundlePath: sourceWindow.app.bundlePath,
             targetWorkspaceName: nil,
             targetsNewWorkspace: true,
-            targetProjectId: nil,
+            targetProjectId: projectId,
+            targetMonitorScopeId: monitorScopeId,
             isTabGroup: isTabGroup,
             windowCount: windowCount,
             tabItems: tabItems,

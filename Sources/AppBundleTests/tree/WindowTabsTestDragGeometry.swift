@@ -267,6 +267,26 @@ import XCTest
     }
 
     @MainActor
+    func testWindowDragTargetLookupUsesSiblingTabWhenActiveTabIsExcluded() {
+        setUpWorkspacesForTests()
+        config.windowTabs.enabled = true
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let tabGroup = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let source = TestWindow.new(id: 1, parent: tabGroup)
+        let target = TestWindow.new(id: 2, parent: tabGroup)
+        tabGroup.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
+        source.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
+        target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
+        source.markAsMostRecentChild()
+
+        let surfacePoint = CGPoint(x: 210, y: 199)
+
+        XCTAssertTrue(tabGroup.tabActiveWindow === source)
+        XCTAssertTrue(surfacePoint.findWindowDragTarget(in: root, excluding: source) === target)
+    }
+
+    @MainActor
     func testTabInsertPreviewRectStaysFlushWithBottomEdgeOfTabBand() {
         setUpWorkspacesForTests()
         let workspace = Workspace.get(byName: "tabs")

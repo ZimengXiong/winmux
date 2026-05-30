@@ -20,6 +20,8 @@ func debugDescribe(_ kind: WindowDragIntentKind) -> String {
     switch kind {
         case .tabStack(let targetWindowId):
             "tabStack(target:\(targetWindowId))"
+        case .reorderTab(let windowId, let targetIndex):
+            "reorderTab(window:\(windowId), targetIndex:\(targetIndex))"
         case .detachTab(let windowId):
             "detachTab(window:\(windowId))"
         case .stackSplit(let targetWindowId, let position):

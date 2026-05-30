@@ -7,7 +7,7 @@ extension WorkspaceSidebarView {
         let isCompact = expansionProgress < workspaceSidebarRowsRevealProgress
         let leadingInset = workspaceSidebarOuterLeadingPadding(isCompact: isCompact)
         let trailingInset = workspaceSidebarOuterTrailingPadding(isCompact: isCompact)
-        let showsMonitorSelector = !isCompact
+        let showsMonitorSelector = !isCompact && shouldShowTopFilterBar
         let projectSwipeDirection = workspaceSidebarProjectSwipeDirection(
             horizontalTranslation: projectSwipeTranslation,
             verticalTranslation: 0,
@@ -125,13 +125,18 @@ extension WorkspaceSidebarView {
         .overlay {
             sidebarSwipeCaptureOverlay(expansionProgress: expansionProgress)
         }
-        .simultaneousGesture(projectSwipeGesture(expansionProgress: expansionProgress))
     }
 }
 
 private let workspaceSidebarCollapseReservedProjectPagerHeight = (workspaceSidebarPagerHeight * 2) + 10
 
 extension WorkspaceSidebarView {
+    var shouldShowTopFilterBar: Bool {
+        let hasFocusFilter = snapshot.monitorScopes.contains { $0.id == workspaceSidebarFocusedScopeId }
+        let hasOtherProjects = snapshot.projects.contains { $0.id != snapshot.activeProjectId }
+        return hasFocusFilter || hasOtherProjects
+    }
+
     func workspaceSidebarSplitSectionWidth(expansionProgress: CGFloat) -> CGFloat {
         let sectionWidth = workspaceSidebarSectionWidth(expansionProgress, layout: snapshot.configuration)
         return (sectionWidth * 2) + workspaceSidebarSplitPaneGap

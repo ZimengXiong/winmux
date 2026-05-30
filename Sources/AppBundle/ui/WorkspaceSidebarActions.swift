@@ -174,8 +174,24 @@ func createWorkspaceFromSidebarButton(projectId: WorkspaceProjectId, monitorScop
 
 @MainActor
 func createWorkspaceFromSidebarDrag(sourceNode: TreeNode, sourceWindow: Window) -> Bool {
-    let targetMonitor = sidebarWorkspaceTargetMonitor(fallbackWindow: sourceWindow, fallbackPoint: mouseLocation)
-    let projectId = activeWorkspaceProjectId(for: targetMonitor)
+    createWorkspaceFromSidebarDrag(sourceNode: sourceNode, sourceWindow: sourceWindow, projectId: nil, monitorScopeId: nil)
+}
+
+@MainActor
+func createWorkspaceFromSidebarDrag(
+    sourceNode: TreeNode,
+    sourceWindow: Window,
+    projectId: WorkspaceProjectId?,
+    monitorScopeId: String?,
+) -> Bool {
+    let targetMonitor = monitorScopeId.map {
+        workspaceSidebarTargetMonitor(
+            scopeId: $0,
+            fallbackWindow: sourceWindow,
+            fallbackPoint: mouseLocation,
+        )
+    } ?? sidebarWorkspaceTargetMonitor(fallbackWindow: sourceWindow, fallbackPoint: mouseLocation)
+    let projectId = projectId ?? activeWorkspaceProjectId(for: targetMonitor)
     let workspace = getOrCreateAdjacentBlankWorkspace(projectId: projectId, monitor: targetMonitor)
     let targetContainer: NonLeafTreeNodeObject
     if sourceNode is Window, sourceWindow.isFloating {
@@ -258,13 +274,14 @@ func previewWorkspaceSidebarDrop(_ windowId: UInt32, subject: WindowDragSubject,
         return
     }
     guard case .workspace(let workspaceName) = target else {
-        if case .newWorkspace(let projectId, _) = target {
+        if case .newWorkspace(let projectId, let monitorScopeId) = target {
             setWorkspaceSidebarDropPreviewIfChanged(workspaceSidebarDropPreview(
                 sourceWindow: sourceWindow,
                 subject: subject,
                 targetWorkspaceName: nil,
                 targetsNewWorkspace: true,
                 targetProjectId: projectId,
+                targetMonitorScopeId: monitorScopeId,
             ))
         } else {
             clearWorkspaceSidebarDropPreview()
@@ -324,6 +341,7 @@ private func workspaceSidebarDropPreview(
     targetWorkspaceName: String?,
     targetsNewWorkspace: Bool,
     targetProjectId: WorkspaceProjectId? = nil,
+    targetMonitorScopeId: String? = nil,
 ) -> WorkspaceSidebarDropPreviewViewModel {
     let moveNode = dragSubjectNode(for: sourceWindow, subject: subject)
     let isTabGroup = moveNode is TilingContainer
@@ -338,6 +356,7 @@ private func workspaceSidebarDropPreview(
         targetWorkspaceName: targetWorkspaceName,
         targetsNewWorkspace: targetsNewWorkspace,
         targetProjectId: targetProjectId,
+        targetMonitorScopeId: targetMonitorScopeId,
         isTabGroup: isTabGroup,
         windowCount: max(moveNode.allLeafWindowsRecursive.count, 1),
         tabItems: workspaceSidebarDropPreviewTabs(for: moveNode, isTabGroup: isTabGroup),
@@ -591,6 +610,15 @@ func finishSidebarWindowDrag(pointer: CGPoint? = nil) {
     }
     clearWorkspaceSidebarDropPreview()
     WindowDragCursorProxyPanel.shared.hide()
+}
+
+@MainActor
+func finishWorkspaceSidebarDragAfterGlobalMouseUp() {
+    let hasSidebarDragState = currentActiveWorkspaceSidebarDrag() != nil || isWorkspaceSidebarItemDragActive()
+    let hasCursorProxy = WindowDragCursorProxyPanel.shared.currentContent != nil || WindowDragCursorProxyPanel.shared.isVisible
+    guard hasSidebarDragState || hasCursorProxy else { return }
+    finishSidebarWindowDrag()
+    resetWorkspaceSidebarItemDrag()
 }
 
 @MainActor

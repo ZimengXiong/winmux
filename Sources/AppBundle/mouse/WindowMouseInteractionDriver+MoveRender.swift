@@ -3,7 +3,7 @@ import AppKit
 extension WindowMouseInteractionDriver {
     func renderMoveFrame(force: Bool) {
         guard let session = moveSession else { return }
-        guard isLeftMouseButtonDown, getCurrentMouseManipulationKind() == .move else { return }
+        guard (isLeftMouseButtonDown || force), getCurrentMouseManipulationKind() == .move else { return }
         guard currentlyManipulatedWithMouseWindowId == session.windowId,
               let sourceWindow = Window.get(byId: session.windowId)
         else {

@@ -5,6 +5,11 @@ extension WindowTabStripView {
         for tab: WindowTabItemViewModel,
         context: WindowTabStripLayoutContext,
     ) -> CGFloat {
+        if let reentryPreview = trayModel.windowTabReentryPreview,
+           reentryPreview.stripId == strip.id,
+           reentryPreview.orderBeforeDrop == context.tabOrder {
+            return tabReentryVisualOffset(for: tab, context: context, drop: reentryPreview)
+        }
         if let pendingReorderDrop, pendingReorderDrop.orderBeforeDrop == context.tabOrder {
             return pendingReorderOffset(for: tab, context: context, drop: pendingReorderDrop)
         }
@@ -41,7 +46,26 @@ extension WindowTabStripView {
         drop: WindowTabPendingReorderDrop,
     ) -> CGFloat {
         if tab.windowId == drop.windowId {
+            if let sourceVisualOffset = drop.sourceVisualOffset {
+                return sourceVisualOffset
+            }
             return CGFloat(drop.targetIndex - drop.sourceIndex) * context.effectiveTabWidth
+        }
+        return tabShiftOffset(
+            for: tab,
+            context: context,
+            sourceIndex: drop.sourceIndex,
+            targetIndex: drop.targetIndex,
+        )
+    }
+
+    func tabReentryVisualOffset(
+        for tab: WindowTabItemViewModel,
+        context: WindowTabStripLayoutContext,
+        drop: WindowTabPendingReorderDrop,
+    ) -> CGFloat {
+        if tab.windowId == drop.windowId {
+            return drop.sourceVisualOffset ?? CGFloat(drop.targetIndex - drop.sourceIndex) * context.effectiveTabWidth
         }
         return tabShiftOffset(
             for: tab,

@@ -143,6 +143,72 @@ import XCTest
         XCTAssertTrue(shouldIgnoreWindowTabStripMouseEventsDuringDrag(detachOrigin: .window))
     }
 
+    func testTabStripReentryTargetIndexTracksPointerPosition() {
+        let stripRect = Rect(topLeftX: 100, topLeftY: 20, width: 420, height: 44)
+        let tabWidth = windowTabStripTabWidth(stripWidth: stripRect.width, count: 3)
+        let firstTabMinX = stripRect.minX + windowTabStripContentHorizontalPadding
+        let secondTabCenterX = firstTabMinX + tabWidth + windowTabStripTabSpacing + tabWidth / 2
+
+        XCTAssertEqual(
+            tabReentryTargetIndex(mouseLocation: CGPoint(x: 120, y: 40), tabStripRect: stripRect, tabCount: 3, sourceIndex: 0),
+            0
+        )
+        XCTAssertEqual(
+            tabReentryTargetIndex(mouseLocation: CGPoint(x: secondTabCenterX - 1, y: 40), tabStripRect: stripRect, tabCount: 3, sourceIndex: 0),
+            0
+        )
+        XCTAssertEqual(
+            tabReentryTargetIndex(mouseLocation: CGPoint(x: secondTabCenterX + 1, y: 40), tabStripRect: stripRect, tabCount: 3, sourceIndex: 0),
+            1
+        )
+    }
+
+    func testTabStripReentryTargetIndexAdjustsForSourceRemovalWhenDraggingBackward() {
+        let stripRect = Rect(topLeftX: 100, topLeftY: 20, width: 420, height: 44)
+        let tabWidth = windowTabStripTabWidth(stripWidth: stripRect.width, count: 3)
+        let firstTabCenterX = stripRect.minX + windowTabStripContentHorizontalPadding + tabWidth / 2
+
+        XCTAssertEqual(
+            tabReentryTargetIndex(mouseLocation: CGPoint(x: firstTabCenterX - 1, y: 40), tabStripRect: stripRect, tabCount: 3, sourceIndex: 2),
+            0
+        )
+        XCTAssertEqual(
+            tabReentryTargetIndex(mouseLocation: CGPoint(x: firstTabCenterX + 1, y: 40), tabStripRect: stripRect, tabCount: 3, sourceIndex: 2),
+            1
+        )
+    }
+
+    func testTabStripReentrySourceVisualOffsetTracksPointerSmoothly() {
+        let stripRect = Rect(topLeftX: 100, topLeftY: 20, width: 420, height: 54)
+        let middle = tabReentrySourceVisualOffset(
+            mouseLocation: CGPoint(x: 310, y: 40),
+            tabStripRect: stripRect,
+            tabCount: 3,
+            sourceIndex: 1
+        )
+        let right = tabReentrySourceVisualOffset(
+            mouseLocation: CGPoint(x: 350, y: 40),
+            tabStripRect: stripRect,
+            tabCount: 3,
+            sourceIndex: 1
+        )
+
+        XCTAssertGreaterThan(right, middle)
+    }
+
+    @MainActor
+    func testDetachedTabReentryReordersWithinCurrentTabGroup() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let tabGroup = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let first = TestWindow.new(id: 1, parent: tabGroup)
+        let second = TestWindow.new(id: 2, parent: tabGroup)
+        let third = TestWindow.new(id: 3, parent: tabGroup)
+
+        XCTAssertTrue(reorderWindowTabInCurrentGroup(third, toIndex: 1))
+        XCTAssertEqual(tabGroup.children.compactMap { ($0 as? Window)?.windowId }, [first.windowId, third.windowId, second.windowId])
+    }
+
     func testCompositedGroupPreviewOnlyRunsForTabStripOriginatedGroupDrags() {
         XCTAssertTrue(shouldShowCompositedGroupMovePreview(
             subject: .group,
