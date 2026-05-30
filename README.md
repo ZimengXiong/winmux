@@ -7,7 +7,7 @@
 
 <p align="left">A powerful sidebar-first window manager for macOS.</p>
 
-https://github.com/user-attachments/assets/35b10bb8-97cd-4b8e-87b4-aa99cb24e1ad
+https://github.com/user-attachments/assets/51983568-a168-494f-8ae3-5f50ca1efce1
 
 ## Highlights
 ### Projects
