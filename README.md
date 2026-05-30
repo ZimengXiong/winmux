@@ -7,7 +7,7 @@
 
 <p align="left">A sidebar-first window manager for macOS.</p>
 
-[![](winmux-overview.png)
+[![](resources/screenshots/winmux-overview.png)
 ](https://github.com/user-attachments/assets/89fe433c-55c3-4e42-b857-895a92ce40f6
 )
 
@@ -24,7 +24,7 @@ The sidebar can be configured (as shown) to display the current date and time.
 
 
 ### Tab Groups
-![](tab-groups.png)
+![](resources/screenshots/tab-groups.png)
 Tab groups allow you to have many windows occupy the same footprint, similar to Yabai stacks but with browser-like tab behavior. This is useful when you want to have multiple pieces of reference information next to an editor, multiple tabs in different browser profiles, or, when you simply want multiple fullscreen views without the additional friction and overhead of creating a new workspace.
 
 Unlike stack-only layouts, WinMux tab groups behave more intuitively like you would expect tabs to in browsers, and don't need a keyboard shortcut to activate. You can drag tabs from tab groups into another window's [intent zone](#managed-tiling-mode), or in between workspaces. You can also rearrange tab order within a tab group, and navigate through them with relative and absolute keybindings.
