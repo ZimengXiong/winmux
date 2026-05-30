@@ -95,20 +95,11 @@ xattr -dr com.apple.quarantine /Applications/WinMux.app/
 ### From AeroSpace
 If `~/.config/winmux/winmux.toml` already exists, WinMux uses it as-is.
 
-If it does not exist and an AeroSpace config exists, WinMux imports it once into `~/.config/winmux/winmux.toml`. Users do not need to edit the generated config to get the WinMux experience: the importer automatically injects WinMux's current bundled defaults, including the sidebar and window tabs, then preserves AeroSpace keyboard configuration by importing `[mode...]` and `[key-mapping]` sections with known AeroSpace-era names translated into current WinMux syntax.
+If you have an AeroSpace config but no WinMux config yet, WinMux creates one for you on first launch. It copies over your AeroSpace shortcuts/key mapping and fills in the rest with WinMux defaults, including the sidebar and window tabs.
 
-The reason for this shape is that AeroSpace users should keep their muscle memory without being left on an AeroSpace-shaped config. WinMux-specific behavior is owned by WinMux defaults, so first launch feels like WinMux rather than a compatibility mode that needs manual setup.
-
-After that first import, WinMux reads the generated WinMux config and does not keep syncing or falling back to the AeroSpace source file.
+You do not need to edit anything to get started. After import, WinMux uses `~/.config/winmux/winmux.toml` and leaves your AeroSpace config alone.
 
 If neither exists, WinMux creates a new WinMux config with the bundled defaults.
-
-Inside imported keyboard sections, the importer translates:
-
-- `accordion` layouts to `tab-group`
-- `h_accordion` / `v_accordion` layout commands to `h_tab_group` / `v_tab_group`
-- `accordion-padding` to `tab-group-padding`
-- `AEROSPACE_*` workspace/window environment variables to `WINMUX_*`
 
 ## Credits
 The app logo/icon is still Aerospace's and will proab stay that way for a while. Been focusing on getting everything working first.
