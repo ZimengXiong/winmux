@@ -7,9 +7,7 @@
 
 <p align="left">A sidebar-first window manager for macOS.</p>
 
-[![](resources/screenshots/winmux-overview.png)
-](https://github.com/user-attachments/assets/89fe433c-55c3-4e42-b857-895a92ce40f6
-)
+https://github.com/user-attachments/assets/35b10bb8-97cd-4b8e-87b4-aa99cb24e1ad
 
 ## Highlights
 ### Projects
