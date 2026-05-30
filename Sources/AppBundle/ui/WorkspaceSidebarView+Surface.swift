@@ -3,7 +3,7 @@ import SwiftUI
 
 extension WorkspaceSidebarView {
     var sidebarShape: some Shape {
-        Rectangle()
+        WorkspaceSidebarPanelShape(rightCornerRadius: workspaceSidebarPanelRightCornerRadius)
     }
 
     func sidebarSurface<S: Shape>(in shape: S) -> some View {
@@ -69,3 +69,27 @@ private let sidebarGlassTintOpacity: Double = 0.06
 private let sidebarGlassScrimOpacity: Double = 0.58
 private let sidebarGlassHighlightPeak: Double = 0.08
 private let sidebarGlassBorderOpacity: Double = 0.10
+
+private struct WorkspaceSidebarPanelShape: Shape {
+    let rightCornerRadius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let radius = min(rightCornerRadius, rect.width / 2, rect.height / 2)
+
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX - radius, y: rect.minY))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.maxX, y: rect.minY + radius),
+            control: CGPoint(x: rect.maxX, y: rect.minY)
+        )
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - radius))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.maxX - radius, y: rect.maxY),
+            control: CGPoint(x: rect.maxX, y: rect.maxY)
+        )
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.closeSubpath()
+        return path
+    }
+}

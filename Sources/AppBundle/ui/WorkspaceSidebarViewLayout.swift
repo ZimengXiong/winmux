@@ -110,12 +110,12 @@ extension WorkspaceSidebarView {
                 }
         }
         .environment(\.colorScheme, .dark)
-        .clipShape(sidebarShape)
         .overlay(alignment: .trailing) {
             Rectangle()
                 .fill(Color.white.opacity(0.08))
                 .frame(width: 0.5)
         }
+        .clipShape(sidebarShape)
         .shadow(
             color: Color.black.opacity(0.24),
             radius: 20,

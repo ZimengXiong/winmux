@@ -12,6 +12,7 @@ let workspaceSidebarBadgeWidth: CGFloat = 22
 let workspaceSidebarHeaderSpacing: CGFloat = 10
 let workspaceSidebarHeaderRowLeadingPadding: CGFloat = 6
 let workspaceSidebarRowsRevealProgress: CGFloat = 0.58
+let workspaceSidebarPanelRightCornerRadius: CGFloat = 14
 let workspaceSidebarPlateCornerRadius: CGFloat = 12
 let workspaceSidebarSectionCornerRadius: CGFloat = workspaceSidebarPlateCornerRadius
 let workspaceSidebarRowCornerRadius: CGFloat = 8
