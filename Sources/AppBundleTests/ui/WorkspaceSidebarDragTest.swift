@@ -265,7 +265,7 @@ final class WorkspaceSidebarDragTest: XCTestCase {
     }
 
     @MainActor
-    func testWorkspaceSidebarActionsExposeWindowAndTabGroupDragClosures() {
+    func testWorkspaceSidebarActionsForwardWindowAndTabGroupDragClosures() {
         var received: [String] = []
         let pointer = CGPoint(x: 12, y: 34)
         let actions = WorkspaceSidebarActions(

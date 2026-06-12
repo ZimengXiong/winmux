@@ -60,13 +60,8 @@ enum GlobalObserver {
     }
 
     private static func onKeyDown(_ event: NSEvent) {
-        let modifierFlags = event.modifierFlags
-        let keyCode = event.keyCode
         runOnMainActor {
             noteTapBindingKeyDown()
-            if modifierFlags.contains(.control), keyCode == 34 { // 'i' key
-                ExposePanel.shared.toggle()
-            }
         }
     }
 

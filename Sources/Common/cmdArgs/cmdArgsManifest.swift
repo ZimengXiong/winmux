@@ -7,6 +7,7 @@ public enum CmdKind: String, CaseIterable, Equatable, Sendable {
     case closeAllWindowsButCurrent = "close-all-windows-but-current"
     case config
     case debugWindows = "debug-windows"
+    case doctor
     case enable
     case execAndForget = "exec-and-forget"
     case flattenWorkspaceTree = "flatten-workspace-tree"
@@ -32,6 +33,7 @@ public enum CmdKind: String, CaseIterable, Equatable, Sendable {
     case moveNodeToWorkspace = "move-node-to-workspace"
     case moveWorkspaceToMonitor = "move-workspace-to-monitor"
     case openSidebar = "open-sidebar"
+    case palette
     case project
     case reloadConfig = "reload-config"
     case resize
@@ -62,6 +64,8 @@ func initSubcommands() -> [String: any SubCommandParserProtocol] {
                 result[kind.rawValue] = SubCommandParser(parseConfigCmdArgs)
             case .debugWindows:
                 result[kind.rawValue] = SubCommandParser(DebugWindowsCmdArgs.init)
+            case .doctor:
+                result[kind.rawValue] = SubCommandParser(DoctorCmdArgs.init)
             case .enable:
                 result[kind.rawValue] = SubCommandParser(parseEnableCmdArgs)
             case .execAndForget:
@@ -116,6 +120,8 @@ func initSubcommands() -> [String: any SubCommandParserProtocol] {
                 result["move-workspace-to-display"] = SubCommandParser(MoveWorkspaceToMonitorCmdArgs.init)
             case .openSidebar:
                 result[kind.rawValue] = SubCommandParser(OpenSidebarCmdArgs.init)
+            case .palette:
+                result[kind.rawValue] = SubCommandParser(PaletteCmdArgs.init)
             case .project:
                 result[kind.rawValue] = SubCommandParser(parseProjectCmdArgs)
             case .reloadConfig:

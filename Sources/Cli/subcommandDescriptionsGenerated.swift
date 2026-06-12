@@ -8,6 +8,8 @@ let subcommandDescriptions = [
     ["  close", "Close the focused window"],
     ["  config", "Query WinMux config options"],
     ["  debug-windows", "Interactive command to record Accessibility API debug information to create bug reports"],
+    ["  doctor", "Print diagnostics: permissions, monitors, per-app accessibility latency, manager state"],
+    ["  palette", "Toggle the window switcher palette (fuzzy-search all windows)"],
     ["  enable", "Temporarily enable or disable WinMux"],
     ["  flatten-workspace-tree", "Flatten the tree of the focused workspace"],
     ["  focus-back-and-forth", "Switch between the current and previously focused elements back and forth"],
