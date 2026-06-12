@@ -4,8 +4,10 @@ import SwiftUI
 
 // MARK: - Constants
 
-// Default when the active window's real corner radius can't be measured.
-// macOS 26 (Tahoe) increased the standard window corner radius from ~10pt to 26pt.
+// Initial guess when no window's real corner radius has been measured yet. macOS 27 unified
+// the window corner radius system-wide; the true value is measured from live windows at
+// runtime (see estimatedWindowPreviewCornerRadius), so this constant only matters until the
+// first successful measurement.
 let windowTabPreviewCornerRadius: CGFloat = {
     if #available(macOS 26.0, *) { return 26 } else { return 12 }
 }()
@@ -23,10 +25,12 @@ let windowTabStripScrollOriginTolerance: CGFloat = 0.5
 let windowTabStripGroupDragMinimumDistance: CGFloat = 1
 let windowTabGroupFrameStrokeWidth: CGFloat = 0.5
 let windowTabGroupFrameInnerStrokeWidth: CGFloat = 0.5
-// Must be >= the OS standard window corner radius (26pt on macOS 26+), otherwise the chrome
-// frame's inner cutout clamps below the real window corners and visibly mismatches them.
+// Must be >= the OS standard window corner radius (26pt on macOS 26, unified system-wide on
+// macOS 27), otherwise the chrome frame's inner cutout clamps below the real window corners
+// and visibly mismatches them. The actual radius comes from per-window measurement; this only
+// bounds absurd estimates.
 let windowTabGroupFrameMaxInnerCornerRadius: CGFloat = {
-    if #available(macOS 26.0, *) { return 30 } else { return 22 }
+    if #available(macOS 26.0, *) { return 36 } else { return 22 }
 }()
 let windowTabGroupFrameMaxTopInnerCornerRadius: CGFloat = 40
 let windowTabGroupCornerShieldOverreach: CGFloat = 7

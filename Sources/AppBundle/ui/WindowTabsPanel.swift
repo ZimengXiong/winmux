@@ -12,6 +12,11 @@ let windowTabReorderDropClearDelay: TimeInterval = 0.24
 @MainActor
 var windowPreviewCornerRadiusCache: [UInt32: CGFloat] = [:]
 
+// macOS 27 unified the window corner radius across the system, so a radius measured from any
+// window is a better fallback for unmeasurable windows than a hardcoded constant.
+@MainActor
+private var lastMeasuredWindowCornerRadius: CGFloat? = nil
+
 @MainActor
 func estimatedWindowPreviewCornerRadius(for windowId: UInt32) -> CGFloat {
     if let cached = windowPreviewCornerRadiusCache[windowId] {
@@ -20,9 +25,10 @@ func estimatedWindowPreviewCornerRadius(for windowId: UInt32) -> CGFloat {
     guard CGPreflightScreenCaptureAccess(),
           let resolvedRadius = estimateWindowPreviewCornerRadiusFromImage(windowId: windowId)
     else {
-        return windowTabPreviewCornerRadius
+        return lastMeasuredWindowCornerRadius ?? windowTabPreviewCornerRadius
     }
     windowPreviewCornerRadiusCache[windowId] = resolvedRadius
+    lastMeasuredWindowCornerRadius = resolvedRadius
     return resolvedRadius
 }
 
