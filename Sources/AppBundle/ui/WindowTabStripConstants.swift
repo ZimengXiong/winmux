@@ -4,12 +4,10 @@ import SwiftUI
 
 // MARK: - Constants
 
-// Initial guess when no window's real corner radius has been measured yet. macOS 27 unified
-// the window corner radius system-wide; the true value is measured from live windows at
-// runtime (see estimatedWindowPreviewCornerRadius), so this constant only matters until the
-// first successful measurement.
+// Fallback when the system window corner radius can't be probed from AppKit (see
+// systemWindowCornerRadius). 16 is the measured unified radius on macOS 27.
 let windowTabPreviewCornerRadius: CGFloat = {
-    if #available(macOS 26.0, *) { return 26 } else { return 12 }
+    if #available(macOS 26.0, *) { return 16 } else { return 12 }
 }()
 let windowTabStripContentHorizontalPadding: CGFloat = 3
 let windowTabStripGroupHandleWidth: CGFloat = 26

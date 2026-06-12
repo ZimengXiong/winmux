@@ -6,20 +6,7 @@ struct WindowTabGroupShellShape: Shape {
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        // Bottom corners are concentric with the window's corners (window radius + shell gap),
-        // so the chrome visually hugs the window instead of cutting across its corner curve.
-        let bottomRadius = min(
-            activeWindowCornerRadius + windowTabGroupShellBottomInset(),
-            rect.width / 2,
-            rect.height / 2,
-        )
-        path.addPath(UnevenRoundedRectangle(
-            topLeadingRadius: windowTabStripCornerRadius,
-            bottomLeadingRadius: bottomRadius,
-            bottomTrailingRadius: bottomRadius,
-            topTrailingRadius: windowTabStripCornerRadius,
-            style: .continuous,
-        ).path(in: rect))
+        path.addPath(WindowTabGroupOuterShape(activeWindowCornerRadius: activeWindowCornerRadius).path(in: rect))
         let innerRect = Self.innerRect(in: rect, tabBarHeight: tabBarHeight)
         if innerRect.width > 0, innerRect.height > 0 {
             path.addPath(WindowTabGroupInnerBoundaryShape(
@@ -41,6 +28,28 @@ struct WindowTabGroupShellShape: Shape {
             width: max(rect.width - horizontalInset * 2, 0),
             height: max(availableHeight - bottomInset, 0),
         )
+    }
+}
+
+/// The chrome's outer silhouette. Bottom corners are concentric with the window's corners
+/// (window radius + shell gap), so the chrome hugs the window instead of cutting across its
+/// corner curve.
+struct WindowTabGroupOuterShape: Shape {
+    var activeWindowCornerRadius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let bottomRadius = min(
+            activeWindowCornerRadius + windowTabGroupShellBottomInset(),
+            rect.width / 2,
+            rect.height / 2,
+        )
+        return UnevenRoundedRectangle(
+            topLeadingRadius: windowTabStripCornerRadius,
+            bottomLeadingRadius: bottomRadius,
+            bottomTrailingRadius: bottomRadius,
+            topTrailingRadius: windowTabStripCornerRadius,
+            style: .continuous,
+        ).path(in: rect)
     }
 }
 

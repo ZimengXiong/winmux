@@ -23,6 +23,37 @@ func focusWindowFromTabStrip(_ windowId: UInt32, fallbackWorkspace: String) {
         // setFrame on the app thread is a no-op when the frame already matches, so this is
         // cheap when re-clicking the active tab.
         window.setAxFrame(visibleRect.topLeftCorner, CGSize(width: visibleRect.width, height: visibleRect.height))
+        // Optimistically flip the active tab in the published strip models so the pill
+        // highlight moves on the same frame as the click; the full async rebuild follows.
+        let strips = TrayMenuModel.shared.windowTabStrips.map { strip in
+            guard strip.activeWindowId != windowId, strip.tabs.contains(where: { $0.windowId == windowId }) else {
+                return strip
+            }
+            return WindowTabStripViewModel(
+                id: strip.id,
+                workspaceName: strip.workspaceName,
+                frame: strip.frame,
+                groupFrame: strip.groupFrame,
+                activeWindowId: windowId,
+                activeWindowCornerRadius: strip.activeWindowCornerRadius,
+                tabs: strip.tabs.map { tab in
+                    WindowTabItemViewModel(
+                        windowId: tab.windowId,
+                        workspaceName: tab.workspaceName,
+                        appName: tab.appName,
+                        appBundleId: tab.appBundleId,
+                        appBundlePath: tab.appBundlePath,
+                        title: tab.title,
+                        isActive: tab.windowId == windowId,
+                    )
+                },
+                occludingFloatingWindowFrames: strip.occludingFloatingWindowFrames,
+            )
+        }
+        if strips != TrayMenuModel.shared.windowTabStrips {
+            TrayMenuModel.shared.windowTabStrips = strips
+            WindowTabStripPanelController.shared.refresh()
+        }
     } else {
         isTabSwitch = false
     }

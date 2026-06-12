@@ -63,44 +63,54 @@ func estimateTopCornerRadius(in image: CGImage) -> CGFloat? {
         return bitmap.colorAt(x: x, y: bitmapY)?.alphaComponent ?? 0
     }
 
-    var samples: [Int] = []
+    // For a corner of radius r, the first opaque pixel at scan depth y sits at inset
+    // i = r - sqrt(r^2 - (r-y)^2). Solving for r: r = (i + y) + sqrt(2*i*y). Each (inset, row)
+    // sample therefore yields a direct radius estimate. (The previous implementation compared
+    // raw insets across rows, which only equal the radius at row 0 — the samples disagreed by
+    // design, the consistency check failed, and detection almost always fell back to the
+    // hardcoded default.)
+    func radiusEstimate(inset: Int, depth: Int) -> Double {
+        Double(inset + depth) + (2.0 * Double(inset) * Double(depth)).squareRoot()
+    }
+
+    var estimates: [Double] = []
 
     // Scan horizontal insets at multiple rows from top (both edges)
     for row in 0 ..< min(4, maxScan) {
         for step in 0 ..< maxScan {
             if alphaAt(x: step, yFromTop: row) > windowPreviewCornerAlphaThreshold {
-                samples.append(step)
+                estimates.append(radiusEstimate(inset: step, depth: row))
                 break
             }
         }
         for step in 0 ..< maxScan {
             if alphaAt(x: width - 1 - step, yFromTop: row) > windowPreviewCornerAlphaThreshold {
-                samples.append(step)
+                estimates.append(radiusEstimate(inset: step, depth: row))
                 break
             }
         }
     }
 
-    // Scan vertical insets at leftmost and rightmost columns from top
+    // Scan vertical insets at leftmost and rightmost columns from top (depth 0 along x)
     for x in [0, width - 1] {
         for step in 0 ..< maxScan {
             if alphaAt(x: x, yFromTop: step) > windowPreviewCornerAlphaThreshold {
-                samples.append(step)
+                estimates.append(Double(step))
                 break
             }
         }
     }
 
-    guard samples.count >= 6 else { return nil }
+    guard estimates.count >= 6 else { return nil }
 
-    let sorted = samples.sorted()
+    let sorted = estimates.sorted()
     let median = sorted[sorted.count / 2]
 
-    let consistent = samples.filter { abs($0 - median) <= 2 }
-    guard Double(consistent.count) >= Double(samples.count) * 0.6 else {
+    let consistent = estimates.filter { abs($0 - median) <= 3 }
+    guard Double(consistent.count) >= Double(estimates.count) * 0.6 else {
         return nil
     }
 
     guard median >= 4 else { return nil }
-    return CGFloat(median)
+    return CGFloat((median * 2).rounded() / 2)
 }
