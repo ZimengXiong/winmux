@@ -45,10 +45,10 @@ struct WorkspaceSidebarExpandedStatusCard: View {
         .frame(width: sectionWidth, height: 68, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: workspaceSidebarStatusCornerRadius, style: .continuous)
-                .fill(Color.white.opacity(0.06))
+                .fill(Color.white.opacity(GlassToken.fillResting))
                 .overlay {
                     RoundedRectangle(cornerRadius: workspaceSidebarStatusCornerRadius, style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
+                        .strokeBorder(Color.white.opacity(GlassToken.cardStroke), lineWidth: StrokeToken.hairline)
                 }
         )
         .accessibilityElement(children: .combine)

@@ -18,23 +18,30 @@ struct WindowTabGroupFrameView: View {
                 activeWindowCornerRadius: strip.activeWindowCornerRadius
             )
                 .stroke(mattePanelFill, lineWidth: windowTabGroupFrameStrokeWidth)
-                .shadow(color: Color.black.opacity(0.18), radius: 8, x: 0, y: 4)
+                .glassShadow(.raised)
 
+            let tabBarShape = UnevenRoundedRectangle(
+                topLeadingRadius: windowTabStripCornerRadius,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: windowTabStripCornerRadius,
+                style: .continuous,
+            )
             Rectangle()
                 .fill(mattePanelFill)
-                .frame(height: tabHeight)
+                .overlay { GlassHighlight() }
                 .overlay(alignment: .bottom) {
                     Rectangle()
-                        .fill(Color.white.opacity(0.10))
-                        .frame(height: 0.5)
+                        .fill(Color.white.opacity(GlassToken.borderOpacity))
+                        .frame(height: StrokeToken.hairline)
                 }
-                .clipShape(UnevenRoundedRectangle(
-                    topLeadingRadius: windowTabStripCornerRadius,
-                    bottomLeadingRadius: 0,
-                    bottomTrailingRadius: 0,
-                    topTrailingRadius: windowTabStripCornerRadius,
-                    style: .continuous,
-                ))
+                .frame(height: tabHeight)
+                .clipShape(tabBarShape)
+                .overlay {
+                    tabBarShape
+                        .stroke(Color.white.opacity(GlassToken.borderOpacity), lineWidth: StrokeToken.hairline)
+                        .frame(height: tabHeight)
+                }
 
             WindowTabGroupInnerBoundaryShape(
                 tabBarHeight: tabHeight,

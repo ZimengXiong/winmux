@@ -15,7 +15,7 @@ let windowTabStripContentHorizontalPadding: CGFloat = 3
 let windowTabStripGroupHandleWidth: CGFloat = 26
 let windowTabStripReservedHandleWidth: CGFloat = 24
 let windowTabStripTrailingGroupDragGutterWidth: CGFloat = 28
-let windowTabStripCornerRadius: CGFloat = 12
+let windowTabStripCornerRadius: CGFloat = RadiusToken.section
 let windowTabStripInnerCornerRadius: CGFloat = 7
 let windowTabStripTabSpacing: CGFloat = 4
 let windowTabStripPreferredTabWidth: CGFloat = 240
@@ -34,8 +34,8 @@ let windowTabGroupFrameMaxInnerCornerRadius: CGFloat = {
 }()
 let windowTabGroupFrameMaxTopInnerCornerRadius: CGFloat = 40
 let windowTabGroupCornerShieldOverreach: CGFloat = 7
-let windowTabPillAnimation: Animation = .spring(response: 0.28, dampingFraction: 0.72, blendDuration: 0.08)
-let windowTabReducedMotionAnimation: Animation = .easeOut(duration: 0.12)
+let windowTabPillAnimation: Animation = MotionToken.pill
+let windowTabReducedMotionAnimation: Animation = MotionToken.quick
 
 func windowTabStripContentPadding() -> CGFloat {
     windowTabStripContentHorizontalPadding

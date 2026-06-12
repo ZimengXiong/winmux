@@ -45,15 +45,9 @@ public final class SecureInputPanel: NSPanelHud {
 struct SecureInputView: View {
     @State var isMinimized: Bool = true
 
-    @Environment(\.colorScheme) var colorScheme: ColorScheme
-    private var fontColor: Color {
-        colorScheme == .dark ? Color.black : Color.white
-    }
-
     var body: some View {
         ZStack(alignment: .center) {
-            Rectangle()
-                .fill(Color.gray.opacity(isMinimized ? 0.8 : 1.0))
+            GlassSurface(shape: RoundedRectangle(cornerRadius: RadiusToken.section, style: .continuous))
             if isMinimized {
                 Image(systemName: "lock.shield.fill")
                     .resizable()
@@ -65,8 +59,8 @@ struct SecureInputView: View {
                     .padding(10)
             }
         }
-        .foregroundStyle(fontColor)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .foregroundStyle(Color.white.opacity(GlassToken.textPrimary))
+        .clipShape(RoundedRectangle(cornerRadius: RadiusToken.section, style: .continuous))
         .onTapGesture {
             if !isMinimized {
                 SecureInputPanel.shared.refresh()
