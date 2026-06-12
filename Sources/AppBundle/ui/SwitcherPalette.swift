@@ -35,9 +35,13 @@ final class SwitcherPaletteModel: ObservableObject {
     }
 
     func selectCurrent() {
+        select(at: selection)
+    }
+
+    func select(at index: Int) {
         let results = results
-        guard results.indices.contains(selection) else { return }
-        onSelect?(results[selection].id)
+        guard results.indices.contains(index) else { return }
+        onSelect?(results[index].id)
     }
 }
 
@@ -115,6 +119,14 @@ final class SwitcherPalettePanel: NSPanelHud {
     // (typing) flows to the search field as usual.
     override func sendEvent(_ event: NSEvent) {
         if event.type == .keyDown, isPaletteActive {
+            // Quick-select: cmd+1...cmd+9 jumps straight to the Nth visible result.
+            if event.modifierFlags.contains(.command),
+               let digit = event.charactersIgnoringModifiers.flatMap({ Int($0) }),
+               (1 ... 9).contains(digit)
+            {
+                model.select(at: digit - 1)
+                return
+            }
             switch event.keyCode {
                 case 53: dismiss(); return // esc
                 case 125: model.moveSelection(1); return // down arrow
@@ -224,9 +236,13 @@ struct SwitcherPaletteView: View {
                 ScrollView {
                     LazyVStack(spacing: 1) {
                         ForEach(Array(results.enumerated()), id: \.element.id) { index, item in
-                            SwitcherPaletteRow(item: item, isSelected: index == model.selection)
-                                .id(item.id)
-                                .onTapGesture { model.onSelect?(item.id) }
+                            SwitcherPaletteRow(
+                                item: item,
+                                isSelected: index == model.selection,
+                                hotkeyLabel: index < 9 ? "⌘\(index + 1)" : nil,
+                            )
+                            .id(item.id)
+                            .onTapGesture { model.onSelect?(item.id) }
                         }
                     }
                     .padding(6)
@@ -253,6 +269,7 @@ struct SwitcherPaletteView: View {
 private struct SwitcherPaletteRow: View {
     let item: SwitcherPaletteItem
     let isSelected: Bool
+    let hotkeyLabel: String?
 
     var body: some View {
         HStack(spacing: 8) {
@@ -272,10 +289,17 @@ private struct SwitcherPaletteRow: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: 8)
-            Text(item.workspaceName)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(Color.white.opacity(GlassToken.textQuaternary))
-                .lineLimit(1)
+            if let hotkeyLabel {
+                Text(hotkeyLabel)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(Color.white.opacity(GlassToken.textQuaternary))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background {
+                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                            .fill(Color.white.opacity(GlassToken.fillFaint))
+                    }
+            }
         }
         .padding(.horizontal, 10)
         .frame(height: 30)
