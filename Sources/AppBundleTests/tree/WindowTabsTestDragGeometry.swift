@@ -71,14 +71,6 @@ import XCTest
         XCTAssertEqual(tabBarFrame.height, 36)
     }
 
-    func testTabGroupOuterTopRadiusMatchesTabStripInsteadOfAppWindow() {
-        let topInnerRadius = CGFloat(40)
-        XCTAssertEqual(windowTabGroupOuterCornerRadius(innerCornerRadius: topInnerRadius), 12)
-        XCTAssertLessThan(
-            windowTabGroupOuterCornerRadius(innerCornerRadius: topInnerRadius),
-            topInnerRadius,
-        )
-    }
 
     func testWindowTabLocalOcclusionRectsConvertScreenCoordinatesToPanelCoordinates() {
         let panelFrame = CGRect(x: 100, y: 100, width: 300, height: 200)

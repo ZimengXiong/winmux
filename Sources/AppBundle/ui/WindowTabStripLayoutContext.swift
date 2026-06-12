@@ -34,11 +34,6 @@ struct WindowTabStripLayoutContext {
         "window-tab-strip-scroll-\(strip.id.hashValue)"
     }
 
-    var outerTopRadius: CGFloat {
-        windowTabGroupOuterCornerRadius(
-            innerCornerRadius: windowTabGroupTopInnerCornerRadius(strip.activeWindowCornerRadius)
-        )
-    }
 
     func trailingFadeWidth(contentMinX: CGFloat) -> CGFloat {
         windowTabTrailingScrollFadeWidth(

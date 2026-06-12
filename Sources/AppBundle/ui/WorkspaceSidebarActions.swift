@@ -5,10 +5,38 @@ import SwiftUI
 @MainActor
 func focusWorkspaceFromSidebar(_ workspaceName: String, targetMonitorScopeId: String? = nil) {
     WorkspaceSidebarPanel.suppressEdgeTrapForWorkspaceActivation()
+    optimisticallyMarkWorkspaceFocusedInSidebar(workspaceName)
     runWorkspaceSidebarSession {
         guard let workspace = Workspace.existing(byName: workspaceName) else { return }
         _ = focusWorkspaceFromSidebar(workspace, targetMonitorScopeId: targetMonitorScopeId)
     }
+}
+
+/// Perceived responsiveness: flip the sidebar's focused/visible highlight to the clicked
+/// workspace on the same frame as the click. The session that follows rebuilds the real model
+/// (after an AX round-trip and title fetches) and corrects any difference.
+@MainActor
+private func optimisticallyMarkWorkspaceFocusedInSidebar(_ workspaceName: String) {
+    let workspaces = TrayMenuModel.shared.workspaceSidebarWorkspaces
+    guard let target = workspaces.first(where: { $0.name == workspaceName }), !target.isFocused else { return }
+    TrayMenuModel.shared.workspaceSidebarWorkspaces = workspaces.map { w in
+        let isFocused = w.name == workspaceName
+        let isVisible = w.monitorScopeId == target.monitorScopeId ? isFocused : w.isVisible
+        if isFocused == w.isFocused, isVisible == w.isVisible { return w }
+        return WorkspaceSidebarWorkspaceViewModel(
+            name: w.name,
+            projectId: w.projectId,
+            displayName: w.displayName,
+            sidebarLabel: w.sidebarLabel,
+            isGeneratedName: w.isGeneratedName,
+            monitorScopeId: w.monitorScopeId,
+            monitorName: w.monitorName,
+            isFocused: isFocused,
+            isVisible: isVisible,
+            items: w.items,
+        )
+    }
+    WorkspaceSidebarPanel.syncVisiblePanelModelsFromShared()
 }
 
 @MainActor

@@ -31,7 +31,6 @@ let windowTabGroupFrameMaxInnerCornerRadius: CGFloat = {
     if #available(macOS 26.0, *) { return 36 } else { return 22 }
 }()
 let windowTabGroupFrameMaxTopInnerCornerRadius: CGFloat = 40
-let windowTabGroupCornerShieldOverreach: CGFloat = 7
 let windowTabPillAnimation: Animation = MotionToken.pill
 let windowTabReducedMotionAnimation: Animation = MotionToken.quick
 

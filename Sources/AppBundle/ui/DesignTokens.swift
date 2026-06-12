@@ -70,23 +70,6 @@ extension View {
     }
 }
 
-/// The top sheen that makes a surface read as lit glass. Overlay on opaque surfaces (like the
-/// tab bar) that can't afford a real blur base but should match the glass language.
-struct GlassHighlight: View {
-    var body: some View {
-        LinearGradient(
-            stops: [
-                .init(color: Color.white.opacity(GlassToken.highlightPeak), location: 0),
-                .init(color: Color.white.opacity(GlassToken.highlightPeak * 0.25), location: 0.12),
-                .init(color: Color.clear, location: 0.45),
-            ],
-            startPoint: .top,
-            endPoint: .bottom,
-        )
-        .blendMode(.screen)
-        .allowsHitTesting(false)
-    }
-}
 
 /// The shared glass surface: glass/blur base, dark scrim, neutral tint, top highlight,
 /// hairline border.
