@@ -6,11 +6,20 @@ struct WindowTabGroupShellShape: Shape {
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        path.addRoundedRect(
-            in: rect,
-            cornerSize: CGSize(width: windowTabStripCornerRadius, height: windowTabStripCornerRadius),
-            style: .continuous,
+        // Bottom corners are concentric with the window's corners (window radius + shell gap),
+        // so the chrome visually hugs the window instead of cutting across its corner curve.
+        let bottomRadius = min(
+            activeWindowCornerRadius + windowTabGroupShellBottomInset(),
+            rect.width / 2,
+            rect.height / 2,
         )
+        path.addPath(UnevenRoundedRectangle(
+            topLeadingRadius: windowTabStripCornerRadius,
+            bottomLeadingRadius: bottomRadius,
+            bottomTrailingRadius: bottomRadius,
+            topTrailingRadius: windowTabStripCornerRadius,
+            style: .continuous,
+        ).path(in: rect))
         let innerRect = Self.innerRect(in: rect, tabBarHeight: tabBarHeight)
         if innerRect.width > 0, innerRect.height > 0 {
             path.addPath(WindowTabGroupInnerBoundaryShape(

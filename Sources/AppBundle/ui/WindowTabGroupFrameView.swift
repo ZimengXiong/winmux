@@ -6,42 +6,36 @@ struct WindowTabGroupFrameView: View {
 
     var body: some View {
         let tabHeight = min(strip.frame.height, groupSize.height)
+        let shellShape = WindowTabGroupShellShape(
+            tabBarHeight: tabHeight,
+            activeWindowCornerRadius: strip.activeWindowCornerRadius
+        )
+        let tabBarShape = UnevenRoundedRectangle(
+            topLeadingRadius: windowTabStripCornerRadius,
+            bottomLeadingRadius: 0,
+            bottomTrailingRadius: 0,
+            topTrailingRadius: windowTabStripCornerRadius,
+            style: .continuous,
+        )
         ZStack(alignment: .topLeading) {
-            WindowTabGroupShellShape(
-                tabBarHeight: tabHeight,
-                activeWindowCornerRadius: strip.activeWindowCornerRadius
-            )
-            .fill(mattePanelFill, style: FillStyle(eoFill: true))
+            // The thin ring around the window. Scrim-translucent rather than opaque matte so it
+            // reads as the same glass material as the tab bar without paying for a blur pass on
+            // a few-pixel-wide band.
+            shellShape
+                .fill(Color.black.opacity(GlassToken.scrimOpacity), style: FillStyle(eoFill: true))
 
-            WindowTabGroupShellShape(
-                tabBarHeight: tabHeight,
-                activeWindowCornerRadius: strip.activeWindowCornerRadius
-            )
-                .stroke(mattePanelFill, lineWidth: windowTabGroupFrameStrokeWidth)
+            shellShape
+                .stroke(Color.white.opacity(GlassToken.borderOpacity), lineWidth: windowTabGroupFrameStrokeWidth)
                 .glassShadow(.raised)
 
-            let tabBarShape = UnevenRoundedRectangle(
-                topLeadingRadius: windowTabStripCornerRadius,
-                bottomLeadingRadius: 0,
-                bottomTrailingRadius: 0,
-                topTrailingRadius: windowTabStripCornerRadius,
-                style: .continuous,
-            )
-            Rectangle()
-                .fill(mattePanelFill)
-                .overlay { GlassHighlight() }
+            // The tab bar: the sidebar's glass surface, clipped to the bar region.
+            GlassSurface(shape: tabBarShape)
                 .overlay(alignment: .bottom) {
                     Rectangle()
-                        .fill(Color.white.opacity(GlassToken.borderOpacity))
+                        .fill(Color.white.opacity(GlassToken.separatorOpacity))
                         .frame(height: StrokeToken.hairline)
                 }
                 .frame(height: tabHeight)
-                .clipShape(tabBarShape)
-                .overlay {
-                    tabBarShape
-                        .stroke(Color.white.opacity(GlassToken.borderOpacity), lineWidth: StrokeToken.hairline)
-                        .frame(height: tabHeight)
-                }
 
             WindowTabGroupInnerBoundaryShape(
                 tabBarHeight: tabHeight,

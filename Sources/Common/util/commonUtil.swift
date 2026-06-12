@@ -80,6 +80,9 @@ public enum RefreshSessionEvent: Sendable, CustomStringConvertible {
     case onFocusedMonitorChanged
     case onFocusChanged
     case onModeChanged
+    /// Tab switch within a tab group: no new windows can appear, so skip the heavy window
+    /// refresh barrier — only relayout (which hides the previously active tab) is needed.
+    case onTabSwitched
 
     public var isStartup: Bool {
         if case .startup = self { return true } else { return false }
@@ -93,7 +96,7 @@ public enum RefreshSessionEvent: Sendable, CustomStringConvertible {
                 notif == NSWorkspace.didActivateApplicationNotification.rawValue
             case .hotkeyBinding, .menuBarButton, .socketServer, .onModeChanged:
                 true
-            case .onFocusedMonitorChanged, .onFocusChanged:
+            case .onFocusedMonitorChanged, .onFocusChanged, .onTabSwitched:
                 true
             case .configAutoReload, .globalObserverLeftMouseUp, .startup,
                  .resetManipulatedWithMouse:
@@ -107,6 +110,8 @@ public enum RefreshSessionEvent: Sendable, CustomStringConvertible {
                 notif != kAXFocusedWindowChangedNotification as String
             case .globalObserver(let notif):
                 notif != NSWorkspace.didActivateApplicationNotification.rawValue
+            case .onTabSwitched:
+                false
             case .configAutoReload, .globalObserverLeftMouseUp, .menuBarButton, .hotkeyBinding,
                  .startup, .socketServer, .resetManipulatedWithMouse, .onFocusedMonitorChanged,
                  .onFocusChanged, .onModeChanged:
@@ -132,6 +137,7 @@ public enum RefreshSessionEvent: Sendable, CustomStringConvertible {
             case .onFocusedMonitorChanged: "onFocusedMonitorChanged"
             case .onFocusChanged: "onFocusChanged"
             case .onModeChanged: "onModeChanged"
+            case .onTabSwitched: "onTabSwitched"
         }
     }
 }
