@@ -110,6 +110,16 @@ private struct LayoutContext {
 extension Window {
     @MainActor
     fileprivate func layoutFloatingWindow(_ context: LayoutContext) async throws {
+        // With a single monitor the cross-monitor proportional move below is always a no-op,
+        // so skip the AX round-trip it would need. This runs for every floating window on
+        // every layout pass.
+        if monitors.count == 1 {
+            if isFullscreen {
+                layoutFullscreen(context)
+                isFullscreen = false
+            }
+            return
+        }
         let workspace = context.workspace
         let windowRect = try await getAxRect() // Probably not idempotent
         let currentMonitor = windowRect?.center.monitorApproximation

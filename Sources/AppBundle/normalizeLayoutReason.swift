@@ -22,9 +22,24 @@ private func validateStillPopups() async throws {
 
 @MainActor
 private func _normalizeLayoutReason(workspace: Workspace, windows: [Window]) async throws {
-    for window in windows {
-        let isMacosFullscreen = try await window.isMacosFullscreen
-        let isMacosMinimized = try await (!isMacosFullscreen).andAsync { @MainActor @Sendable in try await window.isMacosMinimized }
+    // Phase 1: gather AX state with one concurrent task per window, so round-trips to different
+    // apps overlap instead of serializing (2 sequential AX round-trips per window adds up fast).
+    // Phase 2: apply tree mutations sequentially to keep binding order deterministic.
+    var axState = [(isMacosFullscreen: Bool, isMacosMinimized: Bool)?](repeating: nil, count: windows.count)
+    try await withThrowingTaskGroup(of: (Int, Bool, Bool).self) { group in
+        for (index, window) in windows.enumerated() {
+            group.addTask { @Sendable @MainActor in
+                let isMacosFullscreen = try await window.isMacosFullscreen
+                let isMacosMinimized = try await (!isMacosFullscreen).andAsync { @MainActor @Sendable in try await window.isMacosMinimized }
+                return (index, isMacosFullscreen, isMacosMinimized)
+            }
+        }
+        for try await (index, isFullscreen, isMinimized) in group {
+            axState[index] = (isFullscreen, isMinimized)
+        }
+    }
+    for (index, window) in windows.enumerated() {
+        guard let (isMacosFullscreen, isMacosMinimized) = axState[index] else { continue }
         let isMacosWindowOfHiddenApp = !isMacosFullscreen && !isMacosMinimized &&
             !config.automaticallyUnhideMacosHiddenApps && window.macAppUnsafe.nsApp.isHidden
         switch window.layoutReason {

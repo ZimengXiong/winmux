@@ -3,10 +3,19 @@ import Foundation
 
 @MainActor
 private var cache: [UInt32: MacOsWindowLevel] = [:]
+@MainActor
+private var lastFullQueryUptime: TimeInterval = 0
 
 @MainActor
 func getWindowLevel(for windowId: UInt32) -> MacOsWindowLevel? {
     if let existing = cache[windowId] { return existing }
+
+    // Off-screen windows (e.g. popups being re-validated every refresh) are never in the
+    // CGWindowList snapshot, so without this throttle every lookup of such a window re-runs
+    // the expensive full CGWindowListCopyWindowInfo query just to miss again.
+    let now = ProcessInfo.processInfo.systemUptime
+    if now - lastFullQueryUptime < 0.1 { return nil }
+    lastFullQueryUptime = now
 
     var result: [UInt32: MacOsWindowLevel] = [:]
     let options = CGWindowListOption(arrayLiteral: .excludeDesktopElements, .optionOnScreenOnly)

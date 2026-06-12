@@ -48,10 +48,21 @@ enum GlobalObserver {
         }
     }
 
+    // NSEvent monitor callbacks arrive on the main thread. Running their bodies synchronously
+    // instead of spawning a Task avoids an allocation + run-loop hop per input event — pointer
+    // events fire at 60-120Hz, so the Task-per-event pattern adds constant latency and churn.
+    private static func runOnMainActor(_ body: @escaping @MainActor () -> Void) {
+        if Thread.isMainThread {
+            MainActor.assumeIsolated(body)
+        } else {
+            Task { @MainActor in body() }
+        }
+    }
+
     private static func onKeyDown(_ event: NSEvent) {
         let modifierFlags = event.modifierFlags
         let keyCode = event.keyCode
-        Task { @MainActor in
+        runOnMainActor {
             noteTapBindingKeyDown()
             if modifierFlags.contains(.control), keyCode == 34 { // 'i' key
                 ExposePanel.shared.toggle()
@@ -62,7 +73,7 @@ enum GlobalObserver {
     private static func onFlagsChanged(_ event: NSEvent) {
         let keyCode = event.keyCode
         let modifierFlags = event.modifierFlags
-        Task { @MainActor in
+        runOnMainActor {
             noteTapBindingFlagsChanged(keyCode: keyCode, modifierFlags: modifierFlags)
         }
     }
@@ -72,11 +83,13 @@ enum GlobalObserver {
         let timestamp = event.timestamp
         let screenPoint = NSEvent.mouseLocation
         let point = normalizeAppKitScreenPoint(screenPoint)
-        Task { @MainActor in
+        runOnMainActor {
             MousePointerTracker.shared.note(point: point, timestamp: timestamp)
             WorkspaceSidebarPanel.trapCursorForVisiblePanelsIfNeeded()
             if isLeftMouseDownEvent {
-                await WindowMouseInteractionDriver.shared.capturePendingResizeCandidate()
+                Task { @MainActor in
+                    await WindowMouseInteractionDriver.shared.capturePendingResizeCandidate()
+                }
             }
             noteTapBindingKeyDown()
         }
@@ -124,7 +137,7 @@ enum GlobalObserver {
         retainEventMonitor(NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDragged) { event in
             let timestamp = event.timestamp
             let point = normalizeAppKitScreenPoint(NSEvent.mouseLocation)
-            Task { @MainActor in
+            runOnMainActor {
                 MousePointerTracker.shared.note(point: point, timestamp: timestamp)
                 WorkspaceSidebarPanel.trapCursorForVisiblePanelsIfNeeded()
                 refreshPendingWindowDragIntentFromGlobalMouseDrag()

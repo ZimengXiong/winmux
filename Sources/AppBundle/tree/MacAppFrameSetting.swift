@@ -12,7 +12,10 @@ func setFrame(_ window: AXUIElement, _ topLeft: CGPoint?, _ size: CGSize?, _ job
     try job.checkCancellation()
     if let topLeft { window.set(Ax.topLeftCornerAttr, topLeft) } else { return }
     try job.checkCancellation()
-    if let size { window.set(Ax.sizeAttr, size) }
+    // Moving a window can make macOS clamp its size (e.g. crossing monitors), so the size may
+    // need re-asserting. Only re-set when it actually changed: an AX read is much cheaper than
+    // an unconditional write, which forces a second layout pass in the target app every time.
+    if let size, window.get(Ax.sizeAttr) != size { window.set(Ax.sizeAttr, size) }
 }
 
 func disableAnimations<T>(app: AXUIElement, _ job: RunLoopJob, _ body: () throws -> T) throws -> T {

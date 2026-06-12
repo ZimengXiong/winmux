@@ -48,6 +48,7 @@ final class MacApp: AbstractApp {
         // AX requests crash if you send them to yourself
         if pid == myPid { return nil }
 
+        var attempted = false
         while true {
             if let existing = allAppsMap[pid] { return existing }
             try checkCancellation()
@@ -55,12 +56,20 @@ final class MacApp: AbstractApp {
                 try await wip.await()
                 continue
             }
+            // Registration can fail (app still launching, AX subscription rejected). In that case
+            // allAppsMap[pid] stays absent, so without this guard the loop would respawn the
+            // registration thread forever, stalling every refresh that awaits this app.
+            if attempted { return nil }
+            attempted = true
             let wip = AwaitableOneTimeBroadcastLatch()
             wipPids[pid] = wip
 
             let thread = Thread {
                 $axTaskLocalAppThreadToken.withValue(AxAppThreadToken(pid: pid, idForDebug: nsApp.idForDebug)) {
                     let axApp = AXUIElementCreateApplication(nsApp.processIdentifier)
+                    // Cap AX round-trips to this app at 1s instead of the 6s global default,
+                    // so a busy/unresponsive app can't stall window operations for seconds.
+                    AXUIElementSetMessagingTimeout(axApp, 1.0)
                     let handlers: HandlerToNotifKeyMapping = [
                         (refreshObs, [kAXWindowCreatedNotification, kAXFocusedWindowChangedNotification]),
                     ]

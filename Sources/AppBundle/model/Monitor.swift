@@ -118,11 +118,15 @@ var mainMonitor: Monitor {
     return LazyMonitor(monitorAppKitNsScreenScreensId: screen.index + 1, isMain: true, screen.value)
 }
 
-var monitors: [Monitor] {
-    if isUnitTest, let override = monitorsOverrideForTests {
-        return override
-    }
-    if isUnitTest { return [mainMonitor] }
+// Rebuilding the monitor list from NSScreen on every access is wasteful: `monitors` and
+// `sortedMonitors` are hit on every focus change, layout pass, and pointer event. Cache the
+// result and invalidate when macOS reports a screen configuration change. Main-thread only:
+// NSScreen must be accessed from the main thread anyway, so off-main callers compute fresh.
+nonisolated(unsafe) private var monitorsCache: [Monitor]? = nil
+nonisolated(unsafe) private var sortedMonitorsCache: [Monitor]? = nil
+nonisolated(unsafe) private var monitorsCacheObserver: NSObjectProtocol? = nil
+
+private func computeMonitors() -> [Monitor] {
     let screens = NSScreen.screens
     guard !screens.isEmpty else { return [mainMonitor] }
     return screens.withIndex.map { index, screen in
@@ -130,8 +134,31 @@ var monitors: [Monitor] {
     }
 }
 
+var monitors: [Monitor] {
+    if isUnitTest, let override = monitorsOverrideForTests {
+        return override
+    }
+    if isUnitTest { return [mainMonitor] }
+    guard Thread.isMainThread else { return computeMonitors() }
+    if monitorsCacheObserver == nil {
+        monitorsCacheObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main,
+        ) { _ in
+            monitorsCache = nil
+            sortedMonitorsCache = nil
+        }
+    }
+    if let cached = monitorsCache { return cached }
+    let computed = computeMonitors()
+    monitorsCache = computed
+    return computed
+}
+
 var sortedMonitors: [Monitor] {
-    monitors.sorted {
+    if Thread.isMainThread, !isUnitTest, let cached = sortedMonitorsCache { return cached }
+    let sorted = monitors.sorted {
         if $0.rect.minX != $1.rect.minX {
             return $0.rect.minX < $1.rect.minX
         }
@@ -140,4 +167,6 @@ var sortedMonitors: [Monitor] {
         }
         return $0.monitorAppKitNsScreenScreensId < $1.monitorAppKitNsScreenScreensId
     }
+    if Thread.isMainThread, !isUnitTest { sortedMonitorsCache = sorted }
+    return sorted
 }

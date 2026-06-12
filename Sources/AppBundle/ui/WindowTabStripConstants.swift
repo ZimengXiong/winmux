@@ -4,7 +4,11 @@ import SwiftUI
 
 // MARK: - Constants
 
-let windowTabPreviewCornerRadius: CGFloat = 12
+// Default when the active window's real corner radius can't be measured.
+// macOS 26 (Tahoe) increased the standard window corner radius from ~10pt to 26pt.
+let windowTabPreviewCornerRadius: CGFloat = {
+    if #available(macOS 26.0, *) { return 26 } else { return 12 }
+}()
 let windowTabStripContentHorizontalPadding: CGFloat = 3
 let windowTabStripGroupHandleWidth: CGFloat = 26
 let windowTabStripReservedHandleWidth: CGFloat = 24
@@ -19,7 +23,11 @@ let windowTabStripScrollOriginTolerance: CGFloat = 0.5
 let windowTabStripGroupDragMinimumDistance: CGFloat = 1
 let windowTabGroupFrameStrokeWidth: CGFloat = 0.5
 let windowTabGroupFrameInnerStrokeWidth: CGFloat = 0.5
-let windowTabGroupFrameMaxInnerCornerRadius: CGFloat = 22
+// Must be >= the OS standard window corner radius (26pt on macOS 26+), otherwise the chrome
+// frame's inner cutout clamps below the real window corners and visibly mismatches them.
+let windowTabGroupFrameMaxInnerCornerRadius: CGFloat = {
+    if #available(macOS 26.0, *) { return 30 } else { return 22 }
+}()
 let windowTabGroupFrameMaxTopInnerCornerRadius: CGFloat = 40
 let windowTabGroupCornerShieldOverreach: CGFloat = 7
 let windowTabPillAnimation: Animation = .spring(response: 0.28, dampingFraction: 0.72, blendDuration: 0.08)

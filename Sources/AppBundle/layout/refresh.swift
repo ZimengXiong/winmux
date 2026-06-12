@@ -50,24 +50,53 @@ func shouldSyncFocusBackToMacOs(
 }
 
 @MainActor
+private var pendingRefreshRequest: (event: RefreshSessionEvent, optimisticallyPreLayoutWorkspaces: Bool)? = nil
+
+/// When two refresh requests coalesce, keep the event whose session does more work, so the
+/// follow-up session covers the requirements of every event that arrived while one was running.
+private func mergeRefreshEvents(_ old: RefreshSessionEvent, _ new: RefreshSessionEvent) -> RefreshSessionEvent {
+    func score(_ e: RefreshSessionEvent) -> Int {
+        (e.requiresWindowRefreshBarrier ? 2 : 0) + (e.canReuseLastAppliedWindowFrames ? 0 : 1)
+    }
+    return score(new) >= score(old) ? new : old
+}
+
+@MainActor
 func scheduleRefreshSession(
     _ event: RefreshSessionEvent,
     optimisticallyPreLayoutWorkspaces: Bool = false,
 ) {
-    if shouldDropScheduledRefresh(event, activeEvent: activeScheduledRefreshEvent) {
-        debugFocusLog("scheduleRefreshSession dropped event=\(event) active=\(activeScheduledRefreshEvent?.description ?? "nil")")
+    if shouldDropScheduledRefresh(event, activeEvent: activeScheduledRefreshEvent) ||
+        shouldDropScheduledRefresh(event, activeEvent: pendingRefreshRequest?.event)
+    {
+        debugFocusLog("scheduleRefreshSession dropped event=\(event) active=\(activeScheduledRefreshEvent?.description ?? "nil") pending=\(pendingRefreshRequest?.event.description ?? "nil")")
         return
     }
-    activeRefreshTask?.cancel()
+    // Coalesce instead of cancel-and-restart: cancelling the in-flight session on every event
+    // meant that during event bursts (app launch, window storms) the refresh kept restarting
+    // and never completed until the burst quieted down. Let the active session finish, then
+    // run a single follow-up session on behalf of all events that arrived in the meantime.
+    if activeRefreshTask != nil {
+        pendingRefreshRequest = pendingRefreshRequest.map {
+            (mergeRefreshEvents($0.event, event), $0.optimisticallyPreLayoutWorkspaces || optimisticallyPreLayoutWorkspaces)
+        } ?? (event, optimisticallyPreLayoutWorkspaces)
+        return
+    }
     activeScheduledRefreshGeneration += 1
     let generation = activeScheduledRefreshGeneration
     activeScheduledRefreshEvent = event
     let override = scheduledRefreshOverrideForTests
     activeRefreshTask = Task { @MainActor in
         defer {
+            // Generation mismatch means someone took over (light session, test setup); they are
+            // responsible for the next refresh, so don't drain the pending request from here.
             if activeScheduledRefreshGeneration == generation {
                 activeRefreshTask = nil
                 activeScheduledRefreshEvent = nil
+                if let pending = pendingRefreshRequest {
+                    pendingRefreshRequest = nil
+                    scheduleRefreshSession(pending.event, optimisticallyPreLayoutWorkspaces: pending.optimisticallyPreLayoutWorkspaces)
+                }
             }
         }
         do {
@@ -169,6 +198,10 @@ func runLightSession<T>(
     defer { signposter.endInterval(#function, state) }
     activeRefreshTask?.cancel() // Give priority to runSession
     activeRefreshTask = nil
+    // Invalidate the cancelled task's generation so its defer doesn't spawn a coalesced
+    // follow-up session in the middle of this light session. The post-refresh scheduled at
+    // the end of the light session (or any later event) picks the pending request up instead.
+    activeScheduledRefreshGeneration += 1
     let focusSnapshot = captureRefreshSessionFocusSnapshot()
     debugFocusLog("runLightSession begin event=\(event) snapshot=\(debugDescribe(focusSnapshot))")
     return try await $refreshSessionEvent.withValue(event) {
@@ -215,6 +248,7 @@ func setScheduledRefreshOverrideForTests(
     activeRefreshTask?.cancel()
     activeRefreshTask = nil
     activeScheduledRefreshEvent = nil
+    pendingRefreshRequest = nil
     scheduledRefreshOverrideForTests = override
 }
 
@@ -226,14 +260,19 @@ func setBlockingRefreshOverridesForTests(
     activeRefreshTask?.cancel()
     activeRefreshTask = nil
     activeScheduledRefreshEvent = nil
+    pendingRefreshRequest = nil
     refreshOverrideForTests = refresh
     normalizeLayoutReasonOverrideForTests = normalizeLayoutReason
 }
 
 @MainActor
 func waitForScheduledRefreshForTests() async throws {
-    defer { activeRefreshTask = nil }
-    try await activeRefreshTask?.value
+    // A completing session may schedule a coalesced follow-up session; drain until quiet.
+    for _ in 0 ..< 100 {
+        guard let task = activeRefreshTask else { return }
+        activeRefreshTask = nil
+        try await task.value
+    }
 }
 
 struct RunSessionGuard: Sendable {
@@ -274,10 +313,17 @@ private func refresh() async throws {
             window.garbageCollect(skipClosedWindowsCache: false)
         }
     }
-    for (app, windowIds) in mapping {
-        for windowId in windowIds {
-            try await MacWindow.getOrRegister(windowId: windowId, macApp: app)
+    // One task per app so the per-window AX round-trips of different apps overlap;
+    // a single slow app no longer delays every other app's window registration.
+    try await withThrowingTaskGroup(of: Void.self) { group in
+        for (app, windowIds) in mapping {
+            group.addTask { @Sendable @MainActor in
+                for windowId in windowIds {
+                    try await MacWindow.getOrRegister(windowId: windowId, macApp: app)
+                }
+            }
         }
+        try await group.waitForAll()
     }
     finalizePersistedFrozenWorldAfterRefresh(aliveWindowIds: aliveWindowIds)
 
