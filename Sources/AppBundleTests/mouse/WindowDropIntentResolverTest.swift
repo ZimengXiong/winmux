@@ -17,15 +17,9 @@ final class WindowDropIntentResolverTest: XCTestCase {
         XCTAssertEqual(resolve(point: CGPoint(x: 200, y: 285))?.intent.zone, .bottom)
     }
 
-    func testPreviewZonesUseFullTargetFrameAndActiveZone() {
+    func testActivePreviewRectUsesActiveZoneFrame() {
         let resolution = resolve(point: CGPoint(x: 200, y: 210)).orDie()
-        let zones = windowDropIntentPreviewZones(for: resolution)
-
-        XCTAssertEqual(zones.count, 6)
-        XCTAssertEqual(zones.filter(\.isActive).count, 1)
-        assertRect(zones.first { $0.isActive }?.rect, x: 170, y: 195.2, width: 70, height: 57.4)
         assertRect(windowDropIntentActivePreviewRect(for: resolution), x: 170, y: 195.2, width: 70, height: 57.4)
-        assertRect(zones.first?.rect, x: 100, y: 100, width: 210, height: 37.8)
     }
 
     func testRejectsSourceAsTargetAndOutsidePointer() {

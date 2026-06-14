@@ -9,19 +9,16 @@ func destinationFromWindowDropIntent(
     subject: WindowDragSubject,
     detachOrigin: TabDetachOrigin,
 ) -> WindowDragIntentDestination? {
-    let previewZones = windowDropIntentPreviewZones(for: resolution)
     func intentOverlayDestination(_ destination: WindowDragIntentDestination) -> WindowDragIntentDestination {
-        destination.replacingIntentPreview(
-            containerRect: resolution.targetFrame,
-            previewRect: windowDropIntentActivePreviewRect(for: resolution),
-            interactionRect: resolution.targetFrame,
-            zones: previewZones
-        )
-        .withDropIntentOverlay(WindowDropIntentOverlayModel(
+        var result = destination
+        result.previewRect = windowDropIntentActivePreviewRect(for: resolution)
+        result.interactionRect = resolution.targetFrame
+        result.dropIntentOverlay = WindowDropIntentOverlayModel(
             targetFrame: resolution.targetFrame,
             activeZone: resolution.intent.zone,
             cornerRadius: resolution.targetCornerRadius.map(CGFloat.init)
-        ))
+        )
+        return result
     }
 
     switch resolution.intent.zone {
@@ -36,7 +33,6 @@ func destinationFromWindowDropIntent(
             else { return nil }
             return intentOverlayDestination(WindowDragIntentDestination(
                 kind: .tabStack(targetWindowId: targetWindow.windowId),
-                previewContainerRect: resolution.targetFrame,
                 previewRect: windowDropIntentActivePreviewRect(for: resolution),
                 interactionRect: resolution.targetFrame,
                 title: "Insert Into Tabs",
@@ -68,47 +64,6 @@ func destinationFromWindowDropIntent(
 
 func windowDropIntentActivePreviewRect(for resolution: WindowDropIntentResolution) -> Rect {
     resolution.zones.first { $0.zone == resolution.intent.zone }?.frame ?? resolution.targetFrame
-}
-
-func windowDropIntentPreviewZones(for resolution: WindowDropIntentResolution) -> [WindowDragIntentPreviewZone] {
-    resolution.zones.map { zone in
-        WindowDragIntentPreviewZone(
-            rect: zone.frame,
-            style: zone.zone.previewStyle,
-            geometry: zone.zone.previewGeometry,
-            isActive: zone.zone == resolution.intent.zone
-        )
-    }
-}
-
-private extension WindowDropZone {
-    var previewStyle: WindowTabDropPreviewStyle {
-        switch self {
-            case .tab:
-                .tabInsert
-            case .left, .right, .top, .bottom:
-                .stackSplit
-            case .middle:
-                .swap
-        }
-    }
-
-    var previewGeometry: WindowTabDropPreviewGeometry {
-        switch self {
-            case .tab:
-                .tabStrip
-            case .left:
-                .splitLeft
-            case .right:
-                .splitRight
-            case .top:
-                .splitAbove
-            case .bottom:
-                .splitBelow
-            case .middle:
-                .rounded
-        }
-    }
 }
 
 @MainActor

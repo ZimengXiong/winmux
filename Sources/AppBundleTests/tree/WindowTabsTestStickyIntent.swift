@@ -397,7 +397,6 @@ import XCTest
             detachOrigin: .window,
             destination: WindowDragIntentDestination(
                 kind: .stackSplit(targetWindowId: target.windowId, position: .left),
-                previewContainerRect: tabGroup.lastAppliedLayoutPhysicalRect.orDie(),
                 previewRect: Rect(topLeftX: 120, topLeftY: 134, width: 140, height: 246),
                 interactionRect: tabGroup.lastAppliedLayoutPhysicalRect.orDie(),
                 title: "Place Left",
@@ -443,7 +442,6 @@ import XCTest
             detachOrigin: .window,
             destination: WindowDragIntentDestination(
                 kind: .tabStack(targetWindowId: target.windowId),
-                previewContainerRect: tabGroup.lastAppliedLayoutPhysicalRect.orDie(),
                 previewRect: Rect(topLeftX: 120, topLeftY: 80, width: 420, height: 54),
                 interactionRect: tabGroup.lastAppliedLayoutPhysicalRect.orDie(),
                 title: "Insert Into Tabs",
@@ -489,7 +487,6 @@ import XCTest
             detachOrigin: .window,
             destination: WindowDragIntentDestination(
                 kind: .stackSplit(targetWindowId: target.windowId, position: .left),
-                previewContainerRect: tabGroup.lastAppliedLayoutPhysicalRect.orDie(),
                 previewRect: Rect(topLeftX: 120, topLeftY: 134, width: 140, height: 246),
                 interactionRect: tabGroup.lastAppliedLayoutPhysicalRect.orDie(),
                 title: "Place Left",
