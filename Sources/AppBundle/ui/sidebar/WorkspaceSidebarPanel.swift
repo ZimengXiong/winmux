@@ -153,6 +153,7 @@ extension WorkspaceSidebarPanel {
         )
         guard isVisible,
               config.workspaceSidebar.enabled,
+              workspaceSidebarAllowsLeftEdgeTrap(config.workspaceSidebar),
               !currentSessionModifierFlags().contains(.maskShift),
               !isMouseWindowDragInProgress(),
               !isWorkspaceSidebarItemDragActive(),

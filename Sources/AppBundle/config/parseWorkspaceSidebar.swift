@@ -29,7 +29,14 @@ func parseWorkspaceSidebar(
     _ backtrace: TomlBacktrace,
     _ errors: inout [TomlParseError],
 ) -> WorkspaceSidebarConfig {
-    parseTable(raw, WorkspaceSidebarConfig(), workspaceSidebarParser, backtrace, &errors)
+    let parsed = parseTable(raw, WorkspaceSidebarConfig(), workspaceSidebarParser, backtrace, &errors)
+    if parsed.alwaysExpanded, parsed.width <= parsed.collapsedWidth {
+        errors += [.semantic(
+            backtrace + .key("width"),
+            "Must be greater than collapsed-width when always-expanded is true",
+        )]
+    }
+    return parsed
 }
 
 private func parseWorkspaceSidebarWidth(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace) -> ParsedToml<Int> {

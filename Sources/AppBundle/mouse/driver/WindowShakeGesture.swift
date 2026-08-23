@@ -13,6 +13,24 @@ final class WindowShakeTilingPlacement {
     }
 }
 
+final class WindowShakeWindowState {
+    var lastToggleTimestamp = -TimeInterval.infinity
+    var tilingPlacement: WindowShakeTilingPlacement?
+}
+
+private let windowShakeStateKey = TreeNodeUserDataKey<WindowShakeWindowState>(key: "windowShakeStateKey")
+
+extension Window {
+    var shakeWindowState: WindowShakeWindowState {
+        if let existing = getUserData(key: windowShakeStateKey) {
+            return existing
+        }
+        let state = WindowShakeWindowState()
+        putUserData(key: windowShakeStateKey, data: state)
+        return state
+    }
+}
+
 struct WindowShakeGestureConfiguration: Equatable {
     var minimumStrokeDistance = CGFloat(55)
     var minimumTotalDistance = CGFloat(240)

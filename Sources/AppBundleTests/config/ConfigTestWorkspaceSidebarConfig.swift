@@ -68,6 +68,18 @@ extension ConfigTest {
         assertEquals(backwardCompatibleErrors, [])
         XCTAssertFalse(backwardCompatible.workspaceSidebar.alwaysExpanded)
 
+        let (_, alwaysExpandedWidthErrors) = parseConfig(
+            """
+            [workspace-sidebar]
+                always-expanded = true
+                collapsed-width = 44
+                width = 44
+            """,
+        )
+        assertEquals(alwaysExpandedWidthErrors.descriptions, [
+            "workspace-sidebar.width: Must be greater than collapsed-width when always-expanded is true",
+        ])
+
         let (_, widthErrors) = parseConfig(
             """
             [workspace-sidebar]

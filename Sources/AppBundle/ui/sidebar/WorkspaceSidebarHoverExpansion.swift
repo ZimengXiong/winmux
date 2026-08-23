@@ -1,5 +1,9 @@
 import AppKit
 
+func workspaceSidebarAllowsLeftEdgeTrap(_ sidebarConfig: WorkspaceSidebarConfig) -> Bool {
+    !sidebarConfig.alwaysExpanded
+}
+
 func workspaceSidebarRestingWidth(_ sidebarConfig: WorkspaceSidebarConfig) -> CGFloat {
     if sidebarConfig.alwaysExpanded {
         return CGFloat(sidebarConfig.width)

@@ -45,8 +45,6 @@ final class WindowMouseInteractionDriver {
     var lastRenderedResizePreviewRect: Rect?
     var shakeGesture: WindowShakeGestureRecognizer?
     var didToggleLayoutWithShake = false
-    var lastShakeToggleTimestampByWindowId: [UInt32: TimeInterval] = [:]
-    var shakeTilingPlacementByWindowId: [UInt32: WindowShakeTilingPlacement] = [:]
 
     private init() {}
 }
@@ -341,19 +339,20 @@ extension WindowMouseInteractionDriver {
             return
         }
         shakeGesture = gesture
-        let previousToggle = lastShakeToggleTimestampByWindowId[sourceWindow.windowId] ?? -.infinity
-        guard sample.timestamp - previousToggle >= shakeToggleCooldown else { return }
+        let state = sourceWindow.shakeWindowState
+        guard sample.timestamp - state.lastToggleTimestamp >= shakeToggleCooldown else { return }
 
         clearPendingWindowDragIntent()
         toggleFloatingForShake(sourceWindow)
-        lastShakeToggleTimestampByWindowId[sourceWindow.windowId] = sample.timestamp
+        state.lastToggleTimestamp = sample.timestamp
         didToggleLayoutWithShake = true
     }
 
     func toggleFloatingForShake(_ window: Window) {
         guard let workspace = window.nodeWorkspace else { return }
+        let state = window.shakeWindowState
         if window.isFloating {
-            if let placement = shakeTilingPlacementByWindowId.removeValue(forKey: window.windowId),
+            if let placement = state.tilingPlacement,
                let parent = placement.parent,
                parent.isBound,
                parent.nodeWorkspace === workspace
@@ -367,12 +366,13 @@ extension WindowMouseInteractionDriver {
                 let placement = bindingDataForNewTilingWindow(workspace, window: window)
                 window.bind(to: placement.parent, adaptiveWeight: placement.adaptiveWeight, index: placement.index)
             }
+            state.tilingPlacement = nil
         } else {
             window.lastFloatingSize = window.lastKnownActualRect?.size ??
                 window.lastAppliedLayoutPhysicalRect?.size ??
                 window.lastFloatingSize
             if let placement = window.bindAsFloatingWindow(to: workspace) {
-                shakeTilingPlacementByWindowId[window.windowId] = WindowShakeTilingPlacement(placement)
+                state.tilingPlacement = WindowShakeTilingPlacement(placement)
             }
         }
         window.lastAppliedLayoutPhysicalRect = nil
