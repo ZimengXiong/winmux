@@ -79,6 +79,12 @@ automatically-tile-new-windows = false
 
 This applies to windows discovered when WinMux starts and windows opened later. You can still tile an individual floating window with `winmux layout tiling` or the configured `layout floating tiling` shortcut.
 
+While dragging a window by its title bar, shake it horizontally to toggle between floating and tiling. The gesture requires several deliberate direction changes in quick succession, and does not activate during resize, sidebar, tab-strip, or tab-group drags. Disable it with:
+
+```toml
+enable-shake-to-toggle-tiling = false
+```
+
 #### Workspaces
 You can NOT create workspaces that have no windows in them. Workspaces with no windows are automatically destroyed.
 

@@ -94,6 +94,23 @@ private func moveWithMouse(_ window: Window) async throws { // todo cover with t
 
 @MainActor
 func moveFloatingWindowWithMouse(_ window: Window) {
+    if WindowMouseInteractionDriver.shared.moveSession?.windowId != window.windowId {
+        let subject = resolvedMouseDragSubject(for: window)
+        _ = beginWindowMoveWithMouseSessionIfNeeded(
+            windowId: window.windowId,
+            subject: subject,
+            detachOrigin: .window,
+            startedInSidebar: false,
+            anchorRect: window.lastKnownActualRect ?? window.lastAppliedLayoutPhysicalRect,
+            refreshActualRects: false,
+        )
+        WindowMouseInteractionDriver.shared.startMove(
+            windowId: window.windowId,
+            subject: subject,
+            detachOrigin: .window,
+            startedInSidebar: false,
+        )
+    }
     let targetWorkspace = MousePointerTracker.shared.currentSample.point.monitorApproximation.activeWorkspace
     guard let parent = window.parent else { return }
     if targetWorkspace != parent {

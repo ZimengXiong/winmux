@@ -3,6 +3,7 @@ import Common
 
 let resizeGestureCalibrationInterval: TimeInterval = 1.0 / 30.0
 let resizePreviewVisibleChangeThreshold = CGFloat(0.5)
+private let shakeToggleCooldown: TimeInterval = 1.25
 
 @MainActor
 final class WindowMouseInteractionDriver {
@@ -42,6 +43,10 @@ final class WindowMouseInteractionDriver {
     var isResizeSampleInFlight = false
     var isMouseUpResetScheduled = false
     var lastRenderedResizePreviewRect: Rect?
+    var shakeGesture: WindowShakeGestureRecognizer?
+    var didToggleLayoutWithShake = false
+    var lastShakeToggleTimestampByWindowId: [UInt32: TimeInterval] = [:]
+    var shakeTilingPlacementByWindowId: [UInt32: WindowShakeTilingPlacement] = [:]
 
     private init() {}
 }
@@ -110,6 +115,8 @@ extension WindowMouseInteractionDriver {
         resizeSession = nil
         dragSourcePreviewState = nil
         pendingResizeCandidate = nil
+        shakeGesture = nil
+        didToggleLayoutWithShake = false
         resetResizeTrackingState()
         WindowResizePreviewPanel.shared.endStableFrame()
         WindowResizePreviewPanel.shared.hide(reason: "driver.stop")
@@ -187,6 +194,7 @@ extension WindowMouseInteractionDriver {
         }
 
         let mouse = MousePointerTracker.shared.currentSample.point
+        detectShakeIfNeeded(sourceWindow: sourceWindow, session: session)
         updateCompositedMovePreview(sourceWindow: sourceWindow, mouseLocation: mouse)
         let isPointerInsideSidebar = WorkspaceSidebarPanel.panel(containing: mouse) != nil
         let shouldProcess = session.startedInSidebar || isPointerInsideSidebar || WindowDragFrameGate.shared.shouldProcess(
@@ -205,6 +213,13 @@ extension WindowMouseInteractionDriver {
     }
 
     func renderManagedMoveFrame(sourceWindow: Window, mouseLocation: CGPoint, session: MoveSession) {
+        if didToggleLayoutWithShake {
+            clearPendingWindowDragIntent()
+            if sourceWindow.isFloating {
+                moveFloatingWindowWithMouse(sourceWindow)
+            }
+            return
+        }
         if WorkspaceSidebarPanel.panel(containing: mouseLocation) != nil {
             _ = updatePendingWindowDragIntent(
                 sourceWindow: sourceWindow,
@@ -257,6 +272,8 @@ extension WindowMouseInteractionDriver {
         let isNewSession = moveSession != session
         if isNewSession {
             WindowDragFrameGate.shared.reset(windowId: windowId)
+            shakeGesture = WindowShakeGestureRecognizer()
+            didToggleLayoutWithShake = false
         }
         moveSession = session
         if shouldHideOtherWindowsDuringMove(session: session) {
@@ -300,6 +317,65 @@ extension WindowMouseInteractionDriver {
         dragSourcePreviewState = nil
         WindowResizePreviewPanel.shared.endStableFrame()
         WindowResizePreviewPanel.shared.hide(reason: "moveStart.clearMovePreview")
+    }
+}
+
+extension WindowMouseInteractionDriver {
+    func detectShakeIfNeeded(sourceWindow: Window, session: MoveSession) {
+        guard config.enableShakeToToggleTiling,
+              !didToggleLayoutWithShake,
+              shouldRecognizeWindowShake(
+                  kind: getCurrentMouseManipulationKind(),
+                  subject: session.subject,
+                  detachOrigin: session.detachOrigin,
+                  startedInSidebar: session.startedInSidebar,
+                  isPointerInsideSidebar: WorkspaceSidebarPanel.panel(
+                      containing: MousePointerTracker.shared.currentSample.point
+                  ) != nil,
+              ),
+              var gesture = shakeGesture
+        else { return }
+        let sample = MousePointerTracker.shared.currentSample
+        guard gesture.observe(sample) else {
+            shakeGesture = gesture
+            return
+        }
+        shakeGesture = gesture
+        let previousToggle = lastShakeToggleTimestampByWindowId[sourceWindow.windowId] ?? -.infinity
+        guard sample.timestamp - previousToggle >= shakeToggleCooldown else { return }
+
+        clearPendingWindowDragIntent()
+        toggleFloatingForShake(sourceWindow)
+        lastShakeToggleTimestampByWindowId[sourceWindow.windowId] = sample.timestamp
+        didToggleLayoutWithShake = true
+    }
+
+    func toggleFloatingForShake(_ window: Window) {
+        guard let workspace = window.nodeWorkspace else { return }
+        if window.isFloating {
+            if let placement = shakeTilingPlacementByWindowId.removeValue(forKey: window.windowId),
+               let parent = placement.parent,
+               parent.isBound,
+               parent.nodeWorkspace === workspace
+            {
+                window.bind(
+                    to: parent,
+                    adaptiveWeight: placement.adaptiveWeight,
+                    index: min(placement.index, parent.children.count),
+                )
+            } else {
+                let placement = bindingDataForNewTilingWindow(workspace, window: window)
+                window.bind(to: placement.parent, adaptiveWeight: placement.adaptiveWeight, index: placement.index)
+            }
+        } else {
+            window.lastFloatingSize = window.lastKnownActualRect?.size ??
+                window.lastAppliedLayoutPhysicalRect?.size ??
+                window.lastFloatingSize
+            if let placement = window.bindAsFloatingWindow(to: workspace) {
+                shakeTilingPlacementByWindowId[window.windowId] = WindowShakeTilingPlacement(placement)
+            }
+        }
+        window.lastAppliedLayoutPhysicalRect = nil
     }
 }
 

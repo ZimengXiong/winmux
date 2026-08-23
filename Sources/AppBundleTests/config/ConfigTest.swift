@@ -42,6 +42,7 @@ final class ConfigTest: XCTestCase {
         XCTAssertTrue(config.workspaceSidebar.showSeconds)
         XCTAssertTrue(config.workspaceSidebar.showDate)
         XCTAssertTrue(config.workspaceSidebar.showWeekday)
+        XCTAssertTrue(config.enableShakeToToggleTiling)
     }
 
     func testParseAutomaticallyTileNewWindows() {
@@ -49,6 +50,13 @@ final class ConfigTest: XCTestCase {
 
         assertEquals(errors, [])
         XCTAssertFalse(config.automaticallyTileNewWindows)
+    }
+
+    func testParseShakeToToggleTiling() {
+        let (config, errors) = parseConfig("enable-shake-to-toggle-tiling = false")
+
+        assertEquals(errors, [])
+        XCTAssertFalse(config.enableShakeToToggleTiling)
     }
 
     func testConfigVersionOutOfBounds() {

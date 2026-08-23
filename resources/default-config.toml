@@ -16,6 +16,8 @@ on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
 
 automatically-unhide-macos-hidden-apps = false
 automatically-tile-new-windows = true
+# Shake a window horizontally while dragging its title bar to toggle floating/tiling.
+enable-shake-to-toggle-tiling = true
 auto-add-new-windows-to-tab-group = false
 shortcuts-preset = 'none'
 persistent-workspaces = []
