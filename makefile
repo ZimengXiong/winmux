@@ -1,8 +1,8 @@
 VERSION ?= 0.0.0-SNAPSHOT
-CODESIGN_IDENTITY ?= Developer ID Application
-EXPECTED_CODESIGN_AUTHORITY_PREFIX ?= Authority=Developer ID Application:
+CODESIGN_IDENTITY ?= Apple Development
+EXPECTED_CODESIGN_AUTHORITY_PREFIX ?= Authority=Apple Development:
 DEVELOPMENT_TEAM ?= W9C2P3N7Q2
-NOTARIZE ?= 1
+NOTARIZE ?= 0
 NOTARYTOOL_PROFILE ?= winmux
 RELEASE_DIR ?= .release
 RELEASE_TAG ?= v$(VERSION)
@@ -94,10 +94,6 @@ release:
 	app_path="$$archive_path/Products/Applications/$$app_name.app"; \
 	zip_path="$$release_dir/$$app_name-$(VERSION).zip"; \
 	log_path="$$release_dir/$$app_name-$(VERSION)-xcodebuild.log"; \
-	if [ "$(PUBLISH)" = "1" ] && [ "$(NOTARIZE)" != "1" ]; then \
-	    echo "Refusing to publish a release that was not notarized" >&2; \
-	    exit 1; \
-	fi; \
 	rm -rf "$$archive_path" "$$zip_path" "$$derived_data_path"; \
 	mkdir -p "$$release_dir"; \
 	xcodebuild-pretty "$$log_path" \

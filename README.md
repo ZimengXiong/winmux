@@ -91,7 +91,7 @@ end tell
 ## Installation
 Download the latest binary from releases and launch.
 
-Release builds are signed with a Developer ID certificate, notarized by Apple, and verified with Gatekeeper before publication.
+Release builds are signed with the project's Apple Development certificate. They are not notarized, so macOS may require you to right-click the app and choose **Open** the first time you launch it.
 
 ## Migrating
 ### From AeroSpace
