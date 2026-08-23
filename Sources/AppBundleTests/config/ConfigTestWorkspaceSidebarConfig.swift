@@ -279,6 +279,23 @@ extension ConfigTest {
         ])
     }
 
+    func testParseZeroGapsForBorderlessTiling() {
+        let (config, errors) = parseConfig(
+            """
+            [gaps]
+                inner.horizontal = 0
+                inner.vertical = 0
+                outer.left = 0
+                outer.bottom = 0
+                outer.top = 0
+                outer.right = 0
+            """,
+        )
+
+        assertEquals(errors, [])
+        assertEquals(config.gaps, .zero)
+    }
+
     func testParseKeyMapping() {
         let (config, errors) = parseConfig(
             """

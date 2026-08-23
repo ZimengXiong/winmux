@@ -39,6 +39,25 @@ The sidebar clock can be configured independently:
     show-weekday = true
 ```
 
+### Window and sidebar spacing
+
+The `[gaps]` settings control the visible borders around tiled windows. `inner.horizontal`
+and `inner.vertical` set the space between neighboring windows. The outer gaps set the space
+at each display edge; when the sidebar is enabled, `outer.left` is the space between the
+sidebar and the tiled windows. Any of these values can be reduced or set to zero independently.
+
+For borderless tiling, including no border beside the sidebar:
+
+```toml
+[gaps]
+    inner.horizontal = 0
+    inner.vertical = 0
+    outer.left = 0
+    outer.bottom = 0
+    outer.top = 0
+    outer.right = 0
+```
+
 
 ### Tab Groups
 ![](resources/screenshots/tab-groups.png)

@@ -25,8 +25,11 @@ on-mode-changed = []
     preset = 'qwerty'
 
 [gaps]
+    # Space between tiled windows. Set either value to 0 for borderless joins.
     inner.horizontal = 8
     inner.vertical = 8
+    # With the sidebar enabled, outer.left is the space between it and tiled windows.
+    # Set all outer values to 0 for borderless display edges/sidebar joins.
     outer.left = 8
     outer.bottom = 8
     outer.top = 8
