@@ -37,6 +37,16 @@ Unlike stack-only layouts, WinMux tab groups behave more intuitively like you wo
 
 ### Philosophy
 
+#### Automatic tiling
+
+WinMux tiles newly discovered windows by default. To keep their existing macOS size and position while still using WinMux's sidebar, workspaces, and manual layout commands, disable automatic tiling:
+
+```toml
+automatically-tile-new-windows = false
+```
+
+This applies to windows discovered when WinMux starts and windows opened later. You can still tile an individual floating window with `winmux layout tiling` or the configured `layout floating tiling` shortcut.
+
 #### Workspaces
 You can NOT create workspaces that have no windows in them. Workspaces with no windows are automatically destroyed.
 

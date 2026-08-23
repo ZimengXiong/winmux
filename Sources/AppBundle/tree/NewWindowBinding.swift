@@ -7,8 +7,17 @@ func unbindAndGetBindingDataForNewWindow(_ windowId: UInt32, _ macApp: MacApp, _
     return switch try await macApp.getAxUiElementWindowType(windowId, windowLevel) {
         case .popup: BindingData(parent: macosPopupWindowsContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
         case .dialog: BindingData(parent: workspace, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
-        case .window: bindingDataForNewTilingWindow(workspace, window: window)
+        case .window: bindingDataForNewRegularWindow(workspace, window: window)
     }
+}
+
+@MainActor
+func bindingDataForNewRegularWindow(_ workspace: Workspace, window: Window?) -> BindingData {
+    guard config.automaticallyTileNewWindows else {
+        window?.unbindFromParent()
+        return BindingData(parent: workspace, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+    }
+    return bindingDataForNewTilingWindow(workspace, window: window)
 }
 
 @MainActor

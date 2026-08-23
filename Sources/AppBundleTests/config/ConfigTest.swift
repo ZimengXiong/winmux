@@ -35,8 +35,16 @@ final class ConfigTest: XCTestCase {
 
     func testParseDefaultConfig() throws {
         let toml = try String(contentsOf: projectRoot.appending(component: "resources/default-config.toml"), encoding: .utf8)
-        let (_, errors) = parseConfig(toml)
+        let (config, errors) = parseConfig(toml)
         assertEquals(errors, [])
+        XCTAssertTrue(config.automaticallyTileNewWindows)
+    }
+
+    func testParseAutomaticallyTileNewWindows() {
+        let (config, errors) = parseConfig("automatically-tile-new-windows = false")
+
+        assertEquals(errors, [])
+        XCTAssertFalse(config.automaticallyTileNewWindows)
     }
 
     func testConfigVersionOutOfBounds() {

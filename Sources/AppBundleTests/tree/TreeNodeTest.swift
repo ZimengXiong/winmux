@@ -14,6 +14,27 @@ final class TreeNodeTest: XCTestCase {
         XCTAssertTrue(window.parent == nil)
     }
 
+    func testNewRegularWindowsTileByDefault() {
+        let workspace = Workspace.get(byName: name)
+        let window = TestWindow.new(id: 501, parent: workspace)
+
+        let binding = bindingDataForNewRegularWindow(workspace, window: window)
+
+        XCTAssertTrue(binding.parent === workspace.rootTilingContainer)
+        XCTAssertNil(window.parent)
+    }
+
+    func testNewRegularWindowsFloatWhenAutomaticTilingIsDisabled() {
+        let workspace = Workspace.get(byName: name)
+        let window = TestWindow.new(id: 502, parent: workspace.rootTilingContainer)
+        config.automaticallyTileNewWindows = false
+
+        let binding = bindingDataForNewRegularWindow(workspace, window: window)
+
+        XCTAssertTrue(binding.parent === workspace)
+        XCTAssertNil(window.parent)
+    }
+
     func testIsEffectivelyEmpty() {
         let workspace = Workspace.get(byName: name)
 

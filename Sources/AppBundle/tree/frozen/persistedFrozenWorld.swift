@@ -47,6 +47,12 @@ func persistFrozenWorldForRestartIfPossible() {
 func loadPersistedFrozenWorldForStartupIfPresent() -> Bool {
     do {
         let url = try persistedFrozenWorldUrl()
+        // A persisted tiling tree would otherwise resize every existing window before the
+        // new-window policy gets a chance to keep it floating.
+        guard config.automaticallyTileNewWindows else {
+            try? FileManager.default.removeItem(at: url)
+            return false
+        }
         guard FileManager.default.fileExists(atPath: url.path) else { return false }
         let data = try Data(contentsOf: url)
         let envelope = try JSONDecoder().decode(PersistedFrozenWorldEnvelope.self, from: data)
