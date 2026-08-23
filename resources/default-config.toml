@@ -41,7 +41,10 @@ on-mode-changed = []
     menu-bar-reserve-height = 28
     project-deletion-action = 'close-windows'
     show-status-pills = true
+    show-clock = true
+    show-seconds = true
     show-date = true
+    show-weekday = true
 
 [mode.main.binding]
     ctrl-f = 'open-sidebar'

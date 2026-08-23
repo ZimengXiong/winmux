@@ -22,7 +22,6 @@ public final class TrayMenuModel: ObservableObject {
     @Published var workspaceSidebarShowsMonitorSelector: Bool = false
     @Published var workspaceSidebarDropPreview: WorkspaceSidebarDropPreviewViewModel? = nil
     @Published var windowTabStrips: [WindowTabStripViewModel] = []
-    @Published var windowTabReentryPreview: WindowTabPendingReorderDrop? = nil
     @Published var isWorkspaceSidebarExpanded: Bool = false
     @Published var workspaceSidebarVisibleWidth: CGFloat = 0
     @Published var workspaceSidebarTopPadding: CGFloat = 12
@@ -39,12 +38,28 @@ public final class TrayMenuModel: ObservableObject {
             )
         }
     }
+
+}
+
+extension ObservableObject {
+    /// Assigning a @Published property fires objectWillChange even when the value is unchanged,
+    /// re-rendering every observing view (menu bar label, sidebar panels, tab strips). Models
+    /// republished wholesale on every refresh session must equality-guard their writes.
+    /// Returns whether the value actually changed, for callers that need to chain side effects.
+    @discardableResult
+    func setIfChanged<T: Equatable>(_ keyPath: ReferenceWritableKeyPath<Self, T>, _ value: T) -> Bool {
+        if self[keyPath: keyPath] != value {
+            self[keyPath: keyPath] = value
+            return true
+        }
+        return false
+    }
 }
 
 @MainActor func updateTrayText() {
     let focus = focus
-    TrayMenuModel.shared.trayText = activeMode?.takeIf { $0 != mainModeId }?.first.map { "(\($0.uppercased()))" } ?? "A"
-    TrayMenuModel.shared.workspaces = userFacingWorkspaces(Workspace.all, focusedWorkspace: focus.workspace).filter {
+    TrayMenuModel.shared.setIfChanged(\.trayText, activeMode?.takeIf { $0 != mainModeId }?.first.map { "(\($0.uppercased()))" } ?? "A")
+    let workspaces = userFacingWorkspaces(Workspace.all, focusedWorkspace: focus.workspace).filter {
         $0.projectId == activeWorkspaceProjectId(for: $0.workspaceMonitor)
     }.map {
         let apps = $0.allLeafWindowsRecursive.map { $0.app.name?.takeIf { !$0.isEmpty } }.filterNotNil().toSet()
@@ -64,8 +79,9 @@ public final class TrayMenuModel: ObservableObject {
             hasFullscreenWindows: hasFullscreenWindows,
         )
     }
+    TrayMenuModel.shared.setIfChanged(\.workspaces, workspaces)
     let items = activeMode?.takeIf { $0 != mainModeId }?.first.map {
         TrayItem(type: .mode, name: $0.uppercased(), isActive: true, hasFullscreenWindows: false)
     }.map { [$0] } ?? []
-    TrayMenuModel.shared.trayItems = items
+    TrayMenuModel.shared.setIfChanged(\.trayItems, items)
 }

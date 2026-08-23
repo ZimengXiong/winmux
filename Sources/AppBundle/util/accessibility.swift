@@ -358,6 +358,17 @@ extension AXUIElement: AxUiElementMock {
         var cgWindowId = CGWindowID()
         return _AXUIElementGetWindow(self, &cgWindowId) == .success ? cgWindowId : nil
     }
+
+    /// Like containingWindowId, but surfaces the AXError so callers can distinguish "the window
+    /// is gone" (.invalidUIElement) from "the app didn't answer" (.cannotComplete — busy app or
+    /// timed-out round-trip). Window liveness decisions must not treat the latter as death.
+    func containingWindowIdWithError() -> (windowId: CGWindowID?, error: AXError) {
+        let state = signposter.beginInterval(#function, "axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
+        defer { signposter.endInterval(#function, state) }
+        var cgWindowId = CGWindowID()
+        let error = _AXUIElementGetWindow(self, &cgWindowId)
+        return error == .success ? (cgWindowId, error) : (nil, error)
+    }
 }
 
 extension AXObserver {

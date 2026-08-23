@@ -33,7 +33,10 @@ struct WorkspaceSidebarConfiguration: Equatable {
     var expandedWidth: CGFloat
     var topPadding: CGFloat
     var showMonitorSelector: Bool
+    var showsClock: Bool
+    var showsSeconds: Bool
     var showsDate: Bool
+    var showsWeekday: Bool
     var showsStatusPills: Bool
 
     static let empty = WorkspaceSidebarConfiguration(
@@ -41,7 +44,10 @@ struct WorkspaceSidebarConfiguration: Equatable {
         expandedWidth: 0,
         topPadding: 12,
         showMonitorSelector: false,
+        showsClock: false,
+        showsSeconds: false,
         showsDate: false,
+        showsWeekday: false,
         showsStatusPills: false,
     )
 }

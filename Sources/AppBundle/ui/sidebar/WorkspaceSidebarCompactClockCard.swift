@@ -4,9 +4,16 @@ import SwiftUI
 struct WorkspaceSidebarCompactClockCard: View {
     let date: Date
     let sectionWidth: CGFloat
+    let showsSeconds: Bool
 
     private var components: WorkspaceSidebarClockComponents {
         WorkspaceSidebarClockComponents(date: date)
+    }
+
+    private var accessibilitySummary: String {
+        showsSeconds
+            ? date.formatted(date: .omitted, time: .standard)
+            : date.formatted(date: .omitted, time: .shortened)
     }
 
     var body: some View {
@@ -23,8 +30,10 @@ struct WorkspaceSidebarCompactClockCard: View {
                     Text(components.minute)
                         .foregroundStyle(Color.white.opacity(0.90))
 
-                    Text(components.second)
-                        .foregroundStyle(Color.white.opacity(0.66))
+                    if showsSeconds {
+                        Text(components.second)
+                            .foregroundStyle(Color.white.opacity(0.66))
+                    }
                 }
                 .font(.system(size: 19, weight: .bold, design: .rounded))
                 .monospacedDigit()
@@ -36,8 +45,8 @@ struct WorkspaceSidebarCompactClockCard: View {
             .clipShape(shape)
         }
         .frame(width: sectionWidth, alignment: .leading)
-        .frame(height: 92)
+        .frame(height: showsSeconds ? 92 : 68)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(date, format: .dateTime.hour().minute().second()))
+        .accessibilityLabel(Text(accessibilitySummary))
     }
 }

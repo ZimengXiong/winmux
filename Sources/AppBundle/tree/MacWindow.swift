@@ -4,7 +4,11 @@ import Common
 final class MacWindow: Window {
     let macApp: MacApp
     private var prevUnhiddenProportionalPositionInsideWorkspaceRect: CGPoint?
-    private var hiddenInCorner: OptimalHideCorner?
+    /// The corner the window is parked in, together with the monitor rect it was parked
+    /// against: when the monitor's geometry changes (or the workspace moves to another
+    /// monitor), the old corner position is wrong and the window must be re-parked even
+    /// though the corner still matches. One value so the two can't desync.
+    private var hiddenInCorner: (corner: OptimalHideCorner, monitorVisibleRect: Rect)?
 
     @MainActor
     private init(_ id: UInt32, _ actor: MacApp, lastFloatingSize: CGSize?, parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {
@@ -19,7 +23,9 @@ final class MacWindow: Window {
     @discardableResult
     static func getOrRegister(windowId: UInt32, macApp: MacApp) async throws -> MacWindow? {
         if let existing = allWindowsMap[windowId] {
-            _ = try await existing.getAxRect()
+            // No AX round-trip for known windows: this runs for every window on every refresh
+            // barrier, and lastKnownActualRect stays correct without polling because moved /
+            // resized AX events invalidate it and consumers re-fetch on demand.
             return existing
         }
         let rect = try await macApp.getAxRect(windowId)
@@ -35,7 +41,7 @@ final class MacWindow: Window {
         // atomic synchronous section
         if let existing = allWindowsMap[windowId] { return existing }
         let window = MacWindow(windowId, macApp, lastFloatingSize: rect?.size, parent: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
-        window.lastKnownActualRect = rect
+        window.recordAuthoritativeActualRect(rect)
         allWindowsMap[windowId] = window
 
         try await debugWindowsIfRecording(window)
@@ -155,10 +161,12 @@ final class MacWindow: Window {
     // todo it's part of the window layout and should be moved to layoutRecursive.swift
     @MainActor
     func hideInCorner(_ corner: OptimalHideCorner, force: Bool = false) async throws {
-        if !force, isHiddenInCorner, hiddenInCorner == corner {
+        guard let nodeMonitor else { return }
+        if !force, isHiddenInCorner, hiddenInCorner?.corner == corner,
+           hiddenInCorner?.monitorVisibleRect == nodeMonitor.visibleRect
+        {
             return
         }
-        guard let nodeMonitor else { return }
         // Don't accidentally override prevUnhiddenEmulationPosition in case of subsequent `hideInCorner` calls
         if !isHiddenInCorner {
             guard let windowRect = try await getAxRect() else { return }
@@ -186,7 +194,7 @@ final class MacWindow: Window {
                 p = nodeMonitor.visibleRect.bottomRightCorner - onePixelOffset
         }
         setAxFrame(p, nil)
-        hiddenInCorner = corner
+        hiddenInCorner = (corner, nodeMonitor.visibleRect)
     }
 
     @MainActor
@@ -236,10 +244,11 @@ final class MacWindow: Window {
     }
 
     override func getAxRect() async throws -> Rect? {
+        let observationToken = await nativeStateObservationToken()
         let rect = try await macApp.getAxRect(windowId)
         let windowId = self.windowId
         await MainActor.run {
-            Window.get(byId: windowId)?.lastKnownActualRect = rect
+            Window.get(byId: windowId)?.recordObservedActualRect(rect, token: observationToken)
         }
         return rect
     }

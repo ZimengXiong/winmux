@@ -19,7 +19,7 @@ final class Workspace: TreeNode, NonLeafTreeNodeObject, Hashable, Comparable {
     }
 
     @MainActor static var all: [Workspace] {
-        winMuxWorkspaceState.workspaceById.values.sorted()
+        winMuxWorkspaceState.sortedWorkspaces()
     }
 
     @MainActor static func get(byName name: String) -> Workspace {

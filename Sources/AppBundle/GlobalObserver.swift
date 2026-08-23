@@ -81,6 +81,7 @@ enum GlobalObserver {
         runOnMainActor {
             MousePointerTracker.shared.note(point: point, timestamp: timestamp)
             WorkspaceSidebarPanel.trapCursorForVisiblePanelsIfNeeded()
+            WorkspaceSidebarPanel.noteHoverPointerActivityForVisiblePanels(timestamp: timestamp)
             if isLeftMouseDownEvent {
                 Task { @MainActor in
                     await WindowMouseInteractionDriver.shared.capturePendingResizeCandidate()
@@ -113,6 +114,9 @@ enum GlobalObserver {
                 finishWorkspaceSidebarDragAfterGlobalMouseUp()
                 guard let token: RunSessionGuard = .isServerEnabled else { return }
                 try await resetManipulatedWithMouseIfPossible()
+                // Drag-end releases the sidebar expansion locks without any pointer movement;
+                // hover must be re-evaluated for a stationary cursor.
+                WorkspaceSidebarPanel.scheduleHoverRecheckForVisiblePanels()
                 let mouseLocation = mouseLocation
                 let clickedMonitor = mouseLocation.monitorApproximation
                 switch true {

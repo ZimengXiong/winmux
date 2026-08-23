@@ -5,7 +5,9 @@ import SwiftUI
 struct WorkspaceSidebarStatusView: View {
     let sectionWidth: CGFloat
     let isCompact: Bool
+    let showsSeconds: Bool
     let showsDate: Bool
+    let showsWeekday: Bool
 
     var body: some View {
         Group {
@@ -14,6 +16,7 @@ struct WorkspaceSidebarStatusView: View {
                     WorkspaceSidebarCompactClockCard(
                         date: context.date,
                         sectionWidth: sectionWidth,
+                        showsSeconds: showsSeconds,
                     )
                 }
             } else {
@@ -21,7 +24,9 @@ struct WorkspaceSidebarStatusView: View {
                     WorkspaceSidebarExpandedStatusCard(
                         date: context.date,
                         sectionWidth: sectionWidth,
+                        showsSeconds: showsSeconds,
                         showsDate: showsDate,
+                        showsWeekday: showsWeekday,
                     )
                 }
             }

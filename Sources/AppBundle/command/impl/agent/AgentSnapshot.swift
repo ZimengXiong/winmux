@@ -114,7 +114,13 @@ struct AgentWindowInfo: Encodable {
         let sizingNode = window.agentPaneSizingNode
         size = sizingNode.agentSizeRatio
         sizeAxis = sizingNode.agentSizeAxis
-        frame = (window.lastKnownActualRect ?? window.lastAppliedLayoutPhysicalRect ?? window.lastAppliedLayoutVirtualRect).map(AgentRect.init)
+        // lastKnownActualRect is invalidated on move/resize events; fetch live when it's stale
+        // so the reported frame reflects reality rather than the last cached observation.
+        var actualRect = window.lastKnownActualRect
+        if actualRect == nil {
+            actualRect = try? await window.getAxRect()
+        }
+        frame = (actualRect ?? window.lastAppliedLayoutPhysicalRect ?? window.lastAppliedLayoutVirtualRect).map(AgentRect.init)
     }
 }
 

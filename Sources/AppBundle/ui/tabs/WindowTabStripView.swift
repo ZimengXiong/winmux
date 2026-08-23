@@ -5,7 +5,9 @@ import Foundation
 struct WindowTabStripView: View {
     let strip: WindowTabStripViewModel
 
-    @ObservedObject var trayModel = TrayMenuModel.shared
+    // Observes only the reentry preview, not the whole TrayMenuModel: the shared model
+    // republishes on every refresh session, which would re-render every tab strip.
+    @ObservedObject var reentryPreviewModel = WindowTabReentryPreviewModel.shared
     @State var draggingTabId: UInt32?
     @State var hoveredTabId: UInt32?
     @State var dragTranslationX: CGFloat = 0
@@ -318,7 +320,7 @@ extension WindowTabStripView {
         for tab: WindowTabItemViewModel,
         context: WindowTabStripLayoutContext,
     ) -> CGFloat {
-        if let reentryPreview = trayModel.windowTabReentryPreview,
+        if let reentryPreview = reentryPreviewModel.value,
            reentryPreview.stripId == strip.id,
            reentryPreview.orderBeforeDrop == context.tabOrder {
             return tabReentryVisualOffset(for: tab, context: context, drop: reentryPreview)
@@ -476,8 +478,8 @@ extension WindowTabStripView {
             y: draggingTabId == tab.windowId ? 2 : 0,
         )
         .animation(.interactiveSpring(response: 0.2, dampingFraction: 0.8), value: reorderTargetIndex(context: context))
-        .animation(.interactiveSpring(response: 0.2, dampingFraction: 0.8), value: trayModel.windowTabReentryPreview?.targetIndex)
-        .animation(nil, value: trayModel.windowTabReentryPreview?.sourceVisualOffset)
+        .animation(.interactiveSpring(response: 0.2, dampingFraction: 0.8), value: reentryPreviewModel.value?.targetIndex)
+        .animation(nil, value: reentryPreviewModel.value?.sourceVisualOffset)
         .highPriorityGesture(tabDragGesture(for: tab, context: context))
         .workspaceSidebarDrag(enabled: true) {
             WorkspaceSidebarDragPayload.window(tab.windowId).itemProvider

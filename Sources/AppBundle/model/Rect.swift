@@ -1,7 +1,7 @@
 import AppKit
 import Common
 
-struct Rect: ConvenienceCopyable, WinMuxAny {
+struct Rect: ConvenienceCopyable, WinMuxAny, Equatable {
     var topLeftX: CGFloat
     var topLeftY: CGFloat
 

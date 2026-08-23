@@ -13,7 +13,10 @@ extension ConfigTest {
                 width = 280
                 monitor = ['secondary', 2]
                 show-status-pills = false
+                show-clock = false
+                show-seconds = false
                 show-date = false
+                show-weekday = false
                 menu-bar-reserve-height = 30
                 project-deletion-action = 'move-windows-to-fallback'
 
@@ -38,7 +41,10 @@ extension ConfigTest {
                 width: 280,
                 monitor: [.secondary, .sequenceNumber(2)],
                 showStatusPills: false,
+                showClock: false,
+                showSeconds: false,
                 showDate: false,
+                showWeekday: false,
                 menuBarReserveHeight: 30,
                 projectDeletionAction: .moveWindowsToFallback,
                 workspaceLabels: ["1": "Code", "2": "Web"],

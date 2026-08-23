@@ -25,8 +25,16 @@ struct MenuBarLabel: View {
 
     var body: some View {
         if #available(macOS 14, *) { // https://github.com/nikitabobko/WinMux/issues/1122
-            let renderer = ImageRenderer(content: menuBarContent)
-            if let cgImage = renderer.cgImage {
+            // body re-runs on every publish of the whole TrayMenuModel (sidebar hover, drop
+            // previews, ...), but rasterizing is only needed when the rendered inputs change.
+            let renderKey = MenuBarLabelRenderKey(
+                trayText: viewModel.trayText,
+                trayItems: viewModel.trayItems,
+                style: style ?? viewModel.experimentalUISettings.displayStyle,
+                colorScheme: menuColorScheme,
+                colorOverride: color,
+            )
+            if let cgImage = cachedMenuBarLabelImage(for: renderKey, render: { ImageRenderer(content: menuBarContent).cgImage }) {
                 // Using scale: 1 results in a blurry image for unknown reasons
                 Image(cgImage, scale: 2, label: Text(viewModel.trayText))
             } else {
@@ -87,26 +95,6 @@ struct MenuBarLabel: View {
             .font(.system(.largeTitle, design: .monospaced))
             .foregroundStyle(finalColor)
             .bold()
-    }
-
-    private func otherWorkspaces(with otherWorkspaces: [WorkspaceViewModel]) -> some View {
-        Group {
-            Text("|")
-                .font(.system(.largeTitle))
-                .foregroundStyle(finalColor)
-                .bold()
-                .padding(.bottom, 6)
-            ForEach(otherWorkspaces, id: \.name) { item in
-                itemView(for: TrayItem(
-                    type: .workspace,
-                    name: item.name,
-                    displayName: item.displayName,
-                    isActive: false,
-                    hasFullscreenWindows: item.hasFullscreenWindows,
-                ))
-            }
-        }
-        .opacity(0.6)
     }
 
     private func modeSeparator(with design: Font.Design) -> some View {
@@ -182,4 +170,25 @@ extension String {
     fileprivate func containsEmoji() -> Bool {
         unicodeScalars.contains { $0.properties.isEmoji && $0.properties.isEmojiPresentation }
     }
+}
+
+struct MenuBarLabelRenderKey: Equatable {
+    let trayText: String
+    let trayItems: [TrayItem]
+    let style: MenuBarStyle
+    let colorScheme: ColorScheme
+    let colorOverride: Color?
+}
+
+@MainActor
+private var menuBarLabelImageCache: (key: MenuBarLabelRenderKey, image: CGImage)? = nil
+
+@MainActor
+func cachedMenuBarLabelImage(for key: MenuBarLabelRenderKey, render: () -> CGImage?) -> CGImage? {
+    if let cached = menuBarLabelImageCache, cached.key == key {
+        return cached.image
+    }
+    guard let image = render() else { return nil }
+    menuBarLabelImageCache = (key, image)
+    return image
 }

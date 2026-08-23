@@ -345,8 +345,12 @@ extension WindowMouseInteractionDriver {
 
 extension WindowMouseInteractionDriver {
     func makePendingResizeCandidate() async -> PendingResizeCandidate? {
+        // The candidate is best-effort calibration data: makeResizeGesture discards it unless
+        // its windowId matches the window that actually reports resize events (which is
+        // re-verified live there). So the logical focus is good enough here, and it avoids a
+        // getNativeFocusedWindow AX round-trip to the focused app on every single left click.
         guard getCurrentMouseManipulationKind() == .none,
-              let window = try? await getNativeFocusedWindow(),
+              let window = focus.windowOrNil,
               window.parent is TilingContainer,
               !window.isHiddenInCorner
         else { return nil }

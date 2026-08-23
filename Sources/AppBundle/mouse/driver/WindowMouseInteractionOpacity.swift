@@ -45,7 +45,7 @@ final class WindowMouseInteractionOpacityController {
         suppressPostDragAxObserverEvents(for: temporarilyMovedWindows.keys)
         for (windowId, rect) in temporarilyMovedWindows {
             guard let window = Window.get(byId: windowId) else { continue }
-            window.lastKnownActualRect = rect
+            window.recordAuthoritativeActualRect(rect)
             window.setAxFrame(rect.topLeftCorner, rect.size)
         }
         temporarilyMovedWindows.removeAll()
@@ -71,13 +71,15 @@ final class WindowMouseInteractionOpacityController {
             guard let rect = temporarilyMovedWindows.removeValue(forKey: staleId),
                   let window = Window.get(byId: staleId)
             else { continue }
-            window.lastKnownActualRect = rect
+            window.recordAuthoritativeActualRect(rect)
             window.setAxFrame(rect.topLeftCorner, rect.size)
         }
         for window in windowsToHide where temporarilyMovedWindows[window.windowId] == nil {
             guard let rect = window.lastKnownActualRect ?? window.lastAppliedLayoutPhysicalRect else { continue }
             temporarilyMovedWindows[window.windowId] = rect
-            window.lastKnownActualRect = rect
+            // Keep the logical (pre-park) rect cached while the window is parked off-screen:
+            // drop targeting and occlusion must keep seeing the window where the user knows it.
+            window.recordAuthoritativeActualRect(rect)
             window.setAxFrame(mouseInteractionHiddenTopLeftCorner(for: rect), nil)
         }
     }

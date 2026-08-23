@@ -18,7 +18,15 @@ The sidebar is a more interactively-performant and useful alternative to [Sketch
 
 You can drag windows in and out of the sidebar from and to the current workspace. You can rearrange windows across all spaces using the sidebar, including tab groups.
 
-The sidebar can be configured (as shown) to display the current date and time.
+The sidebar clock can be configured independently:
+
+```toml
+[workspace-sidebar]
+    show-clock = true
+    show-seconds = true
+    show-date = true
+    show-weekday = true
+```
 
 
 ### Tab Groups
@@ -83,11 +91,7 @@ end tell
 ## Installation
 Download the latest binary from releases and launch.
 
-As WinMux is not signed, you will need to bypass gatekeeper:
-
-```bash
-xattr -dr com.apple.quarantine /Applications/WinMux.app/
-```
+Release builds are signed with a Developer ID certificate, notarized by Apple, and verified with Gatekeeper before publication.
 
 ## Migrating
 ### From AeroSpace

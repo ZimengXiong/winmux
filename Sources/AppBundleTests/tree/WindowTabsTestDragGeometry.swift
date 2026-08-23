@@ -216,8 +216,8 @@ import XCTest
         leftStack.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 200, height: 220)
         target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 200, height: 100)
         overflowingSibling.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 100, width: 200, height: 120)
-        target.lastKnownActualRect = Rect(topLeftX: 0, topLeftY: 0, width: 200, height: 100)
-        overflowingSibling.lastKnownActualRect = Rect(topLeftX: 0, topLeftY: 100, width: 260, height: 120)
+        target.recordAuthoritativeActualRect(Rect(topLeftX: 0, topLeftY: 0, width: 200, height: 100))
+        overflowingSibling.recordAuthoritativeActualRect(Rect(topLeftX: 0, topLeftY: 100, width: 260, height: 120))
 
         let preview = resolvedWindowStackSplitPreview(targetNode: target.moveNode, position: .right).orDie()
 
@@ -248,8 +248,8 @@ import XCTest
         let target = TestWindow.new(id: 2, parent: root)
         source.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 180, height: 220)
         target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 180, topLeftY: 0, width: 180, height: 220)
-        source.lastKnownActualRect = Rect(topLeftX: 0, topLeftY: 0, width: 240, height: 220)
-        target.lastKnownActualRect = Rect(topLeftX: 180, topLeftY: 0, width: 180, height: 220)
+        source.recordAuthoritativeActualRect(Rect(topLeftX: 0, topLeftY: 0, width: 240, height: 220))
+        target.recordAuthoritativeActualRect(Rect(topLeftX: 180, topLeftY: 0, width: 180, height: 220))
         source.markAsMostRecentChild()
 
         let overlapPoint = CGPoint(x: 200, y: 110)

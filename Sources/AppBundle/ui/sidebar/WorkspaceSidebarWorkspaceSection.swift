@@ -179,6 +179,7 @@ extension WorkspaceSidebarWorkspaceSection {
     var sectionBackground: some View {
         sectionShape
             .fill(sectionBackgroundFill)
+            .background { sectionGlassCard }
             .overlay {
                 if isPinnedActiveWorkspace && !isSearchFiltering {
                     sectionShape
@@ -188,6 +189,43 @@ extension WorkspaceSidebarWorkspaceSection {
                         )
                 }
             }
+    }
+
+    /// The Apple-native container look for a workspace: a dimensional Liquid Glass card.
+    /// A bare `.glassEffect` over the already-glassy panel reads flat, so this adds the three
+    /// things that give real Liquid Glass its depth — a refractive edge, a specular top
+    /// highlight, and a lift shadow — and renders inside a `GlassEffectContainer` (only glass,
+    /// no foreground text, so it's safe) where the native lensing actually engages. The state
+    /// tint fills on top. No-op on older systems; the plain tint fill stands in.
+    @ViewBuilder
+    var sectionGlassCard: some View {
+        if #available(macOS 26.0, *) {
+            GlassEffectContainer {
+                ZStack {
+                    Color.clear.glassEffect(.regular, in: sectionShape)
+                    // Specular top sheen.
+                    sectionShape
+                        .fill(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: Color.white.opacity(0.16), location: 0),
+                                    .init(color: Color.white.opacity(0.04), location: 0.14),
+                                    .init(color: Color.clear, location: 0.5),
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom,
+                            )
+                        )
+                        .blendMode(.screen)
+                    // Refractive glass edge.
+                    Color.clear
+                        .glassEffect(.regular, in: sectionShape)
+                        .mask(sectionShape.stroke(lineWidth: 2))
+                    sectionShape.strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5)
+                }
+            }
+            .glassShadow(.resting)
+        }
     }
 
     var sectionBackgroundFill: Color {

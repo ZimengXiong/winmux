@@ -1,26 +1,78 @@
 import AppKit
 import Common
 
+@MainActor private var moveWithMouseSessionWindowIdsInFlight: Set<UInt32> = []
+@MainActor private var moveWithMouseTrailingRerunWindowIds: Set<UInt32> = []
+
 func movedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutableRawPointer?) {
     let windowId = ax.containingWindowId()
     let notif = notif as String
     Task { @MainActor in
-        if shouldIgnoreMovedObsForCurrentDragSession(windowId: windowId) ||
-            WindowMouseInteractionOpacityController.shared.shouldSuppressObserverEvent(windowId: windowId) ||
-            shouldIgnoreAxObserverEventForPostDragSuppression(windowId: windowId, notif: notif)
-        {
-            return
+        await handleMovedEvent(windowId: windowId, notif: notif)
+    }
+}
+
+@MainActor
+private func handleMovedEvent(windowId: UInt32?, notif: String) async {
+    if shouldIgnoreMovedObsForCurrentDragSession(windowId: windowId) ||
+        WindowMouseInteractionOpacityController.shared.shouldSuppressObserverEvent(windowId: windowId) ||
+        shouldIgnoreAxObserverEventForPostDragSuppression(windowId: windowId, notif: notif)
+    {
+        // Suppressed events are our own parking/restore/post-drag moves: their authors write
+        // the resulting rect into the cache themselves, so invalidating here would wipe
+        // deliberately recorded values.
+        return
+    }
+    // The cached native state (rect, fullscreen) is stale the moment the window reports
+    // movement. Consumers fall back to an on-demand AX fetch (or the last applied layout
+    // rect), so invalidating keeps the caches honest without polling every window on every
+    // refresh barrier.
+    if let windowId {
+        Window.get(byId: windowId)?.invalidateLastKnownNativeState()
+    }
+    guard let token: RunSessionGuard = .isServerEnabled else { return }
+    guard let windowId, let window = Window.get(byId: windowId) else {
+        scheduleRefreshSession(.ax(notif))
+        return
+    }
+    if isContinuingManagedDragSessionForMovedEvent(window) { return }
+    // Coalesce: kAXMoved arrives per frame during drags, and each session reads the mouse
+    // and window state fresh when it runs, so events arriving while a session for this
+    // window is queued or running add no information — they only pile up main-actor work
+    // that keeps running long after the drag under CPU load. The trailing-rerun mark
+    // guarantees the burst's final position is still processed once the session finishes
+    // (a floating drag's workspace rebind depends on the last event).
+    if moveWithMouseSessionWindowIdsInFlight.contains(windowId) {
+        moveWithMouseTrailingRerunWindowIds.insert(windowId)
+        return
+    }
+    // Reserve before the isManipulatedWithMouse suspension point: two queued events for the
+    // same window must not both pass the in-flight check and spawn concurrent sessions.
+    moveWithMouseSessionWindowIdsInFlight.insert(windowId)
+    guard (try? await isManipulatedWithMouse(window)) == true else {
+        moveWithMouseSessionWindowIdsInFlight.remove(windowId)
+        moveWithMouseTrailingRerunWindowIds.remove(windowId)
+        scheduleRefreshSession(.ax(notif))
+        return
+    }
+    Task {
+        defer {
+            moveWithMouseSessionWindowIdsInFlight.remove(windowId)
+            if moveWithMouseTrailingRerunWindowIds.remove(windowId) != nil {
+                Task { @MainActor in
+                    await handleMovedEvent(windowId: windowId, notif: notif)
+                }
+            }
         }
-        guard let token: RunSessionGuard = .isServerEnabled else { return }
-        guard let windowId, let window = Window.get(byId: windowId), try await isManipulatedWithMouse(window) else {
-            scheduleRefreshSession(.ax(notif))
-            return
-        }
-        Task {
+        do {
             try checkCancellation()
             try await runLightSession(.ax(notif), token) {
                 try await moveWithMouse(window)
             }
+        } catch is CancellationError {
+            // A newer interaction/session superseded this coalesced event.
+        } catch {
+            debugFocusLog("moveWithMouse coalesced session failed windowId=\(windowId) error=\(error)")
         }
     }
 }

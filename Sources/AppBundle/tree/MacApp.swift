@@ -10,6 +10,11 @@ final class MacApp: AbstractApp {
     let appId: KnownBundleId?
     let nsApp: NSRunningApplication
     private let axApp: ThreadGuardedValue<AXUIElement>
+    /// Second app element with a much shorter messaging timeout, for the focused-window query
+    /// that fronts every refresh session: when the app is too busy to answer quickly, the
+    /// session must fall back to the event-maintained cache instead of stalling on the full
+    /// timeout (and then acting as if no window were focused at all).
+    private let axAppFastTimeout: ThreadGuardedValue<AXUIElement>
     private let appAxSubscriptions: ThreadGuardedValue<[AxSubscription]> // keep subscriptions in memory
     private let windows: ThreadGuardedValue<[UInt32: AxWindow]> = .init([:])
     private var windowsCount = 0
@@ -27,9 +32,10 @@ final class MacApp: AbstractApp {
     @MainActor static var allAppsMap: [pid_t: MacApp] = [:]
     @MainActor private static var wipPids: [pid_t: AwaitableOneTimeBroadcastLatch] = [:]
 
-    private init(_ nsApp: NSRunningApplication, _ axApp: AXUIElement, _ axSubscriptions: [AxSubscription], _ thread: Thread) {
+    private init(_ nsApp: NSRunningApplication, _ axApp: AXUIElement, _ axAppFastTimeout: AXUIElement, _ axSubscriptions: [AxSubscription], _ thread: Thread) {
         self.nsApp = nsApp
         self.axApp = .init(axApp)
+        self.axAppFastTimeout = .init(axAppFastTimeout)
         self.pid = nsApp.processIdentifier
         self.rawAppBundleId = nsApp.bundleIdentifier
         self.appId = nsApp.bundleIdentifier.flatMap { KnownBundleId.init(rawValue: $0) }
@@ -70,13 +76,15 @@ final class MacApp: AbstractApp {
                     // Cap AX round-trips to this app at 1s instead of the 6s global default,
                     // so a busy/unresponsive app can't stall window operations for seconds.
                     AXUIElementSetMessagingTimeout(axApp, 1.0)
+                    let axAppFastTimeout = AXUIElementCreateApplication(nsApp.processIdentifier)
+                    AXUIElementSetMessagingTimeout(axAppFastTimeout, MacApp.focusedWindowQueryTimeout)
                     let handlers: HandlerToNotifKeyMapping = [
                         (refreshObs, [kAXWindowCreatedNotification, kAXFocusedWindowChangedNotification]),
                     ]
                     let job = RunLoopJob()
                     let subscriptions = (try? AxSubscription.bulkSubscribe(nsApp, axApp, job, handlers)) ?? []
                     let isGood = !subscriptions.isEmpty
-                    let app = isGood ? MacApp(nsApp, axApp, subscriptions, Thread.current) : nil
+                    let app = isGood ? MacApp(nsApp, axApp, axAppFastTimeout, subscriptions, Thread.current) : nil
                     Task { @MainActor in
                         allAppsMap[pid] = app
                         await wip.signalToAll()
@@ -124,19 +132,61 @@ final class MacApp: AbstractApp {
         }
     }
 
-    private func focusedWindowId() async throws -> UInt32? {
-        try await thread?.runInLoop { [nsApp, axApp, windows] job in
-            try axApp.threadGuarded.get(Ax.focusedWindowAttr)
-                .flatMap { try windows.threadGuarded.getOrRegisterAxWindow(windowId: $0.windowId, $0.ax.cast, nsApp, job) }?
-                .windowId
-        }
+    /// How long the focused-window query may block a refresh session. Deliberately much shorter
+    /// than the general 1s cap: this query fronts every session (including every hotkey), and
+    /// on timeout there is an accurate fallback (see getFocusedWindow).
+    static let focusedWindowQueryTimeout: Float = 0.25
+
+    private enum FocusedWindowQuery {
+        case window(UInt32)
+        case noFocusedWindow
+        case timedOut
+    }
+
+    private func queryFocusedWindowId() async throws -> FocusedWindowQuery {
+        try await thread?.runInLoop { [nsApp, axAppFastTimeout, windows] job -> FocusedWindowQuery in
+            var raw: AnyObject?
+            let error = AXUIElementCopyAttributeValue(axAppFastTimeout.threadGuarded, kAXFocusedWindowAttribute as CFString, &raw)
+            switch error {
+                case .success:
+                    guard let raw else { return .noFocusedWindow }
+                    let element = raw as! AXUIElement
+                    // Fresh elements use the 6s global default; bound follow-up traffic like
+                    // every other window element.
+                    AXUIElementSetMessagingTimeout(element, 1.0)
+                    guard let windowId = element.containingWindowId(),
+                          let registered = try windows.threadGuarded.getOrRegisterAxWindow(windowId: windowId, element, nsApp, job)
+                    else { return .noFocusedWindow }
+                    return .window(registered.windowId)
+                case .cannotComplete:
+                    return .timedOut
+                default:
+                    return .noFocusedWindow
+            }
+        } ?? .noFocusedWindow
     }
 
     // todo merge together with detectNewWindows
     func getFocusedWindow() async throws -> Window? {
-        let windowId = try await focusedWindowId()
-        guard let windowId else { return nil }
-        return try await MacWindow.getOrRegister(windowId: windowId, macApp: self)
+        switch try await queryFocusedWindowId() {
+            case .window(let windowId):
+                return try await MacWindow.getOrRegister(windowId: windowId, macApp: self)
+            case .noFocusedWindow:
+                return nil
+            case .timedOut:
+                // The app is too busy to answer AX right now. A stalled app cannot change its
+                // own focused window (that requires its main run loop), so the last known
+                // value — maintained by kAXFocusedWindowChanged events and every successful
+                // session — is still accurate. Using it beats both stalling the session for
+                // the full messaging timeout and the old behavior of treating the timeout as
+                // "no window is focused".
+                return lastNativeFocusedWindow()
+        }
+    }
+
+    @MainActor
+    private func lastNativeFocusedWindow() -> Window? {
+        lastNativeFocusedWindowId.flatMap { Window.get(byId: $0) }
     }
 
     @MainActor func nativeFocus(_ windowId: UInt32) {
@@ -171,18 +221,14 @@ final class MacApp: AbstractApp {
     func setAxFrame(_ windowId: UInt32, _ topLeft: CGPoint?, _ size: CGSize?) {
         setFrameJobs.removeValue(forKey: windowId)?.cancel()
         setFrameJobs[windowId] = withWindowAsync(windowId) { [axApp] window, job in
-            try disableAnimations(app: axApp.threadGuarded, job) {
-                try setFrame(window, topLeft, size, job)
-            }
+            try setFrame(window, app: axApp.threadGuarded, topLeft, size, job)
         }
     }
 
     func setAxFrameBlocking(_ windowId: UInt32, _ topLeft: CGPoint?, _ size: CGSize?) async throws {
         setFrameJobs.removeValue(forKey: windowId)?.cancel()
         try await withWindow(windowId) { [axApp] window, job in
-            try disableAnimations(app: axApp.threadGuarded, job) {
-                try setFrame(window, topLeft, size, job)
-            }
+            try setFrame(window, app: axApp.threadGuarded, topLeft, size, job)
         }
     }
 
@@ -274,6 +320,42 @@ final class MacApp: AbstractApp {
         }
     }
 
+    /// Upper bound on how long one app may hold up the window-refresh barrier. A CPU-starved
+    /// app answers each AX message only at the messaging timeout, so its enumeration can take
+    /// (windows × timeout); every other app's layout would wait behind it. On deadline the app
+    /// falls back to the model's current windows (equivalent to "nothing changed"), and a later
+    /// refresh reconciles once the app responds.
+    private static let singleAppRefreshDeadline: Duration = .milliseconds(1500)
+
+    @MainActor
+    private static func refreshAppAndGetAliveWindowIdsWithDeadline(
+        _ nsApp: NSRunningApplication,
+        frontmostAppBundleId: String?,
+    ) async throws -> [UInt32] {
+        let pid = nsApp.processIdentifier
+        let work = Task { @MainActor () -> [UInt32] in
+            guard let app = try await MacApp.getOrRegister(nsApp) else { return [] }
+            return try await app.refreshAndGetAliveWindowIds(frontmostAppBundleId: frontmostAppBundleId)
+        }
+        let deadline = Task { @MainActor in
+            try? await Task.sleep(for: singleAppRefreshDeadline)
+            work.cancel()
+        }
+        defer { deadline.cancel() }
+        return try await withTaskCancellationHandler {
+            do {
+                return try await work.value
+            } catch is CancellationError {
+                // Propagate if the whole refresh session was cancelled; otherwise the deadline
+                // fired — report the model's current windows for this app as alive.
+                try checkCancellation()
+                return MacWindow.allWindows.filter { $0.macApp.pid == pid }.map(\.windowId)
+            }
+        } onCancel: {
+            work.cancel()
+        }
+    }
+
     @MainActor
     static func refreshAllAndGetAliveWindowIds(frontmostAppBundleId: String?) async throws -> [MacApp: [UInt32]] {
         for (_, app) in MacApp.allAppsMap { // gc dead apps
@@ -285,8 +367,10 @@ final class MacApp: AbstractApp {
         return try await withThrowingTaskGroup(of: (pid_t, [UInt32]).self, returning: [MacApp: [UInt32]].self) { group in
             func refreshTheApp(_ nsApp: NSRunningApplication) {
                 group.addTask { @Sendable @MainActor in
-                    guard let app = try await MacApp.getOrRegister(nsApp) else { return (nsApp.processIdentifier, []) }
-                    return (nsApp.processIdentifier, try await app.refreshAndGetAliveWindowIds(frontmostAppBundleId: frontmostAppBundleId))
+                    (
+                        nsApp.processIdentifier,
+                        try await refreshAppAndGetAliveWindowIdsWithDeadline(nsApp, frontmostAppBundleId: frontmostAppBundleId)
+                    )
                 }
             }
             // Register new apps
@@ -329,7 +413,14 @@ final class MacApp: AbstractApp {
             if frontmostAppBundleId != lockScreenAppBundleId {
                 (alive, dead) = try alive.partition {
                     try job.checkCancellation()
-                    return $0.value.ax.containingWindowId() != nil
+                    let (windowId, error) = $0.value.ax.containingWindowIdWithError()
+                    if windowId != nil { return true }
+                    // .cannotComplete means the app didn't answer (CPU-starved or briefly
+                    // unresponsive), not that the window is gone. Treating it as death made
+                    // a busy app's windows get GC'd and later re-detected as new windows
+                    // (losing their tree position). Keep them; a later refresh reconciles
+                    // once the app responds or terminates.
+                    return error == .cannotComplete
                 }
             }
 
@@ -354,9 +445,10 @@ final class MacApp: AbstractApp {
             job.cancel()
         }
         setFrameJobs = [:]
-        thread?.runInLoopAsync { [windows, appAxSubscriptions, axApp] job in
+        thread?.runInLoopAsync { [windows, appAxSubscriptions, axApp, axAppFastTimeout] job in
             appAxSubscriptions.destroy() // Destroy AX objects in reverse order of their creation
             windows.destroy()
+            axAppFastTimeout.destroy()
             axApp.destroy()
             CFRunLoopStop(CFRunLoopGetCurrent())
         }

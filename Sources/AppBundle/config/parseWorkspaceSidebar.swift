@@ -10,7 +10,10 @@ private let workspaceSidebarParser: [String: any ParserProtocol<WorkspaceSidebar
         parseMonitorDescriptions(value, backtrace, &errors)
     },
     "show-status-pills": Parser(\.showStatusPills, parseBool),
+    "show-clock": Parser(\.showClock, parseBool),
+    "show-seconds": Parser(\.showSeconds, parseBool),
     "show-date": Parser(\.showDate, parseBool),
+    "show-weekday": Parser(\.showWeekday, parseBool),
     "menu-bar-reserve-height": Parser(\.menuBarReserveHeight, parseWorkspaceSidebarMenuBarReserveHeight),
     "project-deletion-action": Parser(\.projectDeletionAction, parseWorkspaceProjectDeletionAction),
     "workspace-labels": Parser(\.workspaceLabels, parseWorkspaceSidebarLabels),

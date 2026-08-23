@@ -82,7 +82,10 @@ struct WorkspaceSidebarConfig: ConvenienceCopyable, Equatable, Sendable {
     var width: Int = 240
     var monitor: [MonitorDescription] = []
     var showStatusPills: Bool = true
+    var showClock: Bool = true
+    var showSeconds: Bool = true
     var showDate: Bool = true
+    var showWeekday: Bool = true
     var menuBarReserveHeight: Int = 28
     var projectDeletionAction: WorkspaceProjectDeletionAction = .closeWindows
     var workspaceLabels: [String: String] = [:]

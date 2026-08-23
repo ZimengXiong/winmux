@@ -91,12 +91,14 @@ extension WorkspaceSidebarView {
                 )
             }
 
-            statusSection(
-                expansionProgress: expansionProgress,
-                isCompact: isCompact,
-                leadingInset: leadingInset,
-                trailingInset: trailingInset,
-            )
+            if snapshot.configuration.showsClock {
+                statusSection(
+                    expansionProgress: expansionProgress,
+                    isCompact: isCompact,
+                    leadingInset: leadingInset,
+                    trailingInset: trailingInset,
+                )
+            }
         }
         .coordinateSpace(name: "workspaceSidebarContent")
         .onPreferenceChange(WorkspaceSidebarDropTargetPreferenceKey.self) { frames in

@@ -325,18 +325,53 @@ private func refresh() async throws {
         }
         try await group.waitForAll()
     }
+    // Floating windows are the only windows whose real frame can't be derived from the applied
+    // layout, and some synchronous consumers (interaction-opacity parking, agent pane info)
+    // read the cached rect directly. Re-warm just the ones invalidated by move/resize events —
+    // typically none — instead of polling every window's frame each barrier.
+    let staleFloatingWindows = Workspace.all.flatMap { workspace in
+        workspace.floatingWindows.filter { $0.lastKnownActualRect == nil }
+    }
+    if !staleFloatingWindows.isEmpty {
+        try await withThrowingTaskGroup(of: Void.self) { group in
+            for window in staleFloatingWindows {
+                group.addTask { @Sendable @MainActor in
+                    _ = try? await window.getAxRect()
+                }
+            }
+            try await group.waitForAll()
+        }
+    }
     finalizePersistedFrozenWorldAfterRefresh(aliveWindowIds: aliveWindowIds)
 
     // Garbage collect workspaces after apps, because workspaces contain apps.
     Workspace.reconcileWorkspaceState()
 }
 
-func refreshObs(_: AXObserver, _: AXUIElement, notif: CFString, _: UnsafeMutableRawPointer?) {
+func refreshObs(_: AXObserver, _ ax: AXUIElement, notif: CFString, _: UnsafeMutableRawPointer?) {
     let notif = notif as String
     if notif == kAXFocusedWindowChangedNotification as String || notif == kAXUIElementDestroyedNotification as String {
         debugFocusLog("refreshObs notif=\(notif)")
     }
+    // Minimize state changed: drop the event-invalidated native-state cache for this window so
+    // the next normalizeLayoutReason pass fetches it live. containingWindowId runs here on the
+    // app's AX thread, not on the main thread.
+    let isMinimizeStateNotif =
+        notif == kAXWindowMiniaturizedNotification as String || notif == kAXWindowDeminiaturizedNotification as String
+    let invalidateNativeStateWindowId: UInt32? = isMinimizeStateNotif ? ax.containingWindowId() : nil
+    // A busy app can time out the windowId resolution. Losing this invalidation would poison
+    // the cache permanently (a minimized window emits no further geometry events), so fall
+    // back to invalidating every window of the emitting app.
+    let invalidateNativeStateAppPid: pid_t? =
+        isMinimizeStateNotif && invalidateNativeStateWindowId == nil ? axTaskLocalAppThreadToken?.pid : nil
     Task { @MainActor in
+        if let invalidateNativeStateWindowId {
+            Window.get(byId: invalidateNativeStateWindowId)?.invalidateLastKnownNativeState()
+        } else if let invalidateNativeStateAppPid {
+            for window in MacWindow.allWindows where window.macApp.pid == invalidateNativeStateAppPid {
+                window.invalidateLastKnownNativeState()
+            }
+        }
         if !TrayMenuModel.shared.isEnabled { return }
         scheduleRefreshSession(.ax(notif))
     }
@@ -401,12 +436,22 @@ private func layoutWorkspaces() async throws {
     }
     for workspace in Workspace.all where !workspace.isVisible {
         let corner = monitorToOptimalHideCorner[workspace.workspaceMonitor.rect.topLeftCorner] ?? .bottomRightCorner
-        let shouldReassertHiddenWindows = refreshSessionEvent?.canReuseLastAppliedWindowFrames != true
+        let shouldReassertHiddenWindows = refreshSessionEvent?.requiresHiddenWindowsReassertion == true
         for window in workspace.allLeafWindowsRecursive {
             guard let macWindow = window as? MacWindow else { continue }
             macWindow.lastAppliedLayoutPhysicalRect = nil
             macWindow.lastAppliedLayoutVirtualRect = nil
-            try await macWindow.hideInCorner(corner, force: shouldReassertHiddenWindows)
+            // A nil cached rect means a geometry event arrived since the window was last
+            // observed — including our own parking move, but also an app repositioning its
+            // parked window (document restore, [NSWindow center], ...). Re-observe and
+            // re-park exactly those windows: this keeps the drift self-heal the old
+            // reassert-everything-on-every-event behavior provided, while windows with a
+            // confirmed parked position cost nothing.
+            let geometryUnconfirmed = macWindow.lastKnownActualRect == nil
+            if geometryUnconfirmed {
+                _ = try? await macWindow.getAxRect()
+            }
+            try await macWindow.hideInCorner(corner, force: shouldReassertHiddenWindows || geometryUnconfirmed)
         }
     }
 }

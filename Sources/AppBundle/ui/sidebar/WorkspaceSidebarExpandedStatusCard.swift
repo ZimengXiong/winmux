@@ -4,12 +4,14 @@ import SwiftUI
 struct WorkspaceSidebarExpandedStatusCard: View {
     let date: Date
     let sectionWidth: CGFloat
+    let showsSeconds: Bool
     let showsDate: Bool
+    let showsWeekday: Bool
 
     private var accessibilitySummary: String {
-        var parts = [date.formatted(date: .omitted, time: .standard)]
+        var parts = [date.formatted(date: .omitted, time: showsSeconds ? .standard : .shortened)]
         if showsDate {
-            parts.append(date.formatted(date: .complete, time: .omitted))
+            parts.append(date.formatted(date: showsWeekday ? .complete : .long, time: .omitted))
         }
         return parts.joined(separator: ", ")
     }
@@ -22,18 +24,22 @@ struct WorkspaceSidebarExpandedStatusCard: View {
                     .monospacedDigit()
                     .foregroundStyle(Color.white.opacity(0.90))
                     .lineLimit(1)
-                Text(date, format: .dateTime.second(.twoDigits))
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(Color.white.opacity(0.34))
-                    .lineLimit(1)
-                    .padding(.top, 9)
+                if showsSeconds {
+                    Text(date, format: .dateTime.second(.twoDigits))
+                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(Color.white.opacity(0.34))
+                        .lineLimit(1)
+                        .padding(.top, 9)
+                }
             }
             .layoutPriority(1)
 
             if showsDate {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(date, format: .dateTime.weekday(.abbreviated))
+                    if showsWeekday {
+                        Text(date, format: .dateTime.weekday(.abbreviated))
+                    }
                     Text(date, format: .dateTime.month(.abbreviated).day())
                 }
                 .font(.system(size: 15, weight: .semibold))

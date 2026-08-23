@@ -14,6 +14,9 @@ enum GlassToken {
     static let highlightPeak: Double = 0.08
     static let borderOpacity: Double = 0.10
     static let separatorOpacity: Double = 0.07
+    // Width of the refractive Liquid Glass edge band (macOS 26). Wider = more visible
+    // refraction; the main knob for how pronounced the glassy border reads.
+    static let refractiveBorderWidth: CGFloat = 3
 
     // Interactive fills layered on glass
     static let fillActive: Double = 0.14
@@ -97,7 +100,7 @@ struct GlassSurface<S: Shape>: View {
                 )
                 .blendMode(.screen)
             }
-            shape.stroke(Color.white.opacity(GlassToken.borderOpacity), lineWidth: StrokeToken.hairline)
+            borderEdge
         }
         .compositingGroup()
     }
@@ -109,6 +112,22 @@ struct GlassSurface<S: Shape>: View {
         } else {
             shape.fill(.ultraThinMaterial)
                 .environment(\.colorScheme, .dark)
+        }
+    }
+
+    /// The outer edge. On macOS 26 it's a ring of real Liquid Glass masked to just the
+    /// border band, so the edge refracts — light bends along the rounded corner like the
+    /// native material — over a faint hairline that keeps the outline defined. Older systems
+    /// get the plain hairline.
+    @ViewBuilder
+    private var borderEdge: some View {
+        if #available(macOS 26.0, *) {
+            Color.clear
+                .glassEffect(.regular, in: shape)
+                .mask(shape.stroke(lineWidth: GlassToken.refractiveBorderWidth))
+                .overlay(shape.stroke(Color.white.opacity(GlassToken.borderOpacity), lineWidth: StrokeToken.hairline))
+        } else {
+            shape.stroke(Color.white.opacity(GlassToken.borderOpacity), lineWidth: StrokeToken.hairline)
         }
     }
 }

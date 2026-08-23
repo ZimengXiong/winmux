@@ -5,7 +5,7 @@ func updateWindowTabModel() async {
     let didClearMouseInteractionChromeSuppression =
         WindowTabStripPanelController.shared.clearMouseInteractionChromeSuppressionIfInactive()
     guard TrayMenuModel.shared.isEnabled, config.windowTabs.enabled else {
-        TrayMenuModel.shared.windowTabStrips = []
+        TrayMenuModel.shared.setIfChanged(\.windowTabStrips, [])
         WindowTabStripPanelController.shared.refresh()
         debugFocusLog("updateWindowTabModel disabled -> cleared")
         return

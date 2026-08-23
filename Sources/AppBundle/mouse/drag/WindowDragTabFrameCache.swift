@@ -55,7 +55,7 @@ private extension TilingContainer {
 @MainActor
 func synchronizeTabbedWindowCache(_ window: Window, rect: Rect) {
     window.lastFloatingSize = rect.size
-    window.lastKnownActualRect = rect
+    window.recordAuthoritativeActualRect(rect)
     window.lastAppliedLayoutPhysicalRect = rect
     windowDragActualRectCache[window.windowId] = rect
 }

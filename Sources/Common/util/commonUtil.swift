@@ -123,6 +123,24 @@ public enum RefreshSessionEvent: Sendable, CustomStringConvertible {
         requiresWindowRefreshBarrier
     }
 
+    /// Hidden (corner-parked) windows can drift only when macOS repositions windows behind our
+    /// back with no AX events delivered — wake from sleep is the known case (plus startup, where
+    /// windows may be anywhere from a previous session). Monitor-geometry changes are handled
+    /// separately: hideInCorner re-parks when the monitor rect it parked against changes.
+    /// Every other event leaves parked windows where they are, so re-asserting their frames
+    /// (one AX round-trip per hidden window) would be pure waste.
+    public var requiresHiddenWindowsReassertion: Bool {
+        switch self {
+            case .startup:
+                true
+            case .globalObserver(let notif):
+                notif == NSWorkspace.didWakeNotification.rawValue ||
+                    notif == NSWorkspace.screensDidWakeNotification.rawValue
+            default:
+                false
+        }
+    }
+
     public var description: String {
         switch self {
             case .ax(let str): "ax(\(str))"

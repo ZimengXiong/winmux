@@ -10,8 +10,22 @@ struct MonitorViewport {
 
 @MainActor
 struct WinMuxWorkspaceState {
-    var workspaceById: [WorkspaceId: Workspace] = [:]
+    var workspaceById: [WorkspaceId: Workspace] = [:] {
+        didSet { sortedWorkspacesCache = nil }
+    }
+    /// Workspace.all is read dozens of times per refresh session and sorting by logical name
+    /// segments isn't free. The sort key (nameLogicalSegments) is immutable per Workspace
+    /// object — renames create new workspaces — so the order can only change when the registry
+    /// dictionary itself changes.
+    private var sortedWorkspacesCache: [Workspace]? = nil
     var workspaceIdByName: [String: WorkspaceId] = [:]
+
+    mutating func sortedWorkspaces() -> [Workspace] {
+        if let cached = sortedWorkspacesCache { return cached }
+        let sorted = workspaceById.values.sorted()
+        sortedWorkspacesCache = sorted
+        return sorted
+    }
     var projectsById: [WorkspaceProjectId: WorkspaceProject] = [
         workspaceProjectDefaultId: WorkspaceProject(id: workspaceProjectDefaultId, name: "Default", order: 0),
     ]
@@ -182,7 +196,7 @@ struct WinMuxWorkspaceState {
             monitorViewportsById[viewportId] = viewport
         }
 
-        let orderedWorkspaces = workspaceById.values.sorted()
+        let orderedWorkspaces = sortedWorkspaces()
         for (projectId, project) in projectsById {
             var project = project
             var seen: Set<WorkspaceId> = []
@@ -210,7 +224,7 @@ struct WinMuxWorkspaceState {
             project.workspaceOrder = []
             projectsById[projectId] = project
         }
-        for workspace in workspaceById.values.sorted() {
+        for workspace in sortedWorkspaces() {
             ensureProjectExists(workspace.projectId)
             insertWorkspace(workspace.id, intoProject: workspace.projectId)
         }

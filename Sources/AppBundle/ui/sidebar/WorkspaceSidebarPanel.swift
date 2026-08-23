@@ -75,6 +75,8 @@ extension WorkspaceSidebarPanel {
             viewModel.workspaceSidebarVisibleWidth = width
         }
         updateMousePassthrough()
+        // The hover region just changed size under a possibly stationary cursor.
+        scheduleHoverRecheckSoon()
     }
 
     func expandSidebar(to expandedWidth: CGFloat) {
@@ -796,6 +798,12 @@ extension WorkspaceSidebarPanel {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
             self?.updateHoverStateFromMousePosition()
         }
+        // The 0.08s recheck lands inside the grace period, whose expansion lock swallows a
+        // hover exit. With a stationary cursor no pointer event re-evaluates after the grace
+        // expires, so schedule one recheck just past it.
+        DispatchQueue.main.asyncAfter(deadline: .now() + menuTrackingEndGrace + 0.05) { [weak self] in
+            self?.updateHoverStateFromMousePosition()
+        }
     }
 
     func isMenuTrackingOrInGracePeriod(now: Date = .now) -> Bool {
@@ -803,25 +811,59 @@ extension WorkspaceSidebarPanel {
     }
 }
 extension WorkspaceSidebarPanel {
-    func startHoverMonitoring() {
-        guard !isHoverMonitoring else { return }
-        isHoverMonitoring = true
-        DisplayRefreshDriver.shared.add(owner: self) { [weak self] timestamp in
+    /// Hover state is a pure function of the mouse position and the panel geometry, so it is
+    /// driven by the global/local pointer-event monitors (mouse position changes) plus explicit
+    /// rechecks at the points where the panel itself appears or resizes (geometry changes).
+    /// This used to be a permanent CVDisplayLink subscription polling at 30Hz, which kept the
+    /// display link running and woke the main actor every vsync even when the machine was idle.
+    static func noteHoverPointerActivityForVisiblePanels(timestamp: TimeInterval) {
+        for panel in visiblePanels {
+            panel.noteHoverPointerActivity(timestamp: timestamp)
+        }
+    }
+
+    /// For lock-release points that arrive without pointer movement (drag ends on mouse-up
+    /// with a stationary cursor): the expansion locks cleared, so hover must be re-evaluated
+    /// even though no pointer event will fire.
+    static func scheduleHoverRecheckForVisiblePanels() {
+        for panel in visiblePanels {
+            panel.scheduleHoverRecheckSoon()
+        }
+    }
+
+    /// Rate-limited to `hoverPollInterval`, with a trailing recheck so the final position of an
+    /// event burst is always evaluated (a leading-edge-only throttle could drop the last event
+    /// and leave hover state stale until the next mouse move).
+    private func noteHoverPointerActivity(timestamp: TimeInterval) {
+        if timestamp - lastHoverMonitorTimestamp >= hoverPollInterval {
+            lastHoverMonitorTimestamp = timestamp
+            updateHoverStateFromMousePosition()
+        } else if !hasPendingHoverRecheck {
+            hasPendingHoverRecheck = true
+            let delay = max(hoverPollInterval - (timestamp - lastHoverMonitorTimestamp), 0.001)
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let self else { return }
+                self.hasPendingHoverRecheck = false
+                self.lastHoverMonitorTimestamp = ProcessInfo.processInfo.systemUptime
+                self.updateHoverStateFromMousePosition()
+            }
+        }
+    }
+
+    /// Deferred (not inline) so hover reevaluation can be requested from inside
+    /// expansion/collapse/refresh paths without re-entering them synchronously.
+    func scheduleHoverRecheckSoon() {
+        guard !hasPendingHoverRecheck else { return }
+        hasPendingHoverRecheck = true
+        DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            guard timestamp - self.lastHoverMonitorTimestamp >= self.hoverPollInterval else { return }
-            self.lastHoverMonitorTimestamp = timestamp
+            self.hasPendingHoverRecheck = false
             self.updateHoverStateFromMousePosition()
         }
     }
 
-    func stopHoverMonitoring() {
-        cancelExpansionWork()
-        isHoverMonitoring = false
-        lastHoverMonitorTimestamp = 0
-        DisplayRefreshDriver.shared.remove(owner: self)
-    }
-
     func updateHoverStateFromMousePosition() {
+        guard isVisible else { return }
         updateMousePassthrough()
         setHovering(isMouseInsideHoverRegion())
     }
@@ -877,7 +919,7 @@ extension WorkspaceSidebarPanel {
 
     func refresh(on monitor: Monitor) {
         guard let layout = currentSidebarPanelLayout(on: monitor) else {
-            stopHoverMonitoring()
+            cancelExpansionWork()
             resetHiddenSidebarState()
             return
         }
@@ -891,8 +933,10 @@ extension WorkspaceSidebarPanel {
                 : layout.collapsedWidth
         }
         updateMousePassthrough()
-        startHoverMonitoring()
         orderFrontRegardless()
+        // Panel geometry may have just changed under a stationary cursor; hover is otherwise
+        // event-driven from the pointer monitors.
+        scheduleHoverRecheckSoon()
     }
 
     func refreshForCurrentDragIfNeeded() {
@@ -901,10 +945,14 @@ extension WorkspaceSidebarPanel {
     }
 
     func resetHiddenSidebarState() {
+        // Runs for every inactive panel on every refreshAll — guard the shared-model writes so
+        // they don't invalidate every observer each session.
         workspaceSidebarDropTargets = []
-        TrayMenuModel.shared.workspaceSidebarDropPreview = nil
-        TrayMenuModel.shared.workspaceSidebarHoveredWorkspaceName = nil
-        viewModel.workspaceSidebarVisibleWidth = 0
-        orderOut(nil)
+        setWorkspaceSidebarDropPreviewIfChanged(nil)
+        TrayMenuModel.shared.setIfChanged(\.workspaceSidebarHoveredWorkspaceName, nil)
+        viewModel.setIfChanged(\.workspaceSidebarVisibleWidth, 0)
+        if isVisible {
+            orderOut(nil)
+        }
     }
 }

@@ -110,7 +110,10 @@ private func workspaceSidebarSnapshotForTopFilterBar(
             expandedWidth: 240,
             topPadding: 12,
             showMonitorSelector: true,
+            showsClock: true,
+            showsSeconds: true,
             showsDate: false,
+            showsWeekday: false,
             showsStatusPills: false,
         ),
     )

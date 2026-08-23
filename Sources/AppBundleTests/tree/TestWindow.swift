@@ -4,14 +4,20 @@ import AppKit
 final class TestWindow: Window, CustomStringConvertible {
     private var _rect: Rect?
     private var _isHiddenInCorner: Bool = false
-    var nativeIsMacosFullscreen: Bool = false
-    var nativeIsMacosMinimized: Bool = false
+    // Mutating the fake native state models a real state transition, which in production is
+    // always accompanied by an AX event that invalidates the last-known-native-state cache.
+    @MainActor var nativeIsMacosFullscreen: Bool = false {
+        didSet { invalidateLastKnownNativeState() }
+    }
+    @MainActor var nativeIsMacosMinimized: Bool = false {
+        didSet { invalidateLastKnownNativeState() }
+    }
 
     @MainActor
     private init(_ id: UInt32, _ parent: NonLeafTreeNodeObject, _ adaptiveWeight: CGFloat, _ rect: Rect?) {
         _rect = rect
         super.init(id: id, TestApp.shared, lastFloatingSize: nil, parent: parent, adaptiveWeight: adaptiveWeight, index: INDEX_BIND_LAST)
-        lastKnownActualRect = rect
+        recordAuthoritativeActualRect(rect)
     }
 
     @discardableResult
@@ -41,13 +47,25 @@ final class TestWindow: Window, CustomStringConvertible {
     }
 
     @MainActor override func getAxRect() async throws -> Rect? { // todo change to not Optional
-        lastKnownActualRect = _rect
+        recordAuthoritativeActualRect(_rect)
         return _rect
     }
 
-    @MainActor override var isMacosFullscreen: Bool { get async throws { nativeIsMacosFullscreen } }
+    @MainActor private(set) var nativeStateFetchCount = 0
 
-    @MainActor override var isMacosMinimized: Bool { get async throws { nativeIsMacosMinimized } }
+    @MainActor override var isMacosFullscreen: Bool {
+        get async throws {
+            nativeStateFetchCount += 1
+            return nativeIsMacosFullscreen
+        }
+    }
+
+    @MainActor override var isMacosMinimized: Bool {
+        get async throws {
+            nativeStateFetchCount += 1
+            return nativeIsMacosMinimized
+        }
+    }
 
     override var isHiddenInCorner: Bool { _isHiddenInCorner }
 
@@ -62,7 +80,7 @@ final class TestWindow: Window, CustomStringConvertible {
         let windowId = self.windowId
         let rect = _rect
         Task { @MainActor in
-            Window.get(byId: windowId)?.lastKnownActualRect = rect
+            Window.get(byId: windowId)?.recordAuthoritativeActualRect(rect)
         }
         _isHiddenInCorner = false
     }

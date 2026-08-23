@@ -34,4 +34,26 @@ final class SwitcherPaletteTest: XCTestCase {
         XCTAssertNil(switcherPaletteFuzzyScore("ba", in: "ab"))
         XCTAssertNotNil(switcherPaletteFuzzyScore("ab", in: "a-b"))
     }
+
+    func testFinderFolderTitleIsSearchable() {
+        let items = [item(8, app: "Finder", title: "Quarterly Planning")]
+        XCTAssertEqual(filterSwitcherPaletteItems(items, query: "quarterly").map(\.id), [8])
+    }
+
+    @MainActor
+    func testColdPaletteItemFetchesWindowTitleBeforeIndexing() async {
+        setUpWorkspacesForTests()
+        resetCachedWindowTitles()
+        let workspace = Workspace.get(byName: "finder-palette-test")
+        let window = TestWindow.new(id: 88, parent: workspace.rootTilingContainer)
+
+        let item = await makeSwitcherPaletteItem(
+            window: window,
+            workspaceName: workspace.name,
+            focusedWindowId: nil,
+        )
+
+        XCTAssertEqual(item.title, "TestWindow(88)")
+        XCTAssertEqual(filterSwitcherPaletteItems([item], query: "testwindow").map(\.id), [88])
+    }
 }

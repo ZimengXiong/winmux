@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import Common
 import MASShortcut
 import SwiftUI

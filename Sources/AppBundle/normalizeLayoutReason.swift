@@ -22,15 +22,28 @@ private func validateStillPopups() async throws {
 
 @MainActor
 private func _normalizeLayoutReason(workspace: Workspace, windows: [Window]) async throws {
-    // Phase 1: gather AX state with one concurrent task per window, so round-trips to different
-    // apps overlap instead of serializing (2 sequential AX round-trips per window adds up fast).
+    // Phase 1: gather native state. Windows with an intact event-invalidated cache are answered
+    // synchronously; only windows whose state may have changed (a moved/resized/miniaturized/
+    // deminiaturized event arrived since the last observation) go over AX, with one concurrent
+    // task per window so round-trips to different apps overlap instead of serializing.
     // Phase 2: apply tree mutations sequentially to keep binding order deterministic.
     var axState = [(isMacosFullscreen: Bool, isMacosMinimized: Bool)?](repeating: nil, count: windows.count)
     try await withThrowingTaskGroup(of: (Int, Bool, Bool).self) { group in
         for (index, window) in windows.enumerated() {
+            if let cachedFullscreen = window.lastKnownNativeFullscreen,
+               let cachedMinimized = window.lastKnownNativeMinimized
+            {
+                axState[index] = (cachedFullscreen, cachedMinimized)
+                continue
+            }
             group.addTask { @Sendable @MainActor in
+                let observationToken = window.nativeStateObservationToken()
                 let isMacosFullscreen = try await window.isMacosFullscreen
                 let isMacosMinimized = try await (!isMacosFullscreen).andAsync { @MainActor @Sendable in try await window.isMacosMinimized }
+                // Token-guarded: a transition that completed while these round-trips were in
+                // flight already consumed its invalidation events; writing the pre-transition
+                // values back would look valid forever.
+                window.recordObservedNativeState(fullscreen: isMacosFullscreen, minimized: isMacosMinimized, token: observationToken)
                 return (index, isMacosFullscreen, isMacosMinimized)
             }
         }
@@ -40,8 +53,10 @@ private func _normalizeLayoutReason(workspace: Workspace, windows: [Window]) asy
     }
     for (index, window) in windows.enumerated() {
         guard let (isMacosFullscreen, isMacosMinimized) = axState[index] else { continue }
+        // Safe cast rather than macAppUnsafe: identical in production (all windows are
+        // MacWindow), and non-Mac windows (tests) are simply never "windows of a hidden app".
         let isMacosWindowOfHiddenApp = !isMacosFullscreen && !isMacosMinimized &&
-            !config.automaticallyUnhideMacosHiddenApps && window.macAppUnsafe.nsApp.isHidden
+            !config.automaticallyUnhideMacosHiddenApps && (window.app as? MacApp)?.nsApp.isHidden == true
         switch window.layoutReason {
             case .standard:
                 guard window.parent != nil else { continue }

@@ -67,12 +67,16 @@ final class SwitcherPalettePanel: NSPanelHud {
         hostingView.autoresizingMask = [.width, .height]
     }
 
-    func toggle() { if isPaletteActive { dismiss() } else { show() } }
+    func toggle() async { if isPaletteActive { dismiss() } else { await show() } }
 
-    func show() {
+    func show() async {
         guard !isPaletteActive else { return }
         isPaletteActive = true
-        model.items = buildSwitcherPaletteItems()
+        let items = await buildSwitcherPaletteItems()
+        // Palette construction suspends while first-sight window titles are fetched. A second
+        // toggle may have dismissed the palette in the meantime.
+        guard isPaletteActive else { return }
+        model.items = items
         model.query = ""
         model.selection = 0
         model.onSelect = { [weak self] id in self?.select(id) }
@@ -148,23 +152,52 @@ private func appKitScreenMaxY() -> CGFloat {
 }
 
 @MainActor
-private func buildSwitcherPaletteItems() -> [SwitcherPaletteItem] {
+private func buildSwitcherPaletteItems() async -> [SwitcherPaletteItem] {
     let focusedWindowId = focus.windowOrNil?.windowId
     let focusedWorkspace = focus.workspace
     // Focused workspace first, then the rest — so an empty query shows nearby windows on top.
     let workspaces = [focusedWorkspace] + Workspace.all.filter { $0 != focusedWorkspace }
-    return workspaces.flatMap { workspace in
-        workspace.allLeafWindowsRecursive.filter(\.isBound).map { window in
-            SwitcherPaletteItem(
-                id: window.windowId,
-                title: sidebarDisplayLabel(for: window),
-                appName: window.app.name ?? "Unknown",
-                icon: (window as? MacWindow)?.macApp.nsApp.icon,
-                workspaceName: workspace.name,
-                isFocused: window.windowId == focusedWindowId,
-            )
+    let indexedWindows = workspaces.flatMap { workspace in
+        workspace.allLeafWindowsRecursive.filter(\.isBound).map { (window: $0, workspaceName: workspace.name) }
+    }
+    var items = [SwitcherPaletteItem?](repeating: nil, count: indexedWindows.count)
+    await withTaskGroup(of: (Int, SwitcherPaletteItem).self) { group in
+        for (index, entry) in indexedWindows.enumerated() {
+            group.addTask { @Sendable @MainActor in
+                (index, await makeSwitcherPaletteItem(
+                    window: entry.window,
+                    workspaceName: entry.workspaceName,
+                    focusedWindowId: focusedWindowId,
+                ))
+            }
+        }
+        for await (index, item) in group {
+            items[index] = item
         }
     }
+    return items.compactMap { $0 }
+}
+
+@MainActor
+func makeSwitcherPaletteItem(
+    window: Window,
+    workspaceName: String,
+    focusedWindowId: UInt32?,
+) async -> SwitcherPaletteItem {
+    let appName = window.app.name ?? window.app.rawAppBundleId ?? "Unknown"
+    // A cold cache previously indexed every Finder window as only "Finder" until some other
+    // UI happened to fetch its title. Fetch first-sight titles before showing the palette so
+    // folder names are searchable immediately; known stale titles still return instantly and
+    // refresh in the background.
+    let title = await getSessionWindowTitle(window) ?? appName
+    return SwitcherPaletteItem(
+        id: window.windowId,
+        title: title,
+        appName: appName,
+        icon: (window as? MacWindow)?.macApp.nsApp.icon,
+        workspaceName: workspaceName,
+        isFocused: window.windowId == focusedWindowId,
+    )
 }
 
 // MARK: - Fuzzy matching

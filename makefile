@@ -1,7 +1,9 @@
 VERSION ?= 0.0.0-SNAPSHOT
-CODESIGN_IDENTITY ?= Apple Development
-EXPECTED_CODESIGN_AUTHORITY ?= Apple Development: zxzimeng@gmail.com (4F7GA4MB42)
+CODESIGN_IDENTITY ?= Developer ID Application
+EXPECTED_CODESIGN_AUTHORITY_PREFIX ?= Authority=Developer ID Application:
 DEVELOPMENT_TEAM ?= W9C2P3N7Q2
+NOTARIZE ?= 1
+NOTARYTOOL_PROFILE ?= winmux
 RELEASE_DIR ?= .release
 RELEASE_TAG ?= v$(VERSION)
 RELEASE_NOTES ?= auto
@@ -92,6 +94,10 @@ release:
 	app_path="$$archive_path/Products/Applications/$$app_name.app"; \
 	zip_path="$$release_dir/$$app_name-$(VERSION).zip"; \
 	log_path="$$release_dir/$$app_name-$(VERSION)-xcodebuild.log"; \
+	if [ "$(PUBLISH)" = "1" ] && [ "$(NOTARIZE)" != "1" ]; then \
+	    echo "Refusing to publish a release that was not notarized" >&2; \
+	    exit 1; \
+	fi; \
 	rm -rf "$$archive_path" "$$zip_path" "$$derived_data_path"; \
 	mkdir -p "$$release_dir"; \
 	xcodebuild-pretty "$$log_path" \
@@ -106,8 +112,20 @@ release:
 	    archive; \
 	test -d "$$app_path"; \
 	codesign --verify --deep --strict --verbose=2 "$$app_path"; \
-	codesign -dv --verbose=4 "$$app_path" 2>&1 | grep -F "Authority=$(EXPECTED_CODESIGN_AUTHORITY)" >/dev/null; \
+	codesign -dv --verbose=4 "$$app_path" 2>&1 | grep -F "$(EXPECTED_CODESIGN_AUTHORITY_PREFIX)" >/dev/null; \
 	ditto -c -k --sequesterRsrc --keepParent "$$app_path" "$$zip_path"; \
+	if [ "$(NOTARIZE)" = "1" ]; then \
+	    test -n "$(NOTARYTOOL_PROFILE)"; \
+	    xcrun notarytool submit "$$zip_path" --keychain-profile "$(NOTARYTOOL_PROFILE)" --wait; \
+	    xcrun stapler staple "$$app_path"; \
+	    xcrun stapler validate "$$app_path"; \
+	    codesign --verify --deep --strict --verbose=2 "$$app_path"; \
+	    spctl --assess --type execute --verbose=4 "$$app_path"; \
+	    rm -f "$$zip_path"; \
+	    ditto -c -k --sequesterRsrc --keepParent "$$app_path" "$$zip_path"; \
+	else \
+	    echo "Skipping notarization because NOTARIZE=$(NOTARIZE)"; \
+	fi; \
 	if [ "$(PUBLISH)" != "1" ]; then \
 	    echo "Skipping GitHub release publish because PUBLISH=$(PUBLISH)"; \
 	elif /usr/bin/which gh >/dev/null 2>&1; then \

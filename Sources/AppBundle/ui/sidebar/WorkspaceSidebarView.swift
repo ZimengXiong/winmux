@@ -709,7 +709,9 @@ extension WorkspaceSidebarView {
         WorkspaceSidebarStatusView(
             sectionWidth: workspaceSidebarSectionWidth(expansionProgress, layout: snapshot.configuration),
             isCompact: isCompact,
+            showsSeconds: snapshot.configuration.showsSeconds,
             showsDate: snapshot.configuration.showsDate,
+            showsWeekday: snapshot.configuration.showsWeekday,
         )
         .padding(.leading, leadingInset)
         .padding(.trailing, trailingInset)

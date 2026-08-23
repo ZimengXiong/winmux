@@ -345,6 +345,45 @@ func shouldIgnoreMovedObsForCurrentDragSession(windowId: UInt32?) -> Bool {
     )
 }
 
+/// A kAXMoved for the window that a driver session already owns adds no information:
+/// - During a move session the display loop renders every frame; re-entering moveWithMouse per
+///   event just queues redundant light sessions (each with an AX focused-window round-trip).
+///   The only per-event effect worth keeping is drag-subject promotion (Option pressed
+///   mid-drag turns a window drag into a group drag), so the event is NOT skipped when the
+///   resolved subject differs from the session's.
+/// - During a resize session, kAXMoved is a byproduct of resizing from the left/top edge.
+///   Re-entering moveWithMouse from it would flip the resize into a move session mid-gesture
+///   (hiding the resize preview and starting drag-intent tracking).
+@MainActor
+func isContinuingManagedDragSessionForMovedEvent(_ window: Window) -> Bool {
+    guard isLeftMouseButtonDown, currentlyManipulatedWithMouseWindowId == window.windowId else { return false }
+    switch getCurrentMouseManipulationKind() {
+        case .resize:
+            return WindowMouseInteractionDriver.shared.resizeSession?.windowId == window.windowId
+        case .move:
+            guard WindowMouseInteractionDriver.shared.moveSession?.windowId == window.windowId else { return false }
+            return resolvedMouseDragSubject(for: window) == getCurrentMouseDragSubject()
+        case .none:
+            return false
+    }
+}
+
+/// Symmetric to isContinuingManagedDragSessionForMovedEvent: a kAXResized for the window a
+/// driver session already owns is either the resize itself (the display loop samples it at
+/// display rate) or a byproduct of a move session and must not restart startResize per event.
+@MainActor
+func isContinuingManagedDragSessionForResizedEvent(_ windowId: UInt32) -> Bool {
+    guard isLeftMouseButtonDown, currentlyManipulatedWithMouseWindowId == windowId else { return false }
+    switch getCurrentMouseManipulationKind() {
+        case .resize:
+            return WindowMouseInteractionDriver.shared.resizeSession?.windowId == windowId
+        case .move:
+            return WindowMouseInteractionDriver.shared.moveSession?.windowId == windowId
+        case .none:
+            return false
+    }
+}
+
 /// Same motivation as in monitorFrameNormalized
 var mouseLocation: CGPoint {
     normalizeAppKitScreenPoint(NSEvent.mouseLocation)

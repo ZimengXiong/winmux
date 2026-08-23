@@ -135,7 +135,7 @@ func clearPendingWindowDragIntent() {
         )
     }
     pendingWindowDragIntent = nil
-    TrayMenuModel.shared.windowTabReentryPreview = nil
+    WindowTabReentryPreviewModel.shared.set(nil)
     lastWindowDragIntentLogSignature = nil
     setPinnedDraggedWindowId(nil)
     if !preservesSidebarDragUI {
@@ -163,10 +163,10 @@ private func updateWindowTabReentryPreview(sourceWindowId: UInt32, destination: 
           parent.layout == .tabGroup,
           let sourceIndex = sourceWindow.ownIndex
     else {
-        TrayMenuModel.shared.windowTabReentryPreview = nil
+        WindowTabReentryPreviewModel.shared.set(nil)
         return
     }
-    TrayMenuModel.shared.windowTabReentryPreview = WindowTabPendingReorderDrop(
+    WindowTabReentryPreviewModel.shared.set(WindowTabPendingReorderDrop(
         stripId: ObjectIdentifier(parent),
         windowId: windowId,
         sourceIndex: sourceIndex,
@@ -180,7 +180,7 @@ private func updateWindowTabReentryPreview(sourceWindowId: UInt32, destination: 
                 sourceIndex: sourceIndex
             )
         }
-    )
+    ))
 }
 
 @MainActor
