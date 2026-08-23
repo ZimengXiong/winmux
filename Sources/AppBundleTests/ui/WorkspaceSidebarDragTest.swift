@@ -121,6 +121,59 @@ private func workspaceSidebarSnapshotForTopFilterBar(
 }
 
 final class WorkspaceSidebarDragTest: XCTestCase {
+    func testClockAccessibilityHonorsIndependentVisibilityOptions() {
+        let date = Date(timeIntervalSince1970: 1_700_000_000)
+        let timeWithoutSeconds = date.formatted(date: .omitted, time: .shortened)
+        let timeWithSeconds = date.formatted(date: .omitted, time: .standard)
+        let weekday = date.formatted(.dateTime.weekday(.wide))
+        let monthAndDay = date.formatted(.dateTime.month(.wide).day())
+
+        XCTAssertEqual(
+            workspaceSidebarCompactClockAccessibilitySummary(date: date, showsSeconds: false),
+            timeWithoutSeconds,
+        )
+        XCTAssertEqual(
+            workspaceSidebarCompactClockAccessibilitySummary(date: date, showsSeconds: true),
+            timeWithSeconds,
+        )
+        XCTAssertEqual(
+            workspaceSidebarExpandedClockAccessibilityParts(
+                date: date,
+                showsSeconds: false,
+                showsDate: false,
+                showsWeekday: false,
+            ),
+            [timeWithoutSeconds],
+        )
+        XCTAssertEqual(
+            workspaceSidebarExpandedClockAccessibilityParts(
+                date: date,
+                showsSeconds: false,
+                showsDate: false,
+                showsWeekday: true,
+            ),
+            [timeWithoutSeconds, weekday],
+        )
+        XCTAssertEqual(
+            workspaceSidebarExpandedClockAccessibilityParts(
+                date: date,
+                showsSeconds: true,
+                showsDate: true,
+                showsWeekday: false,
+            ),
+            [timeWithSeconds, monthAndDay],
+        )
+        XCTAssertEqual(
+            workspaceSidebarExpandedClockAccessibilityParts(
+                date: date,
+                showsSeconds: true,
+                showsDate: true,
+                showsWeekday: true,
+            ),
+            [timeWithSeconds, weekday, monthAndDay],
+        )
+    }
+
     @MainActor
     func testTopFilterBarHidesForSingleProjectWithoutFocusFilter() {
         let view = WorkspaceSidebarView(snapshot: workspaceSidebarSnapshotForTopFilterBar(

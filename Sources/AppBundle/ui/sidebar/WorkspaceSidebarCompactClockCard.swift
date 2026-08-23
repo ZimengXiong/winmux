@@ -10,12 +10,6 @@ struct WorkspaceSidebarCompactClockCard: View {
         WorkspaceSidebarClockComponents(date: date)
     }
 
-    private var accessibilitySummary: String {
-        showsSeconds
-            ? date.formatted(date: .omitted, time: .standard)
-            : date.formatted(date: .omitted, time: .shortened)
-    }
-
     var body: some View {
         GeometryReader { _ in
             let shape = RoundedRectangle(cornerRadius: workspaceSidebarStatusCornerRadius, style: .continuous)
@@ -47,6 +41,15 @@ struct WorkspaceSidebarCompactClockCard: View {
         .frame(width: sectionWidth, alignment: .leading)
         .frame(height: showsSeconds ? 92 : 68)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(accessibilitySummary))
+        .accessibilityLabel(Text(workspaceSidebarCompactClockAccessibilitySummary(
+            date: date,
+            showsSeconds: showsSeconds,
+        )))
     }
+}
+
+func workspaceSidebarCompactClockAccessibilitySummary(date: Date, showsSeconds: Bool) -> String {
+    showsSeconds
+        ? date.formatted(date: .omitted, time: .standard)
+        : date.formatted(date: .omitted, time: .shortened)
 }

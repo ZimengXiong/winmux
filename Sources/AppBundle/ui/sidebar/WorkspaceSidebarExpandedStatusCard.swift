@@ -8,14 +8,6 @@ struct WorkspaceSidebarExpandedStatusCard: View {
     let showsDate: Bool
     let showsWeekday: Bool
 
-    private var accessibilitySummary: String {
-        var parts = [date.formatted(date: .omitted, time: showsSeconds ? .standard : .shortened)]
-        if showsDate {
-            parts.append(date.formatted(date: showsWeekday ? .complete : .long, time: .omitted))
-        }
-        return parts.joined(separator: ", ")
-    }
-
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             HStack(alignment: .top, spacing: 4) {
@@ -35,12 +27,14 @@ struct WorkspaceSidebarExpandedStatusCard: View {
             }
             .layoutPriority(1)
 
-            if showsDate {
+            if showsDate || showsWeekday {
                 VStack(alignment: .leading, spacing: 1) {
                     if showsWeekday {
                         Text(date, format: .dateTime.weekday(.abbreviated))
                     }
-                    Text(date, format: .dateTime.month(.abbreviated).day())
+                    if showsDate {
+                        Text(date, format: .dateTime.month(.abbreviated).day())
+                    }
                 }
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Color.white.opacity(0.48))
@@ -58,6 +52,27 @@ struct WorkspaceSidebarExpandedStatusCard: View {
                 }
         )
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text(accessibilitySummary))
+        .accessibilityLabel(Text(workspaceSidebarExpandedClockAccessibilityParts(
+            date: date,
+            showsSeconds: showsSeconds,
+            showsDate: showsDate,
+            showsWeekday: showsWeekday,
+        ).joined(separator: ", ")))
     }
+}
+
+func workspaceSidebarExpandedClockAccessibilityParts(
+    date: Date,
+    showsSeconds: Bool,
+    showsDate: Bool,
+    showsWeekday: Bool,
+) -> [String] {
+    var parts = [date.formatted(date: .omitted, time: showsSeconds ? .standard : .shortened)]
+    if showsWeekday {
+        parts.append(date.formatted(.dateTime.weekday(.wide)))
+    }
+    if showsDate {
+        parts.append(date.formatted(.dateTime.month(.wide).day()))
+    }
+    return parts
 }

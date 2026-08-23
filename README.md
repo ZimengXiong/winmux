@@ -39,6 +39,10 @@ The sidebar clock can be configured independently:
     show-weekday = true
 ```
 
+`show-clock` hides the entire clock card. The other settings independently control seconds,
+the month and day, and the weekday; for example, `show-date = false` with
+`show-weekday = true` leaves a weekday-only calendar label in the expanded sidebar.
+
 ### Window and sidebar spacing
 
 The `[gaps]` settings control the visible borders around tiled windows. `inner.horizontal`
@@ -57,8 +61,6 @@ For borderless tiling, including no border beside the sidebar:
     outer.top = 0
     outer.right = 0
 ```
-
-
 ### Tab Groups
 ![](resources/screenshots/tab-groups.png)
 Tab groups allow you to have many windows occupy the same footprint, similar to Yabai stacks but with browser-like tab behavior. This is useful when you want to have multiple pieces of reference information next to an editor, multiple tabs in different browser profiles, or, when you simply want multiple fullscreen views without the additional friction and overhead of creating a new workspace.
