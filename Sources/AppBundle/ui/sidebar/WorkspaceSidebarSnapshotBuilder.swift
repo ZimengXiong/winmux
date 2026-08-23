@@ -3,7 +3,7 @@ import Foundation
 @MainActor
 func workspaceSidebarConfiguration() -> WorkspaceSidebarConfiguration {
     WorkspaceSidebarConfiguration(
-        collapsedWidth: CGFloat(config.workspaceSidebar.collapsedWidth),
+        collapsedWidth: workspaceSidebarRestingWidth(config.workspaceSidebar),
         expandedWidth: CGFloat(config.workspaceSidebar.width),
         topPadding: TrayMenuModel.shared.workspaceSidebarTopPadding,
         showMonitorSelector: TrayMenuModel.shared.workspaceSidebarShowsMonitorSelector,
@@ -12,5 +12,6 @@ func workspaceSidebarConfiguration() -> WorkspaceSidebarConfiguration {
         showsDate: config.workspaceSidebar.showDate,
         showsWeekday: config.workspaceSidebar.showWeekday,
         showsStatusPills: config.workspaceSidebar.showStatusPills,
+        usesLiquidGlass: config.workspaceSidebar.useLiquidGlass,
     )
 }

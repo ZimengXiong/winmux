@@ -199,7 +199,7 @@ extension WorkspaceSidebarWorkspaceSection {
     /// tint fills on top. No-op on older systems; the plain tint fill stands in.
     @ViewBuilder
     var sectionGlassCard: some View {
-        if #available(macOS 26.0, *) {
+        if #available(macOS 26.0, *), layout.usesLiquidGlass {
             GlassEffectContainer {
                 ZStack {
                     Color.clear.glassEffect(.regular, in: sectionShape)

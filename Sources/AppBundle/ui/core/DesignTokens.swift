@@ -79,6 +79,7 @@ extension View {
 struct GlassSurface<S: Shape>: View {
     let shape: S
     var hasHighlight: Bool = true
+    var usesLiquidGlass: Bool = true
 
     var body: some View {
         ZStack {
@@ -107,7 +108,7 @@ struct GlassSurface<S: Shape>: View {
 
     @ViewBuilder
     private var base: some View {
-        if #available(macOS 26.0, *) {
+        if #available(macOS 26.0, *), usesLiquidGlass {
             Color.clear.glassEffect(.regular.interactive(false), in: shape)
         } else {
             shape.fill(.ultraThinMaterial)
@@ -121,7 +122,7 @@ struct GlassSurface<S: Shape>: View {
     /// get the plain hairline.
     @ViewBuilder
     private var borderEdge: some View {
-        if #available(macOS 26.0, *) {
+        if #available(macOS 26.0, *), usesLiquidGlass {
             Color.clear
                 .glassEffect(.regular, in: shape)
                 .mask(shape.stroke(lineWidth: GlassToken.refractiveBorderWidth))

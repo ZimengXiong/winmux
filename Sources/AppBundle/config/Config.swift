@@ -79,6 +79,7 @@ enum ShortcutsPreset: String, Equatable, Sendable {
 struct WorkspaceSidebarConfig: ConvenienceCopyable, Equatable, Sendable {
     var enabled: Bool = false
     var enableFocus: Bool = false
+    var autoHide: Bool = false
     var collapsedWidth: Int = 44
     var width: Int = 240
     var monitor: [MonitorDescription] = []
@@ -87,6 +88,7 @@ struct WorkspaceSidebarConfig: ConvenienceCopyable, Equatable, Sendable {
     var showSeconds: Bool = true
     var showDate: Bool = true
     var showWeekday: Bool = true
+    var useLiquidGlass: Bool = true
     var menuBarReserveHeight: Int = 28
     var projectDeletionAction: WorkspaceProjectDeletionAction = .closeWindows
     var workspaceLabels: [String: String] = [:]

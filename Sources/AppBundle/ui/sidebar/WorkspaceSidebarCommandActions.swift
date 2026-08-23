@@ -59,7 +59,7 @@ func closeWorkspaceSidebarFromCommand(_ panel: WorkspaceSidebarPanel) {
     panel.shouldLockNextSidebarSearchExpansion = false
     panel.bufferedCommandSidebarSearchKeys = []
     removeWorkspaceSidebarCommandMouseUnlockMonitor(panel)
-    panel.animateVisibleSidebarWidth(CGFloat(config.workspaceSidebar.collapsedWidth), animation: .easeInOut(duration: panel.animationDuration))
+    panel.animateVisibleSidebarWidth(workspaceSidebarRestingWidth(config.workspaceSidebar), animation: .easeInOut(duration: panel.animationDuration))
     panel.viewModel.isWorkspaceSidebarExpanded = false
     panel.updateMousePassthrough()
 }

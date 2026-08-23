@@ -34,6 +34,8 @@ on-mode-changed = []
 
 [workspace-sidebar]
     enabled = true
+    # Hide the compact rail until the pointer reaches the display's left edge.
+    auto-hide = false
     collapsed-width = 44
     width = 240
     # Omit monitor to show an independent sidebar on every display.
@@ -46,6 +48,8 @@ on-mode-changed = []
     show-seconds = true
     show-date = true
     show-weekday = true
+    # Use native Liquid Glass on macOS 26 and newer; older macOS uses material blur.
+    use-liquid-glass = true
 
 [mode.main.binding]
     ctrl-f = 'open-sidebar'

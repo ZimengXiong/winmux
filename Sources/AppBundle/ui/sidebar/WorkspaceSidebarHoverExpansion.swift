@@ -1,5 +1,13 @@
 import AppKit
 
+func workspaceSidebarRestingWidth(_ sidebarConfig: WorkspaceSidebarConfig) -> CGFloat {
+    sidebarConfig.autoHide ? 0 : CGFloat(sidebarConfig.collapsedWidth)
+}
+
+func workspaceSidebarHoverActivationWidth(_ sidebarConfig: WorkspaceSidebarConfig) -> CGFloat {
+    CGFloat(sidebarConfig.collapsedWidth)
+}
+
 func isWorkspaceSidebarHoverDeepEnoughToExpand(
     mouseX: CGFloat,
     sidebarMinX: CGFloat,

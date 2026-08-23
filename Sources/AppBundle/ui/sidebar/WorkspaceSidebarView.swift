@@ -771,7 +771,7 @@ extension WorkspaceSidebarView {
     }
 
     func sidebarSurface<S: Shape>(in shape: S) -> some View {
-        GlassSurface(shape: shape)
+        GlassSurface(shape: shape, usesLiquidGlass: snapshot.configuration.usesLiquidGlass)
             .ignoresSafeArea()
     }
 

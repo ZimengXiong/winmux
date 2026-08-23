@@ -115,6 +115,7 @@ private func workspaceSidebarSnapshotForTopFilterBar(
             showsDate: false,
             showsWeekday: false,
             showsStatusPills: false,
+            usesLiquidGlass: true,
         ),
     )
 }
@@ -758,6 +759,18 @@ final class WorkspaceSidebarDragTest: XCTestCase {
                 collapsedWidth: 28,
             ),
         )
+    }
+
+    func testWorkspaceSidebarAutoHideUsesZeroRestingWidthAndKeepsConfiguredEdgeActivationWidth() {
+        var sidebarConfig = WorkspaceSidebarConfig()
+        sidebarConfig.autoHide = true
+        sidebarConfig.collapsedWidth = 36
+
+        XCTAssertEqual(workspaceSidebarRestingWidth(sidebarConfig), 0)
+        XCTAssertEqual(workspaceSidebarHoverActivationWidth(sidebarConfig), 36)
+
+        sidebarConfig.autoHide = false
+        XCTAssertEqual(workspaceSidebarRestingWidth(sidebarConfig), 36)
     }
 
     func testMouseWindowDragInProgressRequiresMoveSessionWindowAndPressedButton() {

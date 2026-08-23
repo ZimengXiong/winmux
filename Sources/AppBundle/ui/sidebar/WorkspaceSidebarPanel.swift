@@ -147,7 +147,7 @@ extension WorkspaceSidebarPanel {
 
     func trapCursorForLeftEdgeSidebarActivationIfNeeded() {
         let sample = MousePointerTracker.shared.currentSample
-        let collapsedWidth = CGFloat(config.workspaceSidebar.collapsedWidth)
+        let collapsedWidth = workspaceSidebarRestingWidth(config.workspaceSidebar)
         debugWorkspaceSidebarEdgeTrapLog(
             "entry panel=\(monitorScopeId) visible=\(isVisible) enabled=\(config.workspaceSidebar.enabled) shift=\(currentSessionModifierFlags().contains(.maskShift)) mouseDrag=\(isMouseWindowDragInProgress()) sidebarDrag=\(isWorkspaceSidebarItemDragActive()) width=\(viewModel.workspaceSidebarVisibleWidth) collapsed=\(collapsedWidth) sample=\(sample) previous=\(String(describing: lastEdgeTrapSample)) suppressUntil=\(edgeTrapSuppressedUntil) startedAt=\(String(describing: edgeTrapStartedAt))"
         )
@@ -555,8 +555,8 @@ extension WorkspaceSidebarPanel {
         let sidebarConfig = config.workspaceSidebar
         let expandedWidth = CGFloat(sidebarConfig.width)
         let maximumExpandedWidth = expandedWidth * 2
-        let collapsedWidth = CGFloat(sidebarConfig.collapsedWidth)
-        guard expandedWidth > 0, collapsedWidth > 0 else { return nil }
+        let collapsedWidth = workspaceSidebarRestingWidth(sidebarConfig)
+        guard expandedWidth > 0, collapsedWidth >= 0 else { return nil }
 
         let menuBarReserveHeight = min(CGFloat(sidebarConfig.menuBarReserveHeight), max(screen.frame.height - 1, 0))
         return WorkspaceSidebarPanelLayout(
@@ -584,7 +584,7 @@ extension WorkspaceSidebarPanel {
 extension WorkspaceSidebarPanel {
     func setHovering(_ isHovering: Bool) {
         let expandedWidth = CGFloat(config.workspaceSidebar.width)
-        let collapsedWidth = CGFloat(config.workspaceSidebar.collapsedWidth)
+        let collapsedWidth = workspaceSidebarRestingWidth(config.workspaceSidebar)
         if viewModel.workspaceSidebarVisibleWidth > collapsedWidth + 0.5 || pendingCollapse != nil {
             debugWorkspaceSidebarHoverLog("setHovering panel=\(monitorScopeId) isHovering=\(isHovering) visible=\(viewModel.workspaceSidebarVisibleWidth) frame=\(frame) mouse=\(NSEvent.mouseLocation)")
         }
@@ -625,7 +625,7 @@ extension WorkspaceSidebarPanel {
             updateMousePassthrough()
         }
 
-        guard isMouseDeepEnoughToExpand(collapsedWidth: collapsedWidth) else {
+        guard isMouseDeepEnoughToExpand() else {
             pendingExpand?.cancel()
             pendingExpand = nil
             return
@@ -639,7 +639,7 @@ extension WorkspaceSidebarPanel {
             guard let self else { return }
             self.pendingExpand = nil
             guard self.isMouseInsideHoverRegion(),
-                  self.isMouseDeepEnoughToExpand(collapsedWidth: collapsedWidth)
+                  self.isMouseDeepEnoughToExpand()
             else { return }
             self.expandSidebar(to: expandedWidth)
         }
@@ -669,7 +669,9 @@ extension WorkspaceSidebarPanel {
         }
 
         if isExternalWindowDrag && !isSidebarOriginatedDrag && isMousePushedAgainstDisplayEdge() {
-            showCollapsedSidebarDuringExternalDrag(collapsedWidth: collapsedWidth)
+            showCollapsedSidebarDuringExternalDrag(
+                collapsedWidth: workspaceSidebarHoverActivationWidth(config.workspaceSidebar)
+            )
             return
         }
         if !shouldDelayWorkspaceSidebarExpansion(
@@ -882,11 +884,11 @@ extension WorkspaceSidebarPanel {
         guard isVisible else { return false }
         let hoverWidth = max(
             viewModel.workspaceSidebarVisibleWidth,
-            CGFloat(config.workspaceSidebar.collapsedWidth),
+            workspaceSidebarHoverActivationWidth(config.workspaceSidebar),
         ) + hoverExitTolerance
         let hoverRegion = NSRect(x: frame.minX, y: frame.minY, width: hoverWidth, height: frame.height)
         let inside = hoverRegion.contains(NSEvent.mouseLocation)
-        if viewModel.workspaceSidebarVisibleWidth > CGFloat(config.workspaceSidebar.collapsedWidth) + 0.5 || pendingCollapse != nil {
+        if viewModel.workspaceSidebarVisibleWidth > workspaceSidebarRestingWidth(config.workspaceSidebar) + 0.5 || pendingCollapse != nil {
             debugWorkspaceSidebarHoverLog("hoverRegion panel=\(monitorScopeId) inside=\(inside) hoverWidth=\(hoverWidth) visibleWidth=\(viewModel.workspaceSidebarVisibleWidth) frame=\(frame) mouse=\(NSEvent.mouseLocation) suppressUntil=\(splitBrowseCollapseSuppressedUntil)")
         }
         return inside
@@ -903,12 +905,12 @@ extension WorkspaceSidebarPanel {
         return visibleRegion.contains(NSEvent.mouseLocation)
     }
 
-    func isMouseDeepEnoughToExpand(collapsedWidth: CGFloat) -> Bool {
+    func isMouseDeepEnoughToExpand() -> Bool {
         guard isVisible else { return false }
         return isWorkspaceSidebarHoverDeepEnoughToExpand(
             mouseX: NSEvent.mouseLocation.x,
             sidebarMinX: frame.minX,
-            collapsedWidth: collapsedWidth,
+            collapsedWidth: workspaceSidebarHoverActivationWidth(config.workspaceSidebar),
         )
     }
 }
@@ -931,6 +933,13 @@ extension WorkspaceSidebarPanel {
             viewModel.workspaceSidebarVisibleWidth = viewModel.isWorkspaceSidebarExpanded
                 ? layout.expandedWidth
                 : layout.collapsedWidth
+        } else if !viewModel.isWorkspaceSidebarExpanded,
+                  pendingExpand == nil,
+                  pendingCollapse == nil,
+                  viewModel.workspaceSidebarVisibleWidth != layout.collapsedWidth
+        {
+            // Apply auto-hide/collapsed-width changes immediately on config reload.
+            viewModel.workspaceSidebarVisibleWidth = layout.collapsedWidth
         }
         updateMousePassthrough()
         orderFrontRegardless()

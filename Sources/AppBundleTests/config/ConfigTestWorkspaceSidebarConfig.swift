@@ -10,6 +10,7 @@ extension ConfigTest {
             [workspace-sidebar]
                 enabled = true
                 enable-focus = true
+                auto-hide = true
                 width = 280
                 monitor = ['secondary', 2]
                 show-status-pills = false
@@ -17,6 +18,7 @@ extension ConfigTest {
                 show-seconds = false
                 show-date = false
                 show-weekday = false
+                use-liquid-glass = false
                 menu-bar-reserve-height = 30
                 project-deletion-action = 'move-windows-to-fallback'
 
@@ -37,6 +39,7 @@ extension ConfigTest {
             WorkspaceSidebarConfig(
                 enabled: true,
                 enableFocus: true,
+                autoHide: true,
                 collapsedWidth: 44,
                 width: 280,
                 monitor: [.secondary, .sequenceNumber(2)],
@@ -45,6 +48,7 @@ extension ConfigTest {
                 showSeconds: false,
                 showDate: false,
                 showWeekday: false,
+                useLiquidGlass: false,
                 menuBarReserveHeight: 30,
                 projectDeletionAction: .moveWindowsToFallback,
                 workspaceLabels: ["1": "Code", "2": "Web"],

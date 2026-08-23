@@ -38,6 +38,7 @@ struct WorkspaceSidebarConfiguration: Equatable {
     var showsDate: Bool
     var showsWeekday: Bool
     var showsStatusPills: Bool
+    var usesLiquidGlass: Bool
 
     static let empty = WorkspaceSidebarConfiguration(
         collapsedWidth: 0,
@@ -49,6 +50,7 @@ struct WorkspaceSidebarConfiguration: Equatable {
         showsDate: false,
         showsWeekday: false,
         showsStatusPills: false,
+        usesLiquidGlass: false,
     )
 }
 

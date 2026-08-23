@@ -4,6 +4,7 @@ import TOMLKit
 private let workspaceSidebarParser: [String: any ParserProtocol<WorkspaceSidebarConfig>] = [
     "enabled": Parser(\.enabled, parseBool),
     "enable-focus": Parser(\.enableFocus, parseBool),
+    "auto-hide": Parser(\.autoHide, parseBool),
     "collapsed-width": Parser(\.collapsedWidth, parseWorkspaceSidebarWidth),
     "width": Parser(\.width, parseWorkspaceSidebarWidth),
     "monitor": Parser(\.monitor) { value, backtrace, errors in
@@ -14,6 +15,7 @@ private let workspaceSidebarParser: [String: any ParserProtocol<WorkspaceSidebar
     "show-seconds": Parser(\.showSeconds, parseBool),
     "show-date": Parser(\.showDate, parseBool),
     "show-weekday": Parser(\.showWeekday, parseBool),
+    "use-liquid-glass": Parser(\.useLiquidGlass, parseBool),
     "menu-bar-reserve-height": Parser(\.menuBarReserveHeight, parseWorkspaceSidebarMenuBarReserveHeight),
     "project-deletion-action": Parser(\.projectDeletionAction, parseWorkspaceProjectDeletionAction),
     "workspace-labels": Parser(\.workspaceLabels, parseWorkspaceSidebarLabels),

@@ -18,6 +18,17 @@ The sidebar is a more interactively-performant and useful alternative to [Sketch
 
 You can drag windows in and out of the sidebar from and to the current workspace. You can rearrange windows across all spaces using the sidebar, including tab groups.
 
+By default the sidebar rests as a compact rail and expands when hovered. To hide the rail
+completely until the pointer reaches the left display edge, enable auto-hide. On macOS 26 and
+newer, native Liquid Glass is enabled by default and can be replaced with the material-blur
+fallback independently:
+
+```toml
+[workspace-sidebar]
+    auto-hide = true
+    use-liquid-glass = false
+```
+
 The sidebar clock can be configured independently:
 
 ```toml

@@ -70,6 +70,24 @@ final class MonitorTopologyTest: XCTestCase {
         XCTAssertEqual(secondary.visibleRectPaddedByOuterGaps.width, 1866)
     }
 
+    func testAutoHiddenWorkspaceSidebarDoesNotReserveWindowLayoutSpace() {
+        let main = MonitorTopologyTestMonitor(
+            monitorAppKitNsScreenScreensId: 1,
+            name: "Main",
+            rect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            visibleRect: Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1080),
+            isMain: true,
+        )
+        setMonitorsForTests([main])
+        config.workspaceSidebar.enabled = true
+        config.workspaceSidebar.autoHide = true
+        config.workspaceSidebar.collapsedWidth = 54
+        config.gaps = .zero
+
+        XCTAssertEqual(main.workspaceSidebarInset, 0)
+        XCTAssertEqual(main.visibleRectPaddedByOuterGaps, main.visibleRect)
+    }
+
     func testWorkspaceSidebarMainMonitorConfigResolvesAllMonitors() {
         let main = MonitorTopologyTestMonitor(
             monitorAppKitNsScreenScreensId: 1,
