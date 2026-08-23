@@ -41,6 +41,8 @@ on-mode-changed = []
     enabled = true
     # Hide the compact rail until the pointer reaches the display's left edge.
     auto-hide = false
+    # Keep the full sidebar open and reserve its width for tiled windows.
+    always-expanded = false
     collapsed-width = 44
     width = 240
     # Omit monitor to show an independent sidebar on every display.

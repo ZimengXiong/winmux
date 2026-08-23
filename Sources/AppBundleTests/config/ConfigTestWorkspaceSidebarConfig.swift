@@ -11,6 +11,7 @@ extension ConfigTest {
                 enabled = true
                 enable-focus = true
                 auto-hide = true
+                always-expanded = true
                 width = 280
                 monitor = ['secondary', 2]
                 show-status-pills = false
@@ -40,6 +41,7 @@ extension ConfigTest {
                 enabled: true,
                 enableFocus: true,
                 autoHide: true,
+                alwaysExpanded: true,
                 collapsedWidth: 44,
                 width: 280,
                 monitor: [.secondary, .sequenceNumber(2)],
@@ -56,6 +58,15 @@ extension ConfigTest {
                 projectColors: ["default": "#FF8844"],
             ),
         )
+
+        let (backwardCompatible, backwardCompatibleErrors) = parseConfig(
+            """
+            [workspace-sidebar]
+                enabled = true
+            """,
+        )
+        assertEquals(backwardCompatibleErrors, [])
+        XCTAssertFalse(backwardCompatible.workspaceSidebar.alwaysExpanded)
 
         let (_, widthErrors) = parseConfig(
             """

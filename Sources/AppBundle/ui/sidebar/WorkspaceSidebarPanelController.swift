@@ -38,6 +38,7 @@ final class WorkspaceSidebarPanel: NSPanelHud {
     var edgeTrapStartedAt: TimeInterval?
     var edgeTrapSuppressedUntil: TimeInterval = 0
     var splitBrowseCollapseSuppressedUntil: Date = .distantPast
+    var persistentExpansionWidth: CGFloat?
     let hoverExitTolerance: CGFloat = 20
     let hoverPollInterval: TimeInterval = 1.0 / 30.0
     let hoverOpenDelay: TimeInterval = 0.05

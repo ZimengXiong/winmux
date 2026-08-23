@@ -788,6 +788,42 @@ final class WorkspaceSidebarDragTest: XCTestCase {
         XCTAssertEqual(workspaceSidebarRestingWidth(sidebarConfig), 36)
     }
 
+    func testAlwaysExpandedSidebarUsesExpandedRestingAndActivationWidths() {
+        var sidebarConfig = WorkspaceSidebarConfig()
+        sidebarConfig.autoHide = true
+        sidebarConfig.alwaysExpanded = true
+        sidebarConfig.collapsedWidth = 36
+        sidebarConfig.width = 260
+
+        XCTAssertEqual(workspaceSidebarRestingWidth(sidebarConfig), 260)
+        XCTAssertEqual(workspaceSidebarHoverActivationWidth(sidebarConfig), 260)
+        XCTAssertEqual(workspaceSidebarCollapsedContentWidth(sidebarConfig), 36)
+        XCTAssertEqual(
+            workspaceSidebarPersistentVisibleWidth(
+                currentWidth: 0,
+                previousExpandedWidth: nil,
+                expandedWidth: 260,
+            ),
+            260,
+        )
+        XCTAssertEqual(
+            workspaceSidebarPersistentVisibleWidth(
+                currentWidth: 260,
+                previousExpandedWidth: 260,
+                expandedWidth: 280,
+            ),
+            280,
+        )
+        XCTAssertEqual(
+            workspaceSidebarPersistentVisibleWidth(
+                currentWidth: 520,
+                previousExpandedWidth: 260,
+                expandedWidth: 280,
+            ),
+            560,
+        )
+    }
+
     func testMouseWindowDragInProgressRequiresMoveSessionWindowAndPressedButton() {
         XCTAssertTrue(isMouseWindowDragInProgress(kind: .move, draggedWindowId: 7, isLeftMouseButtonDown: true))
         XCTAssertFalse(isMouseWindowDragInProgress(kind: .none, draggedWindowId: 7, isLeftMouseButtonDown: true))

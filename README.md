@@ -29,6 +29,18 @@ fallback independently:
     use-liquid-glass = false
 ```
 
+To keep the full sidebar visible, reserve its expanded width when laying out tiled windows:
+
+```toml
+[workspace-sidebar]
+    always-expanded = true
+    width = 240
+```
+
+`always-expanded` takes precedence over `auto-hide`. The configured `gaps.outer.left` remains
+the spacing between the sticky sidebar and tiled windows, and monitor selection continues to
+control which displays reserve sidebar space.
+
 The sidebar clock can be configured independently:
 
 ```toml

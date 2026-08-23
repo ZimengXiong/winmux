@@ -3,7 +3,7 @@ import Foundation
 @MainActor
 func workspaceSidebarConfiguration() -> WorkspaceSidebarConfiguration {
     WorkspaceSidebarConfiguration(
-        collapsedWidth: workspaceSidebarRestingWidth(config.workspaceSidebar),
+        collapsedWidth: workspaceSidebarCollapsedContentWidth(config.workspaceSidebar),
         expandedWidth: CGFloat(config.workspaceSidebar.width),
         topPadding: TrayMenuModel.shared.workspaceSidebarTopPadding,
         showMonitorSelector: TrayMenuModel.shared.workspaceSidebarShowsMonitorSelector,

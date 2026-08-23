@@ -9,7 +9,9 @@ func openWorkspaceSidebarFromCommand() {
     let panel = WorkspaceSidebarPanel.panel(for: focusedScopeId)
         ?? WorkspaceSidebarPanel.visiblePanels.first
         ?? WorkspaceSidebarPanel.shared
-    if panel.viewModel.isWorkspaceSidebarExpanded || panel.inlineTextEditingActive {
+    if panel.inlineTextEditingActive ||
+        (panel.viewModel.isWorkspaceSidebarExpanded && !config.workspaceSidebar.alwaysExpanded)
+    {
         closeWorkspaceSidebarFromCommand(panel)
         return
     }
@@ -54,13 +56,15 @@ func closeWorkspaceSidebarFromCommand(_ panel: WorkspaceSidebarPanel) {
     panel.pendingCollapse = nil
     panel.pendingCollapseFinalize?.cancel()
     panel.pendingCollapseFinalize = nil
-    NotificationCenter.default.post(name: workspaceSidebarWillCollapseNotification, object: panel)
+    if !config.workspaceSidebar.alwaysExpanded {
+        NotificationCenter.default.post(name: workspaceSidebarWillCollapseNotification, object: panel)
+    }
     panel.commandExpansionLocksCollapse = false
     panel.shouldLockNextSidebarSearchExpansion = false
     panel.bufferedCommandSidebarSearchKeys = []
     removeWorkspaceSidebarCommandMouseUnlockMonitor(panel)
     panel.animateVisibleSidebarWidth(workspaceSidebarRestingWidth(config.workspaceSidebar), animation: .easeInOut(duration: panel.animationDuration))
-    panel.viewModel.isWorkspaceSidebarExpanded = false
+    panel.viewModel.isWorkspaceSidebarExpanded = config.workspaceSidebar.alwaysExpanded
     panel.updateMousePassthrough()
 }
 
