@@ -7,9 +7,26 @@ struct WorkspaceSidebarExpandedStatusCard: View {
     let showsSeconds: Bool
     let showsDate: Bool
     let showsWeekday: Bool
+    @Environment(\.locale) private var locale
+    @Environment(\.calendar) private var calendar
+
+    private var dateLines: WorkspaceSidebarExpandedClockDateLines {
+        WorkspaceSidebarExpandedClockDateLines(date: date, locale: locale, calendar: calendar)
+    }
+
+    private var accessibilitySummary: String {
+        workspaceSidebarExpandedClockAccessibilitySummary(
+            date: date,
+            showsSeconds: showsSeconds,
+            showsDate: showsDate,
+            showsWeekday: showsWeekday,
+            locale: locale,
+            calendar: calendar
+        )
+    }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
+        VStack(alignment: .leading, spacing: 1) {
             HStack(alignment: .top, spacing: 4) {
                 Text(date, format: .dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
                     .font(.system(size: 42, weight: .bold, design: .rounded))
@@ -27,22 +44,20 @@ struct WorkspaceSidebarExpandedStatusCard: View {
             }
             .layoutPriority(1)
 
-            if showsDate || showsWeekday {
-                VStack(alignment: .leading, spacing: 1) {
-                    if showsWeekday {
-                        Text(date, format: .dateTime.weekday(.abbreviated))
-                    }
-                    if showsDate {
-                        Text(date, format: .dateTime.month(.abbreviated).day())
-                    }
-                }
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.48))
-                .lineLimit(1)
+            if showsWeekday {
+                dateLine(dateLines.weekday)
+            }
+            if showsDate {
+                dateLine(dateLines.monthAndDay)
             }
         }
         .padding(.horizontal, 14)
-        .frame(width: sectionWidth, height: 68, alignment: .leading)
+        .padding(.vertical, 8)
+        .frame(
+            width: sectionWidth,
+            height: workspaceSidebarExpandedClockCardHeight(showsDate: showsDate, showsWeekday: showsWeekday),
+            alignment: .leading,
+        )
         .background(
             RoundedRectangle(cornerRadius: workspaceSidebarStatusCornerRadius, style: .continuous)
                 .fill(Color.white.opacity(GlassToken.fillResting))
@@ -51,28 +66,17 @@ struct WorkspaceSidebarExpandedStatusCard: View {
                         .strokeBorder(Color.white.opacity(GlassToken.cardStroke), lineWidth: StrokeToken.hairline)
                 }
         )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text(workspaceSidebarExpandedClockAccessibilityParts(
-            date: date,
-            showsSeconds: showsSeconds,
-            showsDate: showsDate,
-            showsWeekday: showsWeekday,
-        ).joined(separator: ", ")))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(accessibilitySummary))
     }
-}
 
-func workspaceSidebarExpandedClockAccessibilityParts(
-    date: Date,
-    showsSeconds: Bool,
-    showsDate: Bool,
-    showsWeekday: Bool,
-) -> [String] {
-    var parts = [date.formatted(date: .omitted, time: showsSeconds ? .standard : .shortened)]
-    if showsWeekday {
-        parts.append(date.formatted(.dateTime.weekday(.wide)))
+    private func dateLine(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 15, weight: .semibold))
+            .foregroundStyle(Color.white.opacity(0.48))
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .allowsTightening(true)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
-    if showsDate {
-        parts.append(date.formatted(.dateTime.month(.wide).day()))
-    }
-    return parts
 }
