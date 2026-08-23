@@ -36,15 +36,22 @@ struct ResizeCommand: Command {
         guard let parent else { return io.err("resize command doesn't support floating windows yet https://github.com/nikitabobko/WinMux/issues/9") }
         guard let orientation else { return false }
         guard let node else { return false }
-        let diff: CGFloat = switch args.units.val {
+        let requestedDiff: CGFloat = switch args.units.val {
             case .set(let unit): CGFloat(unit) - node.getWeight(orientation)
             case .add(let unit): CGFloat(unit)
             case .subtract(let unit): -CGFloat(unit)
         }
 
-        guard let childDiff = diff.div(parent.children.count - 1) else { return false }
-        parent.children.lazy
-            .filter { $0 != node }
+        let siblings = parent.children.filter { $0 != node }
+        guard !siblings.isEmpty else { return false }
+        let siblingMultiplier = -CGFloat(1).div(siblings.count).orDie()
+        let diff = constrainedTiledResizeDiff(
+            requestedDiff,
+            adjustments: [TiledResizeAdjustment(weight: node.getWeight(orientation), multiplier: 1)] +
+                siblings.map { TiledResizeAdjustment(weight: $0.getWeight(orientation), multiplier: siblingMultiplier) },
+        )
+        let childDiff = diff.div(siblings.count).orDie()
+        siblings
             .forEach { $0.setWeight(parent.orientation, $0.getWeight(parent.orientation) - childDiff) }
 
         node.setWeight(orientation, node.getWeight(orientation) + diff)

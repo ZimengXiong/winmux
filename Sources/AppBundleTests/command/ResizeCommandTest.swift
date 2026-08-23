@@ -27,15 +27,41 @@ final class ResizeCommandTest: XCTestCase {
 
     func testResizeWidthAddsWeightToFocusedWindowAndSubtractsFromSiblings() async throws {
         let root = Workspace.get(byName: name).rootTilingContainer
-        let focused = TestWindow.new(id: 1, parent: root, adaptiveWeight: 10)
-        let sibling = TestWindow.new(id: 2, parent: root, adaptiveWeight: 10)
+        let focused = TestWindow.new(id: 1, parent: root, adaptiveWeight: 100)
+        let sibling = TestWindow.new(id: 2, parent: root, adaptiveWeight: 100)
         _ = focused.focusWindow()
 
         let result = try await parseCommand("resize width +4").cmdOrDie.run(.defaultEnv, .emptyStdin)
 
         assertEquals(result.exitCode, 0)
-        assertEquals(focused.hWeight, 14)
-        assertEquals(sibling.hWeight, 6)
+        assertEquals(focused.hWeight, 104)
+        assertEquals(sibling.hWeight, 96)
+    }
+
+    func testResizeStopsBeforeSiblingWouldBecomeTooSmall() async throws {
+        let root = Workspace.get(byName: name).rootTilingContainer
+        let focused = TestWindow.new(id: 1, parent: root, adaptiveWeight: 200)
+        let sibling = TestWindow.new(id: 2, parent: root, adaptiveWeight: 100)
+        _ = focused.focusWindow()
+
+        let result = try await parseCommand("resize width +500").cmdOrDie.run(.defaultEnv, .emptyStdin)
+
+        assertEquals(result.exitCode, 0)
+        assertEquals(focused.hWeight, 220)
+        assertEquals(sibling.hWeight, minimumTiledResizeWeight)
+    }
+
+    func testResizeStopsBeforeFocusedWindowWouldBecomeTooSmall() async throws {
+        let root = Workspace.get(byName: name).rootTilingContainer
+        let focused = TestWindow.new(id: 1, parent: root, adaptiveWeight: 200)
+        let sibling = TestWindow.new(id: 2, parent: root, adaptiveWeight: 100)
+        _ = focused.focusWindow()
+
+        let result = try await parseCommand("resize width -500").cmdOrDie.run(.defaultEnv, .emptyStdin)
+
+        assertEquals(result.exitCode, 0)
+        assertEquals(focused.hWeight, minimumTiledResizeWeight)
+        assertEquals(sibling.hWeight, 220)
     }
 
     func testResizeHeightUsesVerticalAncestorForFocusedWindow() async throws {
@@ -43,18 +69,18 @@ final class ResizeCommandTest: XCTestCase {
         var focused: Window!
         var verticalSibling: Window!
         let focusedContainer = TilingContainer.newVTiles(parent: root, adaptiveWeight: 8).apply {
-            focused = TestWindow.new(id: 1, parent: $0, adaptiveWeight: 6)
-            verticalSibling = TestWindow.new(id: 2, parent: $0, adaptiveWeight: 6)
+            focused = TestWindow.new(id: 1, parent: $0, adaptiveWeight: 100)
+            verticalSibling = TestWindow.new(id: 2, parent: $0, adaptiveWeight: 100)
             _ = focused.focusWindow()
         }
         let siblingContainer = TilingContainer.newVTiles(parent: root, adaptiveWeight: 12)
         TestWindow.new(id: 3, parent: siblingContainer, adaptiveWeight: 1)
 
-        let result = try await parseCommand("resize height 10").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        let result = try await parseCommand("resize height 110").cmdOrDie.run(.defaultEnv, .emptyStdin)
 
         assertEquals(result.exitCode, 0)
-        assertEquals(focused.vWeight, 10)
-        assertEquals(verticalSibling.vWeight, 2)
+        assertEquals(focused.vWeight, 110)
+        assertEquals(verticalSibling.vWeight, 90)
         assertEquals(focusedContainer.hWeight, 8)
         assertEquals(siblingContainer.hWeight, 12)
     }

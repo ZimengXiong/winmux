@@ -1,8 +1,6 @@
 import CoreGraphics
 import Foundation
 
-private let resizeGestureMinimumWidth = CGFloat(80)
-private let resizeGestureMinimumHeight = CGFloat(80)
 private let resizeGestureChangedEdgeThreshold = CGFloat(2)
 private let resizeGestureCandidateEdgeThreshold = CGFloat(32)
 
@@ -37,16 +35,16 @@ struct ResizeGestureSessionState {
         var maxY = baseRect.maxY
 
         if edges.left {
-            minX = min(mouse.x - mouseOffset.left, maxX - resizeGestureMinimumWidth)
+            minX = min(mouse.x - mouseOffset.left, maxX - minimumTiledResizeWeight)
         }
         if edges.right {
-            maxX = max(mouse.x - mouseOffset.right, minX + resizeGestureMinimumWidth)
+            maxX = max(mouse.x - mouseOffset.right, minX + minimumTiledResizeWeight)
         }
         if edges.up {
-            minY = min(mouse.y - mouseOffset.up, maxY - resizeGestureMinimumHeight)
+            minY = min(mouse.y - mouseOffset.up, maxY - minimumTiledResizeWeight)
         }
         if edges.down {
-            maxY = max(mouse.y - mouseOffset.down, minY + resizeGestureMinimumHeight)
+            maxY = max(mouse.y - mouseOffset.down, minY + minimumTiledResizeWeight)
         }
 
         return Rect(topLeftX: minX, topLeftY: minY, width: maxX - minX, height: maxY - minY)

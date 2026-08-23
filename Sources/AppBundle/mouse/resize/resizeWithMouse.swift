@@ -165,17 +165,29 @@ func proposedResizeWeightMap(_ window: Window, rect: Rect) -> WindowResizePrevie
     ]
     for (diff, parent, startIndex, pastTheEndIndex) in table {
         if let parent, let startIndex, let pastTheEndIndex, pastTheEndIndex - startIndex > 0 && abs(diff) > 5 { // 5 pixels should be enough to fight with accumulated floating precision error
-            let siblingDiff = diff.div(pastTheEndIndex - startIndex).orDie()
             let orientation = parent.orientation
-
-            window.parentsWithSelf.lazy
+            let resizedNodes = Array(window.parentsWithSelf.lazy
                 .prefix(while: { $0 != parent })
                 .filter {
                     let parent = $0.parent as? TilingContainer
                     return parent?.orientation == orientation && parent?.layout == .tiles
-                }
-                .forEach { weightMap.set($0.getWeightBeforeResize(orientation) + diff, for: $0, orientation: orientation) }
-            for sibling in parent.children[startIndex ..< pastTheEndIndex] {
+                })
+            let siblings = Array(parent.children[startIndex ..< pastTheEndIndex])
+            let siblingMultiplier = -CGFloat(1).div(siblings.count).orDie()
+            let constrainedDiff = constrainedTiledResizeDiff(
+                diff,
+                adjustments: resizedNodes.map {
+                    TiledResizeAdjustment(weight: $0.getWeightBeforeResize(orientation), multiplier: 1)
+                } + siblings.map {
+                    TiledResizeAdjustment(weight: $0.getWeightBeforeResize(orientation), multiplier: siblingMultiplier)
+                },
+            )
+            let siblingDiff = constrainedDiff.div(siblings.count).orDie()
+
+            for node in resizedNodes {
+                weightMap.set(node.getWeightBeforeResize(orientation) + constrainedDiff, for: node, orientation: orientation)
+            }
+            for sibling in siblings {
                 weightMap.set(sibling.getWeightBeforeResize(orientation) - siblingDiff, for: sibling, orientation: orientation)
             }
         }

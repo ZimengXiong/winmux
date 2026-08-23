@@ -372,6 +372,30 @@ import XCTest
         cancelManipulatedWithMouseState()
     }
 
+    @MainActor
+    func testResizePreviewStopsBeforeTiledSiblingWouldOverlap() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        root.changeOrientation(.h)
+        root.layout = .tiles
+
+        let left = TestWindow.new(id: 1, parent: root, adaptiveWeight: 500)
+        let right = TestWindow.new(id: 2, parent: root, adaptiveWeight: 500)
+        left.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 0, width: 500, height: 400)
+        left.lastAppliedLayoutVirtualRect = left.lastAppliedLayoutPhysicalRect
+        right.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 500, topLeftY: 0, width: 500, height: 400)
+        right.lastAppliedLayoutVirtualRect = right.lastAppliedLayoutPhysicalRect
+
+        let excessiveRect = Rect(topLeftX: 0, topLeftY: 0, width: 2_000, height: 400)
+        let weightMap = proposedResizeWeightMap(left, rect: excessiveRect).orDie()
+
+        XCTAssertEqual(weightMap.weight(for: left, orientation: .h), 920)
+        XCTAssertEqual(weightMap.weight(for: right, orientation: .h), minimumTiledResizeWeight)
+        XCTAssertEqual(left.hWeight, 500)
+        XCTAssertEqual(right.hWeight, 500)
+    }
+
     func testWindowTabStripDragInProgressIgnoresRegularWindowMove() {
         XCTAssertFalse(isWindowTabStripDragInProgress(
             kind: .move,
