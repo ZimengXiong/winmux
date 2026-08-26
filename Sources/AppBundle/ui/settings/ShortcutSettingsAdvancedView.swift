@@ -12,7 +12,7 @@ struct ShortcutAdvancedView: View {
     @State private var hasLoaded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Config Editor")
@@ -30,23 +30,25 @@ struct ShortcutAdvancedView: View {
                 Button("Reload From Disk") {
                     loadFromDisk()
                 }
+                .controlSize(.small)
                 Button("Validate") {
                     validateConfig()
                 }
+                .controlSize(.small)
                 Button("Save") {
                     saveConfig()
                 }
+                .controlSize(.small)
                 .keyboardShortcut("s", modifiers: [.command])
             }
 
             if let validationMessage {
                 Text(validationMessage)
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundStyle(.red)
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.red.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(.red)
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.red.opacity(0.06))
                     .textSelection(.enabled)
             } else if let saveMessage {
                 Text(saveMessage)
@@ -58,15 +60,11 @@ struct ShortcutAdvancedView: View {
             TextEditor(text: $configText)
                 .font(.system(size: 12, design: .monospaced))
                 .scrollContentBackground(.hidden)
-                .padding(8)
+                .padding(4)
                 .background(Color(nsColor: .textBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 0.5)
-                )
+                .overlay(Rectangle().stroke(Color(nsColor: .separatorColor), lineWidth: 0.5))
         }
-        .padding(24)
+        .padding(18)
         .task {
             guard !hasLoaded else { return }
             hasLoaded = true
@@ -157,6 +155,11 @@ func shortcutSettingsWindow() -> NSWindow? {
 
 @MainActor
 func presentShortcutSettingsWindow(_ window: NSWindow) {
+    let fixedSize = NSSize(width: 760, height: 620)
+    window.styleMask.remove(.resizable)
+    window.minSize = fixedSize
+    window.maxSize = fixedSize
+    window.setContentSize(fixedSize)
     NSApp.activate(ignoringOtherApps: true)
     window.center()
     window.makeKeyAndOrderFront(nil)

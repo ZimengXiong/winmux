@@ -209,7 +209,7 @@ struct ShortcutAutomationSettingsView: View {
 
 private struct SettingsScrollView<Content: View>: View {
     @ViewBuilder let content: Content
-    var body: some View { ScrollView { VStack(alignment: .leading, spacing: 20) { content }.padding(20) } }
+    var body: some View { ScrollView { VStack(alignment: .leading, spacing: 14) { content }.padding(18) } }
 }
 
 private struct SettingsSection<Content: View>: View {
@@ -217,12 +217,10 @@ private struct SettingsSection<Content: View>: View {
     @ViewBuilder let content: Content
     init(_ title: String, @ViewBuilder content: () -> Content) { self.title = title; self.content = content() }
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.headline)
-            VStack(spacing: 0) { content }
-                .background(Color(nsColor: .controlBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 0.5))
+            content
+            Divider()
         }
     }
 }
@@ -230,7 +228,7 @@ private struct SettingsSection<Content: View>: View {
 private struct SettingsToggle: View {
     let title: String; @Binding var isOn: Bool; var help: String? = nil; let save: () -> Void
     init(_ title: String, isOn: Binding<Bool>, help: String? = nil, save: @escaping () -> Void) { self.title = title; _isOn = isOn; self.help = help; self.save = save }
-    var body: some View { Toggle(isOn: $isOn) { VStack(alignment: .leading, spacing: 1) { Text(title); if let help { Text(help).font(.caption).foregroundStyle(.secondary) } } }.toggleStyle(.switch).padding(.vertical, 7).padding(.horizontal, 12).onChange(of: isOn) { _ in save() } }
+    var body: some View { Toggle(isOn: $isOn) { VStack(alignment: .leading, spacing: 1) { Text(title); if let help { Text(help).font(.caption).foregroundStyle(.secondary) } } }.toggleStyle(.switch).padding(.vertical, 5).onChange(of: isOn) { _ in save() } }
 }
 
 private struct SettingsStepper: View {
@@ -242,7 +240,7 @@ private struct SettingsStepper: View {
         self.help = help
         self.save = save
     }
-    var body: some View { HStack { VStack(alignment: .leading, spacing: 1) { Text(title); Text(help).font(.caption).foregroundStyle(.secondary) }; Spacer(); Slider(value: Binding(get: { Double(value) }, set: { value = Int($0.rounded()) }), in: Double(range.lowerBound)...Double(range.upperBound), step: 1).frame(width: 110); TextField("", value: $value, format: .number).textFieldStyle(.roundedBorder).frame(width: 48); Text("px").font(.caption).foregroundStyle(.secondary); Stepper("", value: $value, in: range).labelsHidden() }.padding(.vertical, 7).padding(.horizontal, 12).onChange(of: value) { _ in save() } }
+    var body: some View { HStack { VStack(alignment: .leading, spacing: 1) { Text(title); Text(help).font(.caption).foregroundStyle(.secondary) }; Spacer(); Slider(value: Binding(get: { Double(value) }, set: { value = Int($0.rounded()) }), in: Double(range.lowerBound)...Double(range.upperBound), step: 1).frame(width: 92); TextField("", value: $value, format: .number).textFieldStyle(.roundedBorder).frame(width: 42); Stepper("", value: $value, in: range).labelsHidden() }.padding(.vertical, 5).onChange(of: value) { _ in save() } }
 }
 
 private struct SettingsTextField: View {
@@ -260,7 +258,7 @@ private struct SettingsMultilineField: View {
 private struct SettingsPicker<Selection: Hashable, Content: View>: View {
     let title: String; @Binding var selection: Selection; let help: String; @ViewBuilder let content: Content; let onChange: () -> Void
     init(_ title: String, selection: Binding<Selection>, help: String, @ViewBuilder content: () -> Content, onChange: @escaping () -> Void) { self.title = title; _selection = selection; self.help = help; self.content = content(); self.onChange = onChange }
-    var body: some View { HStack { VStack(alignment: .leading, spacing: 1) { Text(title); Text(help).font(.caption).foregroundStyle(.secondary) }; Spacer(); Picker("", selection: $selection, content: { content }).labelsHidden().pickerStyle(.menu).frame(width: 150) }.padding(.vertical, 7).padding(.horizontal, 12).onChange(of: selection) { _ in onChange() } }
+    var body: some View { HStack { VStack(alignment: .leading, spacing: 1) { Text(title); Text(help).font(.caption).foregroundStyle(.secondary) }; Spacer(); Picker("", selection: $selection, content: { content }).labelsHidden().pickerStyle(.menu).frame(width: 150) }.padding(.vertical, 5).onChange(of: selection) { _ in onChange() } }
 }
 
 @MainActor

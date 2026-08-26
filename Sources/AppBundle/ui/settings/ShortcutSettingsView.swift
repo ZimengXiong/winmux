@@ -9,7 +9,7 @@ public let shortcutSettingsWindowId = "\(winMuxAppName).shortcutSettings"
 public func getShortcutSettingsWindow(model: ShortcutSettingsModel) -> some Scene {
     SwiftUI.Window("WinMux Settings", id: shortcutSettingsWindowId) {
         ShortcutSettingsView(model: model)
-            .frame(minWidth: 760, minHeight: 620)
+            .frame(width: 760, height: 620)
             .onAppear {
                 NSApp.setActivationPolicy(.accessory)
             }
@@ -36,8 +36,8 @@ enum SettingsSidebarItem: Hashable, Identifiable {
     case workspaces
     case behavior
     case appearance
-    case automation
     case configuration
+    case reference
 
     var id: Self { self }
 
@@ -47,8 +47,8 @@ enum SettingsSidebarItem: Hashable, Identifiable {
             case .workspaces: "Workspaces"
             case .behavior: "Behavior"
             case .appearance: "Appearance"
-            case .automation: "Automation & Rules"
             case .configuration: "Configuration"
+            case .reference: "Configuration Reference"
         }
     }
 
@@ -58,8 +58,8 @@ enum SettingsSidebarItem: Hashable, Identifiable {
             case .workspaces: "rectangle.3.group"
             case .behavior: "arrow.triangle.2.circlepath"
             case .appearance: "sidebar.left"
-            case .automation: "flowchart"
             case .configuration: "doc.text"
+            case .reference: "book"
         }
     }
 }
@@ -71,7 +71,7 @@ struct ShortcutSettingsView: View {
     var body: some View {
         NavigationSplitView {
             List(selection: $selectedItem) {
-                ForEach([SettingsSidebarItem.shortcuts, .workspaces, .behavior, .appearance, .automation, .configuration]) { item in
+                ForEach([SettingsSidebarItem.shortcuts, .workspaces, .behavior, .appearance, .configuration, .reference]) { item in
                     NavigationLink(value: item) {
                         Label(item.label, systemImage: item.icon)
                     }
@@ -90,10 +90,10 @@ struct ShortcutSettingsView: View {
                         ShortcutBehaviorSettingsView(model: model)
                     case .appearance:
                         ShortcutAppearanceSettingsView(model: model)
-                    case .automation:
-                        ShortcutAutomationSettingsView(model: model)
                     case .configuration:
                         ShortcutAdvancedView(model: model)
+                    case .reference:
+                        ShortcutConfigurationReferenceView()
                     case nil:
                         Text("Select an item")
                 }
@@ -125,7 +125,7 @@ struct ShortcutCategoryView: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 20) {
+            LazyVStack(alignment: .leading, spacing: 14) {
                 if let error = model.errorMessage {
                     Text(error)
                         .foregroundStyle(.white)
@@ -139,7 +139,7 @@ struct ShortcutCategoryView: View {
                     ShortcutSectionView(model: model, section: section)
                 }
             }
-            .padding(20)
+            .padding(18)
         }
     }
 }
@@ -149,7 +149,7 @@ struct ShortcutSectionView: View {
     let section: ShortcutSettingsModel.Section
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 6) {
             if section.id != "managed-focus" {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(section.title)
@@ -183,12 +183,6 @@ struct ShortcutSectionView: View {
                         }
                     }
                 }
-                .background(Color(nsColor: .controlBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 0.5)
-                )
             }
         }
     }
@@ -220,7 +214,6 @@ struct ShortcutRow: View {
             )
             .frame(width: 140, height: 22)
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
     }
 }
