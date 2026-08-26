@@ -37,6 +37,7 @@ struct ShortcutBehaviorSettingsView: View {
                 } onChange: { persistRootString("default-root-container-orientation", defaultOrientation.rawValue) }
             }
         }
+        .id(model.settingsRevision)
     }
 
     private func persistRootBool(_ key: String, _ value: Bool) { persistConfig(section: nil, key: key, value: value ? "true" : "false") }
@@ -49,6 +50,7 @@ struct ShortcutBehaviorSettingsView: View {
 struct ShortcutAppearanceSettingsView: View {
     @ObservedObject var model: ShortcutSettingsModel
     @State private var sidebarEnabled = config.workspaceSidebar.enabled
+    @State private var sidebarFocusEnabled = config.workspaceSidebar.enableFocus
     @State private var sidebarAutoHide = config.workspaceSidebar.autoHide
     @State private var sidebarAlwaysExpanded = config.workspaceSidebar.alwaysExpanded
     @State private var showStatusPills = config.workspaceSidebar.showStatusPills
@@ -62,15 +64,23 @@ struct ShortcutAppearanceSettingsView: View {
     @State private var tabEnabled = config.windowTabs.enabled
     @State private var tabHeight = config.windowTabs.height
     @State private var tabPadding = config.tabGroupPadding
+    @State private var menuBarReserveHeight = config.workspaceSidebar.menuBarReserveHeight
+    @State private var projectDeletionAction = config.workspaceSidebar.projectDeletionAction
 
     var body: some View {
         SettingsScrollView {
             SettingsSection("Sidebar") {
                 SettingsToggle("Show sidebar", isOn: $sidebarEnabled, help: "Show the workspace rail on configured displays.") { sidebarBool("enabled", sidebarEnabled) }
+                SettingsToggle("Focus sidebar monitor only", isOn: $sidebarFocusEnabled, help: "Show the sidebar only on the focused monitor when monitor scope allows it.") { sidebarBool("enable-focus", sidebarFocusEnabled) }
                 SettingsToggle("Reveal sidebar at the display edge", isOn: $sidebarAutoHide, help: "Hide the compact rail until the pointer reaches the left edge.") { sidebarBool("auto-hide", sidebarAutoHide) }
                 SettingsToggle("Keep sidebar expanded", isOn: $sidebarAlwaysExpanded, help: "Reserve the full sidebar width for tiled windows.") { sidebarBool("always-expanded", sidebarAlwaysExpanded) }
                 SettingsStepper("Expanded width", value: $sidebarWidth, range: 120...480, help: "Width of the fully expanded sidebar.") { sidebarInt("width", sidebarWidth) }
                 SettingsStepper("Collapsed width", value: $collapsedWidth, range: 28...120, help: "Width of the compact sidebar rail.") { sidebarInt("collapsed-width", collapsedWidth) }
+                SettingsStepper("Menu bar reserve", value: $menuBarReserveHeight, range: 0...72, help: "Use 0 px when the macOS menu bar auto-hides.") { sidebarInt("menu-bar-reserve-height", menuBarReserveHeight) }
+                SettingsPicker("Deleting projects", selection: $projectDeletionAction, help: "Choose what happens to the project's windows.") {
+                    Text("Close project windows").tag(WorkspaceProjectDeletionAction.closeWindows)
+                    Text("Move windows elsewhere").tag(WorkspaceProjectDeletionAction.moveWindowsToFallback)
+                } onChange: { persist("workspace-sidebar", "project-deletion-action", "'\(projectDeletionAction.rawValue)'") }
             }
             SettingsSection("Sidebar content") {
                 SettingsToggle("Show status pills", isOn: $showStatusPills) { sidebarBool("show-status-pills", showStatusPills) }
@@ -86,6 +96,7 @@ struct ShortcutAppearanceSettingsView: View {
                 SettingsStepper("Tab group padding", value: $tabPadding, range: 0...80, help: "Space around tab groups.") { persist(nil, "tab-group-padding", "\(tabPadding)") }
             }
         }
+        .id(model.settingsRevision)
     }
 
     private func sidebarBool(_ key: String, _ value: Bool) { persist("workspace-sidebar", key, value ? "true" : "false") }
@@ -144,6 +155,10 @@ private func persistSettingsConfig(section: String?, key: String, renderedValue:
             let url = preferredEditableConfigUrl()
             let current = (try? String(contentsOf: url, encoding: .utf8)) ?? starterConfigText()
             let updated = updateSettingsScalarConfig(in: current, section: section, key: key, renderedValue: renderedValue)
+            let parsed = parseConfig(updated)
+            guard parsed.errors.isEmpty else {
+                throw NSError(domain: "WinMux", code: 1, userInfo: [NSLocalizedDescriptionKey: parsed.errors.map(\.description).joined(separator: "\n")])
+            }
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try updated.write(to: url, atomically: true, encoding: .utf8)
             guard try await reloadConfig(forceConfigUrl: url) else { throw NSError(domain: "WinMux", code: 1, userInfo: [NSLocalizedDescriptionKey: "Saved the setting, but could not reload the config."]) }

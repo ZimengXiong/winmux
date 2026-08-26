@@ -36,6 +36,7 @@ extension ShortcutSettingsModel {
                 moveNotation: workspaceState.moveOverrides[$0],
             )
         }
+        settingsRevision += 1
     }
 
     func requestWindowOpen() {
