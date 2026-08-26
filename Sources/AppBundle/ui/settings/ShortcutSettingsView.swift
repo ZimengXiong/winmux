@@ -36,6 +36,7 @@ enum SettingsSidebarItem: Hashable, Identifiable {
     case workspaces
     case behavior
     case appearance
+    case automation
     case configuration
 
     var id: Self { self }
@@ -46,6 +47,7 @@ enum SettingsSidebarItem: Hashable, Identifiable {
             case .workspaces: "Workspaces"
             case .behavior: "Behavior"
             case .appearance: "Appearance"
+            case .automation: "Automation & Rules"
             case .configuration: "Configuration"
         }
     }
@@ -56,6 +58,7 @@ enum SettingsSidebarItem: Hashable, Identifiable {
             case .workspaces: "rectangle.3.group"
             case .behavior: "arrow.triangle.2.circlepath"
             case .appearance: "sidebar.left"
+            case .automation: "flowchart"
             case .configuration: "doc.text"
         }
     }
@@ -68,7 +71,7 @@ struct ShortcutSettingsView: View {
     var body: some View {
         NavigationSplitView {
             List(selection: $selectedItem) {
-                ForEach([SettingsSidebarItem.shortcuts, .workspaces, .behavior, .appearance, .configuration]) { item in
+                ForEach([SettingsSidebarItem.shortcuts, .workspaces, .behavior, .appearance, .automation, .configuration]) { item in
                     NavigationLink(value: item) {
                         Label(item.label, systemImage: item.icon)
                     }
@@ -87,6 +90,8 @@ struct ShortcutSettingsView: View {
                         ShortcutBehaviorSettingsView(model: model)
                     case .appearance:
                         ShortcutAppearanceSettingsView(model: model)
+                    case .automation:
+                        ShortcutAutomationSettingsView(model: model)
                     case .configuration:
                         ShortcutAdvancedView(model: model)
                     case nil:
