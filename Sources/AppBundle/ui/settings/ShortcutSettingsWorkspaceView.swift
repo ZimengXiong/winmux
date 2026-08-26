@@ -5,42 +5,52 @@ import SwiftUI
 
 struct WorkspaceShortcutSectionView: View {
     @ObservedObject var model: ShortcutSettingsModel
+    @State private var showsOverrides = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack(alignment: .top, spacing: 20) {
-                WorkspacePatternCard(model: model, kind: .switchTo)
-                WorkspacePatternCard(model: model, kind: .moveTo)
-            }
-
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Overrides")
-                    .font(.headline)
-                Text("Individual workspace shortcuts override the global pattern above.")
+        VStack(alignment: .leading, spacing: 10) {
+            WorkspacePatternRow(model: model, kind: .switchTo)
+            Divider()
+            WorkspacePatternRow(model: model, kind: .moveTo)
+            Divider()
+            DisclosureGroup("Custom overrides", isExpanded: $showsOverrides) {
+                Text("Use an override only when a workspace needs a different shortcut.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-
-                VStack(spacing: 0) {
-                    ForEach(model.workspaceNumbers.indices, id: \.self) { index in
-                        let workspaceName = model.workspaceNumbers[index]
-                        WorkspaceOverrideRow(model: model, workspaceName: workspaceName)
-                        if index < model.workspaceNumbers.count - 1 {
-                            Divider().padding(.leading, 12)
-                        }
-                    }
-                }
-                .background(Color(nsColor: .controlBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 0.5)
-                )
+                    .padding(.top, 4)
+                WorkspaceOverridesGrid(model: model)
+                    .padding(.top, 8)
             }
+            .font(.system(size: 13, weight: .medium))
         }
+        .padding(.vertical, 4)
     }
 }
 
-struct WorkspacePatternCard: View {
+private struct WorkspacePatternRow: View {
+    @ObservedObject var model: ShortcutSettingsModel
+    let kind: ShortcutSettingsModel.WorkspaceShortcutKind
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(kind == .switchTo ? "Switch workspaces" : "Move window to workspace")
+                Text(kind.subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 16)
+            WorkspaceModifierMenu(model: model, kind: kind)
+            Text(model.workspacePatternDisplay(for: kind))
+                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                .frame(width: 74, alignment: .trailing)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 3)
+    }
+}
+
+private struct WorkspaceModifierMenu: View {
     @ObservedObject var model: ShortcutSettingsModel
     let kind: ShortcutSettingsModel.WorkspaceShortcutKind
 
@@ -52,93 +62,59 @@ struct WorkspacePatternCard: View {
     ]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(kind.title)
-                .font(.headline)
-            Text(kind.subtitle)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            VStack(alignment: .leading, spacing: 6) {
-                ForEach(modifiers, id: \.0) { label, modifier in
-                    Toggle(
-                        label,
-                        isOn: Binding(
-                            get: { model.workspacePatternIncludesModifier(modifier, kind: kind) },
-                            set: { model.setWorkspacePatternModifier(modifier, enabled: $0, kind: kind) }
-                        )
-                    )
-                    .toggleStyle(.checkbox)
-                }
+        Menu {
+            ForEach(modifiers, id: \.0) { label, modifier in
+                Toggle(label, isOn: Binding(
+                    get: { model.workspacePatternIncludesModifier(modifier, kind: kind) },
+                    set: { model.setWorkspacePatternModifier(modifier, enabled: $0, kind: kind) }
+                ))
             }
-
-            Divider()
-
-            HStack {
-                Text("Preview")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text(model.workspacePatternDisplay(for: kind))
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-            }
+        } label: {
+            Text("Modifiers")
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .padding(16)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color(nsColor: .separatorColor).opacity(0.5), lineWidth: 0.5)
-        )
+        .menuStyle(.borderedButton)
+        .controlSize(.small)
+        .frame(width: 94)
     }
 }
 
-struct WorkspaceOverrideRow: View {
+private struct WorkspaceOverridesGrid: View {
     @ObservedObject var model: ShortcutSettingsModel
-    let workspaceName: String
 
     var body: some View {
-        HStack(spacing: 16) {
-            Text("Workspace \(workspaceName)")
-                .font(.system(size: 13, weight: .semibold))
-                .frame(width: 100, alignment: .leading)
+        Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
+            GridRow {
+                Text("Workspace").foregroundStyle(.secondary)
+                Text("Switch").foregroundStyle(.secondary)
+                Text("Move").foregroundStyle(.secondary)
+            }
+            .font(.caption)
 
-            WorkspaceOverrideField(model: model, workspaceName: workspaceName, kind: .switchTo)
-            WorkspaceOverrideField(model: model, workspaceName: workspaceName, kind: .moveTo)
+            ForEach(model.workspaceNumbers, id: \.self) { workspaceName in
+                GridRow {
+                    Text(workspaceName)
+                        .frame(width: 78, alignment: .leading)
+                    WorkspaceOverrideRecorder(model: model, workspaceName: workspaceName, kind: .switchTo)
+                    WorkspaceOverrideRecorder(model: model, workspaceName: workspaceName, kind: .moveTo)
+                }
+            }
         }
-        .padding(.vertical, 10)
-        .padding(.horizontal, 12)
     }
 }
 
-struct WorkspaceOverrideField: View {
+private struct WorkspaceOverrideRecorder: View {
     @ObservedObject var model: ShortcutSettingsModel
     let workspaceName: String
     let kind: ShortcutSettingsModel.WorkspaceShortcutKind
 
     var body: some View {
-        HStack(spacing: 8) {
-            Text(kind == .switchTo ? "Switch:" : "Move:")
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-            
-            ShortcutRecorderView(
-                shortcut: Binding(
-                    get: { model.workspaceOverrideShortcutValue(workspaceName: workspaceName, kind: kind) },
-                    set: { model.setWorkspaceOverrideShortcutValue($0, workspaceName: workspaceName, kind: kind) }
-                ),
-                onChange: { _ in }
-            )
-            .frame(width: 120, height: 22)
-            
-            if model.workspaceOverrideShortcutValue(workspaceName: workspaceName, kind: kind) == nil {
-                Text(model.workspaceEffectiveNotation(for: workspaceName, kind: kind).map(displayBindingNotation) ?? "None")
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        ShortcutRecorderView(
+            shortcut: Binding(
+                get: { model.workspaceOverrideShortcutValue(workspaceName: workspaceName, kind: kind) },
+                set: { model.setWorkspaceOverrideShortcutValue($0, workspaceName: workspaceName, kind: kind) }
+            ),
+            onChange: { _ in }
+        )
+        .frame(width: 150, height: 22)
     }
 }
-
