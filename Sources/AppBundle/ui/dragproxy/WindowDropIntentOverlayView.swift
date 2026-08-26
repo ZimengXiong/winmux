@@ -3,27 +3,16 @@ import SwiftUI
 struct WindowDropIntentOverlayView: View {
     let model: WindowDropIntentOverlayModel
 
-    private let borderLineWidth: CGFloat = 3
-
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         ZStack {
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(WindowIntentPreviewPalette.gridBaseFill)
+            overlaySurface(shape: shape)
 
             ForEach(localZones) { zone in
                 dropZoneView(zone)
             }
-
-            WindowIntentPreviewGridLines()
-                .stroke(
-                    WindowIntentPreviewPalette.gridLineStroke,
-                    style: StrokeStyle(lineWidth: borderLineWidth, lineCap: .butt, lineJoin: .miter)
-                )
-
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .stroke(WindowIntentPreviewPalette.gridOuterStroke, lineWidth: borderLineWidth)
         }
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .clipShape(shape)
         .frame(width: model.targetFrame.width, height: model.targetFrame.height)
         .compositingGroup()
         .allowsHitTesting(false)
@@ -43,19 +32,53 @@ struct WindowDropIntentOverlayView: View {
         ))
     }
 
+    @ViewBuilder
+    private func overlaySurface<S: Shape>(shape: S) -> some View {
+        if config.workspaceSidebar.chromeStyle == .solid {
+            // Intent feedback remains translucent even with solid chrome selected. The selected
+            // color tints the shared glass material instead of replacing it with an opaque fill.
+            ZStack {
+                GlassSurface(shape: shape)
+                shape.fill(config.workspaceSidebar.resolvedSolidChromeColor.opacity(0.42))
+            }
+            .clipShape(shape)
+        } else {
+            GlassSurface(
+                shape: shape,
+                style: .liquidGlass,
+                solidColor: config.workspaceSidebar.resolvedSolidChromeColor
+            )
+        }
+    }
+
     private func dropZoneView(_ zone: WindowIntentZone) -> some View {
         let isActive = zone.zone == model.activeZone
+        let style = config.workspaceSidebar.chromeStyle
+        let solidColor = config.workspaceSidebar.resolvedSolidChromeColor
+        let activeShape = RoundedRectangle(cornerRadius: activeZoneCornerRadius(for: zone.frame), style: .continuous)
         return ZStack {
-            Rectangle()
-                .fill(WindowIntentPreviewPalette.gridZoneFill(isActive: isActive))
+            if isActive {
+                activeShape
+                    .fill(WindowIntentPreviewPalette.activeZoneFill(style: style, solidColor: solidColor))
+                    .overlay(alignment: .center) {
+                        activeShape
+                            .stroke(
+                                WindowIntentPreviewPalette.activeZoneStroke(style: style, solidColor: solidColor),
+                                lineWidth: StrokeToken.emphasis
+                            )
+                    }
+                    .shadow(color: WindowIntentPreviewPalette.activeZoneGlow(style: style, solidColor: solidColor), radius: 10)
+                    .transition(.opacity)
+            }
             if let name = symbolName(for: zone.zone) {
                 Image(systemName: name)
                     .font(.system(size: iconSize(for: zone.frame), weight: .semibold))
-                    .foregroundStyle(WindowIntentPreviewPalette.gridSymbol(isActive: isActive))
+                    .foregroundStyle(WindowIntentPreviewPalette.zoneSymbol(isActive: isActive))
             }
         }
         .frame(width: zone.frame.width, height: zone.frame.height)
         .position(x: zone.frame.center.x, y: zone.frame.center.y)
+        .animation(MotionToken.quick, value: model.activeZone)
     }
 
     private func symbolName(for zone: WindowDropZone) -> String? {
@@ -76,6 +99,10 @@ struct WindowDropIntentOverlayView: View {
     }
 
     private func iconSize(for frame: Rect) -> CGFloat {
-        min(max(min(frame.width, frame.height) * 0.45, 14), 48)
+        min(max(min(frame.width, frame.height) * 0.38, 14), 42)
+    }
+
+    private func activeZoneCornerRadius(for frame: Rect) -> CGFloat {
+        min(max(min(frame.width, frame.height) * 0.08, RadiusToken.row), RadiusToken.section)
     }
 }

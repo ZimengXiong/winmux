@@ -19,6 +19,16 @@ import XCTest
         target.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
 
         let mouseLocation = tabGroup.windowTabDropInteractionRect.orDie().center
+        let destination = selfTabGroupTabReentryDestination(
+            sourceWindow: source,
+            targetWindow: target,
+            mouseLocation: mouseLocation,
+            subject: .window,
+            detachOrigin: .tabStrip,
+        ).orDie()
+
+        XCTAssertEqual(destination.dropIntentOverlay?.targetFrame, tabGroup.windowDragVisibleRect)
+        XCTAssertEqual(destination.dropIntentOverlay?.activeZone, .tab)
 
         XCTAssertTrue(updatePendingWindowDragIntent(
             sourceWindow: source,
@@ -39,6 +49,42 @@ import XCTest
         XCTAssertEqual(pendingIntent.interactionRect.topLeftY, expectedInteractionRect.topLeftY)
         XCTAssertEqual(pendingIntent.interactionRect.width, expectedInteractionRect.width)
         XCTAssertEqual(pendingIntent.interactionRect.height, expectedInteractionRect.height)
+    }
+
+    func testSameTabGroupMiddleIntentKeepsTheOverlayVisible() {
+        setUpWorkspacesForTests()
+        let previousWindowTabs = config.windowTabs.enabled
+        config.windowTabs.enabled = true
+        defer { config.windowTabs.enabled = previousWindowTabs }
+
+        let workspace = Workspace.get(byName: "tabs")
+        let tabGroup = TilingContainer(parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let source = TestWindow.new(id: 1, parent: tabGroup)
+        let target = TestWindow.new(id: 2, parent: tabGroup)
+        let groupRect = Rect(topLeftX: 0, topLeftY: 0, width: 420, height: 280)
+        tabGroup.lastAppliedLayoutPhysicalRect = groupRect
+        source.lastAppliedLayoutPhysicalRect = Rect(topLeftX: 0, topLeftY: 34, width: 420, height: 246)
+        target.lastAppliedLayoutPhysicalRect = source.lastAppliedLayoutPhysicalRect
+        let mouseLocation = CGPoint(x: groupRect.center.x, y: groupRect.center.y)
+        let resolution = resolveWindowDropIntent(
+            sourceWindow: source,
+            targetWindow: target,
+            targetNode: tabGroup,
+            mouseLocation: mouseLocation,
+        ).orDie()
+
+        XCTAssertEqual(resolution.intent.zone, .middle)
+        let destination = destinationFromWindowDropIntent(
+            resolution,
+            sourceWindow: source,
+            targetWindow: target,
+            mouseLocation: mouseLocation,
+            subject: .window,
+            detachOrigin: .tabStrip,
+        ).orDie()
+
+        XCTAssertEqual(destination.kind, .reorderTab(windowId: source.windowId, targetIndex: 0))
+        XCTAssertEqual(destination.dropIntentOverlay?.activeZone, .middle)
     }
 
     func testTabStackOntoHiddenTabbedWindowUsesGroupContentRect() {

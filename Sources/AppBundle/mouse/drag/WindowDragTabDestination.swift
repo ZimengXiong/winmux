@@ -31,6 +31,7 @@ func selfTabGroupTabReentryDestination(
           config.windowTabs.enabled,
           let sourceParent = sourceWindow.parent as? TilingContainer,
           sourceParent.layout == .tabGroup,
+          let targetFrame = sourceParent.windowDragVisibleRect,
           targetWindow.parent === sourceParent,
           let previewRect = sourceParent.windowTabDropZoneRect,
           let interactionRect = sourceParent.windowTabDropInteractionRect,
@@ -53,6 +54,11 @@ func selfTabGroupTabReentryDestination(
         previewStyle: .tabInsert,
         previewGeometry: .tabStrip,
         isGroup: false,
+        dropIntentOverlay: WindowDropIntentOverlayModel(
+            targetFrame: targetFrame,
+            activeZone: .tab,
+            cornerRadius: nil,
+        ),
     )
 }
 

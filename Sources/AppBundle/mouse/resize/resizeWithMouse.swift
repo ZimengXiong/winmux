@@ -52,13 +52,9 @@ private let adaptiveWeightBeforeResizeWithMouseKey = TreeNodeUserDataKey<CGFloat
 @MainActor
 func updateCompositedResizePreview(_ window: Window, rect: Rect) {
     syncClosedWindowsCacheToCurrentWorld()
-    let usesActiveTabGroupChrome = windowResizeUsesActiveTabGroupChrome(window: window)
-    if usesActiveTabGroupChrome {
-        WindowTabStripPanelController.shared.showChromeDuringMouseInteraction()
-    } else {
-        WindowTabStripPanelController.shared.hideChromeDuringMouseInteraction(showFrameOnly: true)
-    }
-    WindowTabStripPanelController.shared.updateResizingTabGroupChrome(window: window, activeWindowRect: rect)
+    // The actively resized content stays real. Hide all tab chrome, including the active
+    // group, so every inactive group can be represented by one uninterrupted glass pane.
+    WindowTabStripPanelController.shared.hideChromeDuringMouseInteraction(showFrameOnly: false)
     guard let workspace = window.nodeWorkspace,
           workspace.isVisible,
           let weightMap = proposedResizeWeightMap(window, rect: rect)
@@ -83,21 +79,7 @@ func updateCompositedResizePreview(_ window: Window, rect: Rect) {
     }
     currentlyManipulatedWithMouseWindowId = window.windowId
     setCurrentMouseManipulationKind(.resize)
-    WindowTabStripPanelController.shared.setHiddenPassiveTabGroupChrome(
-        resizePreviewTabGroupChromeIdsToHide(items)
-    )
-    WindowResizePreviewPanel.shared.show(items)
-}
-
-@MainActor
-private func resizePreviewTabGroupChromeIdsToHide(_ items: [WindowResizePreviewItem]) -> Set<ObjectIdentifier> {
-    Set(items.compactMap { item in
-        guard item.isTabGroup,
-              let tabGroup = Window.get(byId: item.id)?.nearestWindowTabGroup,
-              tabGroup.usesWindowTabBehavior
-        else { return nil }
-        return ObjectIdentifier(tabGroup)
-    })
+    WindowResizePreviewPanel.shared.show(items, presentation: .resizeOverlay)
 }
 
 @MainActor

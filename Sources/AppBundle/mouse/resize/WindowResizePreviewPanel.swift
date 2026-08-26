@@ -33,7 +33,10 @@ final class WindowResizePreviewPanel: NSPanelHud {
         stableFrame = nil
     }
 
-    func show(_ screenItems: [WindowResizePreviewItem]) {
+    func show(
+        _ screenItems: [WindowResizePreviewItem],
+        presentation: WindowResizePreviewPresentation = .detailed,
+    ) {
         pendingHide?.cancel()
         pendingHide = nil
         guard let panelFrame = stableFrame ?? windowResizePreviewPanelFrame(for: screenItems) else {
@@ -50,7 +53,7 @@ final class WindowResizePreviewPanel: NSPanelHud {
         } else {
             setFrame(alignedPanelFrame, display: false, animate: false)
         }
-        compositorView.update(localItems)
+        compositorView.update(localItems, presentation: presentation)
         if !isVisible {
             orderFrontRegardless()
         }

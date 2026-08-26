@@ -58,7 +58,7 @@ private func selfTabGroupSurfaceDestination(
           detachOrigin == .tabStrip,
           let sourceParent = sourceWindow.parent as? TilingContainer,
           sourceParent.layout == .tabGroup,
-          sourceParent.windowDragVisibleRect?.contains(mouseLocation) == true
+          sourceParent.lastAppliedLayoutPhysicalRect?.contains(mouseLocation) == true
     else { return nil }
     let targetWindow =
         sourceParent.tabActiveWindow?.takeIf { $0 != sourceWindow } ??

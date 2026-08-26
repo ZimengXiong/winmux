@@ -50,16 +50,22 @@ final class WindowResizePreviewItemLayer: CALayer {
     func update(
         _ item: WindowResizePreviewItem,
         scale: CGFloat,
+        presentation: WindowResizePreviewPresentation,
         iconResolver: (WindowResizePreviewIcon) -> CGImage?,
     ) {
         contentsScale = scale
         frame = item.frame
         let localBounds = CGRect(origin: .zero, size: item.frame.size)
+        if presentation == .resizeOverlay {
+            updateResizeOverlay(bounds: localBounds, scale: scale)
+            return
+        }
         if item.isTabGroup, item.drawsFrameOnly {
             updateFrameOnlyShell(item: item, bounds: localBounds, scale: scale)
             return
         }
         let radius = windowResizePreviewCornerRadius(for: localBounds)
+        surfaceLayer.isHidden = false
         let path = CGPath(roundedRect: localBounds, cornerWidth: radius, cornerHeight: radius, transform: nil)
         surfaceLayer.fillRule = .nonZero
         surfaceLayer.fillColor = ResizePreviewPalette.fill
@@ -77,8 +83,27 @@ final class WindowResizePreviewItemLayer: CALayer {
         updateIcons(item: item, scale: scale, iconResolver: iconResolver)
     }
 
+    private func updateResizeOverlay(bounds: CGRect, scale: CGFloat) {
+        hideIconLayers()
+        topBarLayer.isHidden = true
+        topBarLayer.path = nil
+        mockTabStrokeLayer.isHidden = true
+        mockTabStrokeLayer.path = nil
+        surfaceLayer.isHidden = true
+        surfaceLayer.path = nil
+
+        let radius = windowResizePreviewCornerRadius(for: bounds)
+        strokeLayer.isHidden = false
+        strokeLayer.strokeColor = NSColor.white.withAlphaComponent(GlassToken.borderOpacity).cgColor
+        strokeLayer.lineWidth = StrokeToken.hairline
+        strokeLayer.frame = bounds
+        strokeLayer.path = CGPath(roundedRect: bounds, cornerWidth: radius, cornerHeight: radius, transform: nil)
+        strokeLayer.contentsScale = scale
+    }
+
     private func updateFrameOnlyShell(item: WindowResizePreviewItem, bounds localBounds: CGRect, scale: CGFloat) {
         hideIconLayers()
+        surfaceLayer.isHidden = false
 
         let shellPath = windowResizePreviewTabGroupShellPath(
             in: localBounds,

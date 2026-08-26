@@ -23,6 +23,15 @@ func destinationFromWindowDropIntent(
 
     switch resolution.intent.zone {
         case .tab:
+            if let destination = sameTabGroupReturnDestination(
+                resolution: resolution,
+                sourceWindow: sourceWindow,
+                targetWindow: targetWindow,
+                subject: subject,
+                detachOrigin: detachOrigin
+            ) {
+                return intentOverlayDestination(destination)
+            }
             guard config.windowTabs.enabled,
                   isWindowDragIntentKindEnabled(.tabStack(targetWindowId: targetWindow.windowId)),
                   !shouldSuppressSameTabGroupTabDestination(
@@ -42,6 +51,15 @@ func destinationFromWindowDropIntent(
                 isGroup: false,
             ))
         case .middle:
+            if let destination = sameTabGroupReturnDestination(
+                resolution: resolution,
+                sourceWindow: sourceWindow,
+                targetWindow: targetWindow,
+                subject: subject,
+                detachOrigin: detachOrigin
+            ) {
+                return intentOverlayDestination(destination)
+            }
             guard let destination = swapDestination(
                 sourceWindow: sourceWindow,
                 targetWindow: targetWindow,
@@ -62,6 +80,33 @@ func destinationFromWindowDropIntent(
     }
 }
 
+@MainActor
+private func sameTabGroupReturnDestination(
+    resolution: WindowDropIntentResolution,
+    sourceWindow: Window,
+    targetWindow: Window,
+    subject: WindowDragSubject,
+    detachOrigin: TabDetachOrigin,
+) -> WindowDragIntentDestination? {
+    guard subject == .window,
+          detachOrigin == .tabStrip,
+          config.windowTabs.enabled,
+          let sourceParent = sourceWindow.parent as? TilingContainer,
+          sourceParent.layout == .tabGroup,
+          targetWindow.parent === sourceParent
+    else { return nil }
+    return WindowDragIntentDestination(
+        kind: .reorderTab(windowId: sourceWindow.windowId, targetIndex: sourceWindow.ownIndex ?? 0),
+        previewRect: windowDropIntentActivePreviewRect(for: resolution),
+        interactionRect: resolution.targetFrame,
+        title: "Return To Tabs",
+        subtitle: "Drop to keep this tab in the current group",
+        previewStyle: .tabInsert,
+        previewGeometry: .tabStrip,
+        isGroup: false,
+    )
+}
+
 func windowDropIntentActivePreviewRect(for resolution: WindowDropIntentResolution) -> Rect {
     resolution.zones.first { $0.zone == resolution.intent.zone }?.frame ?? resolution.targetFrame
 }
@@ -73,7 +118,13 @@ func resolveWindowDropIntent(
     targetNode: TreeNode,
     mouseLocation: CGPoint,
 ) -> WindowDropIntentResolution? {
-    guard let targetFrame = targetNode.windowDragVisibleRect else { return nil }
+    let targetFrame: Rect?
+    if let tabGroup = targetNode as? TilingContainer, tabGroup.layout == .tabGroup {
+        targetFrame = tabGroup.lastAppliedLayoutPhysicalRect
+    } else {
+        targetFrame = targetNode.windowDragVisibleRect
+    }
+    guard let targetFrame else { return nil }
     return WindowDropIntentResolver().resolve(
         sourceWindowId: sourceWindow.windowId,
         targetWindowId: targetWindow.windowId,
