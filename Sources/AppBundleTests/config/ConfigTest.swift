@@ -38,9 +38,9 @@ final class ConfigTest: XCTestCase {
         let (config, errors) = parseConfig(toml)
         assertEquals(errors, [])
         XCTAssertTrue(config.automaticallyTileNewWindows)
-        XCTAssertTrue(config.workspaceSidebar.showClock)
+        XCTAssertFalse(config.workspaceSidebar.showClock)
         XCTAssertTrue(config.workspaceSidebar.showSeconds)
-        XCTAssertTrue(config.workspaceSidebar.showDate)
+        XCTAssertFalse(config.workspaceSidebar.showDate)
         XCTAssertTrue(config.workspaceSidebar.showWeekday)
         XCTAssertTrue(config.enableShakeToToggleTiling)
     }

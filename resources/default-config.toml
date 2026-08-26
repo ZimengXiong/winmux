@@ -18,7 +18,7 @@ automatically-unhide-macos-hidden-apps = false
 automatically-tile-new-windows = true
 # Shake a window horizontally while dragging its title bar to toggle floating/tiling.
 enable-shake-to-toggle-tiling = true
-auto-add-new-windows-to-tab-group = false
+auto-add-new-windows-to-tab-group = true
 shortcuts-preset = 'none'
 persistent-workspaces = []
 on-mode-changed = []
@@ -32,10 +32,10 @@ on-mode-changed = []
     inner.vertical = 8
     # With the sidebar enabled, outer.left is the space between it and tiled windows.
     # Set all outer values to 0 for borderless display edges/sidebar joins.
-    outer.left = 8
-    outer.bottom = 8
-    outer.top = 8
-    outer.right = 8
+    outer.left = 12
+    outer.bottom = 12
+    outer.top = 12
+    outer.right = 12
 
 [workspace-sidebar]
     enabled = true
@@ -43,17 +43,17 @@ on-mode-changed = []
     auto-hide = false
     # Keep the full sidebar open and reserve its width for tiled windows.
     always-expanded = false
-    collapsed-width = 44
-    width = 240
+    collapsed-width = 50
+    width = 280
     # Omit monitor to show an independent sidebar on every display.
     # Legacy monitor = 'main' is also treated as all displays for this sidebar.
     # Use monitor = 1, 'secondary', 2, or a list to restrict it.
     menu-bar-reserve-height = 28
     project-deletion-action = 'close-windows'
     show-status-pills = true
-    show-clock = true
+    show-clock = false
     show-seconds = true
-    show-date = true
+    show-date = false
     show-weekday = true
     # Apply this style to sidebar, tab groups, and switcher chrome. Use 'solid' for opaque color.
     chrome-style = 'liquid-glass'
@@ -61,6 +61,12 @@ on-mode-changed = []
     solid-chrome-color = 'midnight'
     # Used when solid-chrome-color = 'custom'.
     solid-chrome-custom-color = '#191B20'
+
+[workspace-sidebar.project-labels]
+    "default" = "Default"
+
+[workspace-sidebar.project-colors]
+    "default" = "#C4B5FD"
 
 [mode.main.binding]
     ctrl-f = 'open-sidebar'

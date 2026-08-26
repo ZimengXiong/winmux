@@ -43,7 +43,7 @@ final class ConfigBootstrapTest: XCTestCase {
         XCTAssertTrue(parsedConfig.windowTabs.enabled)
         XCTAssertEqual(parsedConfig.windowTabs.height, 36)
         XCTAssertTrue(parsedConfig.workspaceSidebar.enabled)
-        XCTAssertEqual(parsedConfig.workspaceSidebar.width, 240)
+        XCTAssertEqual(parsedConfig.workspaceSidebar.width, 280)
         XCTAssertTrue(parsedConfig.autoReloadConfig)
         if case .constant(let horizontalGap) = parsedConfig.gaps.inner.horizontal {
             XCTAssertEqual(horizontalGap, 8)
@@ -56,7 +56,7 @@ final class ConfigBootstrapTest: XCTestCase {
             XCTFail("Expected constant vertical gap")
         }
         if case .constant(let outerLeftGap) = parsedConfig.gaps.outer.left {
-            XCTAssertEqual(outerLeftGap, 8)
+            XCTAssertEqual(outerLeftGap, 12)
         } else {
             XCTFail("Expected constant outer left gap")
         }
