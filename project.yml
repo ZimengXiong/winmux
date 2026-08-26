@@ -24,7 +24,6 @@ targets:
         product: AppBundle
       - package: WinMuxPackage
         product: SparkleSupport
-        embed: true
     # https://developer.apple.com/documentation/xcode/build-settings-reference
     settings:
       base:
