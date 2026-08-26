@@ -1,0 +1,65 @@
+name: Update Homebrew cask
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  update-cask:
+    if: ${{ !github.event.release.prerelease }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the Homebrew tap
+        uses: actions/checkout@v4
+        with:
+          repository: ZimengXiong/homebrew
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew
+
+      - name: Update the WinMux cask
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          version="${TAG_NAME#v}"
+          asset="WinMux-${version}.zip"
+
+          gh release download "$TAG_NAME" --repo "$GITHUB_REPOSITORY" --pattern "$asset" --dir release
+          sha256="$(sha256sum "release/$asset" | awk '{print $1}')"
+
+          cat > homebrew/Casks/winmux.rb <<EOF
+          cask "winmux" do
+            version "$version"
+            sha256 "$sha256"
+
+            url "https://github.com/ZimengXiong/winmux/releases/download/v#{version}/WinMux-#{version}.zip"
+            name "WinMux"
+            desc "Tiling window manager for macOS"
+            homepage "https://github.com/ZimengXiong/winmux"
+
+            depends_on macos: :ventura
+
+            app "WinMux.app"
+
+            zap trash: [
+              "~/.config/winmux",
+              "~/.winmux.toml",
+              "~/Library/LaunchAgents/com.zimengxiong.winmux.plist",
+            ]
+          end
+          EOF
+
+          git -C homebrew diff --check
+          git -C homebrew add Casks/winmux.rb
+          if git -C homebrew diff --cached --quiet; then
+            exit 0
+          fi
+
+          git -C homebrew config user.name "github-actions[bot]"
+          git -C homebrew config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C homebrew commit -m "winmux ${version}"
+          git -C homebrew push
