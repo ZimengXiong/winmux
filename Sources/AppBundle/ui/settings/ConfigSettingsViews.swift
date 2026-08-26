@@ -73,7 +73,9 @@ struct ShortcutAppearanceSettingsView: View {
     @State private var showSeconds = config.workspaceSidebar.showSeconds
     @State private var showDate = config.workspaceSidebar.showDate
     @State private var showWeekday = config.workspaceSidebar.showWeekday
-    @State private var liquidGlass = config.workspaceSidebar.useLiquidGlass
+    @State private var chromeStyle = config.workspaceSidebar.chromeStyle
+    @State private var solidChromeColor = config.workspaceSidebar.solidChromeColor
+    @State private var solidChromeCustomColor = config.workspaceSidebar.solidChromeCustomColor
     @State private var sidebarWidth = config.workspaceSidebar.width
     @State private var collapsedWidth = config.workspaceSidebar.collapsedWidth
     @State private var tabEnabled = config.windowTabs.enabled
@@ -90,6 +92,19 @@ struct ShortcutAppearanceSettingsView: View {
 
     var body: some View {
         SettingsScrollView {
+            SettingsSection("Chrome") {
+                SettingsPicker("Style", selection: $chromeStyle, help: "Apply Liquid Glass or an opaque solid color to the sidebar, tab groups, and switcher. Settings keep their own appearance.") {
+                    Text("Liquid Glass").tag(ChromeStyle.liquidGlass)
+                    Text("Solid color").tag(ChromeStyle.solid)
+                } onChange: { persist("workspace-sidebar", "chrome-style", "'\(chromeStyle.rawValue)'") }
+                SettingsSolidColorPalette(
+                    selection: $solidChromeColor,
+                    customColor: $solidChromeCustomColor,
+                    isEnabled: chromeStyle == .solid,
+                    onSelectionChange: { persist("workspace-sidebar", "solid-chrome-color", "'\(solidChromeColor.rawValue)'") },
+                    onCustomColorChange: { persist("workspace-sidebar", "solid-chrome-custom-color", "'\(solidChromeCustomColor)'") },
+                )
+            }
             SettingsSection("Sidebar") {
                 SettingsToggle("Show sidebar", isOn: $sidebarEnabled, help: "Show the workspace rail on configured displays.") { sidebarBool("enabled", sidebarEnabled) }
                 SettingsToggle("Focus sidebar monitor only", isOn: $sidebarFocusEnabled, help: "Show the sidebar only on the focused monitor when monitor scope allows it.") { sidebarBool("enable-focus", sidebarFocusEnabled) }
@@ -109,7 +124,6 @@ struct ShortcutAppearanceSettingsView: View {
                 SettingsToggle("Show seconds", isOn: $showSeconds) { sidebarBool("show-seconds", showSeconds) }
                 SettingsToggle("Show date", isOn: $showDate) { sidebarBool("show-date", showDate) }
                 SettingsToggle("Show weekday", isOn: $showWeekday) { sidebarBool("show-weekday", showWeekday) }
-                SettingsToggle("Use Liquid Glass", isOn: $liquidGlass, help: "Uses native Liquid Glass on supported macOS versions.") { sidebarBool("use-liquid-glass", liquidGlass) }
             }
             SettingsSection("Window tabs") {
                 SettingsToggle("Show tab strips", isOn: $tabEnabled, help: "Display browser-like tabs for stacked windows.") { persist("window-tabs", "enabled", tabEnabled ? "true" : "false") }
@@ -209,7 +223,15 @@ struct ShortcutAutomationSettingsView: View {
 
 private struct SettingsScrollView<Content: View>: View {
     @ViewBuilder let content: Content
-    var body: some View { ScrollView { VStack(alignment: .leading, spacing: 14) { content }.padding(18) } }
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                content
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 18)
+        }
+    }
 }
 
 private struct SettingsSection<Content: View>: View {
@@ -217,10 +239,20 @@ private struct SettingsSection<Content: View>: View {
     @ViewBuilder let content: Content
     init(_ title: String, @ViewBuilder content: () -> Content) { self.title = title; self.content = content() }
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.headline)
-            content
-            Divider()
+        VStack(alignment: .leading, spacing: 7) {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.secondary)
+
+            VStack(spacing: 0) {
+                content
+            }
+            .background(Color(nsColor: .controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color(nsColor: .separatorColor).opacity(0.45), lineWidth: StrokeToken.hairline)
+            }
         }
     }
 }
@@ -228,7 +260,23 @@ private struct SettingsSection<Content: View>: View {
 private struct SettingsToggle: View {
     let title: String; @Binding var isOn: Bool; var help: String? = nil; let save: () -> Void
     init(_ title: String, isOn: Binding<Bool>, help: String? = nil, save: @escaping () -> Void) { self.title = title; _isOn = isOn; self.help = help; self.save = save }
-    var body: some View { Toggle(isOn: $isOn) { VStack(alignment: .leading, spacing: 1) { Text(title); if let help { Text(help).font(.caption).foregroundStyle(.secondary) } } }.toggleStyle(.switch).padding(.vertical, 5).onChange(of: isOn) { _ in save() } }
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Toggle("", isOn: $isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+        }
+        .padding(.horizontal, 14)
+        .frame(minHeight: 38)
+        .help(help ?? title)
+        .overlay(alignment: .bottom) {
+            Divider().padding(.leading, 14)
+        }
+        .onChange(of: isOn) { _ in save() }
+    }
 }
 
 private struct SettingsStepper: View {
@@ -240,13 +288,46 @@ private struct SettingsStepper: View {
         self.help = help
         self.save = save
     }
-    var body: some View { HStack { VStack(alignment: .leading, spacing: 1) { Text(title); Text(help).font(.caption).foregroundStyle(.secondary) }; Spacer(); Slider(value: Binding(get: { Double(value) }, set: { value = Int($0.rounded()) }), in: Double(range.lowerBound)...Double(range.upperBound), step: 1).frame(width: 92); TextField("", value: $value, format: .number).textFieldStyle(.roundedBorder).frame(width: 42); Stepper("", value: $value, in: range).labelsHidden() }.padding(.vertical, 5).onChange(of: value) { _ in save() } }
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(title)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Slider(value: Binding(get: { Double(value) }, set: { value = Int($0.rounded()) }), in: Double(range.lowerBound)...Double(range.upperBound), step: 1)
+                .frame(width: 96)
+            TextField("", value: $value, format: .number)
+                .textFieldStyle(.roundedBorder)
+                .multilineTextAlignment(.trailing)
+                .frame(width: 44)
+            Stepper("", value: $value, in: range)
+                .labelsHidden()
+                .controlSize(.small)
+        }
+        .padding(.horizontal, 14)
+        .frame(minHeight: 38)
+        .help(help)
+        .overlay(alignment: .bottom) {
+            Divider().padding(.leading, 14)
+        }
+        .onChange(of: value) { _ in save() }
+    }
 }
 
 private struct SettingsTextField: View {
     let title: String; @Binding var text: String; let help: String; let save: () -> Void
     init(_ title: String, text: Binding<String>, help: String, save: @escaping () -> Void) { self.title = title; _text = text; self.help = help; self.save = save }
-    var body: some View { HStack { VStack(alignment: .leading, spacing: 1) { Text(title); Text(help).font(.caption).foregroundStyle(.secondary) }; Spacer(); TextField("", text: $text).textFieldStyle(.roundedBorder).frame(width: 240).onSubmit(save) }.padding(.vertical, 7).padding(.horizontal, 12) }
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            TextField("", text: $text)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 230)
+                .onSubmit(save)
+        }
+        .padding(.horizontal, 14)
+        .frame(minHeight: 42)
+        .help(help)
+    }
 }
 
 private struct SettingsMultilineField: View {
@@ -258,7 +339,87 @@ private struct SettingsMultilineField: View {
 private struct SettingsPicker<Selection: Hashable, Content: View>: View {
     let title: String; @Binding var selection: Selection; let help: String; @ViewBuilder let content: Content; let onChange: () -> Void
     init(_ title: String, selection: Binding<Selection>, help: String, @ViewBuilder content: () -> Content, onChange: @escaping () -> Void) { self.title = title; _selection = selection; self.help = help; self.content = content(); self.onChange = onChange }
-    var body: some View { HStack { VStack(alignment: .leading, spacing: 1) { Text(title); Text(help).font(.caption).foregroundStyle(.secondary) }; Spacer(); Picker("", selection: $selection, content: { content }).labelsHidden().pickerStyle(.menu).frame(width: 150) }.padding(.vertical, 5).onChange(of: selection) { _ in onChange() } }
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Picker("", selection: $selection, content: { content })
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(width: 170, alignment: .trailing)
+        }
+        .padding(.horizontal, 14)
+        .frame(minHeight: 38)
+        .help(help)
+        .overlay(alignment: .bottom) {
+            Divider().padding(.leading, 14)
+        }
+        .onChange(of: selection) { _ in onChange() }
+    }
+}
+
+private struct SettingsSolidColorPalette: View {
+    @Binding var selection: ChromeSolidColor
+    @Binding var customColor: String
+    let isEnabled: Bool
+    let onSelectionChange: () -> Void
+    let onCustomColorChange: () -> Void
+    private let columns = Array(repeating: GridItem(.flexible(minimum: 40), spacing: 8), count: 6)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Solid color")
+            Text("Choose an opaque chrome color.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            LazyVGrid(columns: columns, spacing: 8) {
+                ForEach(ChromeSolidColor.allCases) { color in
+                    Button {
+                        selection = color
+                    } label: {
+                        GlassSurface(
+                            shape: RoundedRectangle(cornerRadius: 8, style: .continuous),
+                            hasBorder: false,
+                            style: .solid,
+                            solidColor: color == .custom ? Color(chromeHex: customColor) : color.color,
+                        )
+                            .frame(height: 42)
+                            .overlay {
+                                if selection == color {
+                                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                        .strokeBorder(Color.white.opacity(0.9), lineWidth: 2)
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 13, weight: .bold))
+                                        .foregroundStyle(.white)
+                                        .shadow(color: .black.opacity(0.4), radius: 2)
+                                }
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .help(color.title)
+                    .accessibilityLabel(color.title)
+                    .accessibilityAddTraits(selection == color ? .isSelected : [])
+                }
+            }
+            if selection == .custom {
+                ColorPicker("Custom color", selection: Binding(
+                    get: { Color(chromeHex: customColor) },
+                    set: { customColor = $0.chromeHex },
+                ), supportsOpacity: false)
+            }
+        }
+        .padding(14)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.45)
+        .overlay(alignment: .bottom) {
+            Divider().padding(.leading, 14)
+        }
+        .onChange(of: selection) { _ in onSelectionChange() }
+        .onChange(of: customColor) { _ in
+            guard selection == .custom else { return }
+            onCustomColorChange()
+        }
+    }
 }
 
 @MainActor

@@ -256,7 +256,7 @@ struct WorkspaceSidebarWorkspaceRenameField: View {
         }
         .overlay {
             RoundedRectangle(cornerRadius: workspaceSidebarRowCornerRadius, style: .continuous)
-                .strokeBorder(Color.accentColor.opacity(0.65), lineWidth: 0.8)
+                .strokeBorder(Color.white.opacity(0.62), lineWidth: 0.8)
         }
         .onAppear {
             debugWorkspaceSidebarRenameLog("workspaceRenameField onAppear workspace=\(workspaceName) text=\(text)")

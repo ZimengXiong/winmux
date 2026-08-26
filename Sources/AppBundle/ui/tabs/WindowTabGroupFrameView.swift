@@ -9,22 +9,24 @@ struct WindowTabGroupFrameView: View {
         let outerShape = WindowTabGroupOuterShape(activeWindowCornerRadius: strip.activeWindowCornerRadius)
         let shellShape = WindowTabGroupShellShape(
             tabBarHeight: tabHeight,
-            activeWindowCornerRadius: strip.activeWindowCornerRadius
+            activeWindowCornerRadius: strip.activeWindowCornerRadius,
         )
         ZStack(alignment: .topLeading) {
-            // One continuous glass material across the tab bar AND the frame ring, masked to
-            // the shell so the window cutout stays clear — no material seam between the bar
-            // and the body.
-            GlassSurface(shape: outerShape)
-                .mask {
-                    shellShape.fill(style: FillStyle(eoFill: true))
-                }
+            // The shell includes the tab bar and the visible border around the active window.
+            // Its even-odd mask keeps the window body transparent while retaining that chrome.
+            GlassSurface(
+                shape: outerShape,
+                style: config.workspaceSidebar.chromeStyle,
+                solidColor: config.workspaceSidebar.resolvedSolidChromeColor,
+            )
+            .mask {
+                shellShape.fill(style: FillStyle(eoFill: true))
+            }
 
             outerShape
                 .stroke(Color.white.opacity(GlassToken.borderOpacity), lineWidth: windowTabGroupFrameStrokeWidth)
                 .glassShadow(.raised)
 
-            // Hairline between the tab bar and the window content area.
             Rectangle()
                 .fill(Color.white.opacity(GlassToken.separatorOpacity))
                 .frame(height: StrokeToken.hairline)
@@ -32,9 +34,9 @@ struct WindowTabGroupFrameView: View {
 
             WindowTabGroupInnerBoundaryShape(
                 tabBarHeight: tabHeight,
-                activeWindowCornerRadius: strip.activeWindowCornerRadius
+                activeWindowCornerRadius: strip.activeWindowCornerRadius,
             )
-                .stroke(mattePanelInsetShadow, lineWidth: windowTabGroupFrameInnerStrokeWidth)
+            .stroke(mattePanelInsetShadow, lineWidth: windowTabGroupFrameInnerStrokeWidth)
         }
         .frame(width: groupSize.width, height: groupSize.height)
         .allowsHitTesting(false)

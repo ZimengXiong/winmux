@@ -115,7 +115,9 @@ private func workspaceSidebarSnapshotForTopFilterBar(
             showsDate: false,
             showsWeekday: false,
             showsStatusPills: false,
-            usesLiquidGlass: true,
+            chromeStyle: .liquidGlass,
+            solidChromeColor: .midnight,
+            solidChromeCustomColor: "#191B20",
         ),
     )
 }
@@ -750,6 +752,11 @@ final class WorkspaceSidebarDragTest: XCTestCase {
             workspaceSidebarStatusBottomPadding(isCompact: false),
             workspaceSidebarOuterLeadingPadding(isCompact: false),
         )
+    }
+
+    func testWorkspaceSidebarFooterBottomPaddingAddsSpaceWithoutClock() {
+        XCTAssertEqual(workspaceSidebarFooterBottomPadding(showsClock: true), 0)
+        XCTAssertEqual(workspaceSidebarFooterBottomPadding(showsClock: false), 6)
     }
 
     func testWorkspaceSidebarHoverExpansionRequiresAtLeastThreeQuarterDepth() {

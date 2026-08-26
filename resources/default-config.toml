@@ -55,8 +55,12 @@ on-mode-changed = []
     show-seconds = true
     show-date = true
     show-weekday = true
-    # Use native Liquid Glass on macOS 26 and newer; older macOS uses material blur.
-    use-liquid-glass = true
+    # Apply this style to sidebar, tab groups, and switcher chrome. Use 'solid' for opaque color.
+    chrome-style = 'liquid-glass'
+    # Used when chrome-style = 'solid'. Choose from the Appearance palette, or use 'custom'.
+    solid-chrome-color = 'midnight'
+    # Used when solid-chrome-color = 'custom'.
+    solid-chrome-custom-color = '#191B20'
 
 [mode.main.binding]
     ctrl-f = 'open-sidebar'

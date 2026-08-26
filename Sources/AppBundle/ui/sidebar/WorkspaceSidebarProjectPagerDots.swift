@@ -21,14 +21,27 @@ extension WorkspaceSidebarProjectPager {
                     .fill(isDotHovered ? projectColor.opacity(0.14) : Color.clear)
                     .frame(width: 34, height: 22)
                 Capsule(style: .continuous)
-                    .fill(isCurrent ? projectColor.opacity(0.86) : projectColor.opacity(isDotHovered ? 0.58 : (isHovered ? 0.44 : 0.32)))
+                    .fill(isCurrent ? Color.white.opacity(0.17) : projectColor.opacity(isDotHovered ? 0.58 : (isHovered ? 0.44 : 0.32)))
                     .frame(width: isCurrent ? 28 : 13, height: isCompact ? 10 : 9)
                     .overlay {
                         Capsule(style: .continuous)
                             .strokeBorder(
-                                isCurrent ? projectColor.opacity(0.94) : projectColor.opacity(isDotHovered ? 0.70 : (isHovered ? 0.54 : 0.36)),
+                                isCurrent ? Color.white.opacity(0.42) : projectColor.opacity(isDotHovered ? 0.70 : (isHovered ? 0.54 : 0.36)),
                                 lineWidth: isDotHovered || isCurrent ? 0.8 : 0.5,
                             )
+                    }
+                    .overlay {
+                        if isCurrent {
+                            Capsule(style: .continuous)
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color.white.opacity(0.18), .clear],
+                                        startPoint: .top,
+                                        endPoint: .bottom,
+                                    )
+                                )
+                                .padding(0.8)
+                        }
                     }
                 }
                 .frame(width: 36, height: workspaceSidebarProjectDotFrameHeight, alignment: .center)
@@ -43,7 +56,6 @@ extension WorkspaceSidebarProjectPager {
         .contextMenu {
             projectContextMenuItems(for: project)
         }
-        .animation(.easeOut(duration: 0.18), value: isCurrent)
         .animation(.easeOut(duration: 0.14), value: isDotHovered)
     }
 }

@@ -1,0 +1,10 @@
+<svg width="22" height="22" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- The window geometry matches resources/winmux-logo.svg. -->
+  <g stroke="#000000" stroke-width="8" stroke-linejoin="round">
+    <rect x="128" y="92" width="180" height="148" rx="34" fill="#000000" fill-opacity="0.8" transform="rotate(-10 218 166)"/>
+    <rect x="294" y="84" width="136" height="166" rx="32" fill="#000000" fill-opacity="0.95" transform="rotate(11 362 167)"/>
+    <rect x="96" y="280" width="192" height="138" rx="36" fill="#000000" fill-opacity="0.72" transform="rotate(8 192 349)"/>
+    <rect x="310" y="274" width="124" height="132" rx="32" fill="#000000" fill-opacity="0.9" transform="rotate(-8 372 340)"/>
+    <rect x="78" y="186" width="138" height="106" rx="28" fill="#000000" fill-opacity="0.62" transform="rotate(-7 147 239)"/>
+  </g>
+</svg>

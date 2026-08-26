@@ -119,7 +119,7 @@ struct WorkspaceSidebarWorkspaceSection: View {
                     .zIndex(5)
             }
             .shadow(
-                color: isDropTarget ? Color.accentColor.opacity(0.18) : .clear,
+                color: isDropTarget ? Color.white.opacity(0.16) : .clear,
                 radius: isDropTarget ? 12 : 0
             )
             .background {
@@ -181,6 +181,10 @@ extension WorkspaceSidebarWorkspaceSection {
             .fill(sectionBackgroundFill)
             .background { sectionGlassCard }
             .overlay {
+                if isActiveWorkspaceSelection {
+                    sectionShape
+                        .strokeBorder(Color.white.opacity(isCompact ? 0.30 : 0.20), lineWidth: StrokeToken.control)
+                }
                 if isPinnedActiveWorkspace && !isSearchFiltering {
                     sectionShape
                         .strokeBorder(
@@ -199,7 +203,7 @@ extension WorkspaceSidebarWorkspaceSection {
     /// tint fills on top. No-op on older systems; the plain tint fill stands in.
     @ViewBuilder
     var sectionGlassCard: some View {
-        if #available(macOS 26.0, *), layout.usesLiquidGlass {
+        if #available(macOS 26.0, *), layout.chromeStyle == .liquidGlass {
             GlassEffectContainer {
                 ZStack {
                     Color.clear.glassEffect(.regular, in: sectionShape)
@@ -225,12 +229,20 @@ extension WorkspaceSidebarWorkspaceSection {
                 }
             }
             .glassShadow(.resting)
+        } else if layout.chromeStyle == .solid {
+            sectionShape
+                .fill(layout.resolvedSolidChromeColor.opacity(0.38))
+                .overlay {
+                    sectionShape.strokeBorder(Color.white.opacity(0.12), lineWidth: StrokeToken.hairline)
+                }
         }
     }
 
     var sectionBackgroundFill: Color {
         if isDropTarget {
-            return Color.accentColor.opacity(0.12)
+            // A neutral lift works against both solid colors and Liquid Glass without
+            // introducing the system accent color into themed chrome.
+            return Color.white.opacity(layout.chromeStyle == .solid ? 0.18 : 0.14)
         }
         if isSearchSelectedWorkspace {
             return Color.white.opacity(0.105)
@@ -244,13 +256,12 @@ extension WorkspaceSidebarWorkspaceSection {
             return Color(nsColor: .systemRed).opacity(isHovered ? hoveredRedOpacity : redOpacity)
         }
         if isPinnedActiveWorkspace {
-            return workspaceSidebarActiveWorkspaceTint.opacity(isHovered ? 0.12 : 0.075)
+            return Color.white.opacity(isHovered ? 0.15 : 0.10)
         }
-        let activeTint = isFromOtherDisplay ? Color(nsColor: .systemPink) : workspaceSidebarActiveWorkspaceTint
         if isActiveOnTargetMonitor {
             let compactOpacity: Double = workspace.isFocused ? 0.24 : 0.14
             let expandedOpacity: Double = workspace.isFocused ? 0.12 : 0.07
-            return activeTint.opacity(isCompact ? compactOpacity : expandedOpacity)
+            return Color.white.opacity(isCompact ? compactOpacity : expandedOpacity)
         }
         if isFromOtherDisplay {
             return Color(nsColor: .systemPink).opacity(isHovered ? 0.10 : 0.05)
@@ -259,6 +270,10 @@ extension WorkspaceSidebarWorkspaceSection {
             return Color.white.opacity(0.045)
         }
         return Color.white.opacity(0.015)
+    }
+
+    var isActiveWorkspaceSelection: Bool {
+        !isSearchFiltering && (isPinnedActiveWorkspace || isActiveOnTargetMonitor)
     }
 
     var compactFocusOpacity: Double {

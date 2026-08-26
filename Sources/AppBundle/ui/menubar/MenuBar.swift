@@ -26,8 +26,6 @@ private let winmuxNewIssueURL = "https://github.com/zimengxiong/winmux/issues/ne
             }
         }.keyboardShortcut("E", modifiers: .command)
         OpenShortcutSettingsButton()
-        openConfigButton()
-        reloadConfigButton()
         if let checkForUpdates {
             Button("Check for Updates…") {
                 checkForUpdates()
@@ -47,7 +45,7 @@ private let winmuxNewIssueURL = "https://github.com/zimengxiong/winmux/issues/ne
         }.keyboardShortcut("Q", modifiers: .command)
     } label: {
         if viewModel.isEnabled {
-            MenuBarLabel().environmentObject(viewModel)
+            MenuBarAppIcon().environmentObject(viewModel)
         } else {
             Image(systemName: "pause.circle.fill")
                 .resizable()

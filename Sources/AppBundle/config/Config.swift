@@ -90,12 +90,111 @@ struct WorkspaceSidebarConfig: ConvenienceCopyable, Equatable, Sendable {
     var showSeconds: Bool = true
     var showDate: Bool = true
     var showWeekday: Bool = true
-    var useLiquidGlass: Bool = true
+    var chromeStyle: ChromeStyle = .liquidGlass
+    var solidChromeColor: ChromeSolidColor = .midnight
+    var solidChromeCustomColor: String = "#191B20"
     var menuBarReserveHeight: Int = 28
     var projectDeletionAction: WorkspaceProjectDeletionAction = .closeWindows
     var workspaceLabels: [String: String] = [:]
     var projectLabels: [String: String] = [:]
     var projectColors: [String: String] = [:]
+}
+
+enum ChromeStyle: String, CaseIterable, Identifiable, Sendable {
+    case liquidGlass = "liquid-glass"
+    case solid
+
+    var id: String { rawValue }
+}
+
+enum ChromeSolidColor: String, CaseIterable, Identifiable, Sendable {
+    case black
+    case onyx
+    case charcoal
+    case midnight
+    case graphite
+    case slate
+    case steel
+    case silver
+    case fog
+    case blue
+    case indigo
+    case lavender
+    case ocean
+    case teal
+    case mint
+    case green
+    case sage
+    case gold
+    case cocoa
+    case rose
+    case mauve
+    case plum
+    case violet
+    case apricot
+    case custom
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .black: "Black"
+        case .onyx: "Onyx"
+        case .charcoal: "Charcoal"
+        case .midnight: "Midnight"
+        case .graphite: "Graphite"
+        case .slate: "Slate"
+        case .steel: "Steel"
+        case .silver: "Silver"
+        case .fog: "Fog"
+        case .blue: "Blue"
+        case .indigo: "Indigo"
+        case .lavender: "Lavender"
+        case .ocean: "Ocean"
+        case .teal: "Teal"
+        case .mint: "Mint"
+        case .green: "Green"
+        case .sage: "Sage"
+        case .gold: "Gold"
+        case .cocoa: "Cocoa"
+        case .rose: "Rose"
+        case .mauve: "Mauve"
+        case .plum: "Plum"
+        case .violet: "Violet"
+        case .apricot: "Apricot"
+        case .custom: "Custom"
+        }
+    }
+
+    var rgb: (red: Double, green: Double, blue: Double) {
+        switch self {
+        case .black: (0.015, 0.016, 0.020)
+        case .onyx: (0.045, 0.048, 0.055)
+        case .charcoal: (0.10, 0.105, 0.12)
+        case .midnight: (0.07, 0.09, 0.15)
+        case .graphite: (0.20, 0.21, 0.24)
+        case .slate: (0.19, 0.25, 0.33)
+        case .steel: (0.32, 0.34, 0.38)
+        case .silver: (0.48, 0.50, 0.54)
+        case .fog: (0.67, 0.68, 0.71)
+        case .blue: (0.10, 0.27, 0.53)
+        case .indigo: (0.18, 0.20, 0.46)
+        case .lavender: (0.22, 0.17, 0.34)
+        case .ocean: (0.07, 0.23, 0.34)
+        case .teal: (0.04, 0.34, 0.33)
+        case .mint: (0.08, 0.28, 0.23)
+        case .green: (0.12, 0.35, 0.12)
+        case .sage: (0.26, 0.33, 0.25)
+        case .gold: (0.38, 0.31, 0.02)
+        case .cocoa: (0.30, 0.21, 0.17)
+        case .rose: (0.34, 0.14, 0.24)
+        case .mauve: (0.30, 0.20, 0.28)
+        case .plum: (0.33, 0.15, 0.35)
+        case .violet: (0.25, 0.18, 0.45)
+        case .apricot: (0.35, 0.21, 0.11)
+        case .custom: (0.10, 0.11, 0.13)
+        }
+    }
 }
 
 enum WorkspaceProjectDeletionAction: String, CaseIterable, Identifiable, Sendable {

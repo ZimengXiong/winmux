@@ -16,7 +16,12 @@ private let workspaceSidebarParser: [String: any ParserProtocol<WorkspaceSidebar
     "show-seconds": Parser(\.showSeconds, parseBool),
     "show-date": Parser(\.showDate, parseBool),
     "show-weekday": Parser(\.showWeekday, parseBool),
-    "use-liquid-glass": Parser(\.useLiquidGlass, parseBool),
+    "chrome-style": Parser(\.chromeStyle, parseChromeStyle),
+    "solid-chrome-color": Parser(\.solidChromeColor, parseChromeSolidColor),
+    "solid-chrome-custom-color": Parser(\.solidChromeCustomColor, parseChromeSolidCustomColor),
+    "use-liquid-glass": Parser(\.chromeStyle) { raw, backtrace in
+        parseBool(raw, backtrace).map { $0 ? .liquidGlass : .solid }
+    },
     "menu-bar-reserve-height": Parser(\.menuBarReserveHeight, parseWorkspaceSidebarMenuBarReserveHeight),
     "project-deletion-action": Parser(\.projectDeletionAction, parseWorkspaceProjectDeletionAction),
     "workspace-labels": Parser(\.workspaceLabels, parseWorkspaceSidebarLabels),
@@ -29,7 +34,14 @@ func parseWorkspaceSidebar(
     _ backtrace: TomlBacktrace,
     _ errors: inout [TomlParseError],
 ) -> WorkspaceSidebarConfig {
-    let parsed = parseTable(raw, WorkspaceSidebarConfig(), workspaceSidebarParser, backtrace, &errors)
+    var parsed = parseTable(raw, WorkspaceSidebarConfig(), workspaceSidebarParser, backtrace, &errors)
+    // Preserve the legacy key only when the modern setting is absent. This makes the
+    // Appearance setting authoritative for configs that contain both keys.
+    if let modernRawValue = raw.table?["chrome-style"]?.string,
+       let modernStyle = ChromeStyle(rawValue: modernRawValue)
+    {
+        parsed.chromeStyle = modernStyle
+    }
     if parsed.alwaysExpanded, parsed.width <= parsed.collapsedWidth {
         errors += [.semantic(
             backtrace + .key("width"),
@@ -37,6 +49,30 @@ func parseWorkspaceSidebar(
         )]
     }
     return parsed
+}
+
+private func parseChromeSolidCustomColor(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace) -> ParsedToml<String> {
+    parseString(raw, backtrace).flatMap { rawValue in
+        normalizedWorkspaceSidebarColorHex(rawValue).orFailure(.semantic(backtrace, "Use a six-digit hex color, such as #1A2B3C"))
+    }
+}
+
+private func parseChromeStyle(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace) -> ParsedToml<ChromeStyle> {
+    parseString(raw, backtrace).flatMap { rawValue in
+        ChromeStyle(rawValue: rawValue).orFailure(.semantic(
+            backtrace,
+            "Possible values: \(ChromeStyle.allCases.map(\.rawValue).joined(separator: ", "))",
+        ))
+    }
+}
+
+private func parseChromeSolidColor(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace) -> ParsedToml<ChromeSolidColor> {
+    parseString(raw, backtrace).flatMap { rawValue in
+        ChromeSolidColor(rawValue: rawValue).orFailure(.semantic(
+            backtrace,
+            "Possible values: \(ChromeSolidColor.allCases.map(\.rawValue).joined(separator: ", "))",
+        ))
+    }
 }
 
 private func parseWorkspaceSidebarWidth(_ raw: TOMLValueConvertible, _ backtrace: TomlBacktrace) -> ParsedToml<Int> {

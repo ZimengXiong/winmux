@@ -6,6 +6,7 @@ import SwiftUI
 struct ShortcutGeneralView: View {
     @ObservedObject var model: ShortcutSettingsModel
     @State private var displayStyle = ExperimentalUISettings().displayStyle
+    @State private var iconAppearance = ExperimentalUISettings().iconAppearance
     @State private var workspaceSidebarMenuBarReserveHeight = config.workspaceSidebar.menuBarReserveHeight
     @State private var projectDeletionAction = config.workspaceSidebar.projectDeletionAction
 
@@ -56,6 +57,24 @@ struct ShortcutGeneralView: View {
                                 settings.displayStyle = newValue
                                 TrayMenuModel.shared.experimentalUISettings = settings
                                 updateTrayText()
+                            }
+                        }
+
+                        HStack {
+                            Text("Menu bar icon")
+                            Spacer()
+                            Picker("", selection: $iconAppearance) {
+                                ForEach(MenuBarIconAppearance.allCases) { appearance in
+                                    Text(appearance.title).tag(appearance)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
+                            .frame(width: 180)
+                            .onChange(of: iconAppearance) { newValue in
+                                var settings = ExperimentalUISettings()
+                                settings.iconAppearance = newValue
+                                TrayMenuModel.shared.experimentalUISettings = settings
                             }
                         }
 

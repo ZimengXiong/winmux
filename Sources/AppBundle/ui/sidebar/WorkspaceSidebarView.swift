@@ -771,8 +771,18 @@ extension WorkspaceSidebarView {
     }
 
     func sidebarSurface<S: Shape>(in shape: S) -> some View {
-        GlassSurface(shape: shape, usesLiquidGlass: snapshot.configuration.usesLiquidGlass)
-            .ignoresSafeArea()
+        // The sidebar meets the display edge, so an outline around all four sides reads as a
+        // second, lighter panel behind the content. Keep the material flat and use only the
+        // trailing separator to define its boundary.
+        GlassSurface(
+            shape: shape,
+            hasBorder: false,
+            style: snapshot.configuration.chromeStyle,
+            solidColor: snapshot.configuration.resolvedSolidChromeColor,
+        )
+        // This panel has no safe-area inset. Expanding the material here gives the native
+        // glass backing layer a rectangular area outside the rounded trailing corners.
+        .clipShape(shape)
     }
 
     func sidebarSwipeCaptureOverlay(expansionProgress: CGFloat) -> some View {

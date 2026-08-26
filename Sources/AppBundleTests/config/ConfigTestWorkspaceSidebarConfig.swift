@@ -50,7 +50,7 @@ extension ConfigTest {
                 showSeconds: false,
                 showDate: false,
                 showWeekday: false,
-                useLiquidGlass: false,
+                chromeStyle: .solid,
                 menuBarReserveHeight: 30,
                 projectDeletionAction: .moveWindowsToFallback,
                 workspaceLabels: ["1": "Code", "2": "Web"],
@@ -67,6 +67,44 @@ extension ConfigTest {
         )
         assertEquals(backwardCompatibleErrors, [])
         XCTAssertFalse(backwardCompatible.workspaceSidebar.alwaysExpanded)
+
+        let (solidChrome, solidChromeErrors) = parseConfig(
+            """
+            [workspace-sidebar]
+                chrome-style = 'solid'
+            """,
+        )
+        assertEquals(solidChromeErrors, [])
+        XCTAssertEqual(solidChrome.workspaceSidebar.chromeStyle, .solid)
+
+        let (mintChrome, mintChromeErrors) = parseConfig(
+            """
+            [workspace-sidebar]
+                solid-chrome-color = 'mint'
+            """,
+        )
+        assertEquals(mintChromeErrors, [])
+        XCTAssertEqual(mintChrome.workspaceSidebar.solidChromeColor, .mint)
+
+        let (_, chromeStyleErrors) = parseConfig(
+            """
+            [workspace-sidebar]
+                chrome-style = 'blurred'
+            """,
+        )
+        assertEquals(chromeStyleErrors.descriptions, [
+            "workspace-sidebar.chrome-style: Possible values: liquid-glass, solid",
+        ])
+
+        let (_, solidColorErrors) = parseConfig(
+            """
+            [workspace-sidebar]
+                solid-chrome-color = 'gray'
+            """,
+        )
+        assertEquals(solidColorErrors.descriptions, [
+            "workspace-sidebar.solid-chrome-color: Possible values: black, onyx, charcoal, midnight, graphite, slate, steel, silver, fog, blue, indigo, lavender, ocean, teal, mint, green, sage, gold, cocoa, rose, mauve, plum, violet, apricot, custom",
+        ])
 
         let (_, alwaysExpandedWidthErrors) = parseConfig(
             """

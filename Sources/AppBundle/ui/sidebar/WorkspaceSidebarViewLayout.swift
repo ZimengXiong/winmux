@@ -99,6 +99,11 @@ extension WorkspaceSidebarView {
                     trailingInset: trailingInset,
                 )
             }
+
+            Color.clear
+                .frame(height: workspaceSidebarFooterBottomPadding(
+                    showsClock: snapshot.configuration.showsClock,
+                ))
         }
         .coordinateSpace(name: "workspaceSidebarContent")
         .onPreferenceChange(WorkspaceSidebarDropTargetPreferenceKey.self) { frames in
@@ -114,16 +119,10 @@ extension WorkspaceSidebarView {
         .environment(\.colorScheme, .dark)
         .overlay(alignment: .trailing) {
             Rectangle()
-                .fill(Color.white.opacity(0.08))
+                .fill(Color.white.opacity(GlassToken.separatorOpacity))
                 .frame(width: 0.5)
         }
         .clipShape(sidebarShape)
-        .shadow(
-            color: Color.black.opacity(0.24),
-            radius: 20,
-            x: 3,
-            y: 0
-        )
         .overlay {
             sidebarSwipeCaptureOverlay(expansionProgress: expansionProgress)
         }

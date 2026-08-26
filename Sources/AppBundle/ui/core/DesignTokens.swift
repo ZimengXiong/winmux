@@ -73,21 +73,60 @@ extension View {
     }
 }
 
+extension ChromeSolidColor {
+    var color: Color {
+        let components = rgb
+        return Color(red: components.red, green: components.green, blue: components.blue)
+    }
+}
+
+extension WorkspaceSidebarConfig {
+    var resolvedSolidChromeColor: Color {
+        solidChromeColor == .custom ? Color(chromeHex: solidChromeCustomColor) : solidChromeColor.color
+    }
+}
+
+extension WorkspaceSidebarConfiguration {
+    var resolvedSolidChromeColor: Color {
+        solidChromeColor == .custom ? Color(chromeHex: solidChromeCustomColor) : solidChromeColor.color
+    }
+}
+
+extension Color {
+    init(chromeHex: String) {
+        let hex = chromeHex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        let value = UInt64(hex, radix: 16) ?? 0x191B20
+        self.init(
+            red: Double((value >> 16) & 0xff) / 255,
+            green: Double((value >> 8) & 0xff) / 255,
+            blue: Double(value & 0xff) / 255,
+        )
+    }
+
+    var chromeHex: String {
+        let components = NSColor(self).usingColorSpace(.sRGB) ?? .black
+        return String(format: "#%02X%02X%02X", Int((components.redComponent * 255).rounded()), Int((components.greenComponent * 255).rounded()), Int((components.blueComponent * 255).rounded()))
+    }
+}
 
 /// The shared glass surface: glass/blur base, dark scrim, neutral tint, top highlight,
 /// hairline border.
 struct GlassSurface<S: Shape>: View {
     let shape: S
     var hasHighlight: Bool = true
-    var usesLiquidGlass: Bool = true
+    var hasBorder: Bool = true
+    var style: ChromeStyle = .liquidGlass
+    var solidColor: Color = .black
 
     var body: some View {
         ZStack {
             base
-            shape.fill(Color.black.opacity(GlassToken.scrimOpacity))
-            shape.fill(GlassToken.tint.opacity(GlassToken.tintOpacity))
-                .blendMode(.plusLighter)
-            if hasHighlight {
+            if style == .liquidGlass {
+                shape.fill(Color.black.opacity(GlassToken.scrimOpacity))
+                shape.fill(GlassToken.tint.opacity(GlassToken.tintOpacity))
+                    .blendMode(.plusLighter)
+            }
+            if hasHighlight, style == .liquidGlass {
                 shape.fill(
                     LinearGradient(
                         stops: [
@@ -101,18 +140,28 @@ struct GlassSurface<S: Shape>: View {
                 )
                 .blendMode(.screen)
             }
-            borderEdge
+            if hasBorder {
+                borderEdge
+            }
         }
         .compositingGroup()
+        // `glassEffect` is backed by a rectangular AppKit layer. Clip the composed result,
+        // not only its SwiftUI fills, so that backing layer cannot show beyond a shaped edge.
+        .clipShape(shape)
     }
 
     @ViewBuilder
     private var base: some View {
-        if #available(macOS 26.0, *), usesLiquidGlass {
-            Color.clear.glassEffect(.regular.interactive(false), in: shape)
-        } else {
-            shape.fill(.ultraThinMaterial)
-                .environment(\.colorScheme, .dark)
+        switch style {
+        case .solid:
+            shape.fill(solidColor)
+        case .liquidGlass:
+            if #available(macOS 26.0, *) {
+                Color.clear.glassEffect(.regular.interactive(false), in: shape)
+            } else {
+                shape.fill(.ultraThinMaterial)
+                    .environment(\.colorScheme, .dark)
+            }
         }
     }
 
@@ -122,7 +171,7 @@ struct GlassSurface<S: Shape>: View {
     /// get the plain hairline.
     @ViewBuilder
     private var borderEdge: some View {
-        if #available(macOS 26.0, *), usesLiquidGlass {
+        if #available(macOS 26.0, *), style == .liquidGlass {
             Color.clear
                 .glassEffect(.regular, in: shape)
                 .mask(shape.stroke(lineWidth: GlassToken.refractiveBorderWidth))

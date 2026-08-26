@@ -12,6 +12,10 @@ func workspaceSidebarStatusBottomPadding(isCompact: Bool) -> CGFloat {
     workspaceSidebarOuterLeadingPadding(isCompact: isCompact)
 }
 
+func workspaceSidebarFooterBottomPadding(showsClock: Bool) -> CGFloat {
+    showsClock ? 0 : 6
+}
+
 func workspaceSidebarHoverCueWidth(collapsedWidth: CGFloat, expandedWidth: CGFloat) -> CGFloat {
     min(collapsedWidth, expandedWidth)
 }

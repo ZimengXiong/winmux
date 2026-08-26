@@ -291,7 +291,11 @@ struct SwitcherPaletteView: View {
         .frame(width: switcherPaletteWidth)
         .fixedSize(horizontal: false, vertical: true)
         .background {
-            GlassSurface(shape: RoundedRectangle(cornerRadius: RadiusToken.panel, style: .continuous))
+            GlassSurface(
+                shape: RoundedRectangle(cornerRadius: RadiusToken.panel, style: .continuous),
+                style: config.workspaceSidebar.chromeStyle,
+                solidColor: config.workspaceSidebar.resolvedSolidChromeColor,
+            )
         }
         .clipShape(RoundedRectangle(cornerRadius: RadiusToken.panel, style: .continuous))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

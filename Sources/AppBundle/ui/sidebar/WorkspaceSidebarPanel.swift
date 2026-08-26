@@ -30,7 +30,6 @@ let workspaceSidebarDropdownPadding: CGFloat = 7
 let workspaceSidebarDropdownLabelSize: CGFloat = 11.5
 let workspaceSidebarDropdownSymbolSize: CGFloat = 10.5
 let workspaceSidebarPagerHeight: CGFloat = 32
-let workspaceSidebarActiveWorkspaceTint = Color(nsColor: .systemBlue)
 let workspaceSidebarWorkspaceSectionHeaderHeight: CGFloat = 32
 let workspaceSidebarWorkspaceRowHeight: CGFloat = 24
 let workspaceSidebarWorkspaceSectionHeightCompact: CGFloat = 32

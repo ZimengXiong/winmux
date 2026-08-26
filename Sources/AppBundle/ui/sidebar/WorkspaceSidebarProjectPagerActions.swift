@@ -66,7 +66,7 @@ extension WorkspaceSidebarProjectPager {
                 scrollProjectTrackToCurrent(proxy)
             }
             .onChange(of: projectTrackScrollTargetId) { projectId in
-                scrollProjectTrack(to: projectId, proxy: proxy, animated: true)
+                scrollProjectTrack(to: projectId, proxy: proxy)
             }
             .onChange(of: projectTrackWidth) { _ in
                 scrollProjectTrackToCurrent(proxy)
@@ -98,25 +98,19 @@ extension WorkspaceSidebarProjectPager {
 
     private func scrollProjectTrackToCurrent(_ proxy: ScrollViewProxy) {
         guard let selectedProject else { return }
-        scrollProjectTrack(to: projectTrackScrollTargetId ?? selectedProject.id, proxy: proxy, animated: true)
+        scrollProjectTrack(to: projectTrackScrollTargetId ?? selectedProject.id, proxy: proxy)
     }
 
-    private func scrollProjectTrack(to projectId: WorkspaceProjectId?, proxy: ScrollViewProxy, animated: Bool) {
+    private func scrollProjectTrack(to projectId: WorkspaceProjectId?, proxy: ScrollViewProxy) {
         guard let projectId else { return }
         DispatchQueue.main.async {
-            if animated {
-                withAnimation(.easeOut(duration: 0.16)) {
-                    proxy.scrollTo(projectId, anchor: .center)
-                }
-            } else {
-                proxy.scrollTo(projectId, anchor: .center)
-            }
+            proxy.scrollTo(projectId, anchor: .center)
         }
     }
 
     private func scrollCompactProjectTrackToCurrent(_ proxy: ScrollViewProxy) {
         guard let selectedProject else { return }
-        scrollProjectTrack(to: selectedProject.id, proxy: proxy, animated: true)
+        scrollProjectTrack(to: selectedProject.id, proxy: proxy)
     }
 
     @ViewBuilder
@@ -152,8 +146,10 @@ extension WorkspaceSidebarProjectPager {
             }
             .frame(width: sectionWidth, height: workspaceSidebarPagerHeight, alignment: .trailing)
 
-            projectDotTrack
-                .frame(width: projectTrackWidth, height: workspaceSidebarPagerHeight, alignment: .leading)
+            if showsProjectIndicator {
+                projectDotTrack
+                    .frame(width: projectTrackWidth, height: workspaceSidebarPagerHeight, alignment: .leading)
+            }
         }
         .frame(width: sectionWidth, height: expandedProjectControlsHeight, alignment: .bottomTrailing)
     }

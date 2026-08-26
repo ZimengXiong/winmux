@@ -12,6 +12,8 @@ func workspaceSidebarConfiguration() -> WorkspaceSidebarConfiguration {
         showsDate: config.workspaceSidebar.showDate,
         showsWeekday: config.workspaceSidebar.showWeekday,
         showsStatusPills: config.workspaceSidebar.showStatusPills,
-        usesLiquidGlass: config.workspaceSidebar.useLiquidGlass,
+        chromeStyle: config.workspaceSidebar.chromeStyle,
+        solidChromeColor: config.workspaceSidebar.solidChromeColor,
+        solidChromeCustomColor: config.workspaceSidebar.solidChromeCustomColor,
     )
 }

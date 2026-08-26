@@ -49,7 +49,7 @@ struct WorkspaceSidebarDropPreviewView: View {
         .background(sectionShape.fill(Color.white.opacity(0.015)))
         .overlay {
             sectionShape.strokeBorder(
-                Color.accentColor.opacity(0.35),
+                Color.white.opacity(0.42),
                 style: StrokeStyle(lineWidth: 1, dash: [5, 3])
             )
         }

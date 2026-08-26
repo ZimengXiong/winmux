@@ -40,10 +40,14 @@ struct WorkspaceSidebarProjectPager: View {
         return projects.first { $0.id == selectedProjectId }
             ?? projects.first
     }
+    var showsProjectIndicator: Bool { projects.count > 1 }
     var expandedProjectControlsHeight: CGFloat {
-        (workspaceSidebarPagerHeight * 2) + 4
+        showsProjectIndicator ? (workspaceSidebarPagerHeight * 2) + 4 : workspaceSidebarPagerHeight
     }
     var pagerHeight: CGFloat {
+        if isCompact, !showsProjectIndicator {
+            return 0
+        }
         let controlsHeight = isCompact ? compactProjectControlsHeight : expandedProjectControlsHeight
         guard isProjectMenuOpen && !isCompact else {
             return controlsHeight
@@ -84,7 +88,7 @@ struct WorkspaceSidebarProjectPager: View {
     }
 
     var body: some View {
-        if !projects.isEmpty {
+        if !projects.isEmpty, !isCompact || showsProjectIndicator {
             pagerContent
                 .frame(width: sectionWidth, height: pagerHeight, alignment: .bottom)
                 .contentShape(Rectangle())

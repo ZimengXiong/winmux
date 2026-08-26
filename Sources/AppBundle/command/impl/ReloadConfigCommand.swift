@@ -1,6 +1,10 @@
 import AppKit
 import Common
 
+/// Becomes true once the initial workspace model exists. Config parsing happens earlier during
+/// launch, when scheduling a live layout pass would race app initialization.
+@MainActor var isWinMuxRuntimeReady = false
+
 struct ReloadConfigCommand: Command {
     let args: ReloadConfigCmdArgs
     /*conforms*/ let shouldResetClosedWindowsCache = false
@@ -34,7 +38,7 @@ struct ReloadConfigCommand: Command {
                 configUrl = url
                 try await activateMode(activeMode)
                 syncStartAtLogin()
-                WorkspaceSidebarPanel.refreshAll()
+                applyReloadedConfigurationToRunningApp()
                 MessageModel.shared.message = nil
             }
             result = true
@@ -51,4 +55,16 @@ struct ReloadConfigCommand: Command {
         syncConfigFileWatcher()
     }
     return result
+}
+
+/// Apply a newly loaded config to all running surfaces. This is intentionally part of config
+/// reload rather than individual Settings controls, so GUI edits, config-editor saves, and
+/// filesystem auto-reloads share the same live-update behavior.
+@MainActor private func applyReloadedConfigurationToRunningApp() {
+    WorkspaceSidebarPanel.refreshAll()
+    WindowTabStripPanelController.shared.refresh()
+    SecureInputPanel.shared.refresh()
+
+    guard isWinMuxRuntimeReady else { return }
+    scheduleRefreshSession(.configAutoReload)
 }

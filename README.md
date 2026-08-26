@@ -20,13 +20,14 @@ You can drag windows in and out of the sidebar from and to the current workspace
 
 By default the sidebar rests as a compact rail and expands when hovered. To hide the rail
 completely until the pointer reaches the left display edge, enable auto-hide. On macOS 26 and
-newer, native Liquid Glass is enabled by default and can be replaced with the material-blur
-fallback independently:
+newer, native Liquid Glass is enabled by default. Choose an opaque solid color for greater
+contrast across the sidebar, tab groups, and switcher:
 
 ```toml
 [workspace-sidebar]
     auto-hide = true
-    use-liquid-glass = false
+    chrome-style = 'solid'
+    solid-chrome-color = 'lavender' # Choose any color shown in Appearance, including custom.
 ```
 
 To keep the full sidebar visible, reserve its expanded width when laying out tiled windows:
@@ -149,7 +150,15 @@ end tell
 ```
 
 ## Installation
-Download the latest binary from releases and launch.
+Install WinMux with Homebrew:
+
+```shell
+brew tap ZimengXiong/homebrew https://github.com/ZimengXiong/homebrew
+brew trust ZimengXiong/homebrew
+brew install --cask winmux
+```
+
+Or download the latest binary from releases and launch.
 
 Release builds are signed with the project's Apple Development certificate. They are not notarized, so macOS may require you to right-click the app and choose **Open** the first time you launch it.
 
@@ -158,6 +167,8 @@ WinMux checks GitHub Releases for signed updates automatically. You can also sel
 ### Release updates
 
 `make release VERSION=<version>` creates a signed `appcast.xml` alongside the release archive and uploads both to the GitHub release. Sparkle signs the appcast with the Ed25519 key in the local login Keychain. The matching public key is set through `SPARKLE_PUBLIC_KEY` in the makefile; keep the private key in the Keychain and do not commit or share it.
+
+Publishing a stable GitHub release also updates `Casks/winmux.rb` in `ZimengXiong/homebrew`. Before the first release, add a `HOMEBREW_TAP_TOKEN` repository secret to this repository. The token must have read and write access to the contents of `ZimengXiong/homebrew`.
 
 ## Migrating
 ### From AeroSpace
