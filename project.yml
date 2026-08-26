@@ -18,6 +18,13 @@ targets:
     deploymentTarget: "13.0"
     info:
       path: resources/WinMux-Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSUIElement: true
+        SUEnableAutomaticChecks: true
+        SUFeedURL: https://github.com/ZimengXiong/winmux/releases/latest/download/appcast.xml
+        SUPublicEDKey: $(SPARKLE_PUBLIC_KEY)
     sources:
       - "Sources/WinMuxApp"
       - "resources"
