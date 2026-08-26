@@ -6,7 +6,10 @@ private let winmuxRepositoryURL = "https://github.com/zimengxiong/winmux"
 private let winmuxNewIssueURL = "https://github.com/zimengxiong/winmux/issues/new/choose"
 
     @MainActor
-    public func menuBar(viewModel: TrayMenuModel) -> some Scene { // todo should it be converted to "SwiftUI struct"?
+    public func menuBar(
+        viewModel: TrayMenuModel,
+        checkForUpdates: (() -> Void)? = nil,
+    ) -> some Scene { // todo should it be converted to "SwiftUI struct"?
         MenuBarExtra {
             let shortIdentification = "\(winMuxAppName) v\(winMuxAppVersion) \(gitShortHash)"
             let identification      = "\(winMuxAppName) v\(winMuxAppVersion) \(gitHash)"
@@ -25,6 +28,11 @@ private let winmuxNewIssueURL = "https://github.com/zimengxiong/winmux/issues/ne
         OpenShortcutSettingsButton()
         openConfigButton()
         reloadConfigButton()
+        if let checkForUpdates {
+            Button("Check for Updates…") {
+                checkForUpdates()
+            }
+        }
         Button("GitHub Repository") {
             openURLString(winmuxRepositoryURL)
         }

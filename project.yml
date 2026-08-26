@@ -22,12 +22,19 @@ targets:
     dependencies:
       - package: WinMuxPackage
         product: AppBundle
+      - package: WinMuxPackage
+        product: SparkleSupport
+        embed: true
     # https://developer.apple.com/documentation/xcode/build-settings-reference
     settings:
       base:
         SWIFT_VERSION: 6.2 # Swift Language Version
         GENERATE_INFOPLIST_FILE: YES
         MARKETING_VERSION: ${XCODEGEN_WINMUX_VERSION}
+        CURRENT_PROJECT_VERSION: ${XCODEGEN_WINMUX_VERSION}
+        INFOPLIST_KEY_SUFeedURL: https://github.com/ZimengXiong/winmux/releases/latest/download/appcast.xml
+        INFOPLIST_KEY_SUEnableAutomaticChecks: YES
+        INFOPLIST_KEY_SUPublicEDKey: ${XCODEGEN_WINMUX_SPARKLE_PUBLIC_KEY}
         # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/LaunchServicesKeys.html#//apple_ref/doc/uid/20001431-108256
         # Specifies whether the app runs as an agent app. If this key is set to YES, Launch Services runs the app as an agent app.
         # Agent apps do not appear in the Dock or in the Force Quit window (cmd-opt-esc)

@@ -153,6 +153,12 @@ Download the latest binary from releases and launch.
 
 Release builds are signed with the project's Apple Development certificate. They are not notarized, so macOS may require you to right-click the app and choose **Open** the first time you launch it.
 
+WinMux checks GitHub Releases for signed updates automatically. You can also select **Check for Updates…** from the menu bar.
+
+### Release updates
+
+`make release VERSION=<version>` creates a signed `appcast.xml` alongside the release archive and uploads both to the GitHub release. Sparkle signs the appcast with the Ed25519 key in the local login Keychain. The matching public key is set through `SPARKLE_PUBLIC_KEY` in the makefile; keep the private key in the Keychain and do not commit or share it.
+
 ## Migrating
 ### From AeroSpace
 If `~/.config/winmux/winmux.toml` already exists, WinMux uses it as-is.

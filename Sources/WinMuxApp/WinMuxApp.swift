@@ -1,4 +1,5 @@
 import AppBundle
+import SparkleSupport
 import SwiftUI
 
 // This file is shared between SPM and xcode project
@@ -11,11 +12,21 @@ struct WinMuxApp: App {
     @Environment(\.openWindow) var openWindow: OpenWindowAction
 
     init() {
+        #if !DEBUG
+            AutomaticUpdates.start()
+        #endif
         initAppBundle()
     }
 
     var body: some Scene {
+        #if DEBUG
         menuBar(viewModel: viewModel)
+        #else
+        menuBar(
+            viewModel: viewModel,
+            checkForUpdates: { AutomaticUpdates.checkForUpdates() },
+        )
+        #endif
         getShortcutSettingsWindow(model: shortcutSettingsModel)
             .onChange(of: shortcutSettingsModel.openRequestId) { _ in
                 openShortcutSettingsWindow(openWindow)

@@ -1,5 +1,5 @@
 {
-  "originHash" : "d9871bf58116cb043045b8331e900f40b168b8c23487f79e72131fd4bbd377e2",
+  "originHash" : "161f794280f1c7432c437a64ca76d9837ff73b037c4bd889d21fa39c332a0b8f",
   "pins" : [
     {
       "identity" : "antlr4",
@@ -34,6 +34,15 @@
       "location" : "https://github.com/rxhanson/MASShortcut",
       "state" : {
         "revision" : "2f9fbb3f959b7a683c6faaf9638d22afad37a235"
+      }
+    },
+    {
+      "identity" : "sparkle",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/sparkle-project/Sparkle",
+      "state" : {
+        "revision" : "ac2def288cbff5cfc7df3ffef6abdf45b72bcb0a",
+        "version" : "2.9.6"
       }
     },
     {

@@ -9,6 +9,7 @@ RELEASE_TAG ?= v$(VERSION)
 RELEASE_NOTES ?= auto
 PUBLISH ?= 1
 APP_INSTALL_DIR ?= /Applications
+SPARKLE_PUBLIC_KEY ?= kcc3956V3+Yo8GtwFJ8Odb9sphIr09/9dsuoYBNtxf0=
 ARGS ?=
 
 .PHONY: generate xcodeproj build build-clean run run-clean cli release install installed clean
@@ -27,6 +28,7 @@ xcodeproj:
 	export XCODEGEN_WINMUX_VERSION="$(VERSION)" && \
 	export XCODEGEN_WINMUX_CODE_SIGN_IDENTITY="$(CODESIGN_IDENTITY)" && \
 	export XCODEGEN_WINMUX_DEVELOPMENT_TEAM="$(DEVELOPMENT_TEAM)" && \
+	export XCODEGEN_WINMUX_SPARKLE_PUBLIC_KEY="$(SPARKLE_PUBLIC_KEY)" && \
 	./script/install-dep.sh --xcodegen && \
 	./.deps/xcodegen/xcodegen'
 
@@ -93,8 +95,9 @@ release:
 	derived_data_path="$$release_dir/$$app_name-$(VERSION).deriveddata"; \
 	app_path="$$archive_path/Products/Applications/$$app_name.app"; \
 	zip_path="$$release_dir/$$app_name-$(VERSION).zip"; \
+	appcast_path="$$release_dir/appcast.xml"; \
 	log_path="$$release_dir/$$app_name-$(VERSION)-xcodebuild.log"; \
-	rm -rf "$$archive_path" "$$zip_path" "$$derived_data_path"; \
+	rm -rf "$$archive_path" "$$zip_path" "$$appcast_path" "$$derived_data_path"; \
 	mkdir -p "$$release_dir"; \
 	xcodebuild-pretty "$$log_path" \
 	    -project WinMux.xcodeproj \
@@ -110,6 +113,10 @@ release:
 	codesign --verify --deep --strict --verbose=2 "$$app_path"; \
 	codesign -dv --verbose=4 "$$app_path" 2>&1 | grep -F "$(EXPECTED_CODESIGN_AUTHORITY_PREFIX)" >/dev/null; \
 	ditto -c -k --sequesterRsrc --keepParent "$$app_path" "$$zip_path"; \
+	sparkle_appcast="$$(find "$$derived_data_path/SourcePackages/artifacts" -type f -name generate_appcast -print -quit)"; \
+	test -n "$$sparkle_appcast"; \
+	"$$sparkle_appcast" --download-url-prefix "https://github.com/ZimengXiong/winmux/releases/download/$(RELEASE_TAG)/" "$$release_dir"; \
+	test -f "$$appcast_path"; \
 	if [ "$(NOTARIZE)" = "1" ]; then \
 	    test -n "$(NOTARYTOOL_PROFILE)"; \
 	    xcrun notarytool submit "$$zip_path" --keychain-profile "$(NOTARYTOOL_PROFILE)" --wait; \
@@ -126,12 +133,12 @@ release:
 	    echo "Skipping GitHub release publish because PUBLISH=$(PUBLISH)"; \
 	elif /usr/bin/which gh >/dev/null 2>&1; then \
 	    if gh release view "$(RELEASE_TAG)" >/dev/null 2>&1; then \
-	        gh release upload "$(RELEASE_TAG)" "$$zip_path" --clobber; \
+	        gh release upload "$(RELEASE_TAG)" "$$zip_path" "$$appcast_path" --clobber; \
 	    else \
 	        if [ "$(RELEASE_NOTES)" = "auto" ]; then \
-	            gh release create "$(RELEASE_TAG)" "$$zip_path" --title "$$app_name $(VERSION)" --generate-notes; \
+	            gh release create "$(RELEASE_TAG)" "$$zip_path" "$$appcast_path" --title "$$app_name $(VERSION)" --generate-notes; \
 	        else \
-	            gh release create "$(RELEASE_TAG)" "$$zip_path" --title "$$app_name $(VERSION)" --notes "$(RELEASE_NOTES)"; \
+	            gh release create "$(RELEASE_TAG)" "$$zip_path" "$$appcast_path" --title "$$app_name $(VERSION)" --notes "$(RELEASE_NOTES)"; \
 	        fi; \
 	    fi; \
 	else \
