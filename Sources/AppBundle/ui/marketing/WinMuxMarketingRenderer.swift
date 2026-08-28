@@ -5,8 +5,31 @@ import SwiftUI
 /// The renderer does not capture the screen or read pixels from application windows.
 @MainActor
 public func renderWinMuxMarketingImage(to outputURL: URL) throws {
+    try renderMarketingView(WinMuxMarketingCanvas(), to: outputURL)
+}
+
+/// Exports a focused proof containing one real Safari surface and two WinMux tabs.
+@MainActor
+public func renderWinMuxSafariProofImage(to outputURL: URL) throws {
+    try renderMarketingView(WinMuxSafariProofCanvas(), to: outputURL)
+}
+
+/// Exports a collage of native Helium, Ghostty, and Finder window surfaces.
+@MainActor
+public func renderWinMuxAppsProofImage(to outputURL: URL) throws {
+    try renderMarketingView(WinMuxAppsProofCanvas(), to: outputURL)
+}
+
+/// Exports a tiled Safari and Plasticity workspace using their measured split ratio.
+@MainActor
+public func renderWinMuxSafariPlasticityProofImage(to outputURL: URL) throws {
+    try renderMarketingView(WinMuxSafariPlasticityProofCanvas(), to: outputURL)
+}
+
+@MainActor
+private func renderMarketingView<Content: View>(_ rootView: Content, to outputURL: URL) throws {
     let size = CGSize(width: 1_600, height: 900)
-    let content = WinMuxMarketingCanvas()
+    let content = rootView
         .frame(width: size.width, height: size.height)
         .environment(\.colorScheme, .dark)
 
@@ -67,6 +90,141 @@ public func renderWinMuxMarketingImage(to outputURL: URL) throws {
     try data.write(to: outputURL, options: .atomic)
 }
 
+private struct WinMuxSafariProofCanvas: View {
+    private let strip = MarketingFixtures.browserTabStrip
+
+    private var groupSize: CGSize {
+        let maximumContentSize = CGSize(width: 1_360, height: 780)
+        guard let pixels = MarketingAsset.pixelSize(named: "safari-retina.png"),
+              pixels.width > 0,
+              pixels.height > 0
+        else {
+            return CGSize(width: 1_262, height: 820)
+        }
+
+        let aspectRatio = pixels.width / pixels.height
+        let contentWidth = min(maximumContentSize.width, maximumContentSize.height * aspectRatio)
+        let contentHeight = contentWidth / aspectRatio
+        return CGSize(width: contentWidth, height: contentHeight + strip.frame.height)
+    }
+
+    var body: some View {
+        ZStack {
+            MarketingDesktopWallpaper(
+                imageName: "macos-blue-wallpaper.jpg",
+                darkeningOpacity: 0.58
+            )
+
+            LinearGradient(
+                colors: [.black.opacity(0.05), .black.opacity(0.28)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            MarketingCapturedTabWindow(
+                strip: strip,
+                imageName: "safari-retina.png",
+                contentMode: .fit
+            )
+            .frame(width: groupSize.width, height: groupSize.height)
+        }
+        .frame(width: 1_600, height: 900)
+        .clipped()
+    }
+}
+
+private struct WinMuxAppsProofCanvas: View {
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            MarketingDesktopWallpaper(
+                imageName: "macos-blue-wallpaper.jpg",
+                darkeningOpacity: 0.48
+            )
+
+            LinearGradient(
+                colors: [.black.opacity(0.02), .black.opacity(0.30)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            MarketingCapturedTabWindow(
+                strip: MarketingFixtures.appsTabStrip,
+                imageName: "helium-retina.png",
+                imageAlignment: .top
+            )
+            .frame(width: 918, height: 852)
+            .offset(x: 64, y: 24)
+
+            MarketingCapturedTabWindow(
+                strip: MarketingFixtures.browserTabStrip,
+                imageName: "safari-retina.png",
+                imageAlignment: .top
+            )
+            .frame(width: 582, height: 852)
+            .offset(x: 994, y: 24)
+
+            if let sidebar = MarketingAsset.image(named: "winmux-retina.png") {
+                Image(nsImage: sidebar)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 900, alignment: .topLeading)
+                    .frame(width: 560, height: 900, alignment: .topLeading)
+                    .offset(x: 0, y: 0)
+                    .zIndex(5)
+            }
+        }
+        .frame(width: 1_600, height: 900)
+        .clipped()
+    }
+}
+
+private struct WinMuxSafariPlasticityProofCanvas: View {
+    private let safariWidth: CGFloat = 587.3637
+    private let plasticityWidth: CGFloat = 938.6363
+    private let tileHeight: CGFloat = 864
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            MarketingDesktopWallpaper(
+                imageName: "macos-blue-wallpaper.jpg",
+                darkeningOpacity: 0.46
+            )
+
+            LinearGradient(
+                colors: [.black.opacity(0.02), .black.opacity(0.26)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            MarketingCapturedTabWindow(
+                strip: MarketingFixtures.safariCurrentTabStrip,
+                imageName: "safari-current-retina.png",
+                imageAlignment: .top,
+                shadowOpacity: 0
+            )
+            .frame(width: safariWidth, height: tileHeight)
+            .offset(x: 58, y: 28)
+
+            MarketingCapturedTabWindow(
+                strip: MarketingFixtures.plasticityTabStrip,
+                imageName: "plasticity-current-retina.png",
+                imageAlignment: .top,
+                shadowOpacity: 0
+            )
+            .frame(width: plasticityWidth, height: tileHeight)
+            .offset(x: 653.3637, y: 28)
+
+        }
+        .frame(width: 1_600, height: 900)
+        .overlay(alignment: .topLeading) {
+            if let sidebar = MarketingAsset.image(named: "winmux-retina.png") {
+                MarketingTranslucentCapturedSidebar(image: sidebar)
+            }
+        }
+        .clipped()
+    }
+}
+
 private enum WinMuxMarketingRenderError: LocalizedError {
     case renderFailed
     case encodingFailed
@@ -90,35 +248,31 @@ private struct WinMuxMarketingCanvas: View {
         ZStack(alignment: .topLeading) {
             MarketingDesktopWallpaper()
 
-            MarketingMenuBar()
-                .frame(height: 28)
-
             WorkspaceSidebarView(snapshot: sidebarSnapshot)
-                .frame(width: sidebarSnapshot.visibleWidth, height: 878)
-                .offset(y: 28)
+                .frame(width: sidebarSnapshot.visibleWidth, height: 906)
                 .zIndex(5)
 
             MarketingCapturedTabWindow(strip: codeTabs, imageName: "xcode-winmux.png")
                 .frame(width: 590, height: 620)
-                .offset(x: 300, y: 72)
+                .offset(x: 300, y: 44)
                 .rotationEffect(.degrees(-0.6))
                 .zIndex(2)
 
             MarketingCapturedTabWindow(strip: browserTabs, imageName: "safari-swiftui.png")
                 .frame(width: 735, height: 500)
-                .offset(x: 820, y: 104)
+                .offset(x: 820, y: 76)
                 .rotationEffect(.degrees(0.45))
                 .zIndex(3)
 
             MarketingCapturedWindow(imageName: "finder-winmux.png")
                 .frame(width: 390, height: 260)
-                .offset(x: 390, y: 612)
+                .offset(x: 390, y: 584)
                 .rotationEffect(.degrees(-1.1))
                 .zIndex(3.2)
 
             campaignCopy
                 .frame(width: 700, alignment: .leading)
-                .offset(x: 835, y: 655)
+                .offset(x: 835, y: 627)
                 .zIndex(4)
         }
         .clipped()
@@ -166,22 +320,39 @@ private struct WinMuxMarketingCanvas: View {
 }
 
 private enum MarketingAsset {
-    static func image(named name: String) -> NSImage? {
+    private static func url(named name: String) -> URL {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        return NSImage(contentsOf: root.appendingPathComponent("resources/marketing/captures/\(name)"))
+        return root.appendingPathComponent("resources/marketing/captures/\(name)")
+    }
+
+    static func image(named name: String) -> NSImage? {
+        NSImage(contentsOf: url(named: name))
+    }
+
+    static func pixelSize(named name: String) -> CGSize? {
+        guard let data = try? Data(contentsOf: url(named: name)),
+              let representation = NSBitmapImageRep(data: data)
+        else { return nil }
+        return CGSize(width: representation.pixelsWide, height: representation.pixelsHigh)
     }
 }
 
 private struct MarketingDesktopWallpaper: View {
+    var imageName = "macos-sonoma-wallpaper.png"
+    var darkeningOpacity = 0.0
+
     var body: some View {
         ZStack {
-            if let wallpaper = MarketingAsset.image(named: "macos-sonoma-wallpaper.png") {
+            if let wallpaper = MarketingAsset.image(named: imageName) {
                 Image(nsImage: wallpaper)
                     .resizable()
                     .scaledToFill()
             } else {
                 Color(red: 0.12, green: 0.18, blue: 0.42)
             }
+
+            Color(red: 0.005, green: 0.018, blue: 0.075)
+                .opacity(darkeningOpacity)
 
             LinearGradient(
                 colors: [Color.black.opacity(0.06), Color.black.opacity(0.30)],
@@ -230,7 +401,12 @@ private struct MarketingMenuBar: View {
         .font(.system(size: 11.5, weight: .medium))
         .foregroundStyle(Color.white.opacity(0.92))
         .padding(.horizontal, 16)
-        .background(.ultraThinMaterial)
+        .background {
+            ZStack {
+                Rectangle().fill(.ultraThinMaterial)
+                Rectangle().fill(Color(red: 0.015, green: 0.055, blue: 0.13).opacity(0.50))
+            }
+        }
         .overlay(alignment: .bottom) {
             Rectangle().fill(Color.white.opacity(0.10)).frame(height: 0.5)
         }
@@ -241,43 +417,166 @@ private struct MarketingMenuBar: View {
 private struct MarketingCapturedTabWindow: View {
     let strip: WindowTabStripViewModel
     let imageName: String
+    var contentMode: ContentMode = .fill
+    var imageAlignment: Alignment = .center
+    var shadowOpacity = 0.50
 
     var body: some View {
         GeometryReader { proxy in
+            let innerRect = WindowTabGroupShellShape.innerRect(
+                in: CGRect(origin: .zero, size: proxy.size),
+                tabBarHeight: strip.frame.height
+            )
+            let outerShape = WindowTabGroupOuterShape(
+                activeWindowCornerRadius: strip.activeWindowCornerRadius
+            )
+
             ZStack(alignment: .top) {
-                RoundedRectangle(cornerRadius: strip.activeWindowCornerRadius, style: .continuous)
-                    .fill(Color(red: 0.035, green: 0.038, blue: 0.052))
+                outerShape
+                    .fill(Color(red: 0.025, green: 0.10, blue: 0.22).opacity(0.20))
+                    .overlay {
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.10), Color.blue.opacity(0.04)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    }
 
                 if let image = MarketingAsset.image(named: imageName) {
-                    let scale = max(
-                        proxy.size.width / max(image.size.width, 1),
-                        proxy.size.height / max(image.size.height, 1)
-                    )
-                    let scaledHeight = image.size.height * scale
-                    let topAlignmentOffset = max((scaledHeight - proxy.size.height) / 2, 0)
                     Image(nsImage: image)
                         .resizable()
-                        .scaledToFill()
-                        .offset(y: topAlignmentOffset)
+                        .aspectRatio(contentMode: contentMode)
                         .frame(
-                            width: proxy.size.width,
-                            height: max(proxy.size.height - strip.frame.height, 0)
+                            width: innerRect.width,
+                            height: innerRect.height,
+                            alignment: imageAlignment
                         )
                         .clipped()
-                        .offset(y: strip.frame.height)
+                        .clipShape(RoundedRectangle(
+                            cornerRadius: strip.activeWindowCornerRadius,
+                            style: .continuous
+                        ))
+                        .offset(y: innerRect.minY)
+
                 }
 
-                WindowTabGroupFrameView(strip: strip, groupSize: proxy.size)
+                MarketingMeasuredTabGroupFrameView(strip: strip, groupSize: proxy.size)
                 WindowTabStripView(strip: strip)
                     .frame(height: strip.frame.height)
             }
-            .clipShape(RoundedRectangle(cornerRadius: strip.activeWindowCornerRadius, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: strip.activeWindowCornerRadius, style: .continuous)
-                    .stroke(Color.white.opacity(0.18), lineWidth: 0.6)
-            }
-            .shadow(color: .black.opacity(0.50), radius: 28, y: 17)
+            .clipShape(outerShape)
+            .shadow(color: .black.opacity(shadowOpacity), radius: 28, y: 17)
         }
+    }
+}
+
+private struct MarketingMeasuredTabGroupFrameView: View {
+    let strip: WindowTabStripViewModel
+    let groupSize: CGSize
+
+    var body: some View {
+        let tabHeight = min(strip.frame.height, groupSize.height)
+        let outerShape = WindowTabGroupOuterShape(
+            activeWindowCornerRadius: strip.activeWindowCornerRadius
+        )
+        let innerShape = MarketingMeasuredWindowBoundaryShape(
+            tabBarHeight: tabHeight,
+            cornerRadius: strip.activeWindowCornerRadius
+        )
+        let shellShape = MarketingMeasuredWindowShellShape(
+            tabBarHeight: tabHeight,
+            cornerRadius: strip.activeWindowCornerRadius
+        )
+
+        ZStack(alignment: .topLeading) {
+            GlassSurface(
+                shape: outerShape,
+                style: config.workspaceSidebar.chromeStyle,
+                solidColor: config.workspaceSidebar.resolvedSolidChromeColor
+            )
+            .mask {
+                shellShape.fill(style: FillStyle(eoFill: true))
+            }
+
+            outerShape
+                .stroke(Color.white.opacity(GlassToken.borderOpacity), lineWidth: windowTabGroupFrameStrokeWidth)
+                .glassShadow(.raised)
+
+            Rectangle()
+                .fill(Color.white.opacity(GlassToken.separatorOpacity))
+                .frame(height: StrokeToken.hairline)
+                .offset(y: tabHeight - StrokeToken.hairline)
+
+            innerShape
+                .stroke(mattePanelInsetShadow, lineWidth: windowTabGroupFrameInnerStrokeWidth)
+        }
+        .frame(width: groupSize.width, height: groupSize.height)
+        .allowsHitTesting(false)
+    }
+}
+
+private struct MarketingMeasuredWindowShellShape: Shape {
+    let tabBarHeight: CGFloat
+    let cornerRadius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.addPath(WindowTabGroupOuterShape(activeWindowCornerRadius: cornerRadius).path(in: rect))
+        path.addPath(MarketingMeasuredWindowBoundaryShape(
+            tabBarHeight: tabBarHeight,
+            cornerRadius: cornerRadius
+        ).path(in: rect))
+        return path
+    }
+}
+
+private struct MarketingMeasuredWindowBoundaryShape: Shape {
+    let tabBarHeight: CGFloat
+    let cornerRadius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let innerRect = WindowTabGroupShellShape.innerRect(
+            in: rect,
+            tabBarHeight: tabBarHeight
+        )
+        return RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .path(in: innerRect)
+    }
+}
+
+private struct MarketingTranslucentCapturedSidebar: View {
+    let image: NSImage
+
+    var body: some View {
+        let sidebarShape = UnevenRoundedRectangle(
+            topLeadingRadius: 0,
+            bottomLeadingRadius: 0,
+            bottomTrailingRadius: 20,
+            topTrailingRadius: 20,
+            style: .continuous
+        )
+
+        ZStack(alignment: .topLeading) {
+            sidebarShape
+            .fill(Color(red: 0.012, green: 0.045, blue: 0.115).opacity(0.68))
+            .overlay {
+                LinearGradient(
+                    colors: [Color.white.opacity(0.08), Color.blue.opacity(0.04)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
+
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(height: 934, alignment: .topLeading)
+                .frame(width: 560, height: 934, alignment: .topLeading)
+                .blendMode(.screen)
+                .opacity(0.76)
+        }
+        .frame(width: 50, height: 934, alignment: .topLeading)
+        .clipShape(sidebarShape)
     }
 }
 
@@ -660,6 +959,9 @@ private enum MarketingFixtures {
 
     private static let codeIdentity = TabGroupIdentity()
     private static let browserIdentity = TabGroupIdentity()
+    private static let heliumIdentity = TabGroupIdentity()
+    private static let safariCurrentIdentity = TabGroupIdentity()
+    private static let plasticityIdentity = TabGroupIdentity()
     private static let defaultProject = WorkspaceProjectId(rawValue: "default")
 
     static let sidebarSnapshot = WorkspaceSidebarSnapshot(
@@ -756,9 +1058,80 @@ private enum MarketingFixtures {
         workspace: "code",
         activeWindowId: 103,
         tabs: [
-            tab(103, workspace: "code", app: "Safari", bundle: "com.apple.Safari", title: "SwiftUI documentation", active: true),
-            tab(104, workspace: "code", app: "Safari", bundle: "com.apple.Safari", title: "Window management"),
+            tab(103, workspace: "code", app: "Safari", bundle: "com.apple.Safari", title: "macOS 27 — Apple", active: true),
+            tab(104, workspace: "code", app: "Safari", bundle: "com.apple.Safari", title: "Apple Intelligence"),
         ]
+    )
+
+    static let appsTabStrip = tabStrip(
+        identity: heliumIdentity,
+        workspace: "work",
+        activeWindowId: 301,
+        tabs: [
+            tab(301, workspace: "work", app: "Helium", bundle: "net.imput.helium", title: "alpaca engineering", active: true),
+            tab(302, workspace: "work", app: "Ghostty", bundle: "com.mitchellh.ghostty", title: "WinMux"),
+            tab(303, workspace: "work", app: "Finder", bundle: "com.apple.finder", title: "winmux"),
+        ]
+    )
+
+    static let safariCurrentTabStrip = tabStrip(
+        identity: safariCurrentIdentity,
+        workspace: "design",
+        activeWindowId: 601,
+        tabs: [
+            tab(
+                601,
+                workspace: "design",
+                app: "Safari",
+                bundle: "com.apple.Safari",
+                path: "/Applications/Safari.app",
+                title: "alpaca engineering",
+                active: true
+            ),
+            tab(
+                602,
+                workspace: "design",
+                app: "Google Chrome",
+                bundle: "com.google.Chrome",
+                path: "/Applications/Google Chrome.app",
+                title: "Chrome"
+            ),
+        ],
+        cornerRadius: 14
+    )
+
+    static let plasticityTabStrip = tabStrip(
+        identity: plasticityIdentity,
+        workspace: "design",
+        activeWindowId: 701,
+        tabs: [
+            tab(
+                701,
+                workspace: "design",
+                app: "Plasticity",
+                bundle: "com.electron.plasticity",
+                path: "/Applications/Plasticity.app",
+                title: "5X.plasticity",
+                active: true
+            ),
+            tab(
+                702,
+                workspace: "design",
+                app: "Autodesk Fusion",
+                bundle: "com.autodesk.dls.streamer.scriptapp.Autodesk-Fusion",
+                path: "/Users/xzm/Applications/Autodesk Fusion.app",
+                title: "Fusion"
+            ),
+            tab(
+                703,
+                workspace: "design",
+                app: "Finder",
+                bundle: "com.apple.finder",
+                path: "/System/Library/CoreServices/Finder.app",
+                title: "Finder"
+            ),
+        ],
+        cornerRadius: 14
     )
 
     private static func sidebarWindow(
@@ -785,6 +1158,7 @@ private enum MarketingFixtures {
         workspace: String,
         app: String,
         bundle: String,
+        path: String? = nil,
         title: String,
         active: Bool = false
     ) -> WindowTabItemViewModel {
@@ -793,7 +1167,7 @@ private enum MarketingFixtures {
             workspaceName: workspace,
             appName: app,
             appBundleId: bundle,
-            appBundlePath: nil,
+            appBundlePath: path,
             title: title,
             isActive: active
         )
@@ -803,7 +1177,8 @@ private enum MarketingFixtures {
         identity: TabGroupIdentity,
         workspace: String,
         activeWindowId: UInt32,
-        tabs: [WindowTabItemViewModel]
+        tabs: [WindowTabItemViewModel],
+        cornerRadius: CGFloat = 16
     ) -> WindowTabStripViewModel {
         WindowTabStripViewModel(
             id: ObjectIdentifier(identity),
@@ -811,7 +1186,7 @@ private enum MarketingFixtures {
             frame: CGRect(x: 0, y: 0, width: 400, height: 40),
             groupFrame: CGRect(x: 0, y: 0, width: 400, height: 400),
             activeWindowId: activeWindowId,
-            activeWindowCornerRadius: 16,
+            activeWindowCornerRadius: cornerRadius,
             tabs: tabs,
             occludingFloatingWindowFrames: []
         )

@@ -12,6 +12,7 @@ let package = Package(
     products: [
         .executable(name: "winmux", targets: ["Cli"]),
         .executable(name: "winmux-marketing-renderer", targets: ["MarketingRenderer"]),
+        .executable(name: "winmux-window-capture", targets: ["WindowCapture"]),
         // Don't use this build for release, use xcode instead
         .executable(name: "WinMuxApp", targets: ["WinMuxApp"]),
         // We only need to expose this as a product for xcode
@@ -83,6 +84,7 @@ let package = Package(
                 .target(name: "AppBundle"),
             ],
         ),
+        .executableTarget(name: "WindowCapture"),
         .testTarget(
             name: "AppBundleTests",
             dependencies: [
