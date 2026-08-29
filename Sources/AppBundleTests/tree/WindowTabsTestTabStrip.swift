@@ -396,6 +396,34 @@ import XCTest
         XCTAssertEqual(right.hWeight, 500)
     }
 
+    @MainActor
+    func testResizePreviewCreatesSurfaceForEveryPassivePane() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "three-panes")
+        let root = workspace.rootTilingContainer
+        root.changeOrientation(.h)
+        root.layout = .tiles
+
+        let left = TestWindow.new(id: 1, parent: root, adaptiveWeight: 400)
+        let middle = TestWindow.new(id: 2, parent: root, adaptiveWeight: 400)
+        let right = TestWindow.new(id: 3, parent: root, adaptiveWeight: 400)
+        for (index, window) in [left, middle, right].enumerated() {
+            let rect = Rect(topLeftX: CGFloat(index) * 400, topLeftY: 0, width: 400, height: 600)
+            window.lastAppliedLayoutPhysicalRect = rect
+            window.lastAppliedLayoutVirtualRect = rect
+        }
+
+        let proposedRect = Rect(topLeftX: 0, topLeftY: 0, width: 500, height: 600)
+        let weightMap = proposedResizeWeightMap(left, rect: proposedRect).orDie()
+        let items = windowResizePreviewItems(
+            in: workspace,
+            weightMap: weightMap,
+            excludingActiveWindowId: left.windowId,
+        )
+
+        XCTAssertEqual(Set(items.map(\.id)), [middle.windowId, right.windowId])
+    }
+
     func testWindowTabStripDragInProgressIgnoresRegularWindowMove() {
         XCTAssertFalse(isWindowTabStripDragInProgress(
             kind: .move,

@@ -97,6 +97,10 @@ final class MouseDragSubjectTest: XCTestCase {
 
     func testMouseInteractionHiddenIdsStayHiddenUntilSessionRestore() {
         XCTAssertEqual(
+            nextMouseInteractionHiddenWindowIds(activeWindowId: 1, currentlyHidden: [], discovered: [2, 3]),
+            [2, 3]
+        )
+        XCTAssertEqual(
             nextMouseInteractionHiddenWindowIds(activeWindowId: 1, currentlyHidden: [2, 3], discovered: []),
             [2, 3]
         )
