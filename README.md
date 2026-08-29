@@ -156,6 +156,7 @@ Install WinMux with Homebrew:
 brew tap ZimengXiong/homebrew https://github.com/ZimengXiong/homebrew
 brew trust ZimengXiong/homebrew
 brew install --cask winmux
+xattr -cr /Applications/WinMux.app
 ```
 
 Or download the latest binary from releases and launch.
