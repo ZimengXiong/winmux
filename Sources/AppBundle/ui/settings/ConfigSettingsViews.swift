@@ -52,7 +52,6 @@ struct ShortcutBehaviorSettingsView: View {
                 }
             }
         }
-        .id(model.settingsRevision)
     }
 
     private func persistRootBool(_ key: String, _ value: Bool) { persistConfig(section: nil, key: key, value: value ? "true" : "false") }
@@ -141,7 +140,6 @@ struct ShortcutAppearanceSettingsView: View {
                 SettingsStepper("Outer bottom", value: $outerBottomGap, range: 0...120, help: "Inset at the bottom display edge.") { persist("gaps", "outer.bottom", "\(outerBottomGap)") }
             }
         }
-        .id(model.settingsRevision)
     }
 
     private func sidebarBool(_ key: String, _ value: Bool) { persist("workspace-sidebar", key, value ? "true" : "false") }
@@ -189,7 +187,7 @@ struct ShortcutAutomationSettingsView: View {
             }
         }
         .task { loadCommands() }
-        .id(model.settingsRevision)
+        .onChange(of: model.settingsRevision) { _ in loadCommands() }
     }
 
     private func loadCommands() {
