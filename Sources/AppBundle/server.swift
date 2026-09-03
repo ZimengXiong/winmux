@@ -23,7 +23,7 @@ func toggleReleaseServerIfDebug(_ state: EnableCmdArgs.State) async {
     let socketFile = "/tmp/\(stableWinMuxAppId)-\(unixUserName).sock"
     let connection = NWConnection(to: NWEndpoint.unix(path: socketFile), using: .tcp)
     defer { connection.cancel() }
-    if await connection.startBlocking().error != nil { // Can't connect, WinMux.app is not running
+    if await connection.initConnection().error != nil { // Can't connect, WinMux.app is not running
         return
     }
 
@@ -34,6 +34,21 @@ func toggleReleaseServerIfDebug(_ state: EnableCmdArgs.State) async {
 
 private let serverVersionAndHash = "\(winMuxAppVersion) \(gitHash)"
 
+func negotiateSocketProtocolAsServer(_ connection: NWConnection) async -> Bool {
+    let clientVersion: UInt32
+    switch await connection.readUInt32() {
+        case .success(let version): clientVersion = version
+        case .failure: return false
+    }
+
+    // Always tell the peer which version this server supports before rejecting
+    // an incompatible client.
+    if await connection.writeUInt32(SOCKET_PROTOCOL_VERSION).error != nil {
+        return false
+    }
+    return clientVersion == SOCKET_PROTOCOL_VERSION
+}
+
 private func newConnection(_ connection: NWConnection) async { // todo add exit codes
     func answerToClient(exitCode: Int32, stdout: String = "", stderr: String = "") async {
         let ans = ServerAnswer(exitCode: exitCode, stdout: stdout, stderr: stderr, serverVersionAndHash: serverVersionAndHash)
@@ -42,6 +57,9 @@ private func newConnection(_ connection: NWConnection) async { // todo add exit 
     func answerToClient(_ ans: ServerAnswer) async {
         _ = await connection.writeAtomic(ans)
     }
+
+    guard await negotiateSocketProtocolAsServer(connection) else { return }
+
     while true {
         let rawRequest: Data
         switch await connection.readNonAtomic() {

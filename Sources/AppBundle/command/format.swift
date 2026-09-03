@@ -3,6 +3,7 @@ import Common
 enum FormatObject {
     case window(window: Window, title: String)
     case workspace(Workspace)
+    case project(ProjectFormatObject)
     case app(any AbstractApp)
     case monitor(Monitor)
 
@@ -10,10 +11,21 @@ enum FormatObject {
         switch self {
             case .window: .window
             case .workspace: .workspace
+            case .project: .project
             case .app: .app
             case .monitor: .monitor
         }
     }
+}
+
+struct ProjectFormatObject {
+    let index: Int
+    let project: WorkspaceProject
+    let colorHex: String?
+    let isFocused: Bool
+    let isVisible: Bool
+    let workspaceCount: Int
+    let windowCount: Int
 }
 
 extension [FormatObject] {
@@ -127,11 +139,13 @@ extension String {
             case (.window(let w, _), .app):
                 return expandFormatVar(obj: .app(w.app))
             case (.window(_, _), .window): break
+            case (.window, .project): break
 
             case (.workspace(let ws), .monitor):
                 return expandFormatVar(obj: FormatObject.monitor(ws.workspaceMonitor))
             case (.workspace, _): break
 
+            case (.project, _): break
             case (.app(_), _): break
             case (.monitor(_), _): break
         }
@@ -149,6 +163,17 @@ extension String {
                     case .workspaceVisible: .success(.bool(w.isVisible))
                     case .workspaceFocused: .success(.bool(focus.workspace == w))
                     case .workspaceRootContainerLayout: .success(.string(toLayoutString(tc: w.rootTilingContainer)))
+                }
+            case (.project(let p), .project(let f)):
+                return switch f {
+                    case .projectIndex: .success(.int(p.index))
+                    case .projectId: .success(.string(p.project.id.rawValue))
+                    case .projectName: .success(.string(p.project.name))
+                    case .projectColor: .success(.string(p.colorHex ?? "auto"))
+                    case .projectFocused: .success(.bool(p.isFocused))
+                    case .projectVisible: .success(.bool(p.isVisible))
+                    case .projectWorkspaceCount: .success(.int(p.workspaceCount))
+                    case .projectWindowCount: .success(.int(p.windowCount))
                 }
             case (.monitor(let m), .monitor(let f)):
                 return switch f {
@@ -176,6 +201,7 @@ extension String {
     private func toFormatVar() -> FormatVar? {
         FormatVar.WindowFormatVar(rawValue: self).flatMap(FormatVar.window)
             ?? FormatVar.WorkspaceFormatVar(rawValue: self).flatMap(FormatVar.workspace)
+            ?? FormatVar.ProjectFormatVar(rawValue: self).flatMap(FormatVar.project)
             ?? FormatVar.AppFormatVar(rawValue: self).flatMap(FormatVar.app)
             ?? FormatVar.MonitorFormatVar(rawValue: self).flatMap(FormatVar.monitor)
     }

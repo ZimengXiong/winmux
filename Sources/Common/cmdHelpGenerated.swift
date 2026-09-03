@@ -1,5 +1,5 @@
-// FILE IS GENERATED FROM docs/winmux-*.adoc files
-// TO REGENERATE THE FILE RUN generate.sh
+// CLI HELP TABLE. The legacy generated filename is retained for source compatibility.
+// Keep usage strings in sync with the command argument manifests.
 
 let balance_sizes_help_generated = """
     USAGE: balance-sizes [-h|--help] [--workspace <workspace>]
@@ -16,8 +16,15 @@ let config_help_generated = """
        OR: config [-h|--help] --all-keys
        OR: config [-h|--help] --config-path
     """
+let create_project_help_generated = """
+    USAGE: create-project [-h|--help] [--name <project-name>] [--color <#RRGGBB>] [--json]
+    """
 let debug_windows_help_generated = """
     USAGE: debug-windows [-h|--help] [--window-id <window-id>]
+    """
+let delete_project_help_generated = """
+    USAGE: delete-project [-h|--help] --action move-windows-to-fallback --if-window-count <count>
+                          [--json] <project-id>
     """
 let enable_help_generated = """
     USAGE: enable [-h|--help] toggle
@@ -36,7 +43,7 @@ let focus_back_and_forth_help_generated = """
 let focus_monitor_help_generated = """
     USAGE: focus-monitor [-h|--help] [--wrap-around] (left|down|up|right)
        OR: focus-monitor [-h|--help] [--wrap-around] (next|prev)
-       OR: focus-monitor [-h|--help] <monitor-pattern>...
+       OR: focus-monitor [-h|--help] [--] <monitor-pattern>...
     """
 let focus_help_generated = """
     USAGE: focus [-h|--help] [--ignore-floating] [--wrap-around]
@@ -76,6 +83,9 @@ let list_modes_help_generated = """
 let list_monitors_help_generated = """
     USAGE: list-monitors [-h|--help] [--focused [no]] [--mouse [no]] [--format <output-format>] [--count] [--json]
     """
+let list_projects_help_generated = """
+    USAGE: list-projects [-h|--help] [--focused [no]] [--visible [no]] [--format <output-format>] [--count] [--json]
+    """
 let list_windows_help_generated = """
     USAGE: list-windows [-h|--help] (--workspace <workspace>...|--monitor <monitor>...)
                         [--monitor <monitor>...] [--workspace <workspace>...]
@@ -98,7 +108,7 @@ let macos_native_minimize_help_generated = """
     USAGE: macos-native-minimize [-h|--help] [--window-id <window-id>]
     """
 let mode_help_generated = """
-    USAGE: mode [-h|--help] <binding-mode>
+    USAGE: mode [-h|--help] [--] <binding-mode>
     """
 let move_mouse_help_generated = """
     USAGE: move-mouse [-h|--help] [--fail-if-noop] <mouse-position>
@@ -107,35 +117,46 @@ let move_node_to_monitor_help_generated = """
     USAGE: move-node-to-monitor [-h|--help] [--window-id <window-id>] [--focus-follows-window]
                                 [--wrap-around] (left|down|up|right|next|prev)
        OR: move-node-to-monitor [-h|--help] [--window-id <window-id>] [--focus-follows-window]
-                                [--fail-if-noop] <monitor-pattern>...
+                                [--fail-if-noop] [--] <monitor-pattern>...
     """
 let move_node_to_project_help_generated = """
     USAGE: move-node-to-project [-h|--help] [--window-id <window-id>] [--focus-follows-window]
-                                [--wrap-around] [--fail-if-noop] (<project-index>|next|prev)
+                                [--wrap-around] [--fail-if-noop] (<project-id>|<project-index>|next|prev)
+       OR: move-node-to-project [-h|--help] [--window-id <window-id>] [--focus-follows-window]
+                                [--fail-if-noop] --project-id <project-id>
     """
 let move_node_to_workspace_help_generated = """
     USAGE: move-node-to-workspace [-h|--help] [--focus-follows-window] [--wrap-around]
                                   [--stdin|--no-stdin]
                                   (next|prev)
+       OR: move-node-to-workspace [-h|--help] [--focus-follows-window]
+                                  [--window-id <window-id>] new
        OR: move-node-to-workspace [-h|--help] [--focus-follows-window] [--fail-if-noop]
-                                  [--window-id <window-id>] <workspace-name>
+                                  [--window-id <window-id>] [--] <workspace-name>
     """
 let move_workspace_to_monitor_help_generated = """
     USAGE: move-workspace-to-monitor [-h|--help] [--workspace <workspace>] [--wrap-around] (left|down|up|right)
        OR: move-workspace-to-monitor [-h|--help] [--workspace <workspace>] [--wrap-around] (next|prev)
-       OR: move-workspace-to-monitor [-h|--help] [--workspace <workspace>] <monitor-pattern>...
+       OR: move-workspace-to-monitor [-h|--help] [--workspace <workspace>] [--] <monitor-pattern>...
     """
 let move_help_generated = """
     USAGE: move [-h|--help] [--window-id <window-id>] [--boundaries <boundary>] [--boundaries-action <boundary-action>] (left|down|up|right)
     """
 let project_help_generated = """
-    USAGE: project [-h|--help] [--wrap-around] [--fail-if-noop] (<project-index>|next|prev)
+    USAGE: project [-h|--help] [--wrap-around] [--fail-if-noop] (<project-id>|<project-index>|next|prev)
+       OR: project [-h|--help] [--fail-if-noop] --project-id <project-id>
     """
 let reload_config_help_generated = """
     USAGE: reload-config [-h|--help] [--no-gui] [--dry-run]
     """
+let rename_project_help_generated = """
+    USAGE: rename-project [-h|--help] [--fail-if-noop] [--json] <project-id> <project-name>
+    """
 let resize_help_generated = """
     USAGE: resize [-h|--help] [--window-id <window-id>] (smart|smart-opposite|width|height) [+|-]<number>
+    """
+let set_project_color_help_generated = """
+    USAGE: set-project-color [-h|--help] [--fail-if-noop] [--json] <project-id> (<#RRGGBB>|auto)
     """
 let split_help_generated = """
     USAGE: split [-h|--help] [--window-id <window-id>] (horizontal|vertical|opposite)
@@ -147,7 +168,7 @@ let subscribe_help_generated = """
     USAGE: subscribe [-h|--help] [--all] [--no-send-initial] [<event>...]
     """
 let summon_workspace_help_generated = """
-    USAGE: summon-workspace [-h|--help] [--fail-if-noop] <workspace>
+    USAGE: summon-workspace [-h|--help] [--fail-if-noop] [--] <workspace>
     """
 let swap_help_generated = """
     USAGE: swap [-h|--help] [--window-id <window-id>] [--swap-focus]
@@ -155,7 +176,7 @@ let swap_help_generated = """
                 (left|down|up|right|dfs-next|dfs-prev)
     """
 let trigger_binding_help_generated = """
-    USAGE: trigger-binding [-h|--help] <binding> --mode <mode-id>
+    USAGE: trigger-binding [-h|--help] --mode <mode-id> [--] <binding>
     """
 let volume_help_generated = """
     USAGE: volume [-h|--help] (up|down) [--no-gui]
@@ -166,6 +187,6 @@ let workspace_back_and_forth_help_generated = """
     USAGE: workspace-back-and-forth [-h|--help]
     """
 let workspace_help_generated = """
-    USAGE: workspace [-h|--help] [--auto-back-and-forth] [--fail-if-noop] <workspace-name>
+    USAGE: workspace [-h|--help] [--auto-back-and-forth] [--fail-if-noop] [--] <workspace-name>
        OR: workspace [-h|--help] [--wrap-around] [--stdin|--no-stdin] (next|prev)
     """

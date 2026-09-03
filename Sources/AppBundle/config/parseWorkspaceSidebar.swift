@@ -4,6 +4,7 @@ import TOMLKit
 private let workspaceSidebarParser: [String: any ParserProtocol<WorkspaceSidebarConfig>] = [
     "enabled": Parser(\.enabled, parseBool),
     "enable-focus": Parser(\.enableFocus, parseBool),
+    "stay-on-top": Parser(\.stayOnTop, parseBool),
     "auto-hide": Parser(\.autoHide, parseBool),
     "always-expanded": Parser(\.alwaysExpanded, parseBool),
     "collapsed-width": Parser(\.collapsedWidth, parseWorkspaceSidebarWidth),

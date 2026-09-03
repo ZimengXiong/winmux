@@ -475,15 +475,7 @@ func renameWorkspaceSidebarProject(_ projectId: WorkspaceProjectId, displayName:
 @MainActor
 func setWorkspaceSidebarProjectColor(_ project: WorkspaceSidebarProjectViewModel, colorHex: String?) {
     runWorkspaceSidebarSession {
-        let normalizedColorHex = colorHex.flatMap(normalizedWorkspaceSidebarColorHex)
-        if let normalizedColorHex {
-            config.workspaceSidebar.projectColors[project.id.rawValue] = normalizedColorHex
-        } else {
-            config.workspaceSidebar.projectColors.removeValue(forKey: project.id.rawValue)
-        }
-        if !isUnitTest {
-            try persistWorkspaceSidebarProjectColor(projectId: project.id.rawValue, colorHex: normalizedColorHex)
-        }
+        try setWorkspaceProjectColor(project.id, colorHex: colorHex)
         await updateWorkspaceSidebarModel()
     }
 }

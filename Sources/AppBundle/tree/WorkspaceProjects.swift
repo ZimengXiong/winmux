@@ -40,6 +40,11 @@ func workspaceProjectName(_ projectId: WorkspaceProjectId) -> String {
 }
 
 @MainActor
+func workspaceProject(id rawId: String) -> WorkspaceProject? {
+    workspaceProjects().first { $0.id.rawValue == rawId }
+}
+
+@MainActor
 func workspaceProjectDisplayName(_ projectId: WorkspaceProjectId, fallbackName: String) -> String {
     workspaceProjects().first { $0.id == projectId }?.name ?? fallbackName
 }
@@ -61,6 +66,44 @@ func createWorkspaceProject() -> WorkspaceProject {
     config.workspaceSidebar.projectLabels[project.id.rawValue] = project.id.rawValue
     if !isUnitTest {
         try? persistWorkspaceSidebarProjectLabel(projectId: project.id.rawValue, label: project.id.rawValue)
+    }
+    return project
+}
+
+@MainActor
+func createWorkspaceProjectForCommand(displayName: String?, colorHex: String?) throws -> WorkspaceProject {
+    materializePersistedWorkspaceProjects()
+    let trimmedName = try displayName.map(normalizedWorkspaceProjectDisplayName)
+    let normalizedColor: String?
+    if let colorHex {
+        guard let normalized = normalizedWorkspaceSidebarColorHex(colorHex) else {
+            throw WorkspaceMutationError.invalidProjectColor(colorHex)
+        }
+        normalizedColor = normalized
+    } else {
+        normalizedColor = nil
+    }
+
+    let identity = winMuxWorkspaceState.nextGeneratedProjectIdentity()
+    let label = trimmedName ?? identity.id.rawValue
+    if !isUnitTest {
+        try persistWorkspaceSidebarProjectMetadata(
+            projectId: identity.id.rawValue,
+            label: label,
+            colorHex: normalizedColor,
+        )
+    }
+
+    let project = WorkspaceProject(
+        id: identity.id,
+        name: identity.name,
+        order: winMuxWorkspaceState.nextProjectOrder(),
+    )
+    winMuxWorkspaceState.registerProject(project)
+    ensureMinimumWorkspace(for: project.id)
+    config.workspaceSidebar.projectLabels[project.id.rawValue] = label
+    if let normalizedColor {
+        config.workspaceSidebar.projectColors[project.id.rawValue] = normalizedColor
     }
     return project
 }
@@ -117,6 +160,19 @@ func renameWorkspaceForSidebar(workspaceName: String, displayName: String) throw
     }
 }
 
+func normalizedWorkspaceProjectDisplayName(_ raw: String) throws -> String {
+    guard !raw.unicodeScalars.contains(where: { scalar in
+        scalar.value <= 0x1F || (0x7F ... 0x9F).contains(scalar.value)
+    }) else {
+        throw WorkspaceMutationError.nameContainsControlCharacters
+    }
+    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else {
+        throw WorkspaceMutationError.emptyName
+    }
+    return trimmed
+}
+
 @MainActor
 func resetWorkspaceSidebarName(workspaceName: String) throws {
     guard Workspace.existing(byName: workspaceName) != nil else {
@@ -134,12 +190,38 @@ func renameWorkspaceProject(_ projectId: WorkspaceProjectId, displayName: String
     guard winMuxWorkspaceState.projectsById[projectId] != nil else {
         throw WorkspaceMutationError.projectNotFound(projectId.rawValue)
     }
-    let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmedName.isEmpty else { return }
-    config.workspaceSidebar.projectLabels[projectId.rawValue] = trimmedName
+    let trimmedName = try normalizedWorkspaceProjectDisplayName(displayName)
     if !isUnitTest {
         try persistWorkspaceSidebarProjectLabel(projectId: projectId.rawValue, label: trimmedName)
     }
+    config.workspaceSidebar.projectLabels[projectId.rawValue] = trimmedName
+}
+
+@MainActor
+@discardableResult
+func setWorkspaceProjectColor(_ projectId: WorkspaceProjectId, colorHex: String?) throws -> String? {
+    materializePersistedWorkspaceProjects()
+    guard winMuxWorkspaceState.projectsById[projectId] != nil else {
+        throw WorkspaceMutationError.projectNotFound(projectId.rawValue)
+    }
+    let normalizedColorHex: String?
+    if let colorHex {
+        guard let normalized = normalizedWorkspaceSidebarColorHex(colorHex) else {
+            throw WorkspaceMutationError.invalidProjectColor(colorHex)
+        }
+        normalizedColorHex = normalized
+    } else {
+        normalizedColorHex = nil
+    }
+    if !isUnitTest {
+        try persistWorkspaceSidebarProjectColor(projectId: projectId.rawValue, colorHex: normalizedColorHex)
+    }
+    if let normalizedColorHex {
+        config.workspaceSidebar.projectColors[projectId.rawValue] = normalizedColorHex
+    } else {
+        config.workspaceSidebar.projectColors.removeValue(forKey: projectId.rawValue)
+    }
+    return normalizedColorHex
 }
 
 @MainActor
@@ -177,13 +259,21 @@ func deleteWorkspaceProject(_ projectId: WorkspaceProjectId) throws {
 }
 
 @MainActor
-func deleteWorkspaceProjectFromSidebar(_ projectId: WorkspaceProjectId) async throws {
-    switch config.workspaceSidebar.projectDeletionAction {
+func deleteWorkspaceProject(
+    _ projectId: WorkspaceProjectId,
+    action: WorkspaceProjectDeletionAction,
+) async throws {
+    switch action {
         case .closeWindows:
             try await closeWindowsAndDeleteWorkspaceProject(projectId)
         case .moveWindowsToFallback:
             try deleteWorkspaceProjectMovingWindowsToFallback(projectId)
     }
+}
+
+@MainActor
+func deleteWorkspaceProjectFromSidebar(_ projectId: WorkspaceProjectId) async throws {
+    try await deleteWorkspaceProject(projectId, action: config.workspaceSidebar.projectDeletionAction)
 }
 
 @MainActor
@@ -195,6 +285,9 @@ private func deleteWorkspaceProjectMovingWindowsToFallback(_ projectId: Workspac
     guard canDeleteWorkspaceProject(projectId) else {
         throw WorkspaceMutationError.projectCannotBeDeleted(project.name)
     }
+
+    try persistWorkspaceSidebarProjectMetadataRemoval(projectId)
+    removeWorkspaceSidebarProjectMetadataFromMemory(projectId)
 
     let fallbackId = workspaceProjectFallbackForDeletion(excluding: projectId)
     let viewportsShowingDeletedProject = winMuxWorkspaceState.monitorViewportsById.values.compactMap { viewport -> MonitorViewportId? in
@@ -218,7 +311,6 @@ private func deleteWorkspaceProjectMovingWindowsToFallback(_ projectId: Workspac
     }
 
     winMuxWorkspaceState.projectsById.removeValue(forKey: projectId)
-    try clearWorkspaceSidebarProjectMetadata(projectId)
     ensureVisibleActiveProjectWorkspaces()
     checkWorkspaceHierarchyInvariants()
 }
@@ -264,16 +356,24 @@ private func closeWindowsAndDeleteWorkspaceProject(_ projectId: WorkspaceProject
 
 @MainActor
 private func clearWorkspaceSidebarProjectMetadata(_ projectId: WorkspaceProjectId) throws {
-    let rawProjectId = projectId.rawValue
-    let hadLabel = config.workspaceSidebar.projectLabels.removeValue(forKey: rawProjectId) != nil
-    let hadColor = config.workspaceSidebar.projectColors.removeValue(forKey: rawProjectId) != nil
+    try persistWorkspaceSidebarProjectMetadataRemoval(projectId)
+    removeWorkspaceSidebarProjectMetadataFromMemory(projectId)
+}
+
+@MainActor
+private func persistWorkspaceSidebarProjectMetadataRemoval(_ projectId: WorkspaceProjectId) throws {
     guard !isUnitTest else { return }
-    if hadLabel {
-        try persistWorkspaceSidebarProjectLabel(projectId: rawProjectId, label: nil)
-    }
-    if hadColor {
-        try persistWorkspaceSidebarProjectColor(projectId: rawProjectId, colorHex: nil)
-    }
+    try persistWorkspaceSidebarProjectMetadata(
+        projectId: projectId.rawValue,
+        label: nil,
+        colorHex: nil,
+    )
+}
+
+@MainActor
+private func removeWorkspaceSidebarProjectMetadataFromMemory(_ projectId: WorkspaceProjectId) {
+    config.workspaceSidebar.projectLabels.removeValue(forKey: projectId.rawValue)
+    config.workspaceSidebar.projectColors.removeValue(forKey: projectId.rawValue)
 }
 
 @MainActor

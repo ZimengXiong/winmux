@@ -26,6 +26,7 @@ contrast across the sidebar, tab groups, and switcher:
 ```toml
 [workspace-sidebar]
     auto-hide = true
+    stay-on-top = false # Let the Dock appear above the sidebar.
     chrome-style = 'solid'
     solid-chrome-color = 'lavender' # Choose any color shown in Appearance, including custom.
 ```
@@ -165,9 +166,103 @@ Release builds are signed with the project's Apple Development certificate. They
 
 WinMux checks GitHub Releases for signed updates automatically. You can also select **Check for Updates…** from the menu bar.
 
+### Command-line client
+
+WinMux includes an AeroSpace-style `winmux` client. The client and app communicate over a
+local Unix socket and should normally come from the same installation. An incompatible socket
+protocol is rejected before a command runs; differing app versions or Git revisions remain
+diagnostic information rather than a protocol gate. A debug client talks only to
+`WinMux-Debug`; use a release client with the installed `WinMux.app`.
+
+For everyday commands, shell automation, project workflows, and the complete command index,
+see the [CLI usage guide](docs/cli.md).
+
+Build a universal release client without installing it:
+
+```shell
+make cli-release VERSION=<version>
+.release/winmux --version
+```
+
+`make install VERSION=<version>` builds and installs the app and client as one versioned
+pair under `.local/install/releases/`, updates `.local/install/current`, installs the app in
+`/Applications`, and makes the paired client available to local wrapper integrations at:
+
+```text
+.local/install/current/bin/winmux
+```
+
+Release builds also produce `WinMux-<version>-macOS.zip`, containing both `WinMux.app`
+and `bin/winmux`; the app-only zip remains separate for Sparkle updates. A local ad-hoc
+build can be installed without the publishing key using:
+
+```shell
+make install VERSION=<version> CODESIGN_IDENTITY=- CODESIGN_STYLE=Manual \
+  DEVELOPMENT_TEAM= EXPECTED_CODESIGN_AUTHORITY_PREFIX=
+```
+
+To install the matched pair without launching WinMux or opening System Settings, add
+`LAUNCH_AFTER_INSTALL=0`. This performs only the offline signature, architecture, archive,
+and pair checks; run `make verify-installed` after a later launch.
+
+macOS invalidates Accessibility approval when an ad-hoc signature changes. The installer
+opens Privacy & Security > Accessibility when reapproval is required; enable WinMux there,
+then relaunch the app and run `make verify-installed`. Until that command succeeds, the
+installer reports the pair as installed but unverified rather than treating every launch
+failure as an Accessibility problem. A previous app is preserved beside
+`/Applications/WinMux.app` until the new client/server pair has been verified.
+
+The command surface follows AeroSpace conventions, including `--help`, `--version`, query
+commands with `--json`, explicit `--window-id` targeting, and nonzero exit status on command
+errors. WinMux-specific commands add projects, tab groups, the sidebar, and the structured
+agent workflow:
+
+```shell
+winmux list-windows --all --json
+winmux list-workspaces --all --json
+winmux agent skill
+winmux agent query --path /tmp/winmux-agent.json
+```
+
+`agent check` and `agent apply` accept either `--path <path>` or explicit `--stdin`,
+so deterministic shell transforms can keep the full freshness-guarded snapshot in a pipe:
+
+```shell
+winmux agent query | jq '<edit transformation>' | winmux agent apply --stdin
+```
+
+Implicit stdin is never consumed.
+
+#### Socket protocol
+
+Release builds listen on `/tmp/com.zimengxiong.winmux-${USER}.sock`; debug builds use
+`/tmp/com.zimengxiong.winmux.debug-${USER}.sock`. All integers are four-byte unsigned values
+in host byte order (little-endian on supported Macs).
+
+Immediately after connecting, the client sends `SOCKET_PROTOCOL_VERSION` and the server
+answers with its own `SOCKET_PROTOCOL_VERSION`. The current value is `1`. Either side stops
+before processing a command when the versions differ. Once negotiation succeeds, each message
+is a four-byte JSON byte length followed by that many UTF-8 JSON bytes. Ordinary commands send
+one `ClientRequest` and receive one `ServerAnswer`; `subscribe` receives a stream of framed
+events after its initial request.
+
+Incoming JSON frames are limited to 128 MiB and are rejected from their length prefix before
+payload storage is allocated. This is above the roughly 96 MiB worst-case JSON expansion of the
+official CLI's 16 MiB UTF-8 stdin limit, with additional room for the request envelope.
+
+The handshake is intentionally incompatible with the legacy pre-handshake socket. Upgrade or
+roll back `WinMux.app` and `winmux` together. The client bounds negotiation so accidentally
+connecting a new CLI to a legacy server reports an upgrade error instead of waiting forever.
+
 ### Release updates
 
-`make release VERSION=<version>` creates a signed `appcast.xml` alongside the release archive and uploads both to the GitHub release. Sparkle signs the appcast with the Ed25519 key in the local login Keychain. The matching public key is set through `SPARKLE_PUBLIC_KEY` in the makefile; keep the private key in the Keychain and do not commit or share it.
+`make release VERSION=<version>` currently builds locally without publishing or generating
+an appcast. During the socket protocol-v1 migration, an app-only Sparkle update would leave
+an older CLI behind, so appcast generation is refused unless the maintainer deliberately sets
+`GENERATE_APPCAST=1 ALLOW_APP_ONLY_PROTOCOL_UPDATE=1`. Prefer the combined archive containing
+both `WinMux.app` and `bin/winmux`. When app-only updates are compatible again, Sparkle signs
+the appcast with the Ed25519 key in the local login Keychain. The matching public key is set
+through `SPARKLE_PUBLIC_KEY`; keep the private key in the Keychain and do not commit or share it.
 
 Publishing a stable GitHub release also updates `Casks/winmux.rb` in `ZimengXiong/homebrew`. Before the first release, add a `HOMEBREW_TAP_TOKEN` repository secret to this repository. The token must have read and write access to the contents of `ZimengXiong/homebrew`.
 

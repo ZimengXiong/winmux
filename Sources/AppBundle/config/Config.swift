@@ -80,6 +80,7 @@ enum ShortcutsPreset: String, Equatable, Sendable {
 struct WorkspaceSidebarConfig: ConvenienceCopyable, Equatable, Sendable {
     var enabled: Bool = false
     var enableFocus: Bool = false
+    var stayOnTop: Bool = true
     var autoHide: Bool = false
     var alwaysExpanded: Bool = false
     var collapsedWidth: Int = 44

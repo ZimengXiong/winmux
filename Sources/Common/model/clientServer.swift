@@ -1,8 +1,19 @@
 import Foundation
 
-// TO EVERYONE REVERSE-ENGINEERING THE PROTOCOL
-// client-server socket API is not public yet.
-// Tracking issue for making it public: https://github.com/nikitabobko/WinMux/issues/1513
+/// Version of the framing protocol spoken on the WinMux Unix socket.
+///
+/// This is independent from the app version and Git hash. Bump it only when a
+/// client and server can no longer communicate using the existing wire format.
+public let SOCKET_PROTOCOL_VERSION: UInt32 = 1
+
+/// Maximum JSON payload size for a single framed socket message.
+///
+/// The official CLI accepts at most 16 MiB of UTF-8 stdin. JSON can expand an
+/// ASCII control character to a six-byte `\u00XX` escape, so 128 MiB leaves
+/// headroom above the roughly 96 MiB worst-case stdin encoding and its request
+/// envelope.
+public let MAX_SOCKET_FRAME_BYTES: UInt32 = 128 * 1024 * 1024
+
 public struct ServerAnswer: Codable, Sendable {
     public let exitCode: Int32
     public let stdout: String
@@ -22,9 +33,6 @@ public struct ServerAnswer: Codable, Sendable {
     }
 }
 
-// TO EVERYONE REVERSE-ENGINEERING THE PROTOCOL
-// client-server socket API is not public yet.
-// Tracking issue for making it public: https://github.com/nikitabobko/WinMux/issues/1513
 public struct ClientRequest: Codable, Sendable, ConvenienceCopyable, Equatable {
     // periphery:ignore - Unused. keep it for API compatibility with old servers for a couple of version
     public var command: String? = nil

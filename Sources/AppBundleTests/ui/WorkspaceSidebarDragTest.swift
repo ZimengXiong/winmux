@@ -256,6 +256,18 @@ final class WorkspaceSidebarDragTest: XCTestCase {
         }
     }
 
+    func testWorkspaceSidebarCanRenderBelowDockWhileRemainingAboveNormalWindows() {
+        let loweredLevel = workspaceSidebarPanelLevel(stayOnTop: false)
+
+        XCTAssertEqual(loweredLevel, .floating)
+        XCTAssertGreaterThan(loweredLevel.rawValue, NSWindow.Level.normal.rawValue)
+        XCTAssertLessThan(loweredLevel.rawValue, Int(CGWindowLevelForKey(.dockWindow)))
+        XCTAssertEqual(
+            workspaceSidebarPanelLevel(stayOnTop: true),
+            WinMuxPanelLayer.workspaceSidebar.level,
+        )
+    }
+
     func testLeftMouseButtonPressedUsesBitmask() {
         XCTAssertTrue(isLeftMouseButtonPressed(mask: 0b1))
         XCTAssertTrue(isLeftMouseButtonPressed(mask: 0b11))

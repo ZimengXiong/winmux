@@ -128,6 +128,7 @@ public enum WorkspaceFilter: Equatable, Sendable {
 public enum FormatVar: Equatable {
     case window(WindowFormatVar)
     case workspace(WorkspaceFormatVar)
+    case project(ProjectFormatVar)
     case app(AppFormatVar)
     case monitor(MonitorFormatVar)
 
@@ -144,6 +145,17 @@ public enum FormatVar: Equatable {
         case workspaceFocused = "workspace-is-focused"
         case workspaceVisible = "workspace-is-visible"
         case workspaceRootContainerLayout = "workspace-root-container-layout"
+    }
+
+    public enum ProjectFormatVar: String, Equatable, CaseIterable {
+        case projectIndex = "project-index"
+        case projectId = "project-id"
+        case projectName = "project-name"
+        case projectColor = "project-color"
+        case projectFocused = "project-is-focused"
+        case projectVisible = "project-is-visible"
+        case projectWorkspaceCount = "project-workspace-count"
+        case projectWindowCount = "project-window-count"
     }
 
     public enum AppFormatVar: String, Equatable, CaseIterable {
@@ -169,7 +181,7 @@ public enum PlainInterVar: String, CaseIterable {
 }
 
 public enum FormatObjectKind: CaseIterable, Sendable {
-    case window, workspace, app, monitor
+    case window, workspace, project, app, monitor
 }
 
 public func getAvailableInterVars(for kind: FormatObjectKind) -> [String] {
@@ -183,6 +195,7 @@ private func _getAvailableInterVars(for kind: FormatObjectKind) -> [String] {
         case .workspace:
             FormatVar.WorkspaceFormatVar.allCases.map(\.rawValue) +
                 _getAvailableInterVars(for: .monitor)
+        case .project: FormatVar.ProjectFormatVar.allCases.map(\.rawValue)
         case .window:
             FormatVar.WindowFormatVar.allCases.map(\.rawValue) +
                 _getAvailableInterVars(for: .workspace) +

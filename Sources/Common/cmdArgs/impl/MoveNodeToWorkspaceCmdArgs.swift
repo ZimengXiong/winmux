@@ -13,7 +13,10 @@ public struct MoveNodeToWorkspaceCmdArgs: CmdArgs {
             "--stdin": optionalTrueBoolFlag(\.explicitStdinFlag),
             "--no-stdin": optionalFalseBoolFlag(\.explicitStdinFlag),
         ],
-        posArgs: [newMandatoryPosArgParser(\.target, parseWorkspaceTarget, placeholder: workspaceTargetPlaceholder)],
+        posArgs: [
+            dashDashArg(mandatory: false),
+            newMandatoryPosArgParser(\.target, parseMoveNodeToWorkspaceTarget, placeholder: moveNodeToWorkspaceTargetPlaceholder),
+        ],
         conflictingOptions: [
             ["--stdin", "--no-stdin"],
         ],
@@ -23,10 +26,41 @@ public struct MoveNodeToWorkspaceCmdArgs: CmdArgs {
     public var explicitStdinFlag: Bool? = nil
     public var failIfNoop: Bool = false
     public var focusFollowsWindow: Bool = false
-    public var target: Lateinit<WorkspaceTarget> = .uninitialized
+    public var target: Lateinit<MoveNodeToWorkspaceTarget> = .uninitialized
 
     public init(rawArgs: StrArrSlice) {
         self.commonState = .init(rawArgs)
+    }
+}
+
+public enum MoveNodeToWorkspaceTarget: Equatable, Sendable {
+    case newWorkspace
+    case relative(NextPrev)
+    case direct(WorkspaceName)
+
+    public var isRelative: Bool {
+        switch self {
+            case .relative: true
+            case .newWorkspace, .direct: false
+        }
+    }
+
+    public func workspaceNameOrNil() -> WorkspaceName? {
+        switch self {
+            case .direct(let name): name
+            case .newWorkspace, .relative: nil
+        }
+    }
+}
+
+private let moveNodeToWorkspaceTargetPlaceholder = "(<workspace-name>|new|next|prev)"
+
+private func parseMoveNodeToWorkspaceTarget(i: PosArgParserInput) -> ParsedCliArgs<MoveNodeToWorkspaceTarget> {
+    switch (i.arg, i.sawDashDash) {
+        case ("new", false): .succ(.newWorkspace, advanceBy: 1)
+        case ("next", false): .succ(.relative(.next), advanceBy: 1)
+        case ("prev", false): .succ(.relative(.prev), advanceBy: 1)
+        default: .init(WorkspaceName.parse(i.arg).map(MoveNodeToWorkspaceTarget.direct), advanceBy: 1)
     }
 }
 

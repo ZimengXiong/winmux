@@ -44,6 +44,10 @@ func setUpWorkspacesForTests() {
             child.unbindFromParent()
         }
     }
+    for child in macosMinimizedWindowsContainer.children {
+        child.unbindFromParent()
+    }
+    setAgentSnapshotAfterMembershipCaptureForTests(nil)
     resetWinMuxWorkspaceStateForTests()
     check(Workspace.get(byName: "setUpWorkspacesForTests").focusWorkspace())
     Workspace.reconcileWorkspaceState()
@@ -92,7 +96,7 @@ extension WorkspaceCmdArgs {
 }
 
 extension MoveNodeToWorkspaceCmdArgs {
-    init(target: WorkspaceTarget, wrapAround: Bool? = nil) {
+    init(target: MoveNodeToWorkspaceTarget, wrapAround: Bool? = nil) {
         self = MoveNodeToWorkspaceCmdArgs(rawArgs: [])
         self.target = .initialized(target)
         self._wrapAround = wrapAround

@@ -18,7 +18,9 @@ enum WorkspaceMutationError: LocalizedError {
     case projectNotFound(String)
     case projectCannotBeDeleted(String)
     case projectCloseBlocked(String, Int)
+    case invalidProjectColor(String)
     case emptyName
+    case nameContainsControlCharacters
     case duplicateProjectName(String)
 
     var errorDescription: String? {
@@ -33,8 +35,12 @@ enum WorkspaceMutationError: LocalizedError {
                 "Project '\(name)' cannot be deleted."
             case .projectCloseBlocked(let name, let count):
                 "Project '\(name)' was not deleted because \(count) window\(count == 1 ? "" : "s") stayed open."
+            case .invalidProjectColor(let color):
+                "Invalid project color '\(color)'. Expected 'auto' or a six-digit hex color such as '#1A2B3C'."
             case .emptyName:
                 "Name cannot be empty."
+            case .nameContainsControlCharacters:
+                "Name cannot contain control characters."
             case .duplicateProjectName(let name):
                 "A project named '\(name)' already exists."
         }

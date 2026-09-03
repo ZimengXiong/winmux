@@ -46,6 +46,20 @@ struct PosArgParserContext {
     let argPlaceholderIfMandatory: String?
 }
 
+func dashDashArg<Root: WinMuxAny>(mandatory: Bool) -> PosArgParser<Root, ()> {
+    ArgParser(
+        \.noopKeyPath,
+        { input in
+            switch (input.arg, mandatory) {
+                case ("--", _): .succ((), advanceBy: 1)
+                case (_, false): .succ((), advanceBy: 0)
+                case (_, true): .fail("Expected: --. Got: \(input.arg.singleQuoted)", advanceBy: 0)
+            }
+        },
+        context: PosArgParserContext(argPlaceholderIfMandatory: mandatory ? "--" : nil),
+    )
+}
+
 public struct ParsedCliArgs<T> {
     var value: Parsed<T>
     var advanceBy: Int

@@ -4,6 +4,29 @@ import Foundation
 
 // MARK: - Query
 
+let agentSnapshotQueryMaxAttempts = 2
+
+@MainActor
+private var agentSnapshotAfterMembershipCaptureForTests: (@MainActor @Sendable (Int) async -> Void)?
+
+@MainActor
+func setAgentSnapshotAfterMembershipCaptureForTests(
+    _ hook: (@MainActor @Sendable (Int) async -> Void)?
+) {
+    agentSnapshotAfterMembershipCaptureForTests = hook
+}
+
+enum AgentSnapshotQueryError: LocalizedError {
+    case worldKeptChanging(attempts: Int)
+
+    var errorDescription: String? {
+        switch self {
+            case .worldKeptChanging(let attempts):
+                "Window state kept changing while WinMux built the agent snapshot after \(attempts) attempts. Retry 'winmux agent query' after window movement settles."
+        }
+    }
+}
+
 struct AgentSnapshot: Encodable {
     let schemaVersion: Int
     let snapshotId: String
@@ -14,9 +37,41 @@ struct AgentSnapshot: Encodable {
 
     @MainActor
     static func query() async throws -> AgentSnapshot {
+        for attempt in 1 ... agentSnapshotQueryMaxAttempts {
+            let worldId = currentAgentWorldId()
+            let capture = AgentSnapshotCapture()
+            if let hook = agentSnapshotAfterMembershipCaptureForTests {
+                await hook(attempt)
+            }
+
+            do {
+                let snapshot = try await capture.makeSnapshot(worldId: worldId)
+                if currentAgentWorldId() == worldId {
+                    return snapshot
+                }
+            } catch {
+                if currentAgentWorldId() == worldId {
+                    throw error
+                }
+            }
+        }
+        throw AgentSnapshotQueryError.worldKeptChanging(attempts: agentSnapshotQueryMaxAttempts)
+    }
+}
+
+@MainActor
+private struct AgentSnapshotCapture {
+    let windows: [Window]
+    let tabGroups: [TilingContainer]
+    let workspaceInfos: [AgentWorkspaceInfo]
+    let panes: [AgentPaneInfo]
+    let relations: [AgentPaneRelation]
+    let rawTrees: [AgentRawWorkspaceTree]
+
+    init() {
         let workspaces = userFacingWorkspaces(Workspace.all, focusedWorkspace: focus.workspace)
-        var windows: [AgentWindowInfo] = []
-        var tabGroups: [AgentTabGroupInfo] = []
+        var windowNodes: [Window] = []
+        var tabGroupNodes: [TilingContainer] = []
         var workspaceInfos: [AgentWorkspaceInfo] = []
         var allPanes: [AgentPaneInfo] = []
         var allRelations: [AgentPaneRelation] = []
@@ -36,28 +91,44 @@ struct AgentSnapshot: Encodable {
                 monitorId: workspace.workspaceMonitor.monitorId_oneBased,
                 panes: panes.map(\.paneId),
             ))
-            for group in workspace.rootTilingContainer.allAgentTabGroupsRecursive {
-                tabGroups.append(await AgentTabGroupInfo(group))
-            }
-            for window in workspace.allLeafWindowsRecursive {
-                windows.append(try await AgentWindowInfo(window))
-            }
+            tabGroupNodes.append(contentsOf: workspace.rootTilingContainer.allAgentTabGroupsRecursive)
+            windowNodes.append(contentsOf: workspace.allLeafWindowsRecursive)
+        }
+        windowNodes.append(contentsOf: macosMinimizedWindowsContainer.children.filterIsInstance(of: Window.self))
+
+        var seenWindowIds: Set<UInt32> = []
+        windows = windowNodes.filter { seenWindowIds.insert($0.windowId).inserted }
+        tabGroups = tabGroupNodes
+        self.workspaceInfos = workspaceInfos
+        panes = allPanes
+        relations = allRelations
+        self.rawTrees = rawTrees
+    }
+
+    func makeSnapshot(worldId: String) async throws -> AgentSnapshot {
+        var windowInfos: [AgentWindowInfo] = []
+        for window in windows {
+            windowInfos.append(try await AgentWindowInfo(window))
+        }
+        var tabGroupInfos: [AgentTabGroupInfo] = []
+        for group in tabGroups {
+            tabGroupInfos.append(await AgentTabGroupInfo(group))
         }
 
         let inventory = AgentInventory(
-            windows: windows.sortedBy(\.windowId),
-            tabGroups: tabGroups.sortedBy(\.tabGroupId),
+            windows: windowInfos.sortedBy(\.windowId),
+            tabGroups: tabGroupInfos.sortedBy(\.tabGroupId),
             workspaces: workspaceInfos.sortedBy(\.name),
         )
         let reasoning = AgentReasoning(
-            panes: allPanes.sortedBy(\.paneId),
-            relations: allRelations.sortedBy([{ $0.workspace }, { $0.paneId }]),
+            panes: panes.sortedBy(\.paneId),
+            relations: relations.sortedBy([{ $0.workspace }, { $0.paneId }]),
             rawTrees: rawTrees.sortedBy(\.workspace),
         )
         return AgentSnapshot(
-            schemaVersion: 1,
+            schemaVersion: supportedAgentSchemaVersion,
             snapshotId: ISO8601DateFormatter().string(from: Date()),
-            worldId: currentAgentWorldId(),
+            worldId: worldId,
             inventory: inventory,
             reasoning: reasoning,
             edit: AgentEditTemplate(operations: [], layout: nil),
@@ -104,7 +175,7 @@ struct AgentWindowInfo: Encodable {
         appName = window.app.name
         appBundleId = window.app.rawAppBundleId
         pid = window.app.pid
-        workspace = window.nodeWorkspace?.name
+        workspace = window.agentInventoryWorkspaceName
         tabGroupId = window.nearestWindowTabGroup.map(agentTabGroupId)
         paneId = window.agentPaneId
         focused = focus.windowOrNil == window
@@ -121,6 +192,19 @@ struct AgentWindowInfo: Encodable {
             actualRect = try? await window.getAxRect()
         }
         frame = (actualRect ?? window.lastAppliedLayoutPhysicalRect ?? window.lastAppliedLayoutVirtualRect).map(AgentRect.init)
+    }
+}
+
+private extension Window {
+    @MainActor
+    var agentInventoryWorkspaceName: String? {
+        if let nodeWorkspace {
+            return nodeWorkspace.name
+        }
+        return switch layoutReason {
+            case .standard: nil
+            case .macos(_, let previousWorkspaceName): previousWorkspaceName
+        }
     }
 }
 
@@ -249,4 +333,3 @@ struct AgentEditTemplate: Encodable {
     let operations: [String]
     let layout: AgentLayoutEdit?
 }
-

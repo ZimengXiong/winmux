@@ -67,7 +67,7 @@ final class WorkspaceSidebarPanel: NSPanelHud {
         isExcludedFromWindowsMenu = true
         animationBehavior = .none
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        applyWinMuxLayer(.workspaceSidebar)
+        applyWorkspaceSidebarLayer(stayOnTop: config.workspaceSidebar.stayOnTop)
         contentView = hostingView
         hostingView.frame = contentView?.bounds ?? .zero
         hostingView.autoresizingMask = [.width, .height]

@@ -27,4 +27,12 @@ extension NSPanelHud {
     func applyWinMuxLayer(_ layer: WinMuxPanelLayer) {
         level = layer.level
     }
+
+    func applyWorkspaceSidebarLayer(stayOnTop: Bool) {
+        level = workspaceSidebarPanelLevel(stayOnTop: stayOnTop)
+    }
+}
+
+func workspaceSidebarPanelLevel(stayOnTop: Bool) -> NSWindow.Level {
+    stayOnTop ? WinMuxPanelLayer.workspaceSidebar.level : .floating
 }

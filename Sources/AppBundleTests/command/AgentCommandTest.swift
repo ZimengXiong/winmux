@@ -9,8 +9,119 @@ final class AgentCommandTest: XCTestCase {
     func testParse() {
         XCTAssertTrue(parseCommand("agent query").cmdOrNil is AgentCommand)
         XCTAssertTrue(parseCommand("agent query --path /tmp/winmux-agent.json").cmdOrNil is AgentCommand)
-        XCTAssertEqual(parseCommand("agent apply").errorOrNil, "--path is mandatory for 'check' and 'apply'")
+        XCTAssertTrue(parseCommand("agent check --stdin").cmdOrNil is AgentCommand)
+        XCTAssertTrue(parseCommand("agent apply --stdin").cmdOrNil is AgentCommand)
+        XCTAssertEqual(parseCommand("agent apply").errorOrNil, "--path or --stdin is mandatory for 'check' and 'apply'")
+        XCTAssertEqual(
+            parseCommand("agent apply --path /tmp/winmux-agent.json --stdin").errorOrNil,
+            "ERROR: Conflicting options: --path, --stdin",
+        )
+        XCTAssertEqual(parseCommand("agent query --stdin").errorOrNil, "--stdin is incompatible with 'query' and 'skill'")
         XCTAssertEqual(parseCommand("agent skill --path /tmp/winmux-agent.json").errorOrNil, "--path is incompatible with 'skill'")
+        XCTAssertEqual(parseCommand("agent skill --stdin").errorOrNil, "--stdin is incompatible with 'query' and 'skill'")
+    }
+
+    func testCheckReadsAgentJsonFromStdin() async throws {
+        let result = try await parseCommand("agent check --stdin").cmdOrDie.run(
+            .defaultEnv,
+            CmdStdin(try freshAgentJson("""
+                {
+                  "schemaVersion": 1,
+                  "edit": { "operations": [] }
+                }
+                """)),
+        )
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(result.stdout, ["OK"])
+        XCTAssertTrue(result.stderr.isEmpty)
+    }
+
+    func testApplyReadsAgentJsonFromStdin() async throws {
+        let source = Workspace.get(byName: "a")
+        let window = TestWindow.new(id: 1, parent: source.rootTilingContainer)
+
+        let result = try await parseCommand("agent apply --stdin").cmdOrDie.run(
+            .defaultEnv,
+            CmdStdin(try freshAgentJson("""
+                {
+                  "schemaVersion": 1,
+                  "edit": {
+                    "operations": [
+                      { "type": "moveWindowToWorkspace", "windowId": 1, "workspace": "b" }
+                    ]
+                  }
+                }
+                """)),
+        )
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.stdout.isEmpty)
+        XCTAssertTrue(result.stderr.isEmpty)
+        XCTAssertTrue(window.nodeWorkspace === Workspace.get(byName: "b"))
+    }
+
+    func testCheckRejectsMalformedAgentJsonFromStdin() async throws {
+        let result = try await parseCommand("agent check --stdin").cmdOrDie.run(
+            .defaultEnv,
+            CmdStdin("not json"),
+        )
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stdout.isEmpty)
+        XCTAssertTrue(result.stderr.joined(separator: "\n").contains("Failed to read agent JSON"))
+    }
+
+    func testApplyRejectsMissingWorldIdBeforeMutation() async throws {
+        let source = Workspace.get(byName: "a")
+        let window = TestWindow.new(id: 1, parent: source.rootTilingContainer)
+        let result = try await parseCommand("agent apply --stdin").cmdOrDie.run(
+            .defaultEnv,
+            CmdStdin("""
+                {
+                  "schemaVersion": 1,
+                  "edit": {
+                    "operations": [
+                      { "type": "moveWindowToWorkspace", "windowId": 1, "workspace": "b" }
+                    ]
+                  }
+                }
+                """),
+        )
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.joined(separator: "\n").contains("missing worldId"))
+        XCTAssertTrue(window.nodeWorkspace === source)
+    }
+
+    func testCheckRejectsMissingSchemaVersion() async throws {
+        let result = try await parseCommand("agent check --stdin").cmdOrDie.run(
+            .defaultEnv,
+            CmdStdin("""
+                {
+                  "worldId": "\(currentAgentWorldId())",
+                  "edit": { "operations": [] }
+                }
+                """),
+        )
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.joined(separator: "\n").contains("missing schemaVersion"))
+    }
+
+    func testCheckRejectsUnsupportedSchemaVersion() async throws {
+        let result = try await parseCommand("agent check --stdin").cmdOrDie.run(
+            .defaultEnv,
+            CmdStdin(try freshAgentJson("""
+                {
+                  "schemaVersion": 2,
+                  "edit": { "operations": [] }
+                }
+                """)),
+        )
+
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.joined(separator: "\n").contains("Unsupported agent schemaVersion '2'"))
     }
 
     func testSkill() async throws {
@@ -29,6 +140,7 @@ final class AgentCommandTest: XCTestCase {
         XCTAssertTrue(result.stdout.joined(separator: "\n").contains("\"axis\": \"vertical\""))
         XCTAssertTrue(result.stdout.joined(separator: "\n").contains("replace the entire `edit.operations` array"))
         XCTAssertTrue(result.stdout.joined(separator: "\n").contains("`windows` is accepted as an alias"))
+        XCTAssertTrue(result.stdout.joined(separator: "\n").contains("winmux agent apply --stdin"))
     }
 
     func testQueryIncludesPanesAndTabGroups() async throws {
@@ -49,6 +161,92 @@ final class AgentCommandTest: XCTestCase {
         XCTAssertTrue(out.contains("\"sizeAxis\" : \"horizontal\""))
         XCTAssertTrue(out.contains("\"operations\" : ["))
         XCTAssertTrue(out.contains("\"worldId\" : "))
+    }
+
+    func testQueryIncludesMinimizedWindows() async throws {
+        let workspace = Workspace.get(byName: "a")
+        let window = TestWindow.new(id: 42, parent: macosMinimizedWindowsContainer)
+        window.layoutReason = .macos(prevParentKind: .tilingContainer, prevWorkspaceName: workspace.name)
+
+        let result = try await parseCommand("agent query").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        let data = try XCTUnwrap(result.stdout.joined(separator: "\n").data(using: .utf8))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let inventory = try XCTUnwrap(json["inventory"] as? [String: Any])
+        let windows = try XCTUnwrap(inventory["windows"] as? [[String: Any]])
+        let minimized = try XCTUnwrap(windows.first { ($0["windowId"] as? NSNumber)?.uint32Value == 42 })
+
+        XCTAssertEqual(minimized["layout"] as? String, "macos_native_minimized")
+        XCTAssertEqual(minimized["workspace"] as? String, workspace.name)
+    }
+
+    func testQueryRetriesMembershipChangeWithoutDuplicateWindows() async throws {
+        let workspace = Workspace.get(byName: "a")
+        let window = TestWindow.new(id: 42, parent: workspace.rootTilingContainer)
+        var captureCount = 0
+        setAgentSnapshotAfterMembershipCaptureForTests { attempt in
+            captureCount = attempt
+            if attempt == 1 {
+                window.layoutReason = .macos(prevParentKind: .tilingContainer, prevWorkspaceName: workspace.name)
+                window.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+            }
+        }
+        defer { setAgentSnapshotAfterMembershipCaptureForTests(nil) }
+
+        let snapshot = try await AgentSnapshot.query()
+        let windowIds = snapshot.inventory.windows.map(\.windowId)
+
+        XCTAssertEqual(captureCount, 2)
+        XCTAssertEqual(windowIds.filter { $0 == window.windowId }.count, 1)
+        XCTAssertEqual(windowIds.count, Set(windowIds).count)
+        XCTAssertEqual(snapshot.worldId, currentAgentWorldId())
+    }
+
+    func testQueryReportsRetryableErrorWhenWorldKeepsChanging() async throws {
+        let workspace = Workspace.get(byName: "a")
+        let window = TestWindow.new(id: 42, parent: workspace.rootTilingContainer)
+        var captureCount = 0
+        setAgentSnapshotAfterMembershipCaptureForTests { attempt in
+            captureCount = attempt
+            if window.parent === macosMinimizedWindowsContainer {
+                window.layoutReason = .standard
+                window.bind(to: workspace.rootTilingContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+            } else {
+                window.layoutReason = .macos(prevParentKind: .tilingContainer, prevWorkspaceName: workspace.name)
+                window.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+            }
+        }
+        defer { setAgentSnapshotAfterMembershipCaptureForTests(nil) }
+
+        let result = try await parseCommand("agent query").cmdOrDie.run(.defaultEnv, .emptyStdin)
+
+        XCTAssertEqual(captureCount, agentSnapshotQueryMaxAttempts)
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertTrue(result.stderr.joined(separator: "\n").contains("Window state kept changing"))
+        XCTAssertTrue(result.stderr.joined(separator: "\n").contains("Retry 'winmux agent query'"))
+    }
+
+    func testWorldIdTracksMinimizedWindows() {
+        let initialWorldId = currentAgentWorldId()
+        let window = TestWindow.new(id: 42, parent: macosMinimizedWindowsContainer)
+        window.layoutReason = .macos(prevParentKind: .tilingContainer, prevWorkspaceName: focus.workspace.name)
+
+        let withMinimizedWindow = currentAgentWorldId()
+        window.unbindFromParent()
+
+        XCTAssertNotEqual(withMinimizedWindow, initialWorldId)
+        XCTAssertEqual(currentAgentWorldId(), initialWorldId)
+    }
+
+    func testWorldIdTracksMinimizedWindowOrigin() {
+        let window = TestWindow.new(id: 42, parent: macosMinimizedWindowsContainer)
+        window.layoutReason = .macos(prevParentKind: .tilingContainer, prevWorkspaceName: "a")
+        let firstOriginWorldId = currentAgentWorldId()
+
+        window.layoutReason = .macos(prevParentKind: .workspace, prevWorkspaceName: "b")
+        let secondOriginWorldId = currentAgentWorldId()
+        window.unbindFromParent()
+
+        XCTAssertNotEqual(secondOriginWorldId, firstOriginWorldId)
     }
 
     func testCheckRejectsStaleWorldId() async throws {
@@ -296,10 +494,25 @@ final class AgentCommandTest: XCTestCase {
 }
 
 
+@MainActor
+func freshAgentJson(_ json: String) throws -> String {
+    let data = try XCTUnwrap(json.data(using: .utf8))
+    var object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    if object["schemaVersion"] == nil {
+        object["schemaVersion"] = supportedAgentSchemaVersion
+    }
+    if object["worldId"] == nil {
+        object["worldId"] = currentAgentWorldId()
+    }
+    let result = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+    return try XCTUnwrap(String(data: result, encoding: .utf8))
+}
+
+@MainActor
 func writeAgentJson(_ json: String) throws -> URL {
     let url = URL(filePath: NSTemporaryDirectory())
         .appending(path: "winmux-agent-\(UUID().uuidString).json")
-    try json.write(to: url, atomically: true, encoding: .utf8)
+    try freshAgentJson(json).write(to: url, atomically: true, encoding: .utf8)
     return url
 }
 

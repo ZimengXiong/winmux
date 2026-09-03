@@ -482,9 +482,13 @@ final class WorkspaceNamingTest: XCTestCase {
         let first = createWorkspaceProject()
         let second = createWorkspaceProject()
 
-        XCTAssertEqual(first.id, "project-1")
-        XCTAssertEqual(second.id, "project-2")
-        XCTAssertEqual(workspaceProjects().map(\.id).filter { $0.hasPrefix("project-") }.sorted(), ["project-1", "project-2"])
+        assertUuidProjectId(first.id)
+        assertUuidProjectId(second.id)
+        XCTAssertNotEqual(first.id, second.id)
+        XCTAssertEqual(
+            Set(workspaceProjects().map(\.id).filter { $0.hasPrefix("project-") }),
+            Set([first.id, second.id]),
+        )
     }
 
     func testProjectCreationAppendsAfterDeletedMiddleProject() throws {
@@ -495,14 +499,28 @@ final class WorkspaceNamingTest: XCTestCase {
         try deleteWorkspaceProject(second.id)
         let fourth = createWorkspaceProject()
 
-        XCTAssertEqual(first.id, "project-1")
-        XCTAssertEqual(second.id, "project-2")
-        XCTAssertEqual(third.id, "project-3")
-        XCTAssertEqual(fourth.id, "project-4")
+        assertUuidProjectId(first.id)
+        assertUuidProjectId(second.id)
+        assertUuidProjectId(third.id)
+        assertUuidProjectId(fourth.id)
+        XCTAssertEqual(Set([first.id, second.id, third.id, fourth.id]).count, 4)
         XCTAssertEqual(
             workspaceProjects().map(\.id).filter { $0.hasPrefix("project-") },
-            ["project-1", "project-3", "project-4"],
+            [first.id, third.id, fourth.id],
         )
+    }
+
+    func testProjectIdsDoNotRepeatAcrossWorkspaceStateRestart() {
+        var beforeRestart = WinMuxWorkspaceState()
+        let retiredId = beforeRestart.nextGeneratedProjectIdentity().id
+        beforeRestart.registerProject(WorkspaceProject(id: retiredId, name: "Retired", order: 1))
+
+        let afterRestart = WinMuxWorkspaceState()
+        let newId = afterRestart.nextGeneratedProjectIdentity().id
+
+        assertUuidProjectId(retiredId)
+        assertUuidProjectId(newId)
+        XCTAssertNotEqual(newId, retiredId)
     }
 
     func testProjectNamesFollowStableInsertionOrder() throws {
@@ -585,6 +603,16 @@ final class WorkspaceNamingTest: XCTestCase {
         XCTAssertTrue(mainMonitor.activeWorkspace === returnedWorkspace)
         XCTAssertEqual(returnedWorkspace.projectId, workspaceProjectDefaultId)
         XCTAssertTrue(returnedWorkspace === defaultWorkspace)
+    }
+
+    private func assertUuidProjectId(
+        _ projectId: WorkspaceProjectId,
+        file: StaticString = #filePath,
+        line: UInt = #line,
+    ) {
+        let rawId = projectId.rawValue
+        XCTAssertTrue(rawId.hasPrefix("project-"), file: file, line: line)
+        XCTAssertNotNil(UUID(uuidString: String(rawId.dropFirst("project-".count))), file: file, line: line)
     }
 
 }
