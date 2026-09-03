@@ -66,6 +66,7 @@ struct ShortcutAppearanceSettingsView: View {
     @ObservedObject var model: ShortcutSettingsModel
     @State private var sidebarEnabled = config.workspaceSidebar.enabled
     @State private var sidebarFocusEnabled = config.workspaceSidebar.enableFocus
+    @State private var sidebarStayOnTop = config.workspaceSidebar.stayOnTop
     @State private var sidebarAutoHide = config.workspaceSidebar.autoHide
     @State private var sidebarAlwaysExpanded = config.workspaceSidebar.alwaysExpanded
     @State private var showStatusPills = config.workspaceSidebar.showStatusPills
@@ -108,6 +109,7 @@ struct ShortcutAppearanceSettingsView: View {
             SettingsSection("Sidebar") {
                 SettingsToggle("Show sidebar", isOn: $sidebarEnabled, help: "Show the workspace rail on configured displays.") { sidebarBool("enabled", sidebarEnabled) }
                 SettingsToggle("Focus sidebar monitor only", isOn: $sidebarFocusEnabled, help: "Show the sidebar only on the focused monitor when monitor scope allows it.") { sidebarBool("enable-focus", sidebarFocusEnabled) }
+                SettingsToggle("Keep sidebar above Dock", isOn: $sidebarStayOnTop, help: "Keep the sidebar above the Dock. Turn this off to let the Dock appear over it.") { sidebarBool("stay-on-top", sidebarStayOnTop) }
                 SettingsToggle("Reveal sidebar at the display edge", isOn: $sidebarAutoHide, help: "Hide the compact rail until the pointer reaches the left edge.") { sidebarBool("auto-hide", sidebarAutoHide) }
                 SettingsToggle("Keep sidebar expanded", isOn: $sidebarAlwaysExpanded, help: "Reserve the full sidebar width for tiled windows.") { sidebarBool("always-expanded", sidebarAlwaysExpanded) }
                 SettingsStepper("Expanded width", value: $sidebarWidth, range: 120...480, help: "Width of the fully expanded sidebar.") { sidebarInt("width", sidebarWidth) }

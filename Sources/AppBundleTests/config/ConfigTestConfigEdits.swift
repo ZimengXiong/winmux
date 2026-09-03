@@ -156,4 +156,24 @@ extension ConfigTest {
         XCTAssertFalse(updated.contains("move-windows-to-fallback"))
     }
 
+    func testUpdateSettingsScalarConfigReplacesWorkspaceSidebarStayOnTop() {
+        let updated = updateSettingsScalarConfig(
+            in: """
+            [workspace-sidebar]
+                enabled = true
+                stay-on-top = true
+
+            [mode.main.binding]
+                alt-h = 'focus left'
+            """,
+            section: "workspace-sidebar",
+            key: "stay-on-top",
+            renderedValue: "false",
+        )
+
+        XCTAssertTrue(updated.contains("stay-on-top = false"))
+        XCTAssertFalse(updated.contains("stay-on-top = true"))
+        XCTAssertTrue(updated.contains("[mode.main.binding]"))
+    }
+
 }
