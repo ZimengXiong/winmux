@@ -1,5 +1,5 @@
-// FILE IS GENERATED FROM docs/winmux-*.adoc files
-// TO REGENERATE THE FILE RUN generate.sh
+// CLI SUBCOMMAND DESCRIPTION TABLE. The legacy generated filename is retained for source compatibility.
+// Keep this list in sync with the public command manifest.
 
 let subcommandDescriptions = [
     ["  agent", "Query, validate, and apply agent-oriented window layout JSON"],
@@ -7,7 +7,9 @@ let subcommandDescriptions = [
     ["  close-all-windows-but-current", "On the focused workspace, close all windows but current"],
     ["  close", "Close the focused window"],
     ["  config", "Query WinMux config options"],
+    ["  create-project", "Create a project and print its stable project ID"],
     ["  debug-windows", "Interactive command to record Accessibility API debug information to create bug reports"],
+    ["  delete-project", "Delete a project after verifying its window count, moving windows to a fallback project"],
     ["  doctor", "Print diagnostics: permissions, monitors, per-app accessibility latency, manager state"],
     ["  palette", "Toggle the window switcher palette (fuzzy-search all windows)"],
     ["  enable", "Temporarily enable or disable WinMux"],
@@ -22,6 +24,7 @@ let subcommandDescriptions = [
     ["  list-exec-env-vars", "List environment variables that exec-* commands and callbacks are run with"],
     ["  list-modes", "Print a list of modes currently specified in the configuration"],
     ["  list-monitors", "Print monitors that satisfy conditions"],
+    ["  list-projects", "Print projects that satisfy conditions"],
     ["  list-windows", "Print windows that satisfy conditions"],
     ["  list-workspaces", "Print workspaces that satisfy conditions"],
     ["  macos-native-fullscreen", "Toggle macOS fullscreen for the focused window"],
@@ -33,9 +36,12 @@ let subcommandDescriptions = [
     ["  move-node-to-workspace", "Move the focused window to the specified workspace"],
     ["  move-workspace-to-monitor", "Move workspace to monitor targeted by relative direction, by order, or by pattern."],
     ["  move", "Move the focused window in the given direction"],
+    ["  open-sidebar", "Open the workspace sidebar and arm type-to-search"],
     ["  project", "Focus the specified project"],
     ["  reload-config", "Reload currently active config"],
+    ["  rename-project", "Rename a project by its stable project ID"],
     ["  resize", "Resize the focused window"],
+    ["  set-project-color", "Set or reset a project's sidebar color by its stable project ID"],
     ["  split", "Split focused window"],
     ["  stack-with", "Put the focused window into the same tab group as the nearest window in the specified direction."],
     ["  subscribe", "Subscribe to WinMux events and receive notifications via socket"],

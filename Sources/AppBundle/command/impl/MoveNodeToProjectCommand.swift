@@ -11,7 +11,7 @@ struct MoveNodeToProjectCommand: Command {
             return io.err("Window \(window.windowId) doesn't belong to any workspace")
         }
         guard let project = resolveProjectTarget(args.target.val, currentProjectId: sourceWorkspace.projectId, wrapAround: args.wrapAround) else {
-            return io.err("Can't resolve project target")
+            return io.err(projectTargetResolutionError(args.target.val))
         }
         let monitor = window.nodeMonitor ?? sourceWorkspace.workspaceMonitor
         let targetWorkspace = firstWorkspaceForProjectMove(projectId: project.id, monitor: monitor)
@@ -37,10 +37,20 @@ func resolveProjectTarget(
     switch target {
         case .index(let index):
             return projects.getOrNil(atIndex: index - 1)
+        case .directId(let id):
+            return projects.first { $0.id.rawValue == id }
         case .relative(let nextPrev):
             guard let currentIndex = projects.firstIndex(where: { $0.id == currentProjectId }) else { return nil }
             let targetIndex = currentIndex + (nextPrev == .next ? 1 : -1)
             return wrapAround ? projects.get(wrappingIndex: targetIndex) : projects.getOrNil(atIndex: targetIndex)
+    }
+}
+
+func projectTargetResolutionError(_ target: ProjectTarget) -> String {
+    switch target {
+        case .directId(let id): "Project '\(id)' doesn't exist"
+        case .index(let index): "Project index \(index) is out of range"
+        case .relative: "Can't resolve project target"
     }
 }
 

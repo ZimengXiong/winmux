@@ -32,14 +32,12 @@ struct WinMuxWorkspaceState {
     var monitorViewportsById: [MonitorViewportId: MonitorViewport] = [:]
 
     private var nextWorkspaceCounter = 1
-    private var nextProjectCounter = 1
     private var nextProjectOrderCounter = 1
 
     mutating func resetProjects(defaultProjectName: String) {
         projectsById = [
             workspaceProjectDefaultId: WorkspaceProject(id: workspaceProjectDefaultId, name: defaultProjectName, order: 0),
         ]
-        nextProjectCounter = 1
         nextProjectOrderCounter = 1
         for workspace in workspaceById.values {
             workspace.projectId = workspaceProjectDefaultId
@@ -59,7 +57,6 @@ struct WinMuxWorkspaceState {
             workspaceProjectDefaultId: WorkspaceProject(id: workspaceProjectDefaultId, name: defaultProjectName, order: 0),
         ]
         nextWorkspaceCounter = 1
-        nextProjectCounter = 1
         nextProjectOrderCounter = 1
     }
 
@@ -84,12 +81,13 @@ struct WinMuxWorkspaceState {
         nextProjectOrderCounter = max(nextProjectOrderCounter, project.order + 1)
     }
 
-    mutating func nextGeneratedProjectIdentity() -> (id: WorkspaceProjectId, name: String) {
-        while projectsById[WorkspaceProjectId("project-\(nextProjectCounter)")] != nil {
-            nextProjectCounter += 1
+    func nextGeneratedProjectIdentity() -> (id: WorkspaceProjectId, name: String) {
+        while true {
+            let id = WorkspaceProjectId("project-\(UUID().uuidString.lowercased())")
+            if projectsById[id] == nil {
+                return (id, "Project")
+            }
         }
-        defer { nextProjectCounter += 1 }
-        return (WorkspaceProjectId("project-\(nextProjectCounter)"), "Project \(nextProjectCounter)")
     }
 
     func workspace(named name: String) -> Workspace? {

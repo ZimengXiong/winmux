@@ -10,7 +10,12 @@ struct AgentCommand: Command {
     func run(_ env: CmdEnv, _ io: CmdIo) async throws -> Bool {
         switch args.subcommand.val {
             case .query:
-                let snapshot = try await AgentSnapshot.query()
+                let snapshot: AgentSnapshot
+                do {
+                    snapshot = try await AgentSnapshot.query()
+                } catch let error as AgentSnapshotQueryError {
+                    return io.err(error.localizedDescription)
+                }
                 guard let json = JSONEncoder.winMuxDefault.encodeToString(snapshot) else {
                     return io.err("Failed to encode agent snapshot")
                 }
@@ -22,7 +27,7 @@ struct AgentCommand: Command {
             case .check:
                 let request: AgentRequest
                 do {
-                    request = try AgentRequest.read(path: args.path.orDie())
+                    request = try readRequest(io)
                 } catch {
                     return io.err("Failed to read agent JSON: \(describeAgentJsonError(error))")
                 }
@@ -34,7 +39,7 @@ struct AgentCommand: Command {
             case .apply:
                 let request: AgentRequest
                 do {
-                    request = try AgentRequest.read(path: args.path.orDie())
+                    request = try readRequest(io)
                 } catch {
                     return io.err("Failed to read agent JSON: \(describeAgentJsonError(error))")
                 }
@@ -47,6 +52,13 @@ struct AgentCommand: Command {
             case .skill:
                 return io.out(agentSkillText)
         }
+    }
+
+    private func readRequest(_ io: CmdIo) throws -> AgentRequest {
+        if args.useStdin {
+            return try AgentRequest.read(stdin: io.readStdin())
+        }
+        return try AgentRequest.read(path: args.path.orDie())
     }
 }
 
@@ -72,14 +84,14 @@ private func describeAgentJsonError(_ error: Error) -> String {
 private let agentSkillText = """
     ---
     name: winmux-agent
-    description: Use when arranging WinMux windows through the agent JSON interface. Query to a file, read that exact file, edit it, then apply that exact file.
+    description: Use when arranging WinMux windows through the agent JSON interface. Start from a fresh query, edit only its edit object, then apply the result from a file or explicit stdin.
     ---
 
     # WinMux Agent
 
-    You MUST use the file workflow. Do not guess operation names. Do not search the repository for docs. This skill is the command reference.
+    You MUST start from a fresh `winmux agent query`. Do not guess operation names. Do not search the repository for docs. This skill is the command reference.
 
-    Required workflow for every user request:
+    Recommended file workflow for agent-driven edits:
     1. Query the current state into a JSON file:
        `winmux agent query --path /tmp/winmux-agent.json`
     2. Read the file you just wrote:
@@ -93,6 +105,11 @@ private let agentSkillText = """
        `winmux agent apply --path /tmp/winmux-agent.json`
     7. If apply says the JSON is stale or the `worldId` does not match, discard `/tmp/winmux-agent.json`, run the query command again, read the new file, redo the edit, and apply again.
     8. Return a short summary of what changed.
+
+    A deterministic shell transform may instead use an explicit stdin pipeline:
+    `winmux agent query | jq '<edit transformation>' | winmux agent apply --stdin`
+    `check` also accepts stdin: `winmux agent query | jq '<edit transformation>' | winmux agent check --stdin`.
+    `--stdin` is always explicit and is incompatible with `--path`. Never rely on redirected input being detected implicitly.
 
     Usually skip the separate check command. `apply` validates before changing anything. Use `winmux agent check --path /tmp/winmux-agent.json` only for complex edits or after a failed apply.
 

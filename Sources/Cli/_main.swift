@@ -10,6 +10,7 @@ let usage =
     SUBCOMMANDS:
     \(subcommandDescriptions.sortedBy { $0[0] }.toPaddingTable(columnSeparator: "   ").joined(separator: "\n"))
     """
+private let cliUsageOrParseErrorExitCode: Int32 = 2
 
 @main
 struct Main {
@@ -17,7 +18,7 @@ struct Main {
         let args = CommandLine.arguments.slice(1...) ?? []
 
         if args.isEmpty {
-            exit(1, err: usage)
+            exit(cliUsageOrParseErrorExitCode, err: usage)
         }
         if args.first == "--help" || args.first == "-h" {
             exit(0, out: usage)
@@ -26,11 +27,14 @@ struct Main {
         if args.first == "--version" || args.first == "-v" {
             let connection = NWConnection(to: NWEndpoint.unix(path: socketPath), using: .tcp)
             let serverVersionAndHash: String?
-            if await connection.startBlocking().error == nil {
-                let ans = await run(connection, [], stdin: "", windowId: nil, workspace: nil)
-                serverVersionAndHash = ans.serverVersionAndHash
-            } else {
-                serverVersionAndHash = nil
+            switch await connection.initConnection().error {
+                case nil:
+                    let ans = await run(connection, [], stdin: "", windowId: nil, workspace: nil)
+                    serverVersionAndHash = ans.serverVersionAndHash
+                case .nwError:
+                    serverVersionAndHash = nil
+                case .customError(let error):
+                    exit(1, err: error)
             }
             print(
                 """
@@ -57,17 +61,27 @@ struct Main {
             case .help(let help):
                 exit(0, out: help)
             case .failure(let e):
-                exit(1, err: e)
+                exit(cliUsageOrParseErrorExitCode, err: e)
         }
 
         let connection = NWConnection(to: NWEndpoint.unix(path: socketPath), using: .tcp)
 
-        if let e = await connection.startBlocking().error {
-            exit(1, err: "Can't connect to WinMux server. Is WinMux.app running?\n\(e.localizedDescription)")
+        switch await connection.initConnection().error {
+            case nil:
+                break
+            case .nwError(let error):
+                exit(1, err: "Can't connect to WinMux server. Is WinMux.app running?\n\(error.localizedDescription)")
+            case .customError(let error):
+                exit(1, err: error)
         }
 
         var stdin = ""
-        if shouldReadRelativeWorkspaceStdin(parsedArgs), hasStdin() {
+        if shouldReadAgentStdin(parsedArgs) {
+            switch readBoundedUtf8Stdin() {
+                case .success(let input): stdin = input
+                case .failure(let error): exit(1, err: error)
+            }
+        } else if shouldReadRelativeWorkspaceStdin(parsedArgs), hasStdin() {
             if !hasExplicitRelativeWorkspaceStdinFlag(parsedArgs) {
                 exit(
                     1,
@@ -119,6 +133,10 @@ struct Main {
         }
         exit(ans.exitCode)
     }
+}
+
+func shouldReadAgentStdin(_ args: any CmdArgs) -> Bool {
+    (args as? AgentCmdArgs)?.useStdin == true
 }
 
 private func shouldReadRelativeWorkspaceStdin(_ args: any CmdArgs) -> Bool {

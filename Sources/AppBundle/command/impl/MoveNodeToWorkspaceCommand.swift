@@ -10,6 +10,12 @@ struct MoveNodeToWorkspaceCommand: Command {
         let subjectWs = window.nodeWorkspace
         let targetWorkspace: Workspace
         switch args.target.val {
+            case .newWorkspace:
+                guard let subjectWs else { return io.err("Window \(window.windowId) doesn't belong to any workspace") }
+                targetWorkspace = getOrCreateAdjacentBlankWorkspace(
+                    projectId: subjectWs.projectId,
+                    monitor: window.nodeMonitor ?? target.workspace.workspaceMonitor,
+                )
             case .relative(let nextPrev):
                 guard let subjectWs else { return io.err("Window \(window.windowId) doesn't belong to any workspace") }
                 let ws = getNextPrevWorkspace(

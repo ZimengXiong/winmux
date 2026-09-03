@@ -2,17 +2,24 @@ VERSION ?= 0.0.0-SNAPSHOT
 CODESIGN_IDENTITY ?= Apple Development
 EXPECTED_CODESIGN_AUTHORITY_PREFIX ?= Authority=Apple Development:
 DEVELOPMENT_TEAM ?= W9C2P3N7Q2
+CODESIGN_STYLE ?= Automatic
 NOTARIZE ?= 0
 NOTARYTOOL_PROFILE ?= winmux
+GENERATE_APPCAST ?= 0
+ALLOW_APP_ONLY_PROTOCOL_UPDATE ?= 0
 RELEASE_DIR ?= .release
 RELEASE_TAG ?= v$(VERSION)
 RELEASE_NOTES ?= auto
-PUBLISH ?= 1
+PUBLISH ?= 0
 APP_INSTALL_DIR ?= /Applications
+CLI_STAGE_PATH ?= $(RELEASE_DIR)/winmux
+LOCAL_INSTALL_ROOT ?= $(CURDIR)/.local/install
+INSTALL_LOCK_HELD ?= 0
+LAUNCH_AFTER_INSTALL ?= 1
 SPARKLE_PUBLIC_KEY ?= kcc3956V3+Yo8GtwFJ8Odb9sphIr09/9dsuoYBNtxf0=
 ARGS ?=
 
-.PHONY: generate xcodeproj build build-clean run run-clean cli release install installed clean
+.PHONY: generate xcodeproj build build-clean run run-clean cli cli-release release install install-staged verify-installed installed clean
 
 generate:
 	/bin/bash -lc 'cd "$(CURDIR)" && \
@@ -83,8 +90,31 @@ cli:
 	$(MAKE) build VERSION="$(VERSION)"
 	/bin/bash -lc 'cd "$(CURDIR)" && exec ./.debug/winmux $(ARGS)'
 
+cli-release:
+	$(MAKE) generate VERSION="$(VERSION)"
+	/bin/bash -lc 'cd "$(CURDIR)" && \
+	set -euo pipefail && \
+	source ./script/setup.sh && \
+	swift build -c release --arch arm64 --arch x86_64 --product winmux -Xswiftc -warnings-as-errors && \
+	cli_build_dir="$$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path | /usr/bin/tail -n 1)" && \
+	cli_stage_path="$(CLI_STAGE_PATH)" && \
+	test -x "$$cli_build_dir/winmux" && \
+	mkdir -p "$$(dirname "$$cli_stage_path")" && \
+	/usr/bin/install -m 755 "$$cli_build_dir/winmux" "$$cli_stage_path" && \
+	/usr/bin/codesign --force --sign "$(CODESIGN_IDENTITY)" "$$cli_stage_path" && \
+	/usr/bin/codesign --verify --strict --verbose=2 "$$cli_stage_path" && \
+	archs="$$(/usr/bin/lipo -archs "$$cli_stage_path")" && \
+	case " $$archs " in *" arm64 "*) ;; *) echo "CLI is missing arm64" >&2; exit 1;; esac && \
+	case " $$archs " in *" x86_64 "*) ;; *) echo "CLI is missing x86_64" >&2; exit 1;; esac'
+
 release:
+	@if [ "$(GENERATE_APPCAST)" = "1" ] && [ "$(ALLOW_APP_ONLY_PROTOCOL_UPDATE)" != "1" ]; then \
+	    echo "Refusing to generate an app-only Sparkle update during the socket protocol-v1 migration." >&2; \
+	    echo "Distribute WinMux.app and bin/winmux together, or explicitly set ALLOW_APP_ONLY_PROTOCOL_UPDATE=1." >&2; \
+	    exit 1; \
+	fi
 	$(MAKE) xcodeproj VERSION="$(VERSION)" CODESIGN_IDENTITY="$(CODESIGN_IDENTITY)"
+	$(MAKE) cli-release VERSION="$(VERSION)" CODESIGN_IDENTITY="$(CODESIGN_IDENTITY)" CLI_STAGE_PATH="$(CLI_STAGE_PATH)"
 	/bin/bash -lc 'cd "$(CURDIR)" && \
 	set -euo pipefail && \
 	source ./script/setup.sh && \
@@ -95,9 +125,12 @@ release:
 	derived_data_path="$$release_dir/$$app_name-$(VERSION).deriveddata"; \
 	app_path="$$archive_path/Products/Applications/$$app_name.app"; \
 	zip_path="$$release_dir/$$app_name-$(VERSION).zip"; \
+	dist_path="$$release_dir/$$app_name-$(VERSION)-macOS"; \
+	dist_zip_path="$$release_dir/$$app_name-$(VERSION)-macOS.zip"; \
 	appcast_path="$$release_dir/appcast.xml"; \
 	log_path="$$release_dir/$$app_name-$(VERSION)-xcodebuild.log"; \
-	rm -rf "$$archive_path" "$$zip_path" "$$appcast_path" "$$derived_data_path"; \
+	cli_path="$(CLI_STAGE_PATH)"; \
+	rm -rf "$$archive_path" "$$zip_path" "$$dist_path" "$$dist_zip_path" "$$appcast_path" "$$derived_data_path"; \
 	mkdir -p "$$release_dir"; \
 	xcodebuild-pretty "$$log_path" \
 	    -project WinMux.xcodeproj \
@@ -107,16 +140,36 @@ release:
 	    -derivedDataPath "$$derived_data_path" \
 	    CODE_SIGN_IDENTITY="$(CODESIGN_IDENTITY)" \
 	    DEVELOPMENT_TEAM="$(DEVELOPMENT_TEAM)" \
-	    CODE_SIGN_STYLE=Automatic \
+	    CODE_SIGN_STYLE="$(CODESIGN_STYLE)" \
 	    archive; \
 	test -d "$$app_path"; \
+	test -x "$$cli_path"; \
 	codesign --verify --deep --strict --verbose=2 "$$app_path"; \
-	codesign -dv --verbose=4 "$$app_path" 2>&1 | grep -F "$(EXPECTED_CODESIGN_AUTHORITY_PREFIX)" >/dev/null; \
+	app_archs="$$(/usr/bin/lipo -archs "$$app_path/Contents/MacOS/$$app_name")"; \
+	case " $$app_archs " in *" arm64 "*) ;; *) echo "App is missing arm64" >&2; exit 1;; esac; \
+	case " $$app_archs " in *" x86_64 "*) ;; *) echo "App is missing x86_64" >&2; exit 1;; esac; \
+	expected_authority="$(EXPECTED_CODESIGN_AUTHORITY_PREFIX)"; \
+	if [ -n "$$expected_authority" ]; then \
+	    codesign -dv --verbose=4 "$$app_path" 2>&1 | grep -F "$$expected_authority" >/dev/null; \
+	    codesign -dv --verbose=4 "$$cli_path" 2>&1 | grep -F "$$expected_authority" >/dev/null; \
+	fi; \
+	generated_version="$$(sed -n '\''s/^public let winMuxAppVersion = "\(.*\)"/\1/p'\'' Sources/Common/versionGenerated.swift)"; \
+	generated_hash="$$(sed -n '\''s/^public let gitHash = "\(.*\)"/\1/p'\'' Sources/Common/gitHashGenerated.swift)"; \
+	test "$$generated_version" = "$(VERSION)"; \
+	test -n "$$generated_hash"; \
+	strings "$$app_path/Contents/MacOS/$$app_name" | grep -F -x "$$generated_version" >/dev/null; \
+	strings "$$cli_path" | grep -F -x "$$generated_version" >/dev/null; \
+	strings "$$app_path/Contents/MacOS/$$app_name" | grep -F -x "$$generated_hash" >/dev/null; \
+	strings "$$cli_path" | grep -F -x "$$generated_hash" >/dev/null; \
 	ditto -c -k --sequesterRsrc --keepParent "$$app_path" "$$zip_path"; \
-	sparkle_appcast="$$(find "$$derived_data_path/SourcePackages/artifacts" -type f -name generate_appcast -print -quit)"; \
-	test -n "$$sparkle_appcast"; \
-	"$$sparkle_appcast" --download-url-prefix "https://github.com/ZimengXiong/winmux/releases/download/$(RELEASE_TAG)/" "$$release_dir"; \
-	test -f "$$appcast_path"; \
+	if [ "$(GENERATE_APPCAST)" = "1" ]; then \
+	    sparkle_appcast="$$(find "$$derived_data_path/SourcePackages/artifacts" -type f -name generate_appcast -print -quit)"; \
+	    test -n "$$sparkle_appcast"; \
+	    "$$sparkle_appcast" --download-url-prefix "https://github.com/ZimengXiong/winmux/releases/download/$(RELEASE_TAG)/" "$$release_dir"; \
+	    test -f "$$appcast_path"; \
+	else \
+	    echo "Skipping appcast generation because GENERATE_APPCAST=$(GENERATE_APPCAST)"; \
+	fi; \
 	if [ "$(NOTARIZE)" = "1" ]; then \
 	    test -n "$(NOTARYTOOL_PROFILE)"; \
 	    xcrun notarytool submit "$$zip_path" --keychain-profile "$(NOTARYTOOL_PROFILE)" --wait; \
@@ -129,16 +182,25 @@ release:
 	else \
 	    echo "Skipping notarization because NOTARIZE=$(NOTARIZE)"; \
 	fi; \
-	if [ "$(PUBLISH)" != "1" ]; then \
+	mkdir -p "$$dist_path/bin"; \
+	ditto "$$app_path" "$$dist_path/$$app_name.app"; \
+	/usr/bin/install -m 755 "$$cli_path" "$$dist_path/bin/winmux"; \
+	codesign --verify --deep --strict --verbose=2 "$$dist_path/$$app_name.app"; \
+	codesign --verify --strict --verbose=2 "$$dist_path/bin/winmux"; \
+	ditto -c -k --sequesterRsrc --keepParent "$$dist_path" "$$dist_zip_path"; \
+	if [ "$(PUBLISH)" = "1" ] && [ "$(GENERATE_APPCAST)" != "1" ]; then \
+	    echo "Publishing requires GENERATE_APPCAST=1" >&2; \
+	    exit 1; \
+	elif [ "$(PUBLISH)" != "1" ]; then \
 	    echo "Skipping GitHub release publish because PUBLISH=$(PUBLISH)"; \
 	elif /usr/bin/which gh >/dev/null 2>&1; then \
 	    if gh release view "$(RELEASE_TAG)" >/dev/null 2>&1; then \
-	        gh release upload "$(RELEASE_TAG)" "$$zip_path" "$$appcast_path" --clobber; \
+	        gh release upload "$(RELEASE_TAG)" "$$zip_path" "$$dist_zip_path" "$$appcast_path" --clobber; \
 	    else \
 	        if [ "$(RELEASE_NOTES)" = "auto" ]; then \
-	            gh release create "$(RELEASE_TAG)" "$$zip_path" "$$appcast_path" --title "$$app_name $(VERSION)" --generate-notes; \
+	            gh release create "$(RELEASE_TAG)" "$$zip_path" "$$dist_zip_path" "$$appcast_path" --title "$$app_name $(VERSION)" --generate-notes; \
 	        else \
-	            gh release create "$(RELEASE_TAG)" "$$zip_path" "$$appcast_path" --title "$$app_name $(VERSION)" --notes "$(RELEASE_NOTES)"; \
+	            gh release create "$(RELEASE_TAG)" "$$zip_path" "$$dist_zip_path" "$$appcast_path" --title "$$app_name $(VERSION)" --notes "$(RELEASE_NOTES)"; \
 	        fi; \
 	    fi; \
 	else \
@@ -146,21 +208,209 @@ release:
 	fi'
 
 install:
-	$(MAKE) release VERSION="$(VERSION)" CODESIGN_IDENTITY="$(CODESIGN_IDENTITY)" DEVELOPMENT_TEAM="$(DEVELOPMENT_TEAM)" PUBLISH=0
+	/bin/bash -lc 'cd "$(CURDIR)" && \
+	set -euo pipefail && \
+	local_install_root="$(LOCAL_INSTALL_ROOT)"; \
+	mkdir -p "$$local_install_root"; \
+	install_lock="$$local_install_root/.install.lock"; \
+	if ! mkdir "$$install_lock" 2>/dev/null; then \
+	    echo "Another WinMux build or install is already in progress: $$install_lock" >&2; \
+	    exit 1; \
+	fi; \
+	cleanup_install_lock() { rmdir "$$install_lock" >/dev/null 2>&1 || true; }; \
+	trap cleanup_install_lock EXIT; \
+	$(MAKE) release VERSION="$(VERSION)" CODESIGN_IDENTITY="$(CODESIGN_IDENTITY)" DEVELOPMENT_TEAM="$(DEVELOPMENT_TEAM)" GENERATE_APPCAST=0 PUBLISH=0; \
+	$(MAKE) install-staged VERSION="$(VERSION)" CODESIGN_IDENTITY="$(CODESIGN_IDENTITY)" CLI_STAGE_PATH="$(CLI_STAGE_PATH)" LOCAL_INSTALL_ROOT="$(LOCAL_INSTALL_ROOT)" APP_INSTALL_DIR="$(APP_INSTALL_DIR)" INSTALL_LOCK_HELD=1 LAUNCH_AFTER_INSTALL="$(LAUNCH_AFTER_INSTALL)"'
+
+install-staged:
 	/bin/bash -lc 'cd "$(CURDIR)" && \
 	set -euo pipefail && \
 	app_name="WinMux"; \
 	release_dir="$(RELEASE_DIR)"; \
 	app_path="$$release_dir/$$app_name-$(VERSION).xcarchive/Products/Applications/$$app_name.app"; \
+	cli_path="$(CLI_STAGE_PATH)"; \
+	dist_zip_path="$$release_dir/$$app_name-$(VERSION)-macOS.zip"; \
+	local_install_root="$(LOCAL_INSTALL_ROOT)"; \
 	install_dir="$(APP_INSTALL_DIR)"; \
 	install_path="$$install_dir/$$app_name.app"; \
 	test -d "$$app_path"; \
+	test -x "$$cli_path"; \
+	test -f "$$dist_zip_path"; \
+	dist_hash="$$(/usr/bin/shasum -a 256 "$$dist_zip_path" | /usr/bin/awk '\''{print $$1}'\'')"; \
+	release_id="$(VERSION)-$$dist_hash"; \
+	releases_dir="$$local_install_root/releases"; \
+	pair_path="$$releases_dir/$$release_id"; \
+	mkdir -p "$$releases_dir"; \
+	if [ "$(INSTALL_LOCK_HELD)" != "1" ]; then \
+	    install_lock="$$local_install_root/.install.lock"; \
+	    if ! mkdir "$$install_lock" 2>/dev/null; then \
+	        echo "Another WinMux install is already in progress: $$install_lock" >&2; \
+	        exit 1; \
+	    fi; \
+	    cleanup_install_lock() { rmdir "$$install_lock" >/dev/null 2>&1 || true; }; \
+	    trap cleanup_install_lock EXIT; \
+	fi; \
+	if [ ! -d "$$pair_path" ]; then \
+	    staging_path="$$(/usr/bin/mktemp -d "$$local_install_root/.staging.XXXXXX")"; \
+	    mkdir -p "$$staging_path/bin"; \
+	    ditto "$$app_path" "$$staging_path/$$app_name.app"; \
+	    /usr/bin/install -m 755 "$$cli_path" "$$staging_path/bin/winmux"; \
+	    mv "$$staging_path" "$$pair_path"; \
+	fi; \
+	test -d "$$pair_path/$$app_name.app"; \
+	test -x "$$pair_path/bin/winmux"; \
+	codesign --verify --deep --strict --verbose=2 "$$pair_path/$$app_name.app"; \
+	codesign --verify --strict --verbose=2 "$$pair_path/bin/winmux"; \
+	cmp -s "$$pair_path/$$app_name.app/Contents/MacOS/$$app_name" "$$app_path/Contents/MacOS/$$app_name"; \
+	cmp -s "$$pair_path/bin/winmux" "$$cli_path"; \
+	for executable in "$$pair_path/$$app_name.app/Contents/MacOS/$$app_name" "$$pair_path/bin/winmux"; do \
+	    archs="$$(/usr/bin/lipo -archs "$$executable")"; \
+	    case " $$archs " in *" arm64 "*) ;; *) echo "$$executable is missing arm64" >&2; exit 1;; esac; \
+	    case " $$archs " in *" x86_64 "*) ;; *) echo "$$executable is missing x86_64" >&2; exit 1;; esac; \
+	done; \
 	mkdir -p "$$install_dir"; \
-	osascript -e "tell application \"$$app_name\" to quit" >/dev/null 2>&1 || true; \
-	rm -rf "$$install_path"; \
-	ditto "$$app_path" "$$install_path"; \
+	current_path="$$local_install_root/current"; \
+	if [ -e "$$current_path" ] && [ ! -L "$$current_path" ]; then \
+	    echo "Refusing to replace non-symlink: $$current_path" >&2; \
+	    exit 1; \
+	fi; \
+	old_current="$$(readlink "$$current_path" 2>/dev/null || true)"; \
+	next_path="$$install_dir/.$$app_name.app.next.$$$$"; \
+	backup_path="$$install_dir/.$$app_name.app.rollback.$$(date +%Y%m%d%H%M%S).$$$$"; \
+	current_next="$$local_install_root/.current.$$$$"; \
+	rm -rf "$$next_path"; \
+	ditto "$$pair_path/$$app_name.app" "$$next_path"; \
+	codesign --verify --deep --strict --verbose=2 "$$next_path"; \
+	was_running=0; \
+	if pgrep -x "$$app_name" >/dev/null 2>&1; then \
+	    was_running=1; \
+	    if [ "$(LAUNCH_AFTER_INSTALL)" = "1" ]; then \
+	        osascript -e "tell application \"$$app_name\" to quit" >/dev/null 2>&1 || true; \
+	    else \
+	        pkill -TERM -x "$$app_name" >/dev/null 2>&1 || true; \
+	    fi; \
+	fi; \
+	for attempt in $$(seq 1 100); do \
+	    if ! pgrep -x "$$app_name" >/dev/null 2>&1; then break; fi; \
+	    sleep 0.1; \
+	done; \
+	if pgrep -x "$$app_name" >/dev/null 2>&1; then \
+	    echo "WinMux did not quit; leaving the installed app untouched" >&2; \
+	    rm -rf "$$next_path"; \
+	    exit 1; \
+	fi; \
+	had_previous=0; \
+	if [ -e "$$install_path" ]; then \
+	    mv "$$install_path" "$$backup_path"; \
+	    had_previous=1; \
+	fi; \
+	if ! mv "$$next_path" "$$install_path"; then \
+	    if [ "$$had_previous" = 1 ]; then \
+	        mv "$$backup_path" "$$install_path"; \
+	        if [ "$(LAUNCH_AFTER_INSTALL)" = "1" ]; then open "$$install_path" >/dev/null 2>&1 || true; fi; \
+	    fi; \
+	    exit 1; \
+	fi; \
+	if ! ln -s "$$pair_path" "$$current_next"; then \
+	    mv "$$install_path" "$$next_path"; \
+	    if [ "$$had_previous" = 1 ]; then \
+	        mv "$$backup_path" "$$install_path"; \
+	        if [ "$(LAUNCH_AFTER_INSTALL)" = "1" ]; then open "$$install_path" >/dev/null 2>&1 || true; fi; \
+	    fi; \
+	    rm -rf "$$next_path"; \
+	    exit 1; \
+	fi; \
+	if ! mv -fh "$$current_next" "$$current_path"; then \
+	    mv "$$install_path" "$$next_path"; \
+	    if [ "$$had_previous" = 1 ]; then \
+	        mv "$$backup_path" "$$install_path"; \
+	        if [ "$(LAUNCH_AFTER_INSTALL)" = "1" ]; then open "$$install_path" >/dev/null 2>&1 || true; fi; \
+	    fi; \
+	    rm -rf "$$next_path"; \
+	    exit 1; \
+	fi; \
 	xattr -dr com.apple.quarantine "$$install_path" >/dev/null 2>&1 || true; \
-	open "$$install_path"'
+	generated_hash="$$(sed -n '\''s/^public let gitHash = "\(.*\)"/\1/p'\'' Sources/Common/gitHashGenerated.swift)"; \
+	if [ "$(LAUNCH_AFTER_INSTALL)" != "1" ]; then \
+	    echo "Installed matching WinMux app and CLI on disk: $(VERSION) $$generated_hash"; \
+	    echo "Launch and live client/server verification were deliberately skipped."; \
+	    if [ "$$had_previous" = 1 ]; then echo "Rollback app preserved at $$backup_path"; fi; \
+	    exit 0; \
+	fi; \
+	ready=0; \
+	if launch_error="$$(open "$$install_path" 2>&1)"; then \
+	    for attempt in $$(seq 1 100); do \
+	        version_output="$$("$$current_path/bin/winmux" --version 2>&1 || true)"; \
+	        if printf "%s\n" "$$version_output" | grep -F "winmux CLI client version: $(VERSION) $$generated_hash" >/dev/null && \
+	           printf "%s\n" "$$version_output" | grep -F "WinMux.app server version: $(VERSION) $$generated_hash" >/dev/null; then \
+	            ready=1; \
+	            break; \
+	        fi; \
+	        sleep 0.1; \
+	    done; \
+	else \
+	    version_output="Failed to launch $$install_path: $$launch_error"; \
+	fi; \
+	if [ "$$ready" != 1 ]; then \
+	    if [ "$(CODESIGN_IDENTITY)" = "-" ]; then \
+	        echo "Installed the ad-hoc-signed WinMux app and CLI, but the pair has not passed its readiness check." >&2; \
+	        echo "Accessibility approval is commonly required after an ad-hoc signature changes; a launch, config, or protocol failure can produce the same symptom." >&2; \
+	        open "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility" >/dev/null 2>&1 || true; \
+	        echo "After WinMux is enabled and relaunched, run: make verify-installed" >&2; \
+	        if [ "$$had_previous" = 1 ]; then echo "Rollback app preserved at $$backup_path" >&2; fi; \
+	        exit 75; \
+	    fi; \
+	    echo "Installed WinMux failed the client/server version check; rolling back" >&2; \
+	    osascript -e "tell application \"$$app_name\" to quit" >/dev/null 2>&1 || true; \
+	    for attempt in $$(seq 1 100); do \
+	        if ! pgrep -x "$$app_name" >/dev/null 2>&1; then break; fi; \
+	        sleep 0.1; \
+	    done; \
+	    if pgrep -x "$$app_name" >/dev/null 2>&1; then \
+	        echo "Failed WinMux process did not quit; refusing to move a live app bundle during rollback" >&2; \
+	        echo "New pair remains installed; rollback app remains at $$backup_path" >&2; \
+	        exit 1; \
+	    fi; \
+	    failed_path="$$install_dir/.$$app_name.app.failed.$$(date +%Y%m%d%H%M%S).$$$$"; \
+	    mv "$$install_path" "$$failed_path"; \
+	    if [ "$$had_previous" = 1 ]; then mv "$$backup_path" "$$install_path"; fi; \
+	    restore_link="$$local_install_root/.current-restore.$$$$"; \
+	    if [ -n "$$old_current" ]; then \
+	        ln -s "$$old_current" "$$restore_link"; \
+	        mv -fh "$$restore_link" "$$current_path"; \
+	    else \
+	        rm -f "$$current_path"; \
+	    fi; \
+	    if [ "$$had_previous" = 1 ]; then open "$$install_path"; fi; \
+	    echo "Failed build preserved at $$failed_path" >&2; \
+	    exit 1; \
+	fi; \
+	echo "Installed matching WinMux app and CLI: $$version_output"; \
+	if [ "$$had_previous" = 1 ]; then echo "Rollback app preserved at $$backup_path"; fi'
+
+verify-installed:
+	/bin/bash -lc 'cd "$(CURDIR)" && \
+	set -euo pipefail && \
+	current_path="$(LOCAL_INSTALL_ROOT)/current"; \
+	install_path="$(APP_INSTALL_DIR)/WinMux.app"; \
+	test -L "$$current_path"; \
+	test -x "$$current_path/bin/winmux"; \
+	test -d "$$install_path"; \
+	/usr/bin/codesign --verify --deep --strict --verbose=2 "$$install_path"; \
+	/usr/bin/codesign --verify --strict --verbose=2 "$$current_path/bin/winmux"; \
+	if ! version_output="$$("$$current_path/bin/winmux" --version 2>&1)"; then \
+	    printf "%s\n" "$$version_output" >&2; \
+	    echo "Installed WinMux CLI could not negotiate with the running app" >&2; \
+	    exit 1; \
+	fi; \
+	client_version="$$(printf "%s\n" "$$version_output" | /usr/bin/sed -n '\''s/^winmux CLI client version: //p'\'')"; \
+	server_version="$$(printf "%s\n" "$$version_output" | /usr/bin/sed -n '\''s/^WinMux.app server version: //p'\'')"; \
+	if [ -z "$$client_version" ] || [ "$$client_version" != "$$server_version" ]; then \
+	    printf "%s\n" "$$version_output" >&2; \
+	    echo "Installed WinMux app and CLI did not report the same build identity" >&2; \
+	    exit 1; \
+	fi; \
+	printf "%s\n" "$$version_output"'
 
 installed: install
 

@@ -176,4 +176,108 @@ extension ConfigTest {
         XCTAssertTrue(updated.contains("[mode.main.binding]"))
     }
 
+    func testPersistProjectMetadataCreatesOnlyAtExplicitMissingTarget() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appending(path: "WinMuxProjectPersistenceTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        let targetUrl = tempDir.appending(path: "nested/winmux.toml")
+
+        try persistWorkspaceSidebarProjectMetadata(
+            projectId: "project-test",
+            label: "Research",
+            colorHex: "#60A5FA",
+            targetUrl: targetUrl,
+        )
+
+        let persisted = try String(contentsOf: targetUrl, encoding: .utf8)
+        let (parsed, errors) = parseConfig(persisted)
+        XCTAssertEqual(errors.descriptions, [])
+        XCTAssertEqual(parsed.workspaceSidebar.projectLabels["project-test"], "Research")
+        XCTAssertEqual(parsed.workspaceSidebar.projectColors["project-test"], "#60A5FA")
+    }
+
+    func testPersistProjectMetadataDoesNotReplaceInvalidUtf8() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appending(path: "WinMuxProjectPersistenceTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        let targetUrl = tempDir.appending(path: "winmux.toml")
+        let invalidUtf8 = Data([0xC3, 0x28])
+        try invalidUtf8.write(to: targetUrl)
+
+        XCTAssertThrowsError(
+            try persistWorkspaceSidebarProjectMetadata(
+                projectId: "project-test",
+                label: "Must Not Be Written",
+                colorHex: nil,
+                targetUrl: targetUrl,
+            ),
+        )
+        XCTAssertEqual(try Data(contentsOf: targetUrl), invalidUtf8)
+    }
+
+    func testPersistProjectMetadataRemovesLabelAndColorTogetherAndPreservesOtherConfig() throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appending(path: "WinMuxProjectPersistenceTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+        let targetUrl = tempDir.appending(path: "winmux.toml")
+        let original = """
+            config-version = 2
+
+            [workspace-sidebar.project-labels]
+            "project-test" = "Disposable"
+            "project-keep" = "Keep"
+
+            [workspace-sidebar.project-colors]
+            "project-test" = "#60A5FA"
+            "project-keep" = "#F87171"
+
+            [mode.main.binding]
+            alt-h = 'focus left' # preserve me
+            """
+        try original.write(to: targetUrl, atomically: true, encoding: .utf8)
+
+        try persistWorkspaceSidebarProjectMetadata(
+            projectId: "project-test",
+            label: nil,
+            colorHex: nil,
+            targetUrl: targetUrl,
+        )
+
+        let persisted = try String(contentsOf: targetUrl, encoding: .utf8)
+        XCTAssertFalse(persisted.contains("\"project-test\""))
+        XCTAssertTrue(persisted.contains("\"project-keep\" = \"Keep\""))
+        XCTAssertTrue(persisted.contains("\"project-keep\" = \"#F87171\""))
+        XCTAssertTrue(persisted.contains("alt-h = 'focus left' # preserve me"))
+        let (parsed, errors) = parseConfig(persisted)
+        XCTAssertEqual(errors.descriptions, [])
+        XCTAssertNil(parsed.workspaceSidebar.projectLabels["project-test"])
+        XCTAssertNil(parsed.workspaceSidebar.projectColors["project-test"])
+    }
+
+    func testTomlEscapeEncodesEveryControlCharacter() {
+        let controlScalars = (Array(0x00 ... 0x1F) + Array(0x7F ... 0x9F))
+            .compactMap(UnicodeScalar.init)
+        let raw = String(String.UnicodeScalarView(controlScalars))
+        let escaped = tomlEscape(raw)
+
+        XCTAssertEqual(escaped, "\\u0000\\u0001\\u0002\\u0003\\u0004\\u0005\\u0006\\u0007\\b\\t\\n\\u000B\\f\\r\\u000E\\u000F\\u0010\\u0011\\u0012\\u0013\\u0014\\u0015\\u0016\\u0017\\u0018\\u0019\\u001A\\u001B\\u001C\\u001D\\u001E\\u001F\\u007F\\u0080\\u0081\\u0082\\u0083\\u0084\\u0085\\u0086\\u0087\\u0088\\u0089\\u008A\\u008B\\u008C\\u008D\\u008E\\u008F\\u0090\\u0091\\u0092\\u0093\\u0094\\u0095\\u0096\\u0097\\u0098\\u0099\\u009A\\u009B\\u009C\\u009D\\u009E\\u009F")
+        XCTAssertFalse(escaped.unicodeScalars.contains { scalar in
+            scalar.value <= 0x1F || (0x7F ... 0x9F).contains(scalar.value)
+        })
+    }
+
+    func testTomlEscapeRoundTripsQuotesBackslashesAndCommentCharacters() {
+        let raw = "Client \\\"A\\\" \\\\ # ="
+        let updated = updateWorkspaceSidebarProjectLabelConfig(
+            in: "config-version = 2",
+            projectId: "project-safe",
+            label: raw,
+        )
+        let (parsed, errors) = parseConfig(updated)
+        XCTAssertEqual(errors.descriptions, [])
+        XCTAssertEqual(parsed.workspaceSidebar.projectLabels["project-safe"], raw)
+    }
+
 }

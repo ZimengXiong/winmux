@@ -4,6 +4,8 @@ import Foundation
 
 // MARK: - Input
 
+let supportedAgentSchemaVersion = 1
+
 struct AgentRequest: Decodable {
     let schemaVersion: Int?
     let snapshotId: String?
@@ -12,7 +14,15 @@ struct AgentRequest: Decodable {
 
     static func read(path: String) throws -> AgentRequest {
         let data = try Data(contentsOf: URL(filePath: path))
-        return try JSONDecoder().decode(AgentRequest.self, from: data)
+        return try decode(data)
+    }
+
+    static func read(stdin: String) throws -> AgentRequest {
+        try decode(Data(stdin.utf8))
+    }
+
+    private static func decode(_ data: Data) throws -> AgentRequest {
+        try JSONDecoder().decode(AgentRequest.self, from: data)
     }
 
     var operations: [AgentOperation] {
@@ -22,6 +32,7 @@ struct AgentRequest: Decodable {
     @MainActor
     func validate() async throws -> [String] {
         var errors: [String] = []
+        validateSchemaVersion(appendTo: &errors)
         validateFreshWorldId(appendTo: &errors)
         guard errors.isEmpty else { return errors }
         var context = AgentValidationContext()
@@ -34,15 +45,25 @@ struct AgentRequest: Decodable {
         return errors
     }
 
+    private func validateSchemaVersion(appendTo errors: inout [String]) {
+        if let schemaVersion {
+            if schemaVersion != supportedAgentSchemaVersion {
+                errors.append("Unsupported agent schemaVersion '\(schemaVersion)'. Expected '\(supportedAgentSchemaVersion)'. Run 'winmux agent query' again and rebuild the request before applying.")
+            }
+        } else {
+            errors.append("Agent JSON is missing schemaVersion. Run 'winmux agent query' again and rebuild the request before applying.")
+        }
+    }
+
     @MainActor
     func validateFreshWorldId(appendTo errors: inout [String]) {
         if let worldId {
             let currentWorldId = currentAgentWorldId()
             if worldId != currentWorldId {
-                errors.append("Agent JSON is stale: worldId '\(worldId)' does not match current worldId '\(currentWorldId)'. Run 'winmux agent query --path <path>' again before applying.")
+                errors.append("Agent JSON is stale: worldId '\(worldId)' does not match current worldId '\(currentWorldId)'. Run 'winmux agent query' again and rebuild the request before applying.")
             }
-        } else if snapshotId != nil {
-            errors.append("Agent JSON is missing worldId. Run 'winmux agent query --path <path>' again before applying.")
+        } else {
+            errors.append("Agent JSON is missing worldId. Run 'winmux agent query' again and rebuild the request before applying.")
         }
     }
 
@@ -90,4 +111,3 @@ struct AgentLayoutEdit: Codable {
         }
     }
 }
-
