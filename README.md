@@ -26,6 +26,7 @@ contrast across the sidebar, tab groups, and switcher:
 ```toml
 [workspace-sidebar]
     auto-hide = true
+    stay-on-top = false # Let the Dock appear above the sidebar.
     chrome-style = 'solid'
     solid-chrome-color = 'lavender' # Choose any color shown in Appearance, including custom.
 ```

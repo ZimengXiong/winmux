@@ -39,6 +39,9 @@ on-mode-changed = []
 
 [workspace-sidebar]
     enabled = true
+    # Keep the sidebar above system UI such as the Dock. Set false to keep it
+    # above ordinary app windows while allowing the Dock to appear over it.
+    stay-on-top = true
     # Hide the compact rail until the pointer reaches the display's left edge.
     auto-hide = false
     # Keep the full sidebar open and reserve its width for tiled windows.

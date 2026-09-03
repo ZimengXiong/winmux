@@ -10,6 +10,7 @@ extension ConfigTest {
             [workspace-sidebar]
                 enabled = true
                 enable-focus = true
+                stay-on-top = false
                 auto-hide = true
                 always-expanded = true
                 width = 280
@@ -40,6 +41,7 @@ extension ConfigTest {
             WorkspaceSidebarConfig(
                 enabled: true,
                 enableFocus: true,
+                stayOnTop: false,
                 autoHide: true,
                 alwaysExpanded: true,
                 collapsedWidth: 44,
@@ -67,6 +69,7 @@ extension ConfigTest {
         )
         assertEquals(backwardCompatibleErrors, [])
         XCTAssertFalse(backwardCompatible.workspaceSidebar.alwaysExpanded)
+        XCTAssertTrue(backwardCompatible.workspaceSidebar.stayOnTop)
 
         let (solidChrome, solidChromeErrors) = parseConfig(
             """
