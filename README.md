@@ -165,12 +165,6 @@ Release builds are signed with the project's Apple Development certificate. They
 
 WinMux checks GitHub Releases for signed updates automatically. You can also select **Check for Updates…** from the menu bar.
 
-### Release updates
-
-`make release VERSION=<version>` creates a signed `appcast.xml` alongside the release archive and uploads both to the GitHub release. Sparkle signs the appcast with the Ed25519 key in the local login Keychain. The matching public key is set through `SPARKLE_PUBLIC_KEY` in the makefile; keep the private key in the Keychain and do not commit or share it.
-
-Publishing a stable GitHub release also updates `Casks/winmux.rb` in `ZimengXiong/homebrew`. Before the first release, add a `HOMEBREW_TAP_TOKEN` repository secret to this repository. The token must have read and write access to the contents of `ZimengXiong/homebrew`.
-
 ## Migrating
 ### From AeroSpace
 If `~/.config/winmux/winmux.toml` already exists, WinMux uses it as-is.
