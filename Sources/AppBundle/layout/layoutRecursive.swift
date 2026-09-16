@@ -87,13 +87,27 @@ extension TreeNode {
     }
 }
 
+/// layoutTiles redistributes `delta` across children on every pass, and `sum(weight) + n*delta`
+/// does not round-trip through binary floating point. Whether that matters depends on the
+/// container width and the child count: for many combinations the result is exact and the old
+/// `==` comparison worked, but for others every idle relayout makes the rects oscillate in the
+/// last ulp (303.6666666666667 <-> 303.66666666666663), so the comparison never matched and
+/// every hotkey rewrote the AX frame of every tiled window. In the default test geometry, 6 and
+/// 12 children drift on every pass while 2-5, 8 and 9 do not.
+///
+/// The drift is bounded at one ulp rather than cumulative -- `delta` is recomputed from the
+/// absolute target width each pass, so the error cannot integrate -- which is why a sub-pixel
+/// tolerance is the right fix and redistributing the weights differently is not needed.
+private let reusableFrameTolerance: CGFloat = 1e-6
+
 private func canReuseLastAppliedWindowFrame(previousPhysicalRect: Rect?, nextPhysicalRect: Rect) -> Bool {
     guard refreshSessionEvent?.canReuseLastAppliedWindowFrames == true else { return false }
     guard let previousPhysicalRect else { return false }
-    return previousPhysicalRect.topLeftX == nextPhysicalRect.topLeftX &&
-        previousPhysicalRect.topLeftY == nextPhysicalRect.topLeftY &&
-        previousPhysicalRect.width == nextPhysicalRect.width &&
-        previousPhysicalRect.height == nextPhysicalRect.height
+    func same(_ a: CGFloat, _ b: CGFloat) -> Bool { abs(a - b) <= reusableFrameTolerance }
+    return same(previousPhysicalRect.topLeftX, nextPhysicalRect.topLeftX) &&
+        same(previousPhysicalRect.topLeftY, nextPhysicalRect.topLeftY) &&
+        same(previousPhysicalRect.width, nextPhysicalRect.width) &&
+        same(previousPhysicalRect.height, nextPhysicalRect.height)
 }
 
 private struct LayoutContext {
