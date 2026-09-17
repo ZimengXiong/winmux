@@ -105,8 +105,13 @@ final class MacWindow: Window {
         debugFocusLog(
             "MacWindow.garbageCollect closing=\(windowId) currentFocus=\(debugDescribe(currentFocus)) prev=\(debugDescribe(previousFocus)) prevPrev=\(debugDescribe(previousPreviousFocus)) snapshot=\(debugDescribe(refreshSnapshot))"
         )
+        // Snapshot focus, not live focus: `unbindFromParent()` above already dropped this window
+        // out of `focus`. Outside a refresh session there is no snapshot and the live value can
+        // no longer name the closing window, which leaves focus where it is -- the safe direction.
+        let focusedWindowIdBeforeClosure = refreshSnapshot?.focus.windowId ?? currentFocus.windowOrNil?.windowId
         if let replacementFocus = focusAfterWindowClosure(
             closingWindow: self,
+            focusedWindowIdBeforeClosure: focusedWindowIdBeforeClosure,
             deadWindowWorkspace: deadWindowWorkspace,
             currentFocus: currentFocus,
             previousFocus: previousFocus,

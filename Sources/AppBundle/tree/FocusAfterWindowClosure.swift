@@ -3,6 +3,7 @@ import Foundation
 @MainActor
 func focusAfterWindowClosure(
     closingWindow: Window,
+    focusedWindowIdBeforeClosure: UInt32?,
     deadWindowWorkspace: Workspace?,
     currentFocus: LiveFocus,
     previousFocus: LiveFocus?,
@@ -14,6 +15,22 @@ func focusAfterWindowClosure(
     previousFocusedWorkspaceDate: Date,
     now: Date = .now,
 ) -> LiveFocus? {
+    // Only the closure of the focused window may move focus. This used to run for every closure,
+    // so a short-lived window the user never touched -- Telegram opens and closes one around its
+    // fullscreen video viewer, and it is classified as a floating dialog rather than a popup, so
+    // the popup exemption below does not cover it -- reached the focus-history fallbacks and threw
+    // the user out of the window they were working in, often into a different application.
+    //
+    // `currentFocus` cannot answer "was this window focused": the caller has already unbound the
+    // window, so `focus` has fallen back to something else and never equals the closing window.
+    // The refresh session's snapshot can -- it is taken at the start of the session, before
+    // macOS' own post-close focus reshuffle is read into the model.
+    guard focusedWindowIdBeforeClosure == closingWindow.windowId else {
+        debugFocusLog(
+            "focusAfterWindowClosure closing=\(closingWindow.windowId) skippedNotFocused focusedBefore=\(focusedWindowIdBeforeClosure?.description ?? "nil") currentFocus=\(debugDescribe(currentFocus))"
+        )
+        return nil
+    }
     guard let deadWindowWorkspace else { return nil }
     guard deadWindowWorkspace == currentFocus.workspace ||
         deadWindowWorkspace == previousFocusedWorkspace && previousFocusedWorkspaceDate.distance(to: now) < 1
