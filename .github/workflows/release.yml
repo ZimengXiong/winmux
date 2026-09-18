@@ -115,6 +115,32 @@ jobs:
             --title "WinMux $VERSION"
           gh release edit "$TAG" --draft=false
 
+      - name: Check out the Homebrew tap
+        if: steps.version.outputs.publish == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ZimengXiong/homebrew
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew
+
+      - name: Update the Homebrew cask
+        if: steps.version.outputs.publish == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          set -euo pipefail
+          asset="WinMux-$VERSION.zip"
+          sha256="$(shasum -a 256 ".release/$asset" | awk '{print $1}')"
+
+          sed -i '' -E "s/version \"[^\"]+\"/version \"$VERSION\"/" homebrew/Casks/winmux.rb
+          sed -i '' -E "s/sha256 \"[^\"]+\"/sha256 \"$sha256\"/" homebrew/Casks/winmux.rb
+          git -C homebrew diff --check
+          git -C homebrew add Casks/winmux.rb
+          git -C homebrew config user.name "github-actions[bot]"
+          git -C homebrew config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C homebrew commit -m "winmux $VERSION"
+          git -C homebrew push
+
       - name: Remove signing credentials
         if: always() && steps.version.outputs.publish == 'true'
         run: |
