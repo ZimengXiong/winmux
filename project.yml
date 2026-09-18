@@ -50,6 +50,7 @@ targets:
         Release:
           PRODUCT_NAME: WinMux
           PRODUCT_BUNDLE_IDENTIFIER: com.zimengxiong.winmux
+          ENABLE_HARDENED_RUNTIME: YES
           SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
           GCC_TREAT_WARNINGS_AS_ERRORS: YES
     entitlements:

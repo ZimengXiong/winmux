@@ -1,6 +1,6 @@
 VERSION ?= 0.0.0-SNAPSHOT
-CODESIGN_IDENTITY ?= Apple Development
-EXPECTED_CODESIGN_AUTHORITY_PREFIX ?= Authority=Apple Development:
+CODESIGN_IDENTITY ?= Developer ID Application
+EXPECTED_CODESIGN_AUTHORITY_PREFIX ?= Authority=Developer ID Application:
 DEVELOPMENT_TEAM ?= W9C2P3N7Q2
 NOTARIZE ?= 0
 NOTARYTOOL_PROFILE ?= winmux
@@ -12,7 +12,7 @@ APP_INSTALL_DIR ?= /Applications
 SPARKLE_PUBLIC_KEY ?= kcc3956V3+Yo8GtwFJ8Odb9sphIr09/9dsuoYBNtxf0=
 ARGS ?=
 
-.PHONY: generate xcodeproj build build-clean run run-clean cli release install installed clean
+.PHONY: generate xcodeproj build build-clean run run-clean cli check release install installed clean
 
 generate:
 	/bin/bash -lc 'cd "$(CURDIR)" && \
@@ -83,6 +83,15 @@ cli:
 	$(MAKE) build VERSION="$(VERSION)"
 	/bin/bash -lc 'cd "$(CURDIR)" && exec ./.debug/winmux $(ARGS)'
 
+check:
+	/bin/bash -lc 'cd "$(CURDIR)" && \
+	set -euo pipefail && \
+	source ./script/setup.sh && \
+	swift test && \
+	python3 -m unittest script/test_validate_appcast.py && \
+	swift package resolve && \
+	git diff --exit-code -- Package.resolved'
+
 release:
 	$(MAKE) xcodeproj VERSION="$(VERSION)" CODESIGN_IDENTITY="$(CODESIGN_IDENTITY)"
 	/bin/bash -lc 'cd "$(CURDIR)" && \
@@ -114,19 +123,17 @@ release:
 	test "$$(/usr/libexec/PlistBuddy -c "Print CFBundleVersion" "$$app_path/Contents/Info.plist")" = "$(VERSION)"; \
 	codesign --verify --deep --strict --verbose=2 "$$app_path"; \
 	codesign -dv --verbose=4 "$$app_path" 2>&1 | grep -F "$(EXPECTED_CODESIGN_AUTHORITY_PREFIX)" >/dev/null; \
+	codesign -dv --verbose=4 "$$app_path" 2>&1 | grep -E "^CodeDirectory .*flags=.*runtime" >/dev/null; \
 	ditto -c -k --sequesterRsrc --keepParent "$$app_path" "$$zip_path"; \
-	sparkle_appcast="$$(find "$$derived_data_path/SourcePackages/artifacts" -type f -name generate_appcast -print -quit)"; \
-	test -n "$$sparkle_appcast"; \
-	appcast_stage="$$(mktemp -d "$$release_dir/appcast-stage.XXXXXX")"; \
-	trap "rm -rf \"$$appcast_stage\"" EXIT; \
-	cp "$$zip_path" "$$appcast_stage/"; \
-	"$$sparkle_appcast" --download-url-prefix "https://github.com/ZimengXiong/winmux/releases/download/$(RELEASE_TAG)/" "$$appcast_stage"; \
-	python3 script/validate-appcast.py "$$appcast_stage/appcast.xml" "$(VERSION)" "https://github.com/ZimengXiong/winmux/releases/download/$(RELEASE_TAG)/$$app_name-$(VERSION).zip"; \
-	cp "$$appcast_stage/appcast.xml" "$$appcast_path"; \
-	test -f "$$appcast_path"; \
 	if [ "$(NOTARIZE)" = "1" ]; then \
-	    test -n "$(NOTARYTOOL_PROFILE)"; \
-	    xcrun notarytool submit "$$zip_path" --keychain-profile "$(NOTARYTOOL_PROFILE)" --wait; \
+	    if [ -n "$${APPLE_API_KEY_PATH:-}" ]; then \
+	        test -n "$${APPLE_API_KEY_ID:-}"; \
+	        test -n "$${APPLE_API_ISSUER_ID:-}"; \
+	        xcrun notarytool submit "$$zip_path" --key "$$APPLE_API_KEY_PATH" --key-id "$$APPLE_API_KEY_ID" --issuer "$$APPLE_API_ISSUER_ID" --wait; \
+	    else \
+	        test -n "$(NOTARYTOOL_PROFILE)"; \
+	        xcrun notarytool submit "$$zip_path" --keychain-profile "$(NOTARYTOOL_PROFILE)" --wait; \
+	    fi; \
 	    xcrun stapler staple "$$app_path"; \
 	    xcrun stapler validate "$$app_path"; \
 	    codesign --verify --deep --strict --verbose=2 "$$app_path"; \
@@ -136,6 +143,19 @@ release:
 	else \
 	    echo "Skipping notarization because NOTARIZE=$(NOTARIZE)"; \
 	fi; \
+	sparkle_appcast="$$(find "$$derived_data_path/SourcePackages/artifacts" -type f -name generate_appcast -print -quit)"; \
+	test -n "$$sparkle_appcast"; \
+	appcast_stage="$$(mktemp -d "$$release_dir/appcast-stage.XXXXXX")"; \
+	trap "rm -rf \"$$appcast_stage\"" EXIT; \
+	cp "$$zip_path" "$$appcast_stage/"; \
+	if [ -n "$${SPARKLE_PRIVATE_KEY:-}" ]; then \
+	    printf "%s" "$$SPARKLE_PRIVATE_KEY" | "$$sparkle_appcast" --ed-key-file - --download-url-prefix "https://github.com/ZimengXiong/winmux/releases/download/$(RELEASE_TAG)/" "$$appcast_stage"; \
+	else \
+	    "$$sparkle_appcast" --download-url-prefix "https://github.com/ZimengXiong/winmux/releases/download/$(RELEASE_TAG)/" "$$appcast_stage"; \
+	fi; \
+	python3 script/validate-appcast.py "$$appcast_stage/appcast.xml" "$(VERSION)" "https://github.com/ZimengXiong/winmux/releases/download/$(RELEASE_TAG)/$$app_name-$(VERSION).zip"; \
+	cp "$$appcast_stage/appcast.xml" "$$appcast_path"; \
+	test -f "$$appcast_path"; \
 	if [ "$(PUBLISH)" != "1" ]; then \
 	    echo "Skipping GitHub release publish because PUBLISH=$(PUBLISH)"; \
 	elif /usr/bin/which gh >/dev/null 2>&1; then \
@@ -153,7 +173,7 @@ release:
 	fi'
 
 install:
-	$(MAKE) release VERSION="$(VERSION)" CODESIGN_IDENTITY="$(CODESIGN_IDENTITY)" DEVELOPMENT_TEAM="$(DEVELOPMENT_TEAM)" PUBLISH=0
+	$(MAKE) release VERSION="$(VERSION)" CODESIGN_IDENTITY="Apple Development" EXPECTED_CODESIGN_AUTHORITY_PREFIX="Authority=Apple Development:" DEVELOPMENT_TEAM="$(DEVELOPMENT_TEAM)" PUBLISH=0
 	/bin/bash -lc 'cd "$(CURDIR)" && \
 	set -euo pipefail && \
 	app_name="WinMux"; \
