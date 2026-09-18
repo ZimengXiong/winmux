@@ -1,6 +1,6 @@
 VERSION ?= $(shell tr -d '[:space:]' < VERSION)
-CODESIGN_IDENTITY ?= Developer ID Application
-EXPECTED_CODESIGN_AUTHORITY_PREFIX ?= Authority=Developer ID Application:
+CODESIGN_IDENTITY ?= Apple Development
+EXPECTED_CODESIGN_AUTHORITY_PREFIX ?= Authority=Apple Development:
 CODE_SIGN_STYLE ?= Manual
 DEVELOPMENT_TEAM ?= W9C2P3N7Q2
 RELEASE_DIR ?= .release
@@ -137,7 +137,7 @@ release:
 	test -f "$$appcast_path"'
 
 install:
-	$(MAKE) release VERSION="$(VERSION)" CODESIGN_IDENTITY="Apple Development" EXPECTED_CODESIGN_AUTHORITY_PREFIX="Authority=Apple Development:" CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM="$(DEVELOPMENT_TEAM)"
+	$(MAKE) release VERSION="$(VERSION)" CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM="$(DEVELOPMENT_TEAM)"
 	/bin/bash -lc 'cd "$(CURDIR)" && \
 	set -euo pipefail && \
 	app_name="WinMux"; \

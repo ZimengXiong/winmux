@@ -68,7 +68,7 @@ jobs:
         if: steps.version.outputs.publish == 'true'
         run: make check
 
-      - name: Import the Developer ID certificate
+      - name: Import the Apple Development certificate
         if: steps.version.outputs.publish == 'true'
         env:
           CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
