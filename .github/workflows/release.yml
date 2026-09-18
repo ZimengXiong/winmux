@@ -1,0 +1,127 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths: [VERSION]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: macos-26
+    timeout-minutes: 60
+    environment: release
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Validate the version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < VERSION)"
+          if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "VERSION must contain one stable semantic version, such as 1.2.3." >&2
+            exit 1
+          fi
+
+          latest_tag="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-version:refname | head -1)"
+          if [[ -n "$latest_tag" ]]; then
+            IFS=. read -r old_major old_minor old_patch <<< "${latest_tag#v}"
+            IFS=. read -r new_major new_minor new_patch <<< "$version"
+            if (( new_major < old_major ||
+                  (new_major == old_major && new_minor < old_minor) ||
+                  (new_major == old_major && new_minor == old_minor && new_patch <= old_patch) )); then
+              echo "VERSION $version must be newer than ${latest_tag#v}." >&2
+              exit 1
+            fi
+          fi
+
+          if git rev-parse --verify --quiet "refs/tags/v$version"; then
+            echo "Tag v$version already exists." >&2
+            exit 1
+          fi
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Install the pinned Swift toolchain
+        run: |
+          brew install swiftly
+          swiftly init --skip-install --assume-yes --verbose
+          swiftly install
+
+      - name: Build and test
+        run: make check
+
+      - name: Import the Developer ID certificate
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          certificate_path="$RUNNER_TEMP/developer-id.p12"
+          keychain_path="$RUNNER_TEMP/release-signing.keychain-db"
+          keychain_password="$(uuidgen)"
+
+          printf '%s' "$CERTIFICATE_BASE64" | base64 --decode > "$certificate_path"
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain_path"
+          security set-key-partition-list -S apple-tool:,apple: -k "$keychain_password" "$keychain_path"
+          security list-keychains -d user -s "$keychain_path"
+          echo "RELEASE_KEYCHAIN=$keychain_path" >> "$GITHUB_ENV"
+
+      - name: Prepare notarization credentials
+        env:
+          API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
+        run: |
+          api_key_path="$RUNNER_TEMP/AuthKey.p8"
+          printf '%s' "$API_KEY_BASE64" | base64 --decode > "$api_key_path"
+          echo "APPLE_API_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
+
+      - name: Build, sign, notarize, and generate the appcast
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          make release \
+            VERSION="${{ steps.version.outputs.value }}" \
+            RELEASE_TAG="${{ steps.version.outputs.tag }}" \
+            NOTARIZE=1
+
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.value }}
+          TAG: ${{ steps.version.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" \
+            ".release/WinMux-$VERSION.zip" \
+            .release/appcast.xml \
+            --draft \
+            --generate-notes \
+            --target "$GITHUB_SHA" \
+            --title "WinMux $VERSION"
+          gh release edit "$TAG" --draft=false
+
+      - name: Remove signing credentials
+        if: always()
+        run: |
+          if [[ -n "${RELEASE_KEYCHAIN:-}" ]]; then
+            security delete-keychain "$RELEASE_KEYCHAIN"
+          fi

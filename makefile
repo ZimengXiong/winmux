@@ -1,13 +1,12 @@
-VERSION ?= 0.0.0-SNAPSHOT
+VERSION ?= $(shell tr -d '[:space:]' < VERSION)
 CODESIGN_IDENTITY ?= Developer ID Application
 EXPECTED_CODESIGN_AUTHORITY_PREFIX ?= Authority=Developer ID Application:
+CODE_SIGN_STYLE ?= Manual
 DEVELOPMENT_TEAM ?= W9C2P3N7Q2
 NOTARIZE ?= 0
 NOTARYTOOL_PROFILE ?= winmux
 RELEASE_DIR ?= .release
 RELEASE_TAG ?= v$(VERSION)
-RELEASE_NOTES ?= auto
-PUBLISH ?= 1
 APP_INSTALL_DIR ?= /Applications
 SPARKLE_PUBLIC_KEY ?= kcc3956V3+Yo8GtwFJ8Odb9sphIr09/9dsuoYBNtxf0=
 ARGS ?=
@@ -116,7 +115,7 @@ release:
 	    -derivedDataPath "$$derived_data_path" \
 	    CODE_SIGN_IDENTITY="$(CODESIGN_IDENTITY)" \
 	    DEVELOPMENT_TEAM="$(DEVELOPMENT_TEAM)" \
-	    CODE_SIGN_STYLE=Automatic \
+	    CODE_SIGN_STYLE="$(CODE_SIGN_STYLE)" \
 	    archive; \
 	test -d "$$app_path"; \
 	test "$$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "$$app_path/Contents/Info.plist")" = "$(VERSION)"; \
@@ -155,25 +154,10 @@ release:
 	fi; \
 	python3 script/validate-appcast.py "$$appcast_stage/appcast.xml" "$(VERSION)" "https://github.com/ZimengXiong/winmux/releases/download/$(RELEASE_TAG)/$$app_name-$(VERSION).zip"; \
 	cp "$$appcast_stage/appcast.xml" "$$appcast_path"; \
-	test -f "$$appcast_path"; \
-	if [ "$(PUBLISH)" != "1" ]; then \
-	    echo "Skipping GitHub release publish because PUBLISH=$(PUBLISH)"; \
-	elif /usr/bin/which gh >/dev/null 2>&1; then \
-	    if gh release view "$(RELEASE_TAG)" >/dev/null 2>&1; then \
-	        gh release upload "$(RELEASE_TAG)" "$$zip_path" "$$appcast_path" --clobber; \
-	    else \
-	        if [ "$(RELEASE_NOTES)" = "auto" ]; then \
-	            gh release create "$(RELEASE_TAG)" "$$zip_path" "$$appcast_path" --title "$$app_name $(VERSION)" --generate-notes; \
-	        else \
-	            gh release create "$(RELEASE_TAG)" "$$zip_path" "$$appcast_path" --title "$$app_name $(VERSION)" --notes "$(RELEASE_NOTES)"; \
-	        fi; \
-	    fi; \
-	else \
-	    echo "warning: gh is not installed; built $$zip_path but did not publish a GitHub release" >&2; \
-	fi'
+	test -f "$$appcast_path"'
 
 install:
-	$(MAKE) release VERSION="$(VERSION)" CODESIGN_IDENTITY="Apple Development" EXPECTED_CODESIGN_AUTHORITY_PREFIX="Authority=Apple Development:" DEVELOPMENT_TEAM="$(DEVELOPMENT_TEAM)" PUBLISH=0
+	$(MAKE) release VERSION="$(VERSION)" CODESIGN_IDENTITY="Apple Development" EXPECTED_CODESIGN_AUTHORITY_PREFIX="Authority=Apple Development:" CODE_SIGN_STYLE=Automatic DEVELOPMENT_TEAM="$(DEVELOPMENT_TEAM)"
 	/bin/bash -lc 'cd "$(CURDIR)" && \
 	set -euo pipefail && \
 	app_name="WinMux"; \
