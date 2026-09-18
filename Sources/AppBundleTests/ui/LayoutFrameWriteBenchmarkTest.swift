@@ -5,12 +5,50 @@ import XCTest
 final class LayoutFrameWriteBenchmarkTest: XCTestCase {
     @MainActor
     func testRepeatedLayoutBenchmark() async throws {
-        try await runScenario(name: "steady-hotkey", event: .hotkeyBinding, iterations: 10)
-        try await runScenario(name: "steady-ax", event: .ax("benchmark"), iterations: 10)
+        // A hotkey relayout that changes no geometry must write each frame exactly once (the
+        // first pass) and then reuse it. Regression guard: at this window count the float drift
+        // in layoutTiles used to defeat the reuse check, making every idle pass rewrite every
+        // window over AX. The count matters -- 2-5, 8 and 9 windows never drifted here.
+        try await runScenario(name: "steady-hotkey", event: .hotkeyBinding, iterations: 10, expectedFrameWrites: 6)
+        // A generic AX event means the window actually moved, so reasserting every pass is intended.
+        try await runScenario(name: "steady-ax", event: .ax("benchmark"), iterations: 10, expectedFrameWrites: 60)
+    }
+
+    /// The reuse check has two failure directions and the scenarios above only cover one.
+    /// Too tight a tolerance rewrites every frame on every idle pass; too loose a tolerance
+    /// swallows a real move and the window silently stops following the layout. This locks
+    /// the second direction: raising reusableFrameTolerance to a pixel-scale value fails here.
+    @MainActor
+    func testFrameReuseStillWritesAfterRealMove() async throws {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "layout-bench-real-move")
+        workspace.rootTilingContainer.layout = .tiles
+        for index in 0 ..< 6 {
+            _ = BenchmarkFrameWindow.new(id: UInt32(index + 1), parent: workspace.rootTilingContainer)
+        }
+        XCTAssertTrue(workspace.focusWorkspace())
+        BenchmarkFrameWindow.reset(delayNanoseconds: 0)
+
+        try await $refreshSessionEvent.withValue(.hotkeyBinding) {
+            try await workspace.layoutWorkspace()
+            try await workspace.layoutWorkspace()
+            XCTAssertEqual(BenchmarkFrameWindow.frameWriteCount, 6, "idle relayout must reuse frames")
+
+            // One point is the smallest move the layout can actually express: AX positions are
+            // whole points and setFrame reads back integral values.
+            let first = workspace.rootTilingContainer.children.first!
+            first.setWeight(.h, first.getWeight(.h) + 1)
+            try await workspace.layoutWorkspace()
+        }
+
+        XCTAssertGreaterThan(
+            BenchmarkFrameWindow.frameWriteCount, 6,
+            "a one-point resize must reach AX, but the reuse check swallowed it",
+        )
     }
 
     @MainActor
-    private func runScenario(name: String, event: RefreshSessionEvent, iterations: Int) async throws {
+    private func runScenario(name: String, event: RefreshSessionEvent, iterations: Int, expectedFrameWrites: Int) async throws {
         setUpWorkspacesForTests()
 
         let workspace = Workspace.get(byName: "layout-bench")
@@ -46,7 +84,7 @@ final class LayoutFrameWriteBenchmarkTest: XCTestCase {
         )
         print("LAYOUT_FRAME_BENCHMARK \(result.json)")
 
-        XCTAssertGreaterThan(BenchmarkFrameWindow.frameWriteCount, 0)
+        XCTAssertEqual(BenchmarkFrameWindow.frameWriteCount, expectedFrameWrites, "scenario \(name)")
     }
 }
 
