@@ -3,8 +3,6 @@ CODESIGN_IDENTITY ?= Developer ID Application
 EXPECTED_CODESIGN_AUTHORITY_PREFIX ?= Authority=Developer ID Application:
 CODE_SIGN_STYLE ?= Manual
 DEVELOPMENT_TEAM ?= W9C2P3N7Q2
-NOTARIZE ?= 0
-NOTARYTOOL_PROFILE ?= winmux
 RELEASE_DIR ?= .release
 RELEASE_TAG ?= v$(VERSION)
 APP_INSTALL_DIR ?= /Applications
@@ -124,24 +122,6 @@ release:
 	codesign -dv --verbose=4 "$$app_path" 2>&1 | grep -F "$(EXPECTED_CODESIGN_AUTHORITY_PREFIX)" >/dev/null; \
 	codesign -dv --verbose=4 "$$app_path" 2>&1 | grep -E "^CodeDirectory .*flags=.*runtime" >/dev/null; \
 	ditto -c -k --sequesterRsrc --keepParent "$$app_path" "$$zip_path"; \
-	if [ "$(NOTARIZE)" = "1" ]; then \
-	    if [ -n "$${APPLE_API_KEY_PATH:-}" ]; then \
-	        test -n "$${APPLE_API_KEY_ID:-}"; \
-	        test -n "$${APPLE_API_ISSUER_ID:-}"; \
-	        xcrun notarytool submit "$$zip_path" --key "$$APPLE_API_KEY_PATH" --key-id "$$APPLE_API_KEY_ID" --issuer "$$APPLE_API_ISSUER_ID" --wait; \
-	    else \
-	        test -n "$(NOTARYTOOL_PROFILE)"; \
-	        xcrun notarytool submit "$$zip_path" --keychain-profile "$(NOTARYTOOL_PROFILE)" --wait; \
-	    fi; \
-	    xcrun stapler staple "$$app_path"; \
-	    xcrun stapler validate "$$app_path"; \
-	    codesign --verify --deep --strict --verbose=2 "$$app_path"; \
-	    spctl --assess --type execute --verbose=4 "$$app_path"; \
-	    rm -f "$$zip_path"; \
-	    ditto -c -k --sequesterRsrc --keepParent "$$app_path" "$$zip_path"; \
-	else \
-	    echo "Skipping notarization because NOTARIZE=$(NOTARIZE)"; \
-	fi; \
 	sparkle_appcast="$$(find "$$derived_data_path/SourcePackages/artifacts" -type f -name generate_appcast -print -quit)"; \
 	test -n "$$sparkle_appcast"; \
 	appcast_stage="$$(mktemp -d "$$release_dir/appcast-stage.XXXXXX")"; \
