@@ -243,6 +243,7 @@ final class MacWindow: Window {
         try await macApp.setAxFrameBlocking(windowId, topLeft, size)
     }
 
+    @MainActor
     override func getAxRect() async throws -> Rect? {
         let observationToken = await nativeStateObservationToken()
         let rect = try await macApp.getAxRect(windowId)
