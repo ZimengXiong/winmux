@@ -141,6 +141,7 @@ final class WindowTabsTest: XCTestCase {
 
         let replacementFocus = focusAfterWindowClosure(
             closingWindow: closingWindow,
+            focusedWindowIdBeforeClosure: closingWindow.windowId,
             deadWindowWorkspace: workspace,
             currentFocus: focus,
             previousFocus: previousFocus,
@@ -175,6 +176,7 @@ final class WindowTabsTest: XCTestCase {
 
         let replacementFocus = focusAfterWindowClosure(
             closingWindow: closingWindow,
+            focusedWindowIdBeforeClosure: closingWindow.windowId,
             deadWindowWorkspace: workspace,
             currentFocus: focus,
             previousFocus: closingWindow.toLiveFocusOrNil(),
@@ -207,6 +209,7 @@ final class WindowTabsTest: XCTestCase {
 
         let replacementFocus = focusAfterWindowClosure(
             closingWindow: closingWindow,
+            focusedWindowIdBeforeClosure: closingWindow.windowId,
             deadWindowWorkspace: workspace,
             currentFocus: focus,
             previousFocus: closingWindow.toLiveFocusOrNil(),
@@ -241,6 +244,7 @@ final class WindowTabsTest: XCTestCase {
 
         let replacementFocus = focusAfterWindowClosure(
             closingWindow: closingWindow,
+            focusedWindowIdBeforeClosure: closingWindow.windowId,
             deadWindowWorkspace: workspace,
             currentFocus: focus,
             previousFocus: nil,
@@ -266,6 +270,7 @@ final class WindowTabsTest: XCTestCase {
 
         let replacementFocus = focusAfterWindowClosure(
             closingWindow: closingWindow,
+            focusedWindowIdBeforeClosure: closingWindow.windowId,
             deadWindowWorkspace: workspace,
             currentFocus: provisionalSameAppFocus.toLiveFocusOrNil().orDie(),
             previousFocus: nil,
@@ -293,6 +298,7 @@ final class WindowTabsTest: XCTestCase {
 
         let replacementFocus = focusAfterWindowClosure(
             closingWindow: closingWindow,
+            focusedWindowIdBeforeClosure: closingWindow.windowId,
             deadWindowWorkspace: workspace,
             currentFocus: staleFallbackTab.toLiveFocusOrNil().orDie(),
             previousFocus: nil,
@@ -319,6 +325,7 @@ final class WindowTabsTest: XCTestCase {
 
         let replacementFocus = focusAfterWindowClosure(
             closingWindow: closingWindow,
+            focusedWindowIdBeforeClosure: closingWindow.windowId,
             deadWindowWorkspace: workspace,
             currentFocus: staleFallbackTab.toLiveFocusOrNil().orDie(),
             previousFocus: nil,
@@ -409,4 +416,36 @@ final class WindowTabsTest: XCTestCase {
         XCTAssertTrue(swapDropZone.contains(swapDropZone.center))
     }
 
+    @MainActor
+    func testFocusAfterWindowClosureIgnoresClosureOfUnfocusedWindow() {
+        setUpWorkspacesForTests()
+        let workspace = Workspace.get(byName: "tabs")
+        let root = workspace.rootTilingContainer
+        let tabGroup = TilingContainer(parent: root, adaptiveWeight: WEIGHT_AUTO, .v, .tabGroup, index: INDEX_BIND_LAST)
+        let otherTab = TestWindow.new(id: 1, parent: tabGroup)
+        let focusedWindow = TestWindow.new(id: 2, parent: tabGroup)
+        // Telegram's fullscreen video viewer is a floating window that opens and closes on its own
+        // while the user is focused somewhere else entirely.
+        let overlay = TestWindow.new(id: 9, parent: workspace)
+
+        XCTAssertTrue(otherTab.focusWindow())
+        let previousFocus = focus
+        XCTAssertTrue(focusedWindow.focusWindow())
+
+        let replacementFocus = focusAfterWindowClosure(
+            closingWindow: overlay,
+            focusedWindowIdBeforeClosure: focusedWindow.windowId,
+            deadWindowWorkspace: workspace,
+            currentFocus: focus,
+            previousFocus: previousFocus,
+            previousPreviousFocus: nil,
+            refreshSnapshotCloseFallback: nil,
+            refreshSnapshotPreviousFocus: previousFocus,
+            refreshSnapshotPreviousPreviousFocus: nil,
+            previousFocusedWorkspace: prevFocusedWorkspace,
+            previousFocusedWorkspaceDate: .now,
+        )
+
+        XCTAssertNil(replacementFocus, "closing a window that never had focus must not move focus")
+    }
 }
