@@ -56,7 +56,12 @@ private var pendingRefreshRequest: (event: RefreshSessionEvent, optimisticallyPr
 /// follow-up session covers the requirements of every event that arrived while one was running.
 private func mergeRefreshEvents(_ old: RefreshSessionEvent, _ new: RefreshSessionEvent) -> RefreshSessionEvent {
     func score(_ e: RefreshSessionEvent) -> Int {
-        (e.requiresWindowRefreshBarrier ? 2 : 0) + (e.canReuseLastAppliedWindowFrames ? 0 : 1)
+        // Reassertion outranks the rest: wake-from-sleep is the only event that re-parks drifted
+        // hidden windows, and it ties with (so used to be replaced by) the activeSpaceDidChange
+        // and leftMouseUp events that routinely arrive right after a wake.
+        (e.requiresHiddenWindowsReassertion ? 4 : 0) +
+            (e.requiresWindowRefreshBarrier ? 2 : 0) +
+            (e.canReuseLastAppliedWindowFrames ? 0 : 1)
     }
     return score(new) >= score(old) ? new : old
 }
@@ -196,8 +201,19 @@ func runLightSession<T>(
 ) async throws -> T {
     let state = signposter.beginInterval(#function, "event: \(event) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
     defer { signposter.endInterval(#function, state) }
+    // Re-queue a cancelled reassertion event before dropping the task. Every other requirement
+    // is re-derived by the next session, but re-parking hidden windows has no other trigger:
+    // macOS moved them with no AX events delivered, so nothing later will ask for it again.
+    // Without this, a hotkey or CLI command issued right after a wake cancels the wake session
+    // mid-flight and the windows stay drifted until the next sleep cycle.
+    if let cancelledEvent = activeScheduledRefreshEvent, cancelledEvent.requiresHiddenWindowsReassertion {
+        pendingRefreshRequest = pendingRefreshRequest.map {
+            (mergeRefreshEvents($0.event, cancelledEvent), $0.optimisticallyPreLayoutWorkspaces)
+        } ?? (cancelledEvent, false)
+    }
     activeRefreshTask?.cancel() // Give priority to runSession
     activeRefreshTask = nil
+    activeScheduledRefreshEvent = nil
     // Invalidate the cancelled task's generation so its defer doesn't spawn a coalesced
     // follow-up session in the middle of this light session. The post-refresh scheduled at
     // the end of the light session (or any later event) picks the pending request up instead.
