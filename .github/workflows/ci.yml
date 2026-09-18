@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install the pinned Swift toolchain
+        run: |
+          brew install swiftly
+          swiftly init --skip-install --assume-yes --verbose
+          swiftly install
+
+      - name: Record tool versions
+        run: |
+          source ./script/setup.sh
+          swift --version
+          xcodebuild -version
+
+      - name: Build and test
+        run: make check
